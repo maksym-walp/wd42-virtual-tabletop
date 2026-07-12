@@ -1,0 +1,59 @@
+name: Deploy
+
+on:
+  push:
+    branches: [production]
+  pull_request:
+    branches: [production]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth
+          - user-profile
+          - spellbook
+          - skill-tree
+          - character-sheet
+          - dice-roller
+          - equipment
+          - maneuvers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - working-directory: services/${{ matrix.service }}
+        run: npm ci
+      - working-directory: services/${{ matrix.service }}
+        run: npm test
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - working-directory: services/frontend
+        run: npm ci
+      - working-directory: services/frontend
+        run: npm run build
+
+  # Only real pushes to production (i.e. a merged PR) reach here — pull_request
+  # runs are gated by the two jobs above but never deploy unmerged code.
+  deploy:
+    if: github.event_name == 'push'
+    needs: [test-backend, build-frontend]
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest production and redeploy
+        run: |
+          set -euo pipefail
+          cd /opt/walp-tabletop
+          git fetch origin production
+          git reset --hard origin/production
+          docker compose -f docker-compose.prod.yml up -d --build
+          bash database/migrate.sh
