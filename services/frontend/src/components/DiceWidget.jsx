@@ -56,7 +56,7 @@ export default function DiceWidget() {
         type="button"
         onClick={toggle}
         aria-label="Кинути кубики"
-        className="fixed right-4 bottom-20 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:bottom-6"
+        className="fixed left-4 bottom-20 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:bottom-6"
       >
         <Dices size={26} />
       </button>

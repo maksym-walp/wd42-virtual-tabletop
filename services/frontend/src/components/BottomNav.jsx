@@ -11,14 +11,14 @@ export default function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Основна навігація"
     >
-      <div className="flex">
+      <div className="flex overflow-x-auto">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.7rem] font-semibold ${
+              `flex w-20 shrink-0 flex-col items-center gap-1 py-2.5 text-[0.7rem] font-semibold ${
                 isActive ? 'text-accent' : 'text-text-dim'
               }`
             }
