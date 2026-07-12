@@ -56,4 +56,9 @@ jobs:
           git fetch origin production
           git reset --hard origin/production
           docker compose -f docker-compose.prod.yml up -d --build
+          # nginx.prod.conf is bind-mounted, so "up -d" alone won't reload it
+          # or re-resolve backend container IPs if only the file content
+          # changed (compose only recreates containers on service-spec
+          # changes) — restart it every deploy to guarantee both.
+          docker compose -f docker-compose.prod.yml restart nginx
           bash database/migrate.sh
