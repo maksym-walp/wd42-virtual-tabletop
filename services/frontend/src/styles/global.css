@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@import "@fontsource/cinzel/500.css";
+@import "@fontsource/cinzel/700.css";
+@import "@fontsource/lora/400.css";
+@import "@fontsource/lora/500.css";
+@import "@fontsource/lora/600.css";
+
+/* "Пергамент" — cream parchment base, dark ink text/accents. */
+@theme {
+  --color-bg: #f4efe4;
+  --color-surface: #ede4ca;
+  --color-surface-hover: #e1d6b0;
+  --color-border: #5b440a;
+  --color-text: #5b440a;
+  --color-text-muted: #8a6a3e;
+  --color-text-dim: #b5ab91;
+  --color-accent: #5b440a;
+  --color-sage: #3f5b3a;
+  --color-rose: #7a4a3e;
+  --color-gold: #8a5a2b;
+  --color-danger: #7a2e1d;
+  --font-display: "Cinzel", serif;
+  --font-body: "Lora", serif;
+}
+
+/* @layer base so utility classes (e.g. text-bg on a <Link>) can still
+   override these — unlayered rules would otherwise beat every Tailwind
+   utility regardless of specificity, which silently broke link-styled
+   buttons (bg-accent + text-bg rendered as accent-on-accent). */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  a {
+    color: var(--color-accent);
+  }
+}

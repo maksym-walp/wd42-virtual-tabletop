@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Let's Encrypt certificate for Walp Tabletop
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=WALP_REPO_ROOT=/opt/walp-tabletop
+ExecStart=/opt/walp-tabletop/deploy/certbot-renew.sh

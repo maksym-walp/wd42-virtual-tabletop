@@ -1,0 +1,188 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: walp-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    # No ports exposed — only accessible inside walp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - walp-network
+
+  auth:
+    build:
+      context: ./services/auth
+      target: production
+    container_name: walp-auth
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  user-profile:
+    build:
+      context: ./services/user-profile
+      target: production
+    container_name: walp-user-profile
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  spellbook:
+    build:
+      context: ./services/spellbook
+      target: production
+    container_name: walp-spellbook
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  skill-tree:
+    build:
+      context: ./services/skill-tree
+      target: production
+    container_name: walp-skill-tree
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3004
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  character-sheet:
+    build:
+      context: ./services/character-sheet
+      target: production
+    container_name: walp-character-sheet
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3005
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  dice-roller:
+    build:
+      context: ./services/dice-roller
+      target: production
+    container_name: walp-dice-roller
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3006
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  equipment:
+    build:
+      context: ./services/equipment
+      target: production
+    container_name: walp-equipment
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3007
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  maneuvers:
+    build:
+      context: ./services/maneuvers
+      target: production
+    container_name: walp-maneuvers
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3008
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  frontend:
+    build:
+      context: ./services/frontend
+      target: production
+    container_name: walp-frontend
+    restart: always
+    networks:
+      - walp-network
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: walp-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./certbot-webroot:/var/www/certbot:ro
+    depends_on:
+      - auth
+      - user-profile
+      - spellbook
+      - skill-tree
+      - character-sheet
+      - dice-roller
+      - equipment
+      - maneuvers
+      - frontend
+    networks:
+      - walp-network
+
+volumes:
+  postgres_data:
+
+networks:
+  walp-network:
+    driver: bridge

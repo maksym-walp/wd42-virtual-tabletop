@@ -1,0 +1,196 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: walp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5433:5432"  # remove in production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - walp-network
+
+  auth:
+    build:
+      context: ./services/auth
+      target: development
+    container_name: walp-auth
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3001
+    volumes:
+      - ./services/auth/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  user-profile:
+    build:
+      context: ./services/user-profile
+      target: development
+    container_name: walp-user-profile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3002
+    volumes:
+      - ./services/user-profile/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  spellbook:
+    build:
+      context: ./services/spellbook
+      target: development
+    container_name: walp-spellbook
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3003
+    volumes:
+      - ./services/spellbook/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  skill-tree:
+    build:
+      context: ./services/skill-tree
+      target: development
+    container_name: walp-skill-tree
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3004
+    volumes:
+      - ./services/skill-tree/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  character-sheet:
+    build:
+      context: ./services/character-sheet
+      target: development
+    container_name: walp-character-sheet
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3005
+    volumes:
+      - ./services/character-sheet/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  dice-roller:
+    build:
+      context: ./services/dice-roller
+      target: development
+    container_name: walp-dice-roller
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3006
+    volumes:
+      - ./services/dice-roller/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  equipment:
+    build:
+      context: ./services/equipment
+      target: development
+    container_name: walp-equipment
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3007
+    volumes:
+      - ./services/equipment/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  maneuvers:
+    build:
+      context: ./services/maneuvers
+      target: development
+    container_name: walp-maneuvers
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3008
+    volumes:
+      - ./services/maneuvers/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  frontend:
+    build:
+      context: ./services/frontend
+      target: development
+    container_name: walp-frontend
+    restart: unless-stopped
+    volumes:
+      - ./services/frontend/src:/app/src:delegated
+    networks:
+      - walp-network
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: walp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth
+      - user-profile
+      - spellbook
+      - skill-tree
+      - character-sheet
+      - dice-roller
+      - equipment
+      - maneuvers
+      - frontend
+    networks:
+      - walp-network
+
+volumes:
+  postgres_data:
+
+networks:
+  walp-network:
+    driver: bridge

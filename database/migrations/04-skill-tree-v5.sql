@@ -1,0 +1,5 @@
+ALTER TABLE skill_tree.nodes
+  ADD COLUMN IF NOT EXISTS archetype VARCHAR(50) NOT NULL DEFAULT '';
+
+ALTER TABLE skill_tree.nodes
+  ADD COLUMN IF NOT EXISTS require_both BOOLEAN NOT NULL DEFAULT false;
