@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS character_sheet.characters (
     race_ancestry        VARCHAR(20)
                          CHECK (race_ancestry IS NULL OR race_ancestry IN
                            ('human','gnome','dwarf','elf','nephilim','other')),
-    is_public            BOOLEAN      NOT NULL DEFAULT false,
+    is_public            BOOLEAN      NOT NULL DEFAULT true,
     backstory            TEXT,
     notes                TEXT,
     -- Current vitals (updated during play)

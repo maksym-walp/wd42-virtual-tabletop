@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ChevronUp, ChevronDown, Pencil } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
@@ -10,13 +11,16 @@ import { EQUIPMENT_TYPES } from '../constants/equipment';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, LEVEL_MIN_VALUE, ARCHETYPE_COLORS,
-  valueToLevel, modifierDie, skillsToCharLevel, rollHealthDice,
+  valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES,
 } from '../constants/characterSheet';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
+import IntInput from '../components/ui/IntInput';
 import DiceFormulaText from '../components/DiceFormulaText';
+import RollButton from '../components/RollButton';
+import { useDice } from '../context/DiceContext';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
 
@@ -142,6 +146,7 @@ export default function CharacterSheet({ publicView = false }) {
   };
 
   const addSpell    = async (spellId) => {
+    if (spells.length >= maxKnownSpells) return;
     const entry = await characterApi.addSpell(id, spellId);
     if (entry) setData(prev => ({ ...prev, spells: [...prev.spells, entry] }));
   };
@@ -286,9 +291,7 @@ export default function CharacterSheet({ publicView = false }) {
             <label className="inline-flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={c.is_public} className="h-5 w-5 accent-accent"
                 onChange={e => patchCharacter({ is_public: e.target.checked })} />
-              <span className="text-sm text-text-dim">
-                {c.is_public ? 'Публічний' : 'Приватний'}
-              </span>
+              <span className="text-sm text-text-dim">Публічний</span>
             </label>
           )}
           {c.is_public && (
@@ -304,14 +307,44 @@ export default function CharacterSheet({ publicView = false }) {
         <BannerBox
           label="НАТХНЕННЯ"
           accent
-          onClick={is_owner ? () => setEditingInspiration(true) : undefined}
           sub={
             <span className="inline-flex items-center gap-1">
-              <span className={c.inspiration_used ? 'text-text-dim line-through' : ''}>{gameInspirationDie}</span>
+              {gameInspirationDie === '—' ? (
+                <span className={c.inspiration_used ? 'text-text-dim line-through' : ''}>—</span>
+              ) : (
+                <RollButton
+                  formula={`1${gameInspirationDie}`}
+                  disabled={c.inspiration_used}
+                  title={`Кинути ${gameInspirationDie} (ігрове натхнення)`}
+                  icon={false}
+                  className="p-0 text-base font-bold disabled:line-through"
+                >
+                  {gameInspirationDie}
+                </RollButton>
+              )}
               {c.narrative_inspiration_die && <span className="text-text-dim">/</span>}
-              {c.narrative_inspiration_die && <span>{c.narrative_inspiration_die}</span>}
+              {c.narrative_inspiration_die && (
+                <RollButton
+                  formula={`1${c.narrative_inspiration_die}`}
+                  title={`Кинути ${c.narrative_inspiration_die} (наративне натхнення)`}
+                  icon={false}
+                  className="p-0 text-base font-bold"
+                >
+                  {c.narrative_inspiration_die}
+                </RollButton>
+              )}
             </span>
           }
+          corner={is_owner && (
+            <button
+              type="button"
+              onClick={() => setEditingInspiration(true)}
+              title="Редагувати натхнення"
+              className="flex h-6 w-6 items-center justify-center rounded text-text-dim hover:bg-surface-hover hover:text-text"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
         />
         <BannerBox
           label="ЗАХИСТ"
@@ -323,7 +356,20 @@ export default function CharacterSheet({ publicView = false }) {
           sub={`${heroicLeft} / ${heroicTotal}`}
           accent={heroicLeft > 0}
         />
-        <BannerBox label="ІНІЦІАТИВА" sub={INITIATIVE_DIE[charLevels.agility]} accent />
+        <BannerBox
+          label="ІНІЦІАТИВА"
+          accent
+          sub={
+            <RollButton
+              formula={`1${INITIATIVE_DIE[charLevels.agility]}`}
+              title={`Кинути ${INITIATIVE_DIE[charLevels.agility]} (ініціатива)`}
+              icon={false}
+              className="p-0 text-base font-bold"
+            >
+              {INITIATIVE_DIE[charLevels.agility]}
+            </RollButton>
+          }
+        />
         <BannerBox label="ПЗ" sub={`${c.current_hp} / ${maxHp}${c.temp_hp ? ` (+${c.temp_hp})` : ''}`} accent wide />
         <BannerBox label="МАГІЯ" sub={`${c.current_magic} / ${maxMagic}`} wide />
       </div>
@@ -395,6 +441,7 @@ export default function CharacterSheet({ publicView = false }) {
         )}
         {tab === 'equipment' && (
           <EquipmentTab
+            c={c} patchCharacter={patchCharacter}
             equipment={equipment} allEquipment={allEquipment} is_owner={is_owner}
             onAdd={addEquipment}
             onPatch={patchEquipment}
@@ -489,19 +536,26 @@ export default function CharacterSheet({ publicView = false }) {
 
 // ── BannerBox ─────────────────────────────────────────────────────────────────
 
-function BannerBox({ label, sub, accent, wide, onClick }) {
+// `corner` renders as a sibling of the (possibly clickable) Tag rather than
+// nested inside it — Tag can itself be a <button> (e.g. inspiration opens an
+// editor on click), and a roll button nested inside another button is
+// invalid HTML that browsers mis-parse.
+function BannerBox({ label, sub, accent, wide, onClick, corner }) {
   const Tag = onClick ? 'button' : 'div';
   return (
-    <Tag
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      className={`flex flex-col items-center gap-0.5 rounded-md border-[1.5px] bg-surface px-3 py-2.5 ${
-        wide ? 'min-w-[120px] flex-[1.5]' : 'min-w-[90px] flex-1'
-      } ${accent ? 'border-gold/30' : 'border-border'} ${onClick ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
-    >
-      <span className="text-[0.62rem] font-bold uppercase tracking-wide text-text-dim">{label}</span>
-      <span className={`text-base font-bold ${accent ? 'text-gold' : 'text-text'}`}>{sub}</span>
-    </Tag>
+    <div className={`relative ${wide ? 'min-w-[120px] flex-[1.5]' : 'min-w-[90px] flex-1'}`}>
+      <Tag
+        type={onClick ? 'button' : undefined}
+        onClick={onClick}
+        className={`flex w-full flex-col items-center gap-0.5 rounded-md border-[1.5px] bg-surface px-3 py-2.5 ${
+          accent ? 'border-gold/30' : 'border-border'
+        } ${onClick ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
+      >
+        <span className="text-[0.62rem] font-bold uppercase tracking-wide text-text-dim">{label}</span>
+        <span className={`text-base font-bold ${accent ? 'text-gold' : 'text-text'}`}>{sub}</span>
+      </Tag>
+      {corner && <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5">{corner}</div>}
+    </div>
   );
 }
 
@@ -573,6 +627,7 @@ function LevelSquares({ level }) {
 
 function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressClick, onLevelAdjust }) {
   const die = modifierDie(value);
+  const rollFormula = die === '—' ? '1d20' : `1d20+1${die}`;
   const canLevelDown = is_owner && progress === 0 && value > minValue;
   const canLevelUp   = is_owner && progress === 5 && value < 12;
   return (
@@ -581,7 +636,14 @@ function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressCl
         <span className="text-base font-semibold text-text-muted">{label}</span>
         <div className="flex items-center gap-1.5">
           <span className="w-6 text-center text-base font-bold text-text">{value}</span>
-          <span className="min-w-[28px] rounded border border-border bg-bg px-1.5 py-0.5 text-center text-xs text-accent">{die}</span>
+          <RollButton
+            formula={rollFormula}
+            title={`Кинути ${label}: ${rollFormula}`}
+            size={11}
+            className="min-w-[28px] rounded border border-border bg-bg px-1.5 py-0.5 text-xs font-semibold"
+          >
+            {die === '—' ? '—' : `+${die}`}
+          </RollButton>
         </div>
       </div>
       <div className="flex items-center">
@@ -624,6 +686,7 @@ function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressCl
 // ── VitalsTab ─────────────────────────────────────────────────────────────────
 
 function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_owner, archetype, patchCharacter }) {
+  const { rollAndShow, rolling } = useDice();
   const healthDice   = c.health_dice_values || [];
   const crossedCount = totalCondLevel;
 
@@ -645,9 +708,14 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
     patchCharacter({ conditions });
   };
 
-  const handleRollHealthDice = (existing = []) => {
+  const handleRollHealthDice = async (existing = []) => {
     const dieSize = parseInt(archetype.healthDie.slice(1));
-    const allDice = rollHealthDice(dieSize, maxDiceCount, existing);
+    const needed = maxDiceCount - existing.length;
+    if (needed <= 0) return;
+    const roll = await rollAndShow(`${needed}d${dieSize}`);
+    if (!roll) return;
+    const newRolls = roll.groups.find(g => g.type === 'dice')?.rolls ?? [];
+    const allDice = [...existing, ...newRolls].sort((a, b) => a - b);
     const currentHp = allDice.slice(0, maxDiceCount - crossedCount).reduce((s, v) => s + v, 0);
     patchCharacter({ health_dice_values: allDice, current_hp: currentHp });
   };
@@ -677,17 +745,6 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
           </div>
         </div>
 
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Тимчасове</span>
-            <div className="flex items-center gap-1">
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) - 1)}>−</button>}
-              <span className="min-w-[24px] text-center text-lg font-semibold text-sage">{c.temp_hp || 0}</span>
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) + 1)}>+</button>}
-            </div>
-          </div>
-        </div>
-
         {/* Dice pool — matches PDF cells */}
         <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(26px,1fr))] gap-[3px]">
           {Array.from({ length: maxDiceCount }).map((_, i) => {
@@ -708,18 +765,36 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
         </div>
 
         {is_owner && healthDice.length < maxDiceCount && (
-          <button className="min-h-11 w-full rounded border border-border px-3 py-1.5 text-sm text-accent" onClick={() => handleRollHealthDice(healthDice)}>
+          <button
+            className="mb-3 min-h-11 w-full rounded border border-border px-3 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => handleRollHealthDice(healthDice)}
+            disabled={rolling}
+          >
             {healthDice.length === 0
               ? `Кинути ${maxDiceCount}${archetype.healthDie}`
               : `Кинути ${maxDiceCount - healthDice.length}${archetype.healthDie} (нові кістки)`}
           </button>
         )}
+
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center">
+            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Тимчасове</span>
+            <div className="flex items-center gap-1">
+              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) - 1)}>−</button>}
+              <span className="min-w-[24px] text-center text-lg font-semibold text-sage">{c.temp_hp || 0}</span>
+              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) + 1)}>+</button>}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Death scale + heroic actions */}
       <div className="rounded-lg border border-border bg-surface p-4">
         <SectionTitle>Рятунки від смерті</SectionTitle>
-        <p className="-mt-1 mb-3 text-xs italic text-text-dim">Кидок — d12</p>
+        <div className="-mt-1 mb-3 flex items-center justify-between">
+          <p className="text-xs italic text-text-dim">Кидок — d12</p>
+          <RollButton formula="1d12" title="Кинути d12" size={16} />
+        </div>
         <div className="mb-2 flex gap-[3px]">
           {[-3, -2, -1, 0, 1, 2, 3].map(v => {
             const isActive = c.death_scale != null && c.death_scale === v;
@@ -817,6 +892,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
     !knownIds.has(s.id) &&
     s.name?.toLowerCase().includes(spellSearch.toLowerCase())
   );
+  const atMaxSpells = spells.length >= maxKnownSpells;
 
   const setMagic = v => patchCharacter({ current_magic: Math.max(0, Math.min(maxMagic, v)) });
 
@@ -885,11 +961,20 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
             )}
           </SectionTitle>
           {is_owner && (
-            <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
+            <button
+              className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setShowPicker(!showPicker)}
+              disabled={!showPicker && atMaxSpells}
+              title={!showPicker && atMaxSpells ? 'Досягнуто максимум відомих заклинань' : undefined}
+            >
               {showPicker ? '✕' : '+ Додати'}
             </button>
           )}
         </div>
+
+        {atMaxSpells && (
+          <p className="mb-3 text-xs italic text-text-dim">Досягнуто максимум відомих заклинань ({maxKnownSpells}).</p>
+        )}
 
         {showPicker && (
           <div className="mb-4 rounded-md border border-border bg-bg p-3">
@@ -901,7 +986,11 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
               {filteredAll.map(s => (
                 <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
                   <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em></span>
-                  <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => { onAddSpell(s.id); setShowPicker(false); }}>+</button>
+                  <button
+                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => { onAddSpell(s.id); setShowPicker(false); }}
+                    disabled={atMaxSpells}
+                  >+</button>
                 </div>
               ))}
             </div>
@@ -960,28 +1049,17 @@ function SpellEntry({ entry, spell, is_owner, onPatch, onRemove }) {
               .filter(Boolean).join(' · ')}
           </span>
         </div>
-        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-          {!entry.mastered && (
-            <div className="flex items-center">
-              {[0, 1, 2].map(i => (
-                <button key={i}
-                  className={`flex h-9 w-9 items-center justify-center ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
-                  onClick={() => is_owner && onPatch({ cast_count: i < entry.cast_count ? i : i + 1 })}
-                  title={`Каст ${i + 1}`}
-                >
-                  <span className={`h-[11px] w-[11px] rounded-full border-[1.5px] border-gold/50 ${i < entry.cast_count ? 'bg-gold' : 'bg-transparent'}`} />
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            className={`rounded border px-2 py-1 text-xs font-semibold ${
-              entry.mastered ? 'border-sage/40 bg-sage/15 text-sage' : 'border-border bg-surface-hover text-text-dim'
-            } ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
-            onClick={() => is_owner && onPatch({ mastered: !entry.mastered })}
-          >
-            {entry.mastered ? '✓ освоєно' : 'нове'}
-          </button>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-sage"
+              checked={!!entry.mastered}
+              disabled={!is_owner}
+              onChange={() => is_owner && onPatch({ mastered: !entry.mastered })}
+            />
+            <span className="text-xs text-text-dim">освоєно</span>
+          </label>
           <a href={`/spellbook/${entry.spell_id}`} target="_blank" rel="noreferrer"
             className="flex h-9 w-9 items-center justify-center text-sm text-accent" title="Відкрити у Книзі заклинань"
             onClick={e => e.stopPropagation()}
@@ -1051,9 +1129,101 @@ function ModalStat({ label, value }) {
   );
 }
 
+// ── MoneySection ──────────────────────────────────────────────────────────────
+
+function MoneySection({ c, is_owner, patchCharacter }) {
+  const money = c.money || {};
+  const setDenom = (key, value) => patchCharacter({ money: { ...money, [key]: Math.max(0, value) } });
+
+  // Within a mint, the high denomination is always worth 100 of the low one
+  // (e.g. 1 Альґос = 100 Дельґос) — except "Інші", whose two currencies
+  // aren't a fixed-rate coinage.
+  const convertUp = (cur) => {
+    const lowVal = money[cur.low.key] ?? 0;
+    const count = Math.floor(lowVal / 100);
+    if (count <= 0) return;
+    patchCharacter({ money: {
+      ...money,
+      [cur.high.key]: (money[cur.high.key] ?? 0) + count,
+      [cur.low.key]: lowVal - count * 100,
+    } });
+  };
+  const convertDown = (cur) => {
+    const highVal = money[cur.high.key] ?? 0;
+    if (highVal <= 0) return;
+    patchCharacter({ money: {
+      ...money,
+      [cur.high.key]: highVal - 1,
+      [cur.low.key]: (money[cur.low.key] ?? 0) + 100,
+    } });
+  };
+
+  if (!is_owner) {
+    const nonzero = CURRENCIES.flatMap(cur => [cur.high, cur.low])
+      .filter(denom => (money[denom.key] ?? 0) > 0)
+      .map(denom => `${denom.name}: ${money[denom.key]}`);
+    if (nonzero.length === 0) return null;
+    return (
+      <div className="mb-6">
+        <div className="mb-2 border-b border-border pb-1.5">
+          <span className="text-xs font-bold uppercase tracking-wide text-gold">Гроші</span>
+        </div>
+        <p className="text-sm text-text-muted">{nonzero.join(' · ')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6">
+      <div className="mb-2 border-b border-border pb-1.5">
+        <span className="text-xs font-bold uppercase tracking-wide text-gold">Гроші</span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {CURRENCIES.map(cur => (
+          <div key={cur.region} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded border border-border bg-bg px-2.5 py-1.5">
+            <span className="w-full text-xs text-text-dim sm:w-[130px] sm:shrink-0">{cur.region}</span>
+            {[cur.high, cur.low].map(denom => (
+              <div key={denom.key} className="flex items-center gap-1.5">
+                <span className="text-xs text-text-dim">{denom.name}{denom.metal ? ` (${denom.metal})` : ''}</span>
+                <IntInput
+                  className="w-16 rounded border border-border bg-surface px-2 py-1 text-sm text-text focus:border-accent focus:outline-none"
+                  value={money[denom.key] ?? 0}
+                  onChange={v => setDenom(denom.key, v)}
+                />
+              </div>
+            ))}
+            {cur.convertible && (
+              <div className="flex items-center gap-1 border-l border-border pl-2.5">
+                <button
+                  type="button"
+                  title={`Обміняти 100 ${cur.low.name} → 1 ${cur.high.name}`}
+                  className="flex h-7 w-7 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => convertUp(cur)}
+                  disabled={(money[cur.low.key] ?? 0) < 100}
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  title={`Обміняти 1 ${cur.high.name} → 100 ${cur.low.name}`}
+                  className="flex h-7 w-7 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => convertDown(cur)}
+                  disabled={(money[cur.high.key] ?? 0) < 1}
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── EquipmentTab ──────────────────────────────────────────────────────────────
 
-function EquipmentTab({ equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
+function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
   const [search, setSearch]         = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -1065,6 +1235,8 @@ function EquipmentTab({ equipment, allEquipment, is_owner, onAdd, onPatch, onRem
 
   return (
     <div>
+      <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
+
       {is_owner && (
         <div className="mb-5 flex items-center justify-between">
           <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
@@ -1128,19 +1300,21 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
         </span>
       </Link>
 
+      {item?.type === 'weapon' && item.damage_die && (
+        <RollButton formula={`1${item.damage_die}`} title={`Кинути ${item.damage_die}`} />
+      )}
+
       {item?.type === 'weapon' && (
-        <div className="flex items-center">
-          {!entry.mastered && [0, 1, 2].map(i => (
-            <button key={i}
-              className={`flex h-9 w-9 items-center justify-center ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
-              onClick={() => is_owner && onPatch({ mastery_count: i < entry.mastery_count ? i : i + 1 })}
-              title={`${i + 1} успішна атака`}
-            >
-              <span className={`h-[11px] w-[11px] rounded-full border-[1.5px] border-gold/50 ${i < entry.mastery_count ? 'bg-gold' : 'bg-transparent'}`} />
-            </button>
-          ))}
-          {entry.mastered && <span className="text-xs text-sage">освоєно</span>}
-        </div>
+        <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-sage"
+            checked={!!entry.mastered}
+            disabled={!is_owner}
+            onChange={() => is_owner && onPatch({ mastered: !entry.mastered })}
+          />
+          <span className="text-xs text-text-dim">освоєно</span>
+        </label>
       )}
 
       {is_owner && (

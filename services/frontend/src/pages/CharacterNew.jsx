@@ -11,6 +11,8 @@ import {
 import Card from '../components/ui/Card';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import IntInput from '../components/ui/IntInput';
+import RollButton from '../components/RollButton';
 
 const BUDGET = 42;
 const ALL_SKILL_KEYS = CHARACTERISTICS.flatMap((c) => c.skills.map((s) => s.key));
@@ -507,13 +509,20 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
                     <label className="mb-1 block text-xs text-text-dim">
                       {denom.name}{denom.metal ? ` (${denom.metal})` : ''}
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      className={inputClass}
-                      value={money[denom.key] ?? 0}
-                      onChange={(e) => setMoney((m) => ({ ...m, [denom.key]: Number(e.target.value) || 0 }))}
-                    />
+                    <div className="relative">
+                      <IntInput
+                        className={`${inputClass} pr-10`}
+                        value={money[denom.key] ?? 0}
+                        onChange={(v) => setMoney((m) => ({ ...m, [denom.key]: v }))}
+                      />
+                      <RollButton
+                        formula="1d100"
+                        title="Кинути d100"
+                        showWidget={false}
+                        className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded hover:bg-surface-hover"
+                        onResult={(roll) => setMoney((m) => ({ ...m, [denom.key]: roll.total }))}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

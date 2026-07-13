@@ -1,33 +1,16 @@
-import { Dices } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useDice } from '../context/DiceContext';
+import RollButton from './RollButton';
 
 const FORMULA_RE = /(\[\[[^\]]+\]\])/g;
 
 function DiceFormulaButton({ formula }) {
-  const { user } = useAuth();
-  const { rollAndShow, rolling } = useDice();
-
-  // Public/unauthenticated views (e.g. a shared character sheet) render the
-  // formula as plain text — rolling requires an authed request and the
-  // widget itself isn't mounted without a user.
-  if (!user) {
-    return <span className="font-semibold">{formula}</span>;
-  }
-
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        rollAndShow(formula);
-      }}
-      disabled={rolling}
-      className="mx-0.5 inline-flex items-center gap-1 rounded border border-accent/60 px-1.5 py-0.5 text-xs font-semibold text-accent align-middle"
+    <RollButton
+      formula={formula}
+      size={12}
+      className="mx-0.5 rounded border border-accent/60 px-1.5 py-0.5 text-xs font-semibold align-middle"
     >
-      <Dices size={12} /> {formula}
-    </button>
+      {formula}
+    </RollButton>
   );
 }
 

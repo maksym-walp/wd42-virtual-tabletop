@@ -74,7 +74,7 @@ export default function DiceWidget() {
                     key={key}
                     type="button"
                     onClick={() => handleModeClick(key)}
-                    className={`flex-1 px-2 py-2.5 text-xs font-semibold transition-colors ${i > 0 ? 'border-l border-border' : ''} ${
+                    className={`min-w-0 flex-1 break-words px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${i > 0 ? 'border-l border-border' : ''} ${
                       active ? (MODE_ACTIVE_STYLE[key] || 'bg-accent text-bg') : 'bg-transparent text-text-dim hover:bg-surface-hover'
                     }`}
                   >

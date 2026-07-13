@@ -176,32 +176,38 @@ export const CONDITIONS = [
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
 // Coin denominations by mint, from the character-sheet template (ttrpg-system/*.png) —
-// each mint has a high/low pair at a fixed 1:100 ratio within itself.
+// each mint has a high/low pair at a fixed 1:100 ratio within itself, except
+// "Інші" (infernal gold / gemstones aren't a fixed-rate coinage).
 export const CURRENCIES = [
   {
-    region: 'Трикоронний монетний договір',
-    high: { key: 'asim', name: 'Асім', metal: 'абисальне золото' },
-    low: { key: 'bronvit', name: 'Бронвіт', metal: 'північне золото' },
+    region: 'Великий Арбор',
+    high: { key: 'alios', name: 'Альґос', metal: 'золото' },
+    low: { key: 'delios', name: 'Дельґос', metal: 'срібло' },
+    convertible: true,
   },
   {
-    region: 'Великий Арбор',
-    high: { key: 'alios', name: 'Альос', metal: 'зимне золото/електрум' },
-    low: { key: 'delios', name: 'Дельос', metal: 'старлінгове срібло' },
+    region: 'Трикоронний монетний договір',
+    high: { key: 'asim', name: 'Асім', metal: 'золото' },
+    low: { key: 'bronvit', name: 'Бронвіт', metal: 'бронза' },
+    convertible: true,
   },
   {
     region: 'Карифське царство',
-    high: { key: 'tezar', name: 'Тезар', metal: 'константан' },
-    low: { key: 'kuprum', name: 'Купрум', metal: 'мельхіор' },
+    high: { key: 'tezar', name: 'Тезар', metal: 'бронза' },
+    low: { key: 'kuprum', name: 'Купрум', metal: 'бронза' },
+    convertible: true,
   },
   {
     region: 'Даварія',
     high: { key: 'velykyi_tong', name: 'Великий Тонг', metal: 'бронза' },
-    low: { key: 'malyi_tong', name: 'Малий Тонг', metal: 'латунь' },
+    low: { key: 'malyi_tong', name: 'Малий Тонг', metal: 'бронза' },
+    convertible: true,
   },
   {
     region: 'Інші',
     high: { key: 'infernalne_zoloto', name: 'Інфернальне золото', metal: null },
-    low: { key: 'samotsvity', name: 'Самоцвіти', metal: 'у ляжках' },
+    low: { key: 'samotsvity', name: 'Самоцвіти', metal: 'у золоті' },
+    convertible: false,
   },
 ];
 
