@@ -52,11 +52,13 @@ export default function DiceWidget() {
 
   return (
     <>
+      {/* Mobile has a dedicated "Кубики" tab in BottomNav instead — the
+          floating trigger would otherwise overlap the bottom nav bar. */}
       <button
         type="button"
         onClick={toggle}
         aria-label="Кинути кубики"
-        className="fixed left-4 bottom-20 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:bottom-6"
+        className="fixed left-4 bottom-6 z-40 hidden h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:flex"
       >
         <Dices size={26} />
       </button>

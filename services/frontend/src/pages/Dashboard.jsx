@@ -1,13 +1,16 @@
-import { ScrollText, BookOpen, TreePine, Sparkles } from 'lucide-react';
+import { ScrollText, BookOpen, TreePine, Swords, Zap, CircleUserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
 
 const TOOLS = [
-  { id: 'characters', label: 'Листи персонажів', icon: ScrollText, href: '/characters', available: true },
-  { id: 'spellbook',  label: 'Книга заклинань',   icon: BookOpen,   href: '/spellbook',  available: true },
-  { id: 'skill-tree', label: 'Дерево розвитку',   icon: TreePine,   href: '/skill-tree', available: true },
+  { id: 'profile',    label: 'Профіль',           icon: CircleUserRound, href: '/profile' },
+  { id: 'skill-tree', label: 'Дерево розвитку',   icon: TreePine,        href: '/skill-tree' },
+  { id: 'characters', label: 'Листи персонажів',  icon: ScrollText,      href: '/characters' },
+  { id: 'spellbook',  label: 'Книга заклинань',   icon: BookOpen,        href: '/spellbook' },
+  { id: 'maneuvers',  label: 'Маневри',           icon: Zap,             href: '/maneuvers' },
+  { id: 'equipment',  label: 'Спорядження',       icon: Swords,          href: '/equipment' },
 ];
 
 export default function Dashboard() {
@@ -27,14 +30,6 @@ export default function Dashboard() {
             <Button to={href} className="w-full">Відкрити</Button>
           </Card>
         ))}
-
-        <Card className="flex flex-col items-center gap-4 text-center opacity-40">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-hover text-text-dim">
-            <Sparkles size={28} strokeWidth={1.75} />
-          </div>
-          <h2 className="font-display text-lg text-text">Більше інструментів</h2>
-          <span className="text-sm italic text-text-dim">В розробці</span>
-        </Card>
       </div>
     </div>
   );

@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  X, Link2, Plus, Download, Upload, Pencil, RefreshCw, Trash2,
+  X, Link2, Plus, Download, Upload, Pencil, Trash2, LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
-import spellbookApi from '../api/spellbook';
 import { RACES, ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
@@ -13,6 +12,100 @@ import Button from '../components/ui/Button';
 
 const NODE_R = 32;
 const DRAG_CLICK_THRESHOLD_PX = 5; // movement past this during a node drag suppresses the trailing click
+const LEVEL_SPACING_Y = 260; // vertical gap between prerequisite levels when auto-laying-out
+const SIBLING_SPACING_X = 280; // horizontal gap between sibling nodes — wide enough that a full-length title label never reaches the next node
+
+// A node's level is derived from the graph, not stored: root = 1, otherwise
+// 1 + the deepest prerequisite's level (handles require_both multi-parent nodes).
+function computeLevels(nodes, edges) {
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const parentsOf = new Map();
+  edges.forEach((e) => {
+    if (!parentsOf.has(e.target_id)) parentsOf.set(e.target_id, []);
+    parentsOf.get(e.target_id).push(e.source_id);
+  });
+
+  const levels = {};
+  const levelOf = (id, visiting) => {
+    if (levels[id] != null) return levels[id];
+    const node = nodeMap.get(id);
+    if (!node) return 1;
+    if (node.is_root) { levels[id] = 1; return 1; }
+    const parents = (parentsOf.get(id) || []).filter((pid) => nodeMap.has(pid));
+    if (parents.length === 0) { levels[id] = 2; return 2; }
+    if (visiting.has(id)) return 1; // cycle guard fallback
+    visiting.add(id);
+    const level = 1 + Math.max(...parents.map((pid) => levelOf(pid, visiting)));
+    visiting.delete(id);
+    levels[id] = level;
+    return level;
+  };
+
+  nodes.forEach((n) => levelOf(n.id, new Set()));
+  return levels;
+}
+
+// Semi-automatic layout: places nodes on fixed level bands (y) with siblings
+// spread symmetrically (x), leaving the result freely draggable afterward.
+function computeAutoLayout(nodes, edges) {
+  const levels = computeLevels(nodes, edges);
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const childrenOf = new Map();
+  edges.forEach((e) => {
+    if (!childrenOf.has(e.source_id)) childrenOf.set(e.source_id, []);
+    childrenOf.get(e.source_id).push(e.target_id);
+  });
+
+  const sortedNodes = [...nodes].sort((a, b) => a.pos_x - b.pos_x);
+  const xMemo = new Map();
+  let nextSlot = 0;
+  const computeX = (id, visiting) => {
+    if (xMemo.has(id)) return xMemo.get(id);
+    if (visiting.has(id)) return 0; // cycle guard
+    const kids = (childrenOf.get(id) || [])
+      .filter((cid) => nodeMap.has(cid))
+      .sort((a, b) => nodeMap.get(a).pos_x - nodeMap.get(b).pos_x);
+    if (kids.length === 0) {
+      const x = nextSlot * SIBLING_SPACING_X;
+      nextSlot += 1;
+      xMemo.set(id, x);
+      return x;
+    }
+    visiting.add(id);
+    const childXs = kids.map((cid) => computeX(cid, visiting));
+    visiting.delete(id);
+    const x = childXs.reduce((a, b) => a + b, 0) / childXs.length;
+    xMemo.set(id, x);
+    return x;
+  };
+
+  sortedNodes.filter((n) => levels[n.id] === 1).forEach((n) => computeX(n.id, new Set()));
+  sortedNodes.forEach((n) => computeX(n.id, new Set())); // catches nodes unreachable from any root
+
+  const rootXs = nodes.filter((n) => levels[n.id] === 1).map((n) => xMemo.get(n.id) ?? 0);
+  const originX = rootXs.length ? rootXs.reduce((a, b) => a + b, 0) / rootXs.length : 0;
+
+  const positions = {};
+  nodes.forEach((n) => {
+    const level = levels[n.id] ?? 2;
+    positions[n.id] = {
+      pos_x: Math.round((xMemo.get(n.id) ?? 0) - originX),
+      pos_y: Math.round(-(level - 1) * LEVEL_SPACING_Y),
+    };
+  });
+  return positions;
+}
+
+// Where a new "+"-added child of `parent` should land: to the right of its
+// existing children (or directly below the parent if it has none yet).
+function computeChildSlot(parent, nodes, edges) {
+  const childIds = new Set(edges.filter((e) => e.source_id === parent.id).map((e) => e.target_id));
+  const children = nodes.filter((n) => childIds.has(n.id));
+  const pos_x = children.length
+    ? Math.max(...children.map((c) => c.pos_x)) + SIBLING_SPACING_X
+    : parent.pos_x;
+  return { pos_x, pos_y: parent.pos_y - LEVEL_SPACING_Y };
+}
 
 export default function SkillTree() {
   const { user } = useAuth();
@@ -37,6 +130,8 @@ export default function SkillTree() {
   const [dragState, setDragState] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
+  const levels = useMemo(() => computeLevels(nodes, edges), [nodes, edges]);
+
   const [nodeForm, setNodeForm] = useState(null);
   const [formError, setFormError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -49,41 +144,7 @@ export default function SkillTree() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), 2500);
   };
 
-  const [activeTab, setActiveTab] = useState('skills');
-  const [spells, setSpells] = useState([]);
-  const [spellPositions, setSpellPositions] = useState([]);
-  const [spellsLoading, setSpellsLoading] = useState(false);
-  const [selectedSpell, setSelectedSpell] = useState(null);
-
   const importRef = useRef(null);
-
-  const computeSpellPositions = (spellList) => {
-    const groups = {};
-    spellList.forEach((sp) => {
-      const key = sp.energy_cost ?? 0;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(sp);
-    });
-    const costs = Object.keys(groups).map(Number).sort((a, b) => a - b);
-    const result = [];
-    costs.forEach((cost, colIdx) => {
-      groups[cost].forEach((sp, rowIdx) => {
-        result.push({ ...sp, pos_x: colIdx * 220 + 120, pos_y: rowIdx * 110 + 100 });
-      });
-    });
-    return result;
-  };
-
-  const loadSpells = () => {
-    setSpellsLoading(true);
-    spellbookApi.getAll()
-      .then((data) => {
-        setSpells(data);
-        setSpellPositions(computeSpellPositions(data));
-      })
-      .catch(() => setActionError('Не вдалось завантажити заклинання'))
-      .finally(() => setSpellsLoading(false));
-  };
 
   const loadTree = (archetype, race) => {
     setLoading(true);
@@ -109,15 +170,6 @@ export default function SkillTree() {
     setFilterRace('');
     setTransform({ x: 120, y: 120, k: 1 });
     loadTree(archetype);
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setSelectedNode(null);
-    setSelectedSpell(null);
-    setTooltip(null);
-    setTransform({ x: 120, y: 120, k: 1 });
-    if (tab === 'spells' && spells.length === 0) loadSpells();
   };
 
   // Edge endpoint on circle surface
@@ -275,6 +327,35 @@ export default function SkillTree() {
     });
   };
 
+  // "+" affordance under a selected node: pre-fills the next level's slot and
+  // wires the new node up as a required child once it's saved.
+  const openNewChildForm = (parent) => {
+    const slot = computeChildSlot(parent, nodes, edges);
+    setNodeForm({
+      title: '', description: '', icon: '', cost: 1,
+      enableNarrative: false, narrative_condition: [],
+      effect: [],
+      races: Object.keys(RACES).filter((k) => k !== 'other'),
+      archetype: activeArchetype, require_both: false,
+      pos_x: Math.round(slot.pos_x), pos_y: Math.round(slot.pos_y),
+      _parentId: parent.id,
+    });
+  };
+
+  const handleAutoLayout = async () => {
+    const archetypeLabel = ARCHETYPES[activeArchetype]?.label ?? activeArchetype;
+    if (!window.confirm(`Вирівняти всі ${nodes.length} вузлів дерева «${archetypeLabel}» по сітці рівнів?`)) return;
+    const positions = computeAutoLayout(nodes, edges);
+    const updatedNodes = nodes.map((n) => ({ ...n, ...positions[n.id] }));
+    setNodes(updatedNodes);
+    try {
+      await Promise.all(updatedNodes.map((n) => skillTreeApi.updateNode(n.id, n)));
+      showToast('success', 'Дерево вирівняно');
+    } catch {
+      setActionError('Не вдалось зберегти нове розташування для всіх вузлів');
+    }
+  };
+
   const handleSaveNode = async () => {
     if (!nodeForm.title.trim()) { setFormError('Назва обовʼязкова'); return; }
     const narrativeValue = nodeForm.enableNarrative
@@ -296,6 +377,9 @@ export default function SkillTree() {
       } else {
         const created = await skillTreeApi.createNode(payload);
         setNodes((prev) => [...prev, created]);
+        if (nodeForm._parentId) {
+          await doCreateEdge(nodeForm._parentId, created.id);
+        }
         console.log('[skill-tree] node created', created);
         showToast('success', `Вузол «${created.title}» створено`);
       }
@@ -325,11 +409,11 @@ export default function SkillTree() {
 
   // ── Export / Import ───────────────────────────────────────────────
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ nodes, edges, archetype: activeArchetype }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `skill-tree-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `skill-tree-${activeArchetype}-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -344,13 +428,14 @@ export default function SkillTree() {
         setActionError('Невірний формат файлу');
         return;
       }
+      const archetypeLabel = ARCHETYPES[activeArchetype]?.label ?? activeArchetype;
       if (!window.confirm(
-        `Імпортувати ${data.nodes.length} вузлів і ${data.edges.length} звʼязків?\n\nВесь прогрес персонажів по дереву буде видалено!`
+        `Імпортувати ${data.nodes.length} вузлів і ${data.edges.length} звʼязків у дерево «${archetypeLabel}»?\n\nПрогрес персонажів по ЦЬОМУ дереву буде видалено!`
       )) return;
-      await skillTreeApi.importTree(data);
+      await skillTreeApi.importTree({ ...data, archetype: activeArchetype });
       const [n, ed] = await Promise.all([
-        skillTreeApi.getNodes(),
-        skillTreeApi.getEdges(),
+        skillTreeApi.getNodes({ archetype: activeArchetype }),
+        skillTreeApi.getEdges({ archetype: activeArchetype }),
       ]);
       setNodes(n); setEdges(ed);
       setSelectedNode(null);
@@ -378,58 +463,35 @@ export default function SkillTree() {
 
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-bg px-4 py-2.5 sm:px-6">
-        <div className="flex shrink-0 gap-1">
-          <button
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              activeTab === 'skills' ? 'border-accent/50 bg-surface text-accent' : 'border-border text-text-dim'
-            }`}
-            onClick={() => handleTabChange('skills')}
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          {Object.entries(ARCHETYPES).map(([key, a]) => (
+            <button
+              key={key}
+              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                activeArchetype === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+              }`}
+              onClick={() => handleArchetypeChange(key)}
+            >
+              {a.label}
+            </button>
+          ))}
+          <select
+            className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text"
+            value={filterRace}
+            onChange={(e) => {
+              setFilterRace(e.target.value);
+              handleFilterChange(e.target.value);
+            }}
           >
-            Дерево розвитку
-          </button>
-          <button
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              activeTab === 'spells' ? 'border-accent/50 bg-surface text-accent' : 'border-border text-text-dim'
-            }`}
-            onClick={() => handleTabChange('spells')}
-          >
-            Дерево заклинань
-          </button>
+            <option value="">Всі народи</option>
+            {Object.entries(RACES).map(([key, r]) => (
+              <option key={key} value={key}>{r.label}</option>
+            ))}
+          </select>
         </div>
 
-        {activeTab === 'skills' && (
-          <div className="flex flex-1 flex-wrap gap-1.5">
-            {Object.entries(ARCHETYPES).map(([key, a]) => (
-              <button
-                key={key}
-                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                  activeArchetype === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
-                }`}
-                onClick={() => handleArchetypeChange(key)}
-              >
-                {a.label}
-              </button>
-            ))}
-            <select
-              className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text"
-              value={filterRace}
-              onChange={(e) => {
-                setFilterRace(e.target.value);
-                handleFilterChange(e.target.value);
-              }}
-            >
-              <option value="">Всі народи</option>
-              {Object.entries(RACES).map(([key, r]) => (
-                <option key={key} value={key}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {activeTab === 'spells' && <div className="flex-1" />}
-
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          {activeTab === 'skills' && isGM && editMode && (
+          {isGM && editMode && (
             <>
               <IconBtn
                 active={connectMode}
@@ -438,6 +500,7 @@ export default function SkillTree() {
                 onClick={() => { setConnectMode((c) => !c); setConnectSource(null); }}
               />
               <IconBtn icon={Plus} label="Вузол" onClick={openNewNodeForm} primary />
+              <IconBtn icon={LayoutGrid} label="Вирівняти" onClick={handleAutoLayout} title="Вирівняти вузли по рівнях" />
               <IconBtn icon={Download} label="Експорт" onClick={handleExport} title="Експорт у JSON" />
               <label
                 className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-dim"
@@ -448,16 +511,13 @@ export default function SkillTree() {
               </label>
             </>
           )}
-          {activeTab === 'skills' && isGM && (
+          {isGM && (
             <IconBtn
               active={editMode}
               icon={Pencil}
               label={editMode ? 'Редагування' : 'Редагувати'}
               onClick={() => { setEditMode((m) => !m); setConnectMode(false); setConnectSource(null); }}
             />
-          )}
-          {activeTab === 'spells' && spells.length > 0 && (
-            <IconBtn icon={RefreshCw} label="Оновити" onClick={loadSpells} />
           )}
         </div>
       </div>
@@ -481,7 +541,7 @@ export default function SkillTree() {
           onPointerCancel={handleSvgPointerCancel}
           onPointerLeave={() => { endNodeDrag(); setTooltip(null); }}
           onWheel={panZoom.bind.onWheel}
-          onClick={() => { setSelectedNode(null); setSelectedSpell(null); }}
+          onClick={() => setSelectedNode(null)}
         >
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
@@ -491,7 +551,7 @@ export default function SkillTree() {
 
           <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
             {/* Edges */}
-            {activeTab === 'skills' && edges.map((edge) => {
+            {edges.map((edge) => {
               const pts = edgePoints(edge.source_id, edge.target_id);
               if (!pts) return null;
               const mx = (pts.x1 + pts.x2) / 2;
@@ -533,50 +593,10 @@ export default function SkillTree() {
               );
             })}
 
-            {/* Spell nodes (spell tree tab) */}
-            {activeTab === 'spells' && spellPositions.map((sp) => {
-              const selected = selectedSpell?.id === sp.id;
-              return (
-                <g
-                  key={sp.id}
-                  transform={`translate(${sp.pos_x},${sp.pos_y})`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => { e.stopPropagation(); setSelectedSpell(sp); }}
-                  onMouseEnter={(e) => {
-                    const rect = svgRef.current.getBoundingClientRect();
-                    setTooltip({ node: { title: sp.name, description: sp.mechanical_desc || sp.narrative_desc }, x: e.clientX - rect.left, y: e.clientY - rect.top });
-                  }}
-                  onMouseLeave={handleNodeLeave}
-                >
-                  <circle
-                    r={NODE_R}
-                    fill="#e5e1ee"
-                    stroke={selected ? '#3d2350' : '#8a7aa0'}
-                    strokeWidth={selected ? 2.5 : 1.5}
-                  />
-                  <text x={0} y={6} textAnchor="middle" fontSize={15} fill="#4a3d66"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {sp.name.substring(0, 2)}
-                  </text>
-                  <text x={NODE_R + 10} y={5} textAnchor="start" fontSize={13} fill="#4a3d66"
-                    fontWeight={selected ? 700 : 500}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {sp.name.length > 20 ? sp.name.slice(0, 18) + '…' : sp.name}
-                  </text>
-                  <text x={NODE_R + 10} y={21} textAnchor="start" fontSize={10} fill="#8a7aa0"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {sp.energy_cost ?? 0} ен. • {sp.magic_type ?? '—'}
-                  </text>
-                </g>
-              );
-            })}
-
             {/* Nodes */}
-            {activeTab === 'skills' && nodes.map((node) => {
+            {nodes.map((node) => {
               const selected = selectedNode?.id === node.id;
               const isSrc = connectSource?.id === node.id;
-              const hasRaces = node.races?.length > 0;
-              const hasArchetypes = node.archetypes?.length > 0;
               const ac = ARCHETYPE_COLORS[node.archetype];
 
               const stroke = isSrc ? '#5b440a'
@@ -603,20 +623,6 @@ export default function SkillTree() {
                     stroke={stroke}
                     strokeWidth={selected || isSrc ? 2.5 : 1.5}
                   />
-
-                  {/* Race indicator — gold dot top-left */}
-                  {hasRaces && (
-                    <circle cx={-NODE_R + 8} cy={-NODE_R + 8} r={5}
-                      fill="#8a5a2b" stroke="#5b440a" strokeWidth={1}
-                      style={{ pointerEvents: 'none' }} />
-                  )}
-
-                  {/* Archetype indicator — violet dot top-right */}
-                  {hasArchetypes && (
-                    <circle cx={NODE_R - 8} cy={-NODE_R + 8} r={5}
-                      fill="#4a3d66" stroke="#5b440a" strokeWidth={1}
-                      style={{ pointerEvents: 'none' }} />
-                  )}
 
                   {/* Icon or initials */}
                   <text
@@ -656,6 +662,23 @@ export default function SkillTree() {
                 </g>
               );
             })}
+
+            {/* Add-child affordances — one "+" under every node as soon as edit mode is on */}
+            {isGM && editMode && !connectMode && nodes.map((node) => {
+              const slot = computeChildSlot(node, nodes, edges);
+              return (
+                <g
+                  key={`add-${node.id}`}
+                  transform={`translate(${slot.pos_x},${slot.pos_y})`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); openNewChildForm(node); }}
+                >
+                  <circle r={16} fill="#dce8d6" stroke="#3f5b3a" strokeWidth={1.5} strokeDasharray="4,3" />
+                  <text x={0} y={6} textAnchor="middle" fontSize={18} fill="#3f5b3a"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+                </g>
+              );
+            })}
           </g>
         </svg>
 
@@ -664,24 +687,19 @@ export default function SkillTree() {
           <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} />
         )}
 
-        {activeTab === 'skills' && nodes.length === 0 && (
+        {nodes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
             {isGM ? 'Вмикай «Редагувати» і додавай перший вузол' : 'Дерево розвитку ще порожнє'}
           </div>
         )}
-        {activeTab === 'spells' && spellsLoading && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">Завантаження заклинань...</div>
-        )}
-        {activeTab === 'spells' && !spellsLoading && spells.length === 0 && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">Заклинань ще немає</div>
-        )}
 
         {/* Detail panel */}
-        {activeTab === 'skills' && selectedNode && !nodeForm && (
+        {selectedNode && !nodeForm && (
           <NodePanel
             node={selectedNode}
             nodes={nodes}
             edges={edges}
+            level={levels[selectedNode.id]}
             isGM={isGM}
             onEdit={(n) => {
               setNodeForm({
@@ -697,9 +715,6 @@ export default function SkillTree() {
             onDelete={handleDeleteNode}
             onClose={() => setSelectedNode(null)}
           />
-        )}
-        {activeTab === 'spells' && selectedSpell && (
-          <SpellPanel spell={selectedSpell} onClose={() => setSelectedSpell(null)} />
         )}
       </div>
 
@@ -812,7 +827,7 @@ function ReqBadge({ type }) {
 }
 
 // ── Node detail panel ─────────────────────────────────────────────
-function NodePanel({ node, nodes, edges, isGM, onEdit, onDelete, onClose }) {
+function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose }) {
   const prereqEdges = edges.filter((e) => e.target_id === node.id);
   const prereqs = prereqEdges
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
@@ -827,6 +842,7 @@ function NodePanel({ node, nodes, edges, isGM, onEdit, onDelete, onClose }) {
       <div className="mb-3 flex items-start gap-3">
         {node.icon && <span className="text-3xl leading-none">{node.icon}</span>}
         <div className="flex flex-wrap gap-1.5">
+          {level != null && <Badge>Рівень {level}</Badge>}
           {node.races?.map((r) => <Badge key={r} tone="gold">{r}</Badge>)}
           {node.archetypes?.map((a) => <Badge key={a} tone="accent">{a}</Badge>)}
         </div>
@@ -900,39 +916,6 @@ function Badge({ tone = 'muted', children }) {
     accent: 'bg-accent/15 text-accent',
   };
   return <span className={`inline-block rounded px-2 py-0.5 text-xs ${tones[tone]}`}>{children}</span>;
-}
-
-// ── Spell detail panel ────────────────────────────────────────────
-const KIND_LABELS = { offensive: 'Наступальне', defensive: 'Захисне', utility: 'Утилітарне', healing: 'Лікування', passive: 'Пасивне' };
-const RITUAL_LABELS = { impossible: null, possible: 'Можна ритуалом', only_ritual: 'Тільки ритуал' };
-
-function SpellPanel({ spell, onClose }) {
-  return (
-    <Sheet open onClose={onClose} title={spell.name}>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {spell.magic_type && <Badge tone="accent">{spell.magic_type}</Badge>}
-        {spell.spell_kind && <Badge>{KIND_LABELS[spell.spell_kind] ?? spell.spell_kind}</Badge>}
-      </div>
-
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        <Badge>⚡ {spell.energy_cost ?? 0} ен.</Badge>
-        <Badge>⏱ {spell.action_time ?? 1} {spell.action_time === 1 ? 'дія' : 'дії'}</Badge>
-        {RITUAL_LABELS[spell.ritual] && <Badge tone="accent">{RITUAL_LABELS[spell.ritual]}</Badge>}
-      </div>
-
-      {(spell.duration_value != null || spell.range_desc) && (
-        <InfoBlock label="Тривалість / Дальність">
-          {spell.duration_value != null ? `${spell.duration_value} ${spell.duration_unit ?? ''}` : ''}
-          {spell.range_desc ? ` • ${spell.range_desc}` : ''}
-        </InfoBlock>
-      )}
-      {spell.mechanical_desc && <InfoBlock label="Механіка">{spell.mechanical_desc}</InfoBlock>}
-      {spell.narrative_desc && <InfoBlock label="Наратив">{spell.narrative_desc}</InfoBlock>}
-      {spell.components?.length > 0 && (
-        <InfoBlock label="Компоненти">{spell.components.join(', ')}</InfoBlock>
-      )}
-    </Sheet>
-  );
 }
 
 // ── Repeatable text-item list (mirrors SpellForm's components editor) ─────

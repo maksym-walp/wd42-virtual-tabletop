@@ -22,12 +22,15 @@ describe('TreeModel.importTree', () => {
 
     await TreeModel.importTree(
       [{ id: 'n1', title: 'Root' }],
-      [{ source_id: 'n1', target_id: 'n1' }] // self-loop, should be skipped
+      [{ source_id: 'n1', target_id: 'n1' }], // self-loop, should be skipped
+      'fighter'
     );
 
     const sqlSequence = client.query.mock.calls.map(([sql]) => sql);
     expect(sqlSequence[0]).toBe('BEGIN');
-    expect(sqlSequence).toContain('DELETE FROM skill_tree.nodes');
+    expect(sqlSequence.some((sql) => sql.includes('DELETE FROM skill_tree.nodes WHERE archetype = $1'))).toBe(true);
+    const deleteCall = client.query.mock.calls.find(([sql]) => sql.includes('DELETE FROM skill_tree.nodes'));
+    expect(deleteCall[1]).toEqual(['fighter']);
     expect(sqlSequence[sqlSequence.length - 1]).toBe('COMMIT');
     // self-referencing edge (src === dst) must not be inserted
     expect(sqlSequence.some((sql) => sql.includes('INSERT INTO skill_tree.edges'))).toBe(false);
@@ -41,7 +44,7 @@ describe('TreeModel.importTree', () => {
       return Promise.resolve({ rows: [] });
     });
 
-    await expect(TreeModel.importTree([], [])).rejects.toThrow('boom');
+    await expect(TreeModel.importTree([], [], 'fighter')).rejects.toThrow('boom');
 
     const sqlSequence = client.query.mock.calls.map(([sql]) => sql);
     expect(sqlSequence).toContain('ROLLBACK');
