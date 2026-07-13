@@ -5,6 +5,7 @@ import characterApi from '../api/characterSheet';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
 import maneuversApi from '../api/maneuvers';
+import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import { MAGIC_TYPES, RITUAL_TYPES, formatDuration } from '../constants/spellbook';
 import { EQUIPMENT_TYPES } from '../constants/equipment';
@@ -32,6 +33,21 @@ function useDebounce(fn, delay = 800) {
   }, [fn, delay]);
 }
 
+function prereqMet(item, unlockedNodeIds) {
+  const ids = item.prerequisite_node_ids || [];
+  if (!ids.length) return true;
+  return item.prerequisite_logic === 'and'
+    ? ids.every((id) => unlockedNodeIds.has(id))
+    : ids.some((id) => unlockedNodeIds.has(id));
+}
+
+function missingPrereqLabel(item) {
+  const nodes = item.prerequisite_nodes || [];
+  if (!nodes.length) return '';
+  const joiner = item.prerequisite_logic === 'and' ? ' і ' : ' або ';
+  return `Потрібно: ${nodes.map((n) => n.title).join(joiner)}`;
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
 export default function CharacterSheet({ publicView = false }) {
@@ -46,6 +62,7 @@ export default function CharacterSheet({ publicView = false }) {
   const [allSpells, setAllSpells] = useState([]);
   const [allEquipment, setAllEquipment] = useState([]);
   const [allManeuvers, setAllManeuvers] = useState([]);
+  const [allAbilities, setAllAbilities] = useState([]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName]     = useState('');
   const [editingDefense, setEditingDefense]         = useState(false);
@@ -61,12 +78,14 @@ export default function CharacterSheet({ publicView = false }) {
       publicView ? Promise.resolve([]) : (spellbookApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (equipmentApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (maneuversApi?.getAll?.() ?? Promise.resolve([])),
+      publicView ? Promise.resolve([]) : (abilitiesApi?.getAll?.() ?? Promise.resolve([])),
     ])
-      .then(([sheet, spells, equipmentCatalog, maneuverCatalog]) => {
+      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
         setData(sheet);
         setAllSpells(Array.isArray(spells) ? spells : []);
         setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
         setAllManeuvers(Array.isArray(maneuverCatalog) ? maneuverCatalog : []);
+        setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
       })
       .catch(() => setError('Не вдалось завантажити лист персонажа'))
       .finally(() => setLoading(false));
@@ -178,6 +197,14 @@ export default function CharacterSheet({ publicView = false }) {
     await characterApi.removeManeuver(id, maneuverId);
     setData(prev => ({ ...prev, maneuvers: prev.maneuvers.filter(m => m.maneuver_id !== maneuverId) }));
   };
+  const addAbility    = async (abilityId) => {
+    const ability = await characterApi.addAbility(id, abilityId);
+    if (ability) setData(prev => ({ ...prev, abilities: [...prev.abilities, ability] }));
+  };
+  const removeAbility = async (abilityId) => {
+    await characterApi.removeAbility(id, abilityId);
+    setData(prev => ({ ...prev, abilities: prev.abilities.filter(a => a.ability_id !== abilityId) }));
+  };
   const addRitual    = async (payload) => {
     const tracker = await characterApi.addRitual(id, payload);
     setData(prev => ({ ...prev, rituals: [...prev.rituals, tracker] }));
@@ -195,9 +222,10 @@ export default function CharacterSheet({ publicView = false }) {
   if (error)   return <div className="mx-auto max-w-[1100px] px-4 py-16 text-center text-danger sm:px-6">{error}</div>;
   if (!data)   return null;
 
-  const { character: c, skills, spells, equipment, maneuvers, rituals, is_owner } = data;
+  const { character: c, skills, spells, equipment, maneuvers, abilities, rituals, is_owner } = data;
   const archetype = ARCHETYPES[c.archetype];
   const race      = RACES[c.race];
+  const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
 
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
 
@@ -244,6 +272,7 @@ export default function CharacterSheet({ publicView = false }) {
     { key: 'vitals',    label: 'Стан' },
     { key: 'magic',     label: 'Магія та чари' },
     ...(archetypeTab ? [archetypeTab] : []),
+    { key: 'abilities', label: 'Вміння' },
     { key: 'equipment', label: 'Спорядження' },
     { key: 'tree',      label: 'Дерево розвитку' },
     { key: 'notes',     label: 'Нотатки' },
@@ -419,6 +448,7 @@ export default function CharacterSheet({ publicView = false }) {
             onAddSpell={addSpell}
             onPatchSpell={patchSpell}
             onRemoveSpell={removeSpell}
+            unlockedNodeIds={unlockedNodeIds}
           />
         )}
         {tab === 'maneuvers' && (
@@ -426,6 +456,15 @@ export default function CharacterSheet({ publicView = false }) {
             maneuvers={maneuvers} allManeuvers={allManeuvers} is_owner={is_owner}
             onAdd={addManeuver}
             onRemove={removeManeuver}
+            unlockedNodeIds={unlockedNodeIds}
+          />
+        )}
+        {tab === 'abilities' && (
+          <AbilitiesTab
+            abilities={abilities} allAbilities={allAbilities} archetype={c.archetype} is_owner={is_owner}
+            onAdd={addAbility}
+            onRemove={removeAbility}
+            unlockedNodeIds={unlockedNodeIds}
           />
         )}
         {tab === 'rituals' && (
@@ -881,7 +920,7 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
 
 // ── MagicTab ──────────────────────────────────────────────────────────────────
 
-function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell }) {
+function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, unlockedNodeIds }) {
   const [spellSearch, setSpellSearch] = useState('');
   const [showPicker, setShowPicker]   = useState(false);
   const [editingMaxSpells, setEditingMaxSpells] = useState(false);
@@ -983,16 +1022,22 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
             />
             <div className="max-h-[180px] overflow-y-auto">
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних заклинань</p>}
-              {filteredAll.map(s => (
-                <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                  <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em></span>
-                  <button
-                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => { onAddSpell(s.id); setShowPicker(false); }}
-                    disabled={atMaxSpells}
-                  >+</button>
-                </div>
-              ))}
+              {filteredAll.map(s => {
+                const met = prereqMet(s, unlockedNodeIds);
+                return (
+                  <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
+                    <div className="flex flex-col">
+                      <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em></span>
+                      {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
+                    </div>
+                    <button
+                      className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => { onAddSpell(s.id); setShowPicker(false); }}
+                      disabled={atMaxSpells || !met}
+                    >+</button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1001,9 +1046,10 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
           {spells.length === 0 && <p className="my-2 text-sm text-text-dim">Заклинань ще немає</p>}
           {spells.map(entry => {
             const spell = allSpells.find(s => s.id === entry.spell_id);
+            const met = !spell || prereqMet(spell, unlockedNodeIds);
             return (
               <SpellEntry key={entry.spell_id} entry={entry} spell={spell}
-                is_owner={is_owner}
+                is_owner={is_owner} met={met}
                 onPatch={patch => onPatchSpell(entry.spell_id, patch)}
                 onRemove={() => onRemoveSpell(entry.spell_id)}
               />
@@ -1037,7 +1083,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   );
 }
 
-function SpellEntry({ entry, spell, is_owner, onPatch, onRemove }) {
+function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
   const [showModal, setShowModal] = useState(false);
   return (
     <>
@@ -1048,6 +1094,7 @@ function SpellEntry({ entry, spell, is_owner, onPatch, onRemove }) {
             {[spell?.magic_type && (MAGIC_TYPES[spell.magic_type]?.label ?? spell.magic_type), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
+          {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
         </div>
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
@@ -1326,7 +1373,7 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
 
 // ── ManeuversTab (fighter) ──────────────────────────────────────────────────
 
-function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove }) {
+function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlockedNodeIds }) {
   const [search, setSearch]         = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -1354,12 +1401,22 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove }) {
           />
           <div className="max-h-[220px] overflow-y-auto">
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних маневрів</p>}
-            {filteredAll.map(m => (
-              <div key={m.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                <span>{m.name} <em className="text-xs text-text-dim">{m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</em></span>
-                <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => { onAdd(m.id); setShowPicker(false); }}>+</button>
-              </div>
-            ))}
+            {filteredAll.map(m => {
+              const met = prereqMet(m, unlockedNodeIds);
+              return (
+                <div key={m.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
+                  <div className="flex flex-col">
+                    <span>{m.name} <em className="text-xs text-text-dim">{m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</em></span>
+                    {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(m)}</span>}
+                  </div>
+                  <button
+                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!met}
+                    onClick={() => { onAdd(m.id); setShowPicker(false); }}
+                  >+</button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1367,6 +1424,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove }) {
       {maneuvers.length === 0 && !showPicker && <p className="text-sm text-text-dim">Маневрів ще немає</p>}
       {maneuvers.map(entry => {
         const m = allManeuvers.find(x => x.id === entry.maneuver_id);
+        const met = !m || prereqMet(m, unlockedNodeIds);
         return (
           <div key={entry.maneuver_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
             <Link to={m ? `/maneuvers/${m.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
@@ -1375,9 +1433,85 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove }) {
                 {m && <span className="text-xs text-text-dim"> — {m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</span>}
               </span>
               {m?.description && <span className="text-xs text-text-dim">{m.description}</span>}
+              {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
             </Link>
             {is_owner && (
               <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={() => onRemove(entry.maneuver_id)}>✕</button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── AbilitiesTab (вміння, all archetypes) ───────────────────────────────────
+// Same reference-table pattern as maneuvers/equipment, but the picker is
+// scoped to catalog entries whose `archetypes` checkboxes include this
+// character's archetype, enforcing the per-archetype restriction set when
+// the ability was created.
+function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onRemove, unlockedNodeIds }) {
+  const [search, setSearch]         = useState('');
+  const [showPicker, setShowPicker] = useState(false);
+
+  const relevant    = allAbilities.filter(a => (a.archetypes || []).includes(archetype));
+  const knownIds    = new Set(abilities.map(a => a.ability_id));
+  const filteredAll = relevant.filter(a =>
+    !knownIds.has(a.id) &&
+    a.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      {is_owner && (
+        <div className="mb-5 flex items-center justify-between">
+          <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
+            {showPicker ? '✕ Закрити' : '+ Додати вміння'}
+          </button>
+          <Link to="/abilities" className="text-sm text-accent">Увесь каталог →</Link>
+        </div>
+      )}
+
+      {showPicker && (
+        <div className="mb-4 rounded-md border border-border bg-bg p-3">
+          <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <div className="max-h-[220px] overflow-y-auto">
+            {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних вмінь</p>}
+            {filteredAll.map(a => {
+              const met = prereqMet(a, unlockedNodeIds);
+              return (
+                <div key={a.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
+                  <div className="flex flex-col">
+                    <span>{a.name}</span>
+                    {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(a)}</span>}
+                  </div>
+                  <button
+                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!met}
+                    onClick={() => { onAdd(a.id); setShowPicker(false); }}
+                  >+</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {abilities.length === 0 && !showPicker && <p className="text-sm text-text-dim">Вмінь ще немає</p>}
+      {abilities.map(entry => {
+        const a = allAbilities.find(x => x.id === entry.ability_id);
+        const met = !a || prereqMet(a, unlockedNodeIds);
+        return (
+          <div key={entry.ability_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
+            <Link to={a ? `/abilities/${a.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
+              <span className="text-sm text-text">{a?.name ?? '(невідоме)'}</span>
+              {a?.description && <span className="text-xs text-text-dim">{a.description}</span>}
+              {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
+            </Link>
+            {is_owner && (
+              <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={() => onRemove(entry.ability_id)}>✕</button>
             )}
           </div>
         );

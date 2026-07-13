@@ -7,6 +7,7 @@ const TreeProgressController = require('../controllers/tree-progress.controller'
 const NephilimController = require('../controllers/nephilim.controller');
 const EquipmentController = require('../controllers/equipment.controller');
 const ManeuverController = require('../controllers/maneuver.controller');
+const AbilityController = require('../controllers/ability.controller');
 const RitualTrackerController = require('../controllers/ritual-tracker.controller');
 
 const router = express.Router();
@@ -56,6 +57,11 @@ router.delete('/:id/equipment/:equipmentId', wrap(EquipmentController.remove));
 router.get('/:id/maneuvers',                wrap(ManeuverController.list));
 router.post('/:id/maneuvers',               wrap(ManeuverController.add));
 router.delete('/:id/maneuvers/:maneuverId', wrap(ManeuverController.remove));
+
+// Abilities (вміння, all archetypes) — references abilities.entries catalog
+router.get('/:id/abilities',               wrap(AbilityController.list));
+router.post('/:id/abilities',              wrap(AbilityController.add));
+router.delete('/:id/abilities/:abilityId', wrap(AbilityController.remove));
 
 // Ritual trackers (spellcaster)
 router.get('/:id/rituals',            wrap(RitualTrackerController.list));

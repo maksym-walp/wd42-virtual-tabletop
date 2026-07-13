@@ -3,17 +3,19 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
-import { DURATION_OPTIONS } from '../constants/maneuvers';
+import { ARCHETYPES } from '../constants/characterSheet';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 
+const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
+
 const EMPTY = {
-  name: '', duration_actions: 1, description: '', is_public: true,
+  name: '', archetypes: [], description: '', is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
 };
 
-export default function ManeuverForm() {
+export default function AbilityForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -25,41 +27,49 @@ export default function ManeuverForm() {
   const [nodes, setNodes] = useState([]);
 
   useEffect(() => {
-    skillTreeApi.getNodes({ archetype: 'fighter' }).then(setNodes).catch(() => {});
+    skillTreeApi.getNodes().then(setNodes).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!isEdit) return;
-    api.get(`/api/maneuvers/${id}`)
+    api.get(`/api/abilities/${id}`)
       .then(({ data }) => {
-        const m = data.maneuver;
+        const a = data.ability;
         setForm({
-          name: m.name, duration_actions: m.duration_actions,
-          description: m.description || '', is_public: m.is_public,
-          prerequisite_node_ids: m.prerequisite_node_ids || [],
-          prerequisite_logic: m.prerequisite_logic || 'or',
+          name: a.name, archetypes: a.archetypes || [],
+          description: a.description || '', is_public: a.is_public,
+          prerequisite_node_ids: a.prerequisite_node_ids || [],
+          prerequisite_logic: a.prerequisite_logic || 'or',
         });
       })
-      .catch(() => navigate('/maneuvers'))
+      .catch(() => navigate('/abilities'))
       .finally(() => setLoading(false));
   }, [id]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const setNum = (field) => (e) => setForm((f) => ({ ...f, [field]: Number(e.target.value) }));
+
+  const toggleArchetype = (key) => {
+    setForm((f) => ({
+      ...f,
+      archetypes: f.archetypes.includes(key)
+        ? f.archetypes.filter((a) => a !== key)
+        : [...f.archetypes, key],
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Вкажи назву маневру'); return; }
+    if (!form.name.trim()) { setError('Вкажи назву вміння'); return; }
+    if (form.archetypes.length === 0) { setError('Обери хоча б один архетип'); return; }
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, duration_actions: Number(form.duration_actions) };
       if (isEdit) {
-        await api.put(`/api/maneuvers/${id}`, payload);
-        navigate(`/maneuvers/${id}`);
+        await api.put(`/api/abilities/${id}`, form);
+        navigate(`/abilities/${id}`);
       } else {
-        const { data } = await api.post('/api/maneuvers/', payload);
-        navigate(`/maneuvers/${data.maneuver.id}`);
+        const { data } = await api.post('/api/abilities/', form);
+        navigate(`/abilities/${data.ability.id}`);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -72,12 +82,12 @@ export default function ManeuverForm() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <Link to="/maneuvers" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Маневри
+      <Link to="/abilities" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> Вміння
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
-        {isEdit ? 'Редагування маневру' : 'Новий маневр'}
+        {isEdit ? 'Редагування вміння' : 'Нове вміння'}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -86,10 +96,20 @@ export default function ManeuverForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Тривалість">
-            <select className={inputClass} value={form.duration_actions} onChange={setNum('duration_actions')}>
-              {DURATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+          <Field label="Доступно архетипам">
+            <div className="flex flex-wrap gap-3">
+              {ARCHETYPE_KEYS.map((key) => (
+                <label key={key} className="flex cursor-pointer items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={form.archetypes.includes(key)}
+                    onChange={() => toggleArchetype(key)}
+                    className="h-5 w-5 accent-accent"
+                  />
+                  {ARCHETYPES[key].label}
+                </label>
+              ))}
+            </div>
           </Field>
         </FormSection>
 
@@ -98,13 +118,13 @@ export default function ManeuverForm() {
             className={`${inputClass} resize-y`}
             value={form.description} onChange={set('description')}
             rows={4}
-            placeholder="Що відбувається механічно, коли персонаж виконує цей маневр..."
+            placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
           />
         </FormSection>
 
         <FormSection title="Вимоги дерева розвитку">
           <NodePrerequisitePicker
-            nodes={nodes}
+            nodes={nodes.filter((n) => form.archetypes.includes(n.archetype))}
             value={form}
             onChange={(next) => setForm((f) => ({ ...f, ...next }))}
           />
@@ -124,7 +144,7 @@ export default function ManeuverForm() {
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
-          <Button type="button" variant="ghost" to={isEdit ? `/maneuvers/${id}` : '/maneuvers'}>
+          <Button type="button" variant="ghost" to={isEdit ? `/abilities/${id}` : '/abilities'}>
             Скасувати
           </Button>
           <Button type="submit" disabled={saving}>

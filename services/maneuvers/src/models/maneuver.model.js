@@ -5,6 +5,12 @@ const SORT_MAP = {
   duration_actions: 'm.duration_actions ASC, m.name ASC',
 };
 
+const prereqNodesSelect = (alias) => `COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
+     FROM skill_tree.nodes n WHERE n.id = ANY(${alias}.prerequisite_node_ids)),
+    '[]'::jsonb
+  ) AS prerequisite_nodes`;
+
 const ManeuverModel = {
   async findAll(userId, { search, sort } = {}) {
     const params = [userId];
@@ -18,7 +24,7 @@ const ManeuverModel = {
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
     const { rows } = await pool.query(
-      `SELECT m.*, (m.user_id = $1) AS is_owner
+      `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')}
        FROM maneuvers.entries m
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}`,
@@ -29,7 +35,7 @@ const ManeuverModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT m.*, (m.user_id = $2) AS is_owner
+      `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')}
        FROM maneuvers.entries m
        WHERE m.id = $1 AND (m.user_id = $2 OR m.is_public = true)`,
       [id, userId]
@@ -38,27 +44,28 @@ const ManeuverModel = {
   },
 
   async create(userId, data) {
-    const { name, duration_actions, description, is_public } = data;
+    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO maneuvers.entries
-         (user_id, name, duration_actions, description, is_public)
-       VALUES ($1,$2,$3,$4,$5)
+         (user_id, name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        RETURNING *`,
-      [userId, name, duration_actions ?? 1, description ?? null, is_public ?? false]
+      [userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
     );
     return rows[0];
   },
 
   async update(id, userId, data) {
-    const { name, duration_actions, description, is_public } = data;
+    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
 
     const { rows } = await pool.query(
       `UPDATE maneuvers.entries
-       SET name=$3, duration_actions=$4, description=$5, is_public=$6, updated_at=NOW()
+       SET name=$3, duration_actions=$4, description=$5, is_public=$6,
+           prerequisite_node_ids=$7, prerequisite_logic=$8, updated_at=NOW()
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
-      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false]
+      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
     );
     return rows[0] || null;
   },

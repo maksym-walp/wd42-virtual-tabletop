@@ -1,4 +1,4 @@
-import { ScrollText, BookOpen, TreePine, Swords, Zap, CircleUserRound } from 'lucide-react';
+import { ScrollText, BookOpen, TreePine, Swords, Zap, Star, CircleUserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -9,6 +9,7 @@ const TOOLS = [
   { id: 'skill-tree', label: 'Дерево розвитку',   icon: TreePine,        href: '/skill-tree' },
   { id: 'characters', label: 'Листи персонажів',  icon: ScrollText,      href: '/characters' },
   { id: 'spellbook',  label: 'Книга заклинань',   icon: BookOpen,        href: '/spellbook' },
+  { id: 'abilities',  label: 'Вміння',            icon: Star,            href: '/abilities' },
   { id: 'maneuvers',  label: 'Маневри',           icon: Zap,             href: '/maneuvers' },
   { id: 'equipment',  label: 'Спорядження',       icon: Swords,          href: '/equipment' },
 ];

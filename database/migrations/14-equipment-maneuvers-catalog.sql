@@ -5,6 +5,12 @@
 --     (character_id + catalog id + per-character progress), mirroring
 --     character_sheet.known_spells. Existing freeform rows are test data
 --     only (app not yet deployed) and are discarded.
+--
+-- The reshape blocks below are guarded: on installs that replay every
+-- migration from scratch against an already-current schema, the old
+-- freeform columns (name/slot/... or name/duration_actions/...) may
+-- already be gone — skip in that case instead of erroring on DROP
+-- COLUMN/ADD CONSTRAINT against objects that no longer/already exist.
 -- ================================================================
 
 CREATE SCHEMA IF NOT EXISTS equipment;
@@ -45,25 +51,41 @@ CREATE INDEX IF NOT EXISTS idx_maneuvers_entries_public  ON maneuvers.entries(is
 
 -- Discard old freeform rows (test data only) and turn character_sheet.equipment
 -- into a reference+progress table, like character_sheet.known_spells.
-TRUNCATE character_sheet.equipment;
-ALTER TABLE character_sheet.equipment
-  DROP COLUMN name,
-  DROP COLUMN slot,
-  DROP COLUMN damage_die,
-  DROP COLUMN defense_value,
-  DROP COLUMN notes,
-  ADD COLUMN equipment_id UUID NOT NULL;
-ALTER TABLE character_sheet.equipment
-  ADD CONSTRAINT uq_cs_equipment_char_item UNIQUE (character_id, equipment_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'character_sheet' AND table_name = 'equipment' AND column_name = 'name'
+  ) THEN
+    TRUNCATE character_sheet.equipment;
+    ALTER TABLE character_sheet.equipment
+      DROP COLUMN name,
+      DROP COLUMN slot,
+      DROP COLUMN damage_die,
+      DROP COLUMN defense_value,
+      DROP COLUMN notes,
+      ADD COLUMN equipment_id UUID NOT NULL;
+    ALTER TABLE character_sheet.equipment
+      ADD CONSTRAINT uq_cs_equipment_char_item UNIQUE (character_id, equipment_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_cs_equipment_equipment_id ON character_sheet.equipment(equipment_id);
 
 -- Same treatment for character_sheet.maneuvers (no progress fields — remove-only).
-TRUNCATE character_sheet.maneuvers;
-ALTER TABLE character_sheet.maneuvers
-  DROP COLUMN name,
-  DROP COLUMN duration_actions,
-  DROP COLUMN description,
-  ADD COLUMN maneuver_id UUID NOT NULL;
-ALTER TABLE character_sheet.maneuvers
-  ADD CONSTRAINT uq_cs_maneuvers_char_maneuver UNIQUE (character_id, maneuver_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'character_sheet' AND table_name = 'maneuvers' AND column_name = 'name'
+  ) THEN
+    TRUNCATE character_sheet.maneuvers;
+    ALTER TABLE character_sheet.maneuvers
+      DROP COLUMN name,
+      DROP COLUMN duration_actions,
+      DROP COLUMN description,
+      ADD COLUMN maneuver_id UUID NOT NULL;
+    ALTER TABLE character_sheet.maneuvers
+      ADD CONSTRAINT uq_cs_maneuvers_char_maneuver UNIQUE (character_id, maneuver_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_cs_maneuvers_maneuver_id ON character_sheet.maneuvers(maneuver_id);

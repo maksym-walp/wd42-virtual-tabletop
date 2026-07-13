@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import Button from '../components/ui/Button';
+import ReqBadge from '../components/ui/ReqBadge';
 import DiceFormulaText from '../components/DiceFormulaText';
 
 export default function SpellView() {
@@ -86,6 +87,19 @@ export default function SpellView() {
             <p className="text-[0.95rem] italic leading-relaxed text-text-dim">
               <DiceFormulaText text={spell.narrative_desc} />
             </p>
+          </Section>
+        )}
+
+        {spell.prerequisite_nodes?.length > 0 && (
+          <Section title="Вимоги дерева розвитку">
+            <div className="flex flex-col gap-1.5">
+              {spell.prerequisite_nodes.map((n) => (
+                <span key={n.id} className="flex items-center gap-1.5 text-sm text-text">
+                  <ReqBadge type={spell.prerequisite_logic === 'and' ? 'required' : 'optional'} />
+                  {n.title}
+                </span>
+              ))}
+            </div>
           </Section>
         )}
 

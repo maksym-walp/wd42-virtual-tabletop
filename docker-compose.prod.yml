@@ -147,6 +147,22 @@ services:
     networks:
       - walp-network
 
+  abilities:
+    build:
+      context: ./services/abilities
+      target: production
+    container_name: walp-abilities
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3009
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   frontend:
     build:
       context: ./services/frontend
@@ -176,6 +192,7 @@ services:
       - dice-roller
       - equipment
       - maneuvers
+      - abilities
       - frontend
     networks:
       - walp-network

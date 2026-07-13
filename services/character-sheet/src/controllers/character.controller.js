@@ -5,6 +5,7 @@ const TreeProgressModel = require('../models/tree-progress.model');
 const NephilimBreakthroughModel = require('../models/nephilim-breakthrough.model');
 const EquipmentModel = require('../models/equipment.model');
 const ManeuverModel = require('../models/maneuver.model');
+const AbilityModel = require('../models/ability.model');
 const RitualTrackerModel = require('../models/ritual-tracker.model');
 
 const CharacterController = {
@@ -33,32 +34,34 @@ const CharacterController = {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
-    const [skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, rituals] = await Promise.all([
+    const [skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
       EquipmentModel.findAll(char.id),
       NephilimBreakthroughModel.findAll(char.id),
       ManeuverModel.findAll(char.id),
+      AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
     ]);
 
-    res.json({ character: char, skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, rituals, is_owner: isOwner });
+    res.json({ character: char, skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals, is_owner: isOwner });
   },
 
   async getPublicSheet(req, res) {
     const char = await CharacterModel.findPublicById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено або він приватний' });
 
-    const [skills, spells, equipment, maneuvers, rituals] = await Promise.all([
+    const [skills, spells, equipment, maneuvers, abilities, rituals] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       EquipmentModel.findAll(char.id),
       ManeuverModel.findAll(char.id),
+      AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
     ]);
 
-    res.json({ character: char, skills, spells, equipment, maneuvers, rituals, is_owner: false });
+    res.json({ character: char, skills, spells, equipment, maneuvers, abilities, rituals, is_owner: false });
   },
 
   async update(req, res) {

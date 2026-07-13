@@ -6,6 +6,12 @@ const SORT_MAP = {
   energy_cost: 's.energy_cost ASC, s.name ASC',
 };
 
+const prereqNodesSelect = (alias) => `COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
+     FROM skill_tree.nodes n WHERE n.id = ANY(${alias}.prerequisite_node_ids)),
+    '[]'::jsonb
+  ) AS prerequisite_nodes`;
+
 const SpellModel = {
   async findAll(userId, { magicType, spellKind, ritual, search, sort } = {}) {
     const params = [userId];
@@ -31,7 +37,7 @@ const SpellModel = {
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $1) AS is_owner
+      `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')}
        FROM spellbook.spells s
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}`,
@@ -42,7 +48,7 @@ const SpellModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $2) AS is_owner
+      `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')}
        FROM spellbook.spells s
        WHERE s.id = $1 AND (s.user_id = $2 OR s.is_public = true)`,
       [id, userId]
@@ -56,14 +62,15 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
+      prerequisite_node_ids, prerequisite_logic,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO spellbook.spells
          (user_id, name, magic_type, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
-          range_desc, components, is_public)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [
         userId, name, magic_type, spell_kind ?? 'utility',
@@ -71,6 +78,7 @@ const SpellModel = {
         energy_cost ?? 0, action_time ?? 1, ritual ?? 'impossible',
         duration_value ?? null, duration_unit ?? 'instant',
         range_desc ?? null, components ?? [], is_public ?? false,
+        prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
       ]
     );
     return rows[0];
@@ -82,6 +90,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
+      prerequisite_node_ids, prerequisite_logic,
     } = data;
 
     const { rows } = await pool.query(
@@ -90,7 +99,8 @@ const SpellModel = {
            mechanical_desc=$6, narrative_desc=$7,
            energy_cost=$8, action_time=$9, ritual=$10,
            duration_value=$11, duration_unit=$12, range_desc=$13,
-           components=$14, is_public=$15, updated_at=NOW()
+           components=$14, is_public=$15,
+           prerequisite_node_ids=$16, prerequisite_logic=$17, updated_at=NOW()
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
       [
@@ -99,6 +109,7 @@ const SpellModel = {
         energy_cost, action_time, ritual,
         duration_value ?? null, duration_unit, range_desc ?? null,
         components ?? [], is_public ?? false,
+        prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
       ]
     );
     return rows[0] || null;

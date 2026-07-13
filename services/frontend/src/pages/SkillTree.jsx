@@ -9,6 +9,7 @@ import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import ReqBadge from '../components/ui/ReqBadge';
 
 const NODE_R = 32;
 const DRAG_CLICK_THRESHOLD_PX = 5; // movement past this during a node drag suppresses the trailing click
@@ -817,15 +818,6 @@ function TtLabel({ children }) {
 function TtBadge({ children }) {
   return <span className="inline-block rounded bg-bg px-2 py-0.5 text-xs text-text-dim">{children}</span>;
 }
-function ReqBadge({ type }) {
-  const optional = type === 'optional';
-  return (
-    <span className={`rounded px-1 text-[0.65rem] ${optional ? 'bg-accent/15 text-accent' : 'bg-sage/15 text-sage'}`}>
-      {optional ? 'АБО' : 'І'}
-    </span>
-  );
-}
-
 // ── Node detail panel ─────────────────────────────────────────────
 function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose }) {
   const prereqEdges = edges.filter((e) => e.target_id === node.id);

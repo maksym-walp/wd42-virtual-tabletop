@@ -129,6 +129,21 @@ const characterApi = {
     await api.delete(`${BASE}/${characterId}/maneuvers/${maneuverId}`);
   },
 
+  // Abilities (вміння, all archetypes) — references abilities.entries catalog
+  async listAbilities(characterId) {
+    const { data } = await api.get(`${BASE}/${characterId}/abilities`);
+    return data.abilities;
+  },
+
+  async addAbility(characterId, abilityId) {
+    const { data } = await api.post(`${BASE}/${characterId}/abilities`, { ability_id: abilityId });
+    return data.ability;
+  },
+
+  async removeAbility(characterId, abilityId) {
+    await api.delete(`${BASE}/${characterId}/abilities/${abilityId}`);
+  },
+
   // Ritual trackers (spellcaster)
   async listRituals(characterId) {
     const { data } = await api.get(`${BASE}/${characterId}/rituals`);

@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 import api from '../api/client';
+import skillTreeApi from '../api/skillTree';
 import {
   MAGIC_TYPES, RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_KINDS,
 } from '../constants/spellbook';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 
 const EMPTY = {
   name: '', magic_type: 'arcana', spell_kind: 'utility',
@@ -15,6 +17,7 @@ const EMPTY = {
   energy_cost: 0, action_time: 1, ritual: 'impossible',
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true,
+  prerequisite_node_ids: [], prerequisite_logic: 'or',
 };
 
 export default function SpellForm() {
@@ -26,6 +29,11 @@ export default function SpellForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [nodes, setNodes] = useState([]);
+
+  useEffect(() => {
+    skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -40,6 +48,8 @@ export default function SpellForm() {
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
           components: s.components || [], is_public: s.is_public,
+          prerequisite_node_ids: s.prerequisite_node_ids || [],
+          prerequisite_logic: s.prerequisite_logic || 'or',
         });
       })
       .catch(() => navigate('/spellbook'))
@@ -237,6 +247,15 @@ export default function SpellForm() {
               placeholder="Як це виглядає та відчувається у світі гри..."
             />
           </Field>
+        </FormSection>
+
+        {/* — Вимоги дерева розвитку — */}
+        <FormSection title="Вимоги дерева розвитку" accentColor={activeType.color}>
+          <NodePrerequisitePicker
+            nodes={nodes}
+            value={form}
+            onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+          />
         </FormSection>
 
         {/* — Налаштування — */}

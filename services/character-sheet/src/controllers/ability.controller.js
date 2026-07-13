@@ -1,5 +1,5 @@
 const CharacterModel = require('../models/character.model');
-const ManeuverModel = require('../models/maneuver.model');
+const AbilityModel = require('../models/ability.model');
 const { checkPrerequisites } = require('../models/prerequisite.model');
 
 async function assertOwner(req, res) {
@@ -9,28 +9,28 @@ async function assertOwner(req, res) {
   return char;
 }
 
-const ManeuverController = {
+const AbilityController = {
   async list(req, res) {
-    const maneuvers = await ManeuverModel.findAll(req.params.id);
-    res.json({ maneuvers });
+    const abilities = await AbilityModel.findAll(req.params.id);
+    res.json({ abilities });
   },
 
   async add(req, res) {
     if (!await assertOwner(req, res)) return;
-    const { maneuver_id } = req.body;
-    if (!maneuver_id) return res.status(400).json({ message: 'maneuver_id є обовʼязковим' });
-    const { met, missing } = await checkPrerequisites(req.params.id, 'maneuvers.entries', maneuver_id);
+    const { ability_id } = req.body;
+    if (!ability_id) return res.status(400).json({ message: 'ability_id є обовʼязковим' });
+    const { met, missing } = await checkPrerequisites(req.params.id, 'abilities.entries', ability_id);
     if (!met) return res.status(403).json({ message: 'Не виконано вимоги дерева розвитку', missing_node_ids: missing });
-    const maneuver = await ManeuverModel.add(req.params.id, maneuver_id);
-    res.status(201).json({ maneuver });
+    const ability = await AbilityModel.add(req.params.id, ability_id);
+    res.status(201).json({ ability });
   },
 
   async remove(req, res) {
     if (!await assertOwner(req, res)) return;
-    const deleted = await ManeuverModel.remove(req.params.id, req.params.maneuverId);
-    if (!deleted) return res.status(404).json({ message: 'Маневр не знайдено' });
+    const deleted = await AbilityModel.remove(req.params.id, req.params.abilityId);
+    if (!deleted) return res.status(404).json({ message: 'Вміння не знайдено' });
     res.json({ message: 'Видалено' });
   },
 };
 
-module.exports = ManeuverController;
+module.exports = AbilityController;

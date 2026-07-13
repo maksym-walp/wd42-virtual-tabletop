@@ -19,6 +19,9 @@ import EquipmentForm from './pages/EquipmentForm';
 import ManeuverCatalog from './pages/ManeuverCatalog';
 import ManeuverView from './pages/ManeuverView';
 import ManeuverForm from './pages/ManeuverForm';
+import AbilityCatalog from './pages/AbilityCatalog';
+import AbilityView from './pages/AbilityView';
+import AbilityForm from './pages/AbilityForm';
 import SkillTree from './pages/SkillTree';
 import CharacterList from './pages/CharacterList';
 import CharacterNew from './pages/CharacterNew';
@@ -50,6 +53,10 @@ export default function App() {
                   <Route path="/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/maneuvers/:id" element={<PrivateRoute><ManeuverView /></PrivateRoute>} />
                   <Route path="/maneuvers/:id/edit" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
+                  <Route path="/abilities" element={<PrivateRoute><AbilityCatalog /></PrivateRoute>} />
+                  <Route path="/abilities/new" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
+                  <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
+                  <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
                   <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />
                   <Route path="/characters" element={<PrivateRoute><CharacterList /></PrivateRoute>} />
                   <Route path="/characters/new" element={<PrivateRoute><CharacterNew /></PrivateRoute>} />

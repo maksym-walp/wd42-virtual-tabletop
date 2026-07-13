@@ -21,7 +21,8 @@
     ├── character-sheet/         # порт 3005 — лист персонажа
     ├── dice-roller/              # порт 3006 — кидки кубиків
     ├── equipment/                # порт 3007 — зброя/обладунки/артефакти
-    ├── maneuvers/                # порт 3008 — маневри/особливі дії
+    ├── maneuvers/                # порт 3008 — маневри бійців
+    ├── abilities/                 # порт 3009 — вміння (за архетипами)
     └── frontend/                 # порт 5173 (dev) — React/Vite SPA
 ```
 
@@ -36,6 +37,7 @@ Nginx проксує запити з порту 80:
 - `/api/dice/` → dice-roller
 - `/api/equipment/` → equipment
 - `/api/maneuvers/` → maneuvers
+- `/api/abilities/` → abilities
 - `/` → frontend
 
 ## Швидкий старт (Docker)
