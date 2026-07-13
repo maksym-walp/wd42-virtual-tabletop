@@ -539,10 +539,6 @@ function SkillsTab({ characteristics, skillMap, charLevels, is_owner, onPatchSki
                     progress={s.progress_marks}
                     minValue={minValue}
                     is_owner={is_owner}
-                    onValueChange={delta => {
-                      const next = Math.max(minValue, Math.min(12, s.value + delta));
-                      onPatchSkill(skill.key, { value: next });
-                    }}
                     onProgressClick={idx => {
                       if (!is_owner) return;
                       const newMarks = s.progress_marks === idx + 1 ? idx : idx + 1;
@@ -575,55 +571,51 @@ function LevelSquares({ level }) {
   );
 }
 
-function SkillRow({ label, value, progress, minValue = 1, is_owner, onValueChange, onProgressClick, onLevelAdjust }) {
+function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressClick, onLevelAdjust }) {
   const die = modifierDie(value);
   const canLevelDown = is_owner && progress === 0 && value > minValue;
   const canLevelUp   = is_owner && progress === 5 && value < 12;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-y-1 border-b border-bg py-1.5">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm text-text-muted">{label}</span>
-        <div className="flex items-center">
-          {is_owner && (
-            <button
-              className={`flex h-9 w-9 items-center justify-center text-xs font-bold ${canLevelDown ? 'text-danger' : 'text-border'}`}
-              onClick={() => onLevelAdjust(-1)}
-              disabled={!canLevelDown}
-              title="Зменшити навичку (стерти всі кружечки)"
-            >−</button>
-          )}
-          <div className="flex items-center">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <button key={i}
-                className={`flex h-9 w-9 items-center justify-center ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
-                onClick={() => onProgressClick(i)}
-                title={is_owner ? `Позначити ${i + 1} коло` : undefined}
-              >
-                <span className={`h-[9px] w-[9px] rounded-full border-[1.5px] border-gold/50 ${i < progress ? 'bg-gold' : 'bg-transparent'}`} />
-              </button>
-            ))}
-          </div>
-          {is_owner && (
-            <button
-              className={`flex h-9 w-9 items-center justify-center text-xs font-bold ${canLevelUp ? 'text-sage' : 'text-border'}`}
-              onClick={() => onLevelAdjust(1)}
-              disabled={!canLevelUp}
-              title="Підвищити навичку (заповнити всі кружечки)"
-            >+</button>
-          )}
+    <div className="flex flex-col gap-1 border-b border-bg py-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-base font-semibold text-text-muted">{label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-6 text-center text-base font-bold text-text">{value}</span>
+          <span className="min-w-[28px] rounded border border-border bg-bg px-1.5 py-0.5 text-center text-xs text-accent">{die}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        {is_owner ? (
-          <div className="flex items-center gap-0.5">
-            <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => onValueChange(-1)} disabled={value <= minValue}>−</button>
-            <span className="w-6 text-center text-base font-bold text-text">{value}</span>
-            <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => onValueChange(1)} disabled={value >= 12}>+</button>
-          </div>
-        ) : (
-          <span className="w-6 text-center text-base font-bold text-text">{value}</span>
+      <div className="flex items-center">
+        {is_owner && (
+          <button
+            className={`flex h-9 w-9 items-center justify-center text-xs font-bold ${
+              canLevelDown ? 'rounded border border-danger/40 bg-danger/10 text-danger' : 'text-border'
+            }`}
+            onClick={() => onLevelAdjust(-1)}
+            disabled={!canLevelDown}
+            title="Зменшити навичку (стерти всі кружечки)"
+          >−</button>
         )}
-        <span className="min-w-[28px] rounded border border-border bg-bg px-1.5 py-0.5 text-center text-xs text-accent">{die}</span>
+        <div className="flex items-center">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <button key={i}
+              className={`flex h-9 w-9 items-center justify-center ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
+              onClick={() => onProgressClick(i)}
+              title={is_owner ? `Позначити ${i + 1} коло` : undefined}
+            >
+              <span className={`h-3.5 w-3.5 rounded-full border-[1.5px] border-gold/50 ${i < progress ? 'bg-gold' : 'bg-transparent'}`} />
+            </button>
+          ))}
+        </div>
+        {is_owner && (
+          <button
+            className={`flex h-9 w-9 items-center justify-center text-xs font-bold ${
+              canLevelUp ? 'rounded border border-sage/40 bg-sage/10 text-sage' : 'text-border'
+            }`}
+            onClick={() => onLevelAdjust(1)}
+            disabled={!canLevelUp}
+            title="Підвищити навичку (заповнити всі кружечки)"
+          >+</button>
+        )}
       </div>
     </div>
   );

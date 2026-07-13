@@ -50,7 +50,8 @@ export default function useSvgPanZoom({ initial, minK = 0.2, maxK = 2.5 }) {
 
     if (pointers.current.size === 1 && panStart.current) {
       const p = pointers.current.values().next().value;
-      setTransform((t) => ({ ...t, x: p.x - panStart.current.x, y: p.y - panStart.current.y }));
+      const start = panStart.current;
+      setTransform((t) => ({ ...t, x: p.x - start.x, y: p.y - start.y }));
     }
   };
 
