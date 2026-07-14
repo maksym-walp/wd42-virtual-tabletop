@@ -1738,7 +1738,7 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
     );
     visibleNodes = nodes.filter(n => n.races?.includes('other') || (!n.races?.length && !replacedIds.has(n.id)));
   } else {
-    visibleNodes = nodes.filter(n => !n.races?.length);
+    visibleNodes = nodes.filter(n => !n.races?.length || n.races.includes(effectiveRace));
   }
   const visibleIdSet = new Set(visibleNodes.map(n => n.id));
 
