@@ -1,18 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import { ARCHETYPES } from '../constants/characterSheet';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
+import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 
 const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
+const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
   name: '', archetypes: [], description: '', is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
+  collectionIds: [],
 };
 
 export default function AbilityForm() {
@@ -25,9 +29,20 @@ export default function AbilityForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [nodes, setNodes] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+  const initialCollectionIds = useRef([]);
+  const membershipInitialized = useRef(false);
 
   useEffect(() => {
     skillTreeApi.getNodes().then(setNodes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    domain.collectionsApi.getAll()
+      .then((all) => setCollections(all.filter((c) => c.is_owner)))
+      .catch(() => {})
+      .finally(() => setCollectionsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -35,18 +50,38 @@ export default function AbilityForm() {
     api.get(`/api/abilities/${id}`)
       .then(({ data }) => {
         const a = data.ability;
-        setForm({
+        setForm((f) => ({
+          ...f,
           name: a.name, archetypes: a.archetypes || [],
           description: a.description || '', is_public: a.is_public,
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
-        });
+        }));
       })
       .catch(() => navigate('/abilities'))
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (!isEdit || membershipInitialized.current || loading || !collectionsLoaded) return;
+    const memberIds = collections.filter((c) => (c.items || []).some((it) => it.id === id)).map((c) => c.id);
+    initialCollectionIds.current = memberIds;
+    setForm((f) => ({ ...f, collectionIds: memberIds }));
+    membershipInitialized.current = true;
+  }, [isEdit, loading, collectionsLoaded, collections, id]);
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const reconcileCollections = async (itemId) => {
+    const before = initialCollectionIds.current;
+    const after = form.collectionIds;
+    const toAdd = after.filter((cid) => !before.includes(cid));
+    const toRemove = before.filter((cid) => !after.includes(cid));
+    await Promise.all([
+      ...toAdd.map((cid) => domain.collectionsApi.addItem(cid, domain.itemIdField, itemId)),
+      ...toRemove.map((cid) => domain.collectionsApi.removeItem(cid, itemId)),
+    ]);
+  };
 
   const toggleArchetype = (key) => {
     setForm((f) => ({
@@ -64,11 +99,14 @@ export default function AbilityForm() {
     setSaving(true);
     setError('');
     try {
+      const { collectionIds, ...payload } = form;
       if (isEdit) {
-        await api.put(`/api/abilities/${id}`, form);
+        await api.put(`/api/abilities/${id}`, payload);
+        await reconcileCollections(id);
         navigate(`/abilities/${id}`);
       } else {
-        const { data } = await api.post('/api/abilities/', form);
+        const { data } = await api.post('/api/abilities/', payload);
+        await reconcileCollections(data.ability.id);
         navigate(`/abilities/${data.ability.id}`);
       }
     } catch (err) {
@@ -127,6 +165,15 @@ export default function AbilityForm() {
             nodes={nodes.filter((n) => form.archetypes.includes(n.archetype))}
             value={form}
             onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+          />
+        </FormSection>
+
+        <FormSection title="Колекції">
+          <CollectionMembershipPicker
+            collections={collections}
+            basePath={domain.basePath}
+            value={form.collectionIds}
+            onChange={(ids) => setForm((f) => ({ ...f, collectionIds: ids }))}
           />
         </FormSection>
 

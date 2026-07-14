@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
   EQUIPMENT_TYPES, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES,
 } from '../constants/equipment';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+
+const domain = COLLECTION_DOMAINS.equipment;
 
 const EMPTY = {
   name: '', type: 'weapon', damage_die: '', defense_value: '',
@@ -15,6 +19,7 @@ const EMPTY = {
   weapon_type: '', weapon_grip: '',
   armor_weight: '',
   creator: '', rarity: '',
+  collectionIds: [],
 };
 
 export default function EquipmentForm() {
@@ -26,13 +31,25 @@ export default function EquipmentForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [collections, setCollections] = useState([]);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+  const initialCollectionIds = useRef([]);
+  const membershipInitialized = useRef(false);
+
+  useEffect(() => {
+    domain.collectionsApi.getAll()
+      .then((all) => setCollections(all.filter((c) => c.is_owner)))
+      .catch(() => {})
+      .finally(() => setCollectionsLoaded(true));
+  }, []);
 
   useEffect(() => {
     if (!isEdit) return;
     api.get(`/api/equipment/${id}`)
       .then(({ data }) => {
         const i = data.item;
-        setForm({
+        setForm((f) => ({
+          ...f,
           name: i.name, type: i.type,
           damage_die: i.damage_die || '', defense_value: i.defense_value ?? '',
           description: i.description || '', is_public: i.is_public,
@@ -40,13 +57,35 @@ export default function EquipmentForm() {
           weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || '',
           armor_weight: i.armor_weight || '',
           creator: i.creator || '', rarity: i.rarity || '',
-        });
+        }));
       })
       .catch(() => navigate('/equipment'))
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Membership can only be resolved once both the item (to know its id, in
+  // edit mode) and the user's own collections (to check which contain it)
+  // have loaded — runs once, then form.collectionIds is the source of truth.
+  useEffect(() => {
+    if (!isEdit || membershipInitialized.current || loading || !collectionsLoaded) return;
+    const memberIds = collections.filter((c) => (c.items || []).some((it) => it.id === id)).map((c) => c.id);
+    initialCollectionIds.current = memberIds;
+    setForm((f) => ({ ...f, collectionIds: memberIds }));
+    membershipInitialized.current = true;
+  }, [isEdit, loading, collectionsLoaded, collections, id]);
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const reconcileCollections = async (itemId) => {
+    const before = initialCollectionIds.current;
+    const after = form.collectionIds;
+    const toAdd = after.filter((cid) => !before.includes(cid));
+    const toRemove = before.filter((cid) => !after.includes(cid));
+    await Promise.all([
+      ...toAdd.map((cid) => domain.collectionsApi.addItem(cid, domain.itemIdField, itemId)),
+      ...toRemove.map((cid) => domain.collectionsApi.removeItem(cid, itemId)),
+    ]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -54,8 +93,9 @@ export default function EquipmentForm() {
     setSaving(true);
     setError('');
     try {
+      const { collectionIds, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
         damage_die: form.damage_die || null,
         defense_value: form.defense_value === '' ? null : Number(form.defense_value),
         price: form.price === '' ? null : Number(form.price),
@@ -68,9 +108,11 @@ export default function EquipmentForm() {
       };
       if (isEdit) {
         await api.put(`/api/equipment/${id}`, payload);
+        await reconcileCollections(id);
         navigate(`/equipment/${id}`);
       } else {
         const { data } = await api.post('/api/equipment/', payload);
+        await reconcileCollections(data.item.id);
         navigate(`/equipment/${data.item.id}`);
       }
     } catch (err) {
@@ -192,6 +234,15 @@ export default function EquipmentForm() {
             value={form.description} onChange={set('description')}
             rows={4}
             placeholder="Що це за предмет, як виглядає, які має властивості..."
+          />
+        </FormSection>
+
+        <FormSection title="Колекції" accentColor={activeType.color}>
+          <CollectionMembershipPicker
+            collections={collections}
+            basePath={domain.basePath}
+            value={form.collectionIds}
+            onChange={(ids) => setForm((f) => ({ ...f, collectionIds: ids }))}
           />
         </FormSection>
 

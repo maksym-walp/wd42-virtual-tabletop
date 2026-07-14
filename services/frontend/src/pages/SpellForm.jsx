@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 import api from '../api/client';
@@ -7,9 +7,13 @@ import {
   MAGIC_TYPES, RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_KINDS,
 } from '../constants/spellbook';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
+import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+
+const domain = COLLECTION_DOMAINS.spellbook;
 
 const EMPTY = {
   name: '', magic_type: 'arcana', spell_kind: 'utility',
@@ -18,6 +22,7 @@ const EMPTY = {
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
+  collectionIds: [],
 };
 
 export default function SpellForm() {
@@ -30,9 +35,20 @@ export default function SpellForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [nodes, setNodes] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+  const initialCollectionIds = useRef([]);
+  const membershipInitialized = useRef(false);
 
   useEffect(() => {
     skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    domain.collectionsApi.getAll()
+      .then((all) => setCollections(all.filter((c) => c.is_owner)))
+      .catch(() => {})
+      .finally(() => setCollectionsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -40,7 +56,8 @@ export default function SpellForm() {
     api.get(`/api/spellbook/${id}`)
       .then(({ data }) => {
         const s = data.spell;
-        setForm({
+        setForm((f) => ({
+          ...f,
           name: s.name, magic_type: s.magic_type, spell_kind: s.spell_kind || 'utility',
           mechanical_desc: s.mechanical_desc || '',
           narrative_desc: s.narrative_desc || '',
@@ -50,14 +67,33 @@ export default function SpellForm() {
           components: s.components || [], is_public: s.is_public,
           prerequisite_node_ids: s.prerequisite_node_ids || [],
           prerequisite_logic: s.prerequisite_logic || 'or',
-        });
+        }));
       })
       .catch(() => navigate('/spellbook'))
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (!isEdit || membershipInitialized.current || loading || !collectionsLoaded) return;
+    const memberIds = collections.filter((c) => (c.items || []).some((it) => it.id === id)).map((c) => c.id);
+    initialCollectionIds.current = memberIds;
+    setForm((f) => ({ ...f, collectionIds: memberIds }));
+    membershipInitialized.current = true;
+  }, [isEdit, loading, collectionsLoaded, collections, id]);
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const setNum = (field) => (e) => setForm((f) => ({ ...f, [field]: Number(e.target.value) }));
+
+  const reconcileCollections = async (itemId) => {
+    const before = initialCollectionIds.current;
+    const after = form.collectionIds;
+    const toAdd = after.filter((cid) => !before.includes(cid));
+    const toRemove = before.filter((cid) => !after.includes(cid));
+    await Promise.all([
+      ...toAdd.map((cid) => domain.collectionsApi.addItem(cid, domain.itemIdField, itemId)),
+      ...toRemove.map((cid) => domain.collectionsApi.removeItem(cid, itemId)),
+    ]);
+  };
 
   const addComponent = () => setForm((f) => ({ ...f, components: [...f.components, ''] }));
   const removeComponent = (i) => setForm((f) => ({
@@ -74,8 +110,9 @@ export default function SpellForm() {
     setSaving(true);
     setError('');
     try {
+      const { collectionIds, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
         components: form.components.filter((c) => c.trim() !== ''),
         duration_value: form.duration_value === '' ? null : Number(form.duration_value),
         energy_cost: Number(form.energy_cost),
@@ -83,9 +120,11 @@ export default function SpellForm() {
       };
       if (isEdit) {
         await api.put(`/api/spellbook/${id}`, payload);
+        await reconcileCollections(id);
         navigate(`/spellbook/${id}`);
       } else {
         const { data } = await api.post('/api/spellbook/', payload);
+        await reconcileCollections(data.spell.id);
         navigate(`/spellbook/${data.spell.id}`);
       }
     } catch (err) {
@@ -255,6 +294,16 @@ export default function SpellForm() {
             nodes={nodes}
             value={form}
             onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+          />
+        </FormSection>
+
+        {/* — Колекції — */}
+        <FormSection title="Колекції" accentColor={activeType.color}>
+          <CollectionMembershipPicker
+            collections={collections}
+            basePath={domain.basePath}
+            value={form.collectionIds}
+            onChange={(ids) => setForm((f) => ({ ...f, collectionIds: ids }))}
           />
         </FormSection>
 

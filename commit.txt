@@ -1,4 +1,0 @@
-git add .
-git commit -m "0.6 Added Skills and requirments for tree"
-git push origin main
-git push origin main:production

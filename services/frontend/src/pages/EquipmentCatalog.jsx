@@ -50,7 +50,10 @@ export default function EquipmentCatalog() {
           <h1 className="font-display text-2xl text-accent sm:text-3xl">Спорядження</h1>
           <p className="mt-0.5 text-sm text-text-dim">{items.length} предметів</p>
         </div>
-        <Button to="/equipment/new" className="hidden md:inline-flex">+ Новий предмет</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" to="/equipment/collections">Колекції</Button>
+          <Button to="/equipment/new" className="hidden md:inline-flex">+ Новий предмет</Button>
+        </div>
       </div>
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">

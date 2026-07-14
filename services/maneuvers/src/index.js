@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const maneuverRoutes = require('./routes/maneuver.routes');
+const collectionRoutes = require('./routes/collection.routes');
 
 const app = express();
 
@@ -14,6 +15,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Must be mounted before maneuverRoutes: its GET /:id at root would
+// otherwise swallow GET /collections (matching id='collections') since it's
+// registered at the same '/' prefix.
+app.use('/collections', collectionRoutes);
 app.use('/', maneuverRoutes);
 
 app.use((err, req, res, next) => {

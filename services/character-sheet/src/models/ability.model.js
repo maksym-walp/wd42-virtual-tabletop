@@ -1,9 +1,26 @@
 const pool = require('../config/db');
 
+const prereqNodesSelect = `COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
+     FROM skill_tree.nodes n WHERE n.id = ANY(ae.prerequisite_node_ids)),
+    '[]'::jsonb
+  )`;
+
 const AbilityModel = {
+  // LEFT JOIN cross-schema into abilities.entries — see equipment.model.js for rationale.
   async findAll(characterId) {
     const { rows } = await pool.query(
-      `SELECT * FROM character_sheet.abilities WHERE character_id = $1`,
+      `SELECT ca.*,
+              CASE WHEN ae.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', ae.id, 'name', ae.name, 'description', ae.description,
+                'archetypes', ae.archetypes, 'is_public', ae.is_public,
+                'prerequisite_node_ids', ae.prerequisite_node_ids,
+                'prerequisite_logic', ae.prerequisite_logic,
+                'prerequisite_nodes', ${prereqNodesSelect}
+              ) END AS ability
+       FROM character_sheet.abilities ca
+       LEFT JOIN abilities.entries ae ON ae.id = ca.ability_id
+       WHERE ca.character_id = $1`,
       [characterId]
     );
     return rows;

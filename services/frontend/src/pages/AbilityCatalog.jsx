@@ -35,7 +35,10 @@ export default function AbilityCatalog() {
           <h1 className="font-display text-2xl text-accent sm:text-3xl">Вміння</h1>
           <p className="mt-0.5 text-sm text-text-dim">{abilities.length} вмінь</p>
         </div>
-        <Button to="/abilities/new" className="hidden md:inline-flex">+ Нове вміння</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" to="/abilities/collections">Колекції</Button>
+          <Button to="/abilities/new" className="hidden md:inline-flex">+ Нове вміння</Button>
+        </div>
       </div>
 
       <div className="mb-5 flex flex-wrap gap-1.5">

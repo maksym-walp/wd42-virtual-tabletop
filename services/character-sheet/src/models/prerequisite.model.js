@@ -20,4 +20,15 @@ async function checkPrerequisites(characterId, sourceTable, itemId) {
   return { met, missing };
 }
 
-module.exports = { checkPrerequisites };
+// sourceTable is always a fixed literal from our own code, never user input.
+// A catalog entry is visible to a user if they own it or it's marked public —
+// mirrors the privacy filter each catalog service applies to its own list/getById.
+async function isVisibleToUser(sourceTable, itemId, userId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM ${sourceTable} WHERE id = $1 AND (user_id = $2 OR is_public = true)`,
+    [itemId, userId]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { checkPrerequisites, isVisibleToUser };

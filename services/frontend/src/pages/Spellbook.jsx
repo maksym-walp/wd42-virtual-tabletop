@@ -50,7 +50,10 @@ export default function Spellbook() {
           <h1 className="font-display text-2xl text-accent sm:text-3xl">Книга Заклинань</h1>
           <p className="mt-0.5 text-sm text-text-dim">{spells.length} заклинань</p>
         </div>
-        <Button to="/spellbook/new" className="hidden md:inline-flex">+ Нове заклинання</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" to="/spellbook/collections">Колекції</Button>
+          <Button to="/spellbook/new" className="hidden md:inline-flex">+ Нове заклинання</Button>
+        </div>
       </div>
 
       {/* Search — always visible, prominent */}

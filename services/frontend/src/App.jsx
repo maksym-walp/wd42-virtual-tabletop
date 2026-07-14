@@ -22,6 +22,9 @@ import ManeuverForm from './pages/ManeuverForm';
 import AbilityCatalog from './pages/AbilityCatalog';
 import AbilityView from './pages/AbilityView';
 import AbilityForm from './pages/AbilityForm';
+import CollectionsList from './pages/CollectionsList';
+import CollectionForm from './pages/CollectionForm';
+import CollectionView from './pages/CollectionView';
 import SkillTree from './pages/SkillTree';
 import CharacterList from './pages/CharacterList';
 import CharacterNew from './pages/CharacterNew';
@@ -43,18 +46,38 @@ export default function App() {
                   <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
                   <Route path="/spellbook" element={<PrivateRoute><Spellbook /></PrivateRoute>} />
                   <Route path="/spellbook/new" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
+                  <Route path="/spellbook/collections" element={<PrivateRoute><CollectionsList domainKey="spellbook" /></PrivateRoute>} />
+                  <Route path="/spellbook/collections/new" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
+                  <Route path="/spellbook/collections/public/:id" element={<CollectionView domainKey="spellbook" publicView />} />
+                  <Route path="/spellbook/collections/:id" element={<PrivateRoute><CollectionView domainKey="spellbook" /></PrivateRoute>} />
+                  <Route path="/spellbook/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
                   <Route path="/spellbook/:id" element={<PrivateRoute><SpellView /></PrivateRoute>} />
                   <Route path="/spellbook/:id/edit" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
                   <Route path="/equipment" element={<PrivateRoute><EquipmentCatalog /></PrivateRoute>} />
                   <Route path="/equipment/new" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
+                  <Route path="/equipment/collections" element={<PrivateRoute><CollectionsList domainKey="equipment" /></PrivateRoute>} />
+                  <Route path="/equipment/collections/new" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
+                  <Route path="/equipment/collections/public/:id" element={<CollectionView domainKey="equipment" publicView />} />
+                  <Route path="/equipment/collections/:id" element={<PrivateRoute><CollectionView domainKey="equipment" /></PrivateRoute>} />
+                  <Route path="/equipment/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
                   <Route path="/equipment/:id" element={<PrivateRoute><EquipmentView /></PrivateRoute>} />
                   <Route path="/equipment/:id/edit" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
                   <Route path="/maneuvers" element={<PrivateRoute><ManeuverCatalog /></PrivateRoute>} />
                   <Route path="/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
+                  <Route path="/maneuvers/collections" element={<PrivateRoute><CollectionsList domainKey="maneuvers" /></PrivateRoute>} />
+                  <Route path="/maneuvers/collections/new" element={<PrivateRoute><CollectionForm domainKey="maneuvers" /></PrivateRoute>} />
+                  <Route path="/maneuvers/collections/public/:id" element={<CollectionView domainKey="maneuvers" publicView />} />
+                  <Route path="/maneuvers/collections/:id" element={<PrivateRoute><CollectionView domainKey="maneuvers" /></PrivateRoute>} />
+                  <Route path="/maneuvers/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="maneuvers" /></PrivateRoute>} />
                   <Route path="/maneuvers/:id" element={<PrivateRoute><ManeuverView /></PrivateRoute>} />
                   <Route path="/maneuvers/:id/edit" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/abilities" element={<PrivateRoute><AbilityCatalog /></PrivateRoute>} />
                   <Route path="/abilities/new" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
+                  <Route path="/abilities/collections" element={<PrivateRoute><CollectionsList domainKey="abilities" /></PrivateRoute>} />
+                  <Route path="/abilities/collections/new" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
+                  <Route path="/abilities/collections/public/:id" element={<CollectionView domainKey="abilities" publicView />} />
+                  <Route path="/abilities/collections/:id" element={<PrivateRoute><CollectionView domainKey="abilities" /></PrivateRoute>} />
+                  <Route path="/abilities/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
                   <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
                   <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
                   <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />

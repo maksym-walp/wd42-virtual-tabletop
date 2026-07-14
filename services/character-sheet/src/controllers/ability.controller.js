@@ -1,6 +1,6 @@
 const CharacterModel = require('../models/character.model');
 const AbilityModel = require('../models/ability.model');
-const { checkPrerequisites } = require('../models/prerequisite.model');
+const { checkPrerequisites, isVisibleToUser } = require('../models/prerequisite.model');
 
 async function assertOwner(req, res) {
   const char = await CharacterModel.findById(req.params.id);
@@ -19,6 +19,9 @@ const AbilityController = {
     if (!await assertOwner(req, res)) return;
     const { ability_id } = req.body;
     if (!ability_id) return res.status(400).json({ message: 'ability_id є обовʼязковим' });
+    if (!await isVisibleToUser('abilities.entries', ability_id, req.user.sub)) {
+      return res.status(404).json({ message: 'Вміння не знайдено' });
+    }
     const { met, missing } = await checkPrerequisites(req.params.id, 'abilities.entries', ability_id);
     if (!met) return res.status(403).json({ message: 'Не виконано вимоги дерева розвитку', missing_node_ids: missing });
     const ability = await AbilityModel.add(req.params.id, ability_id);

@@ -1,5 +1,6 @@
 const CharacterModel = require('../models/character.model');
 const EquipmentModel = require('../models/equipment.model');
+const { isVisibleToUser } = require('../models/prerequisite.model');
 
 async function assertOwner(req, res) {
   const char = await CharacterModel.findById(req.params.id);
@@ -18,6 +19,9 @@ const EquipmentController = {
     if (!await assertOwner(req, res)) return;
     const { equipment_id } = req.body;
     if (!equipment_id) return res.status(400).json({ message: 'equipment_id є обовʼязковим' });
+    if (!await isVisibleToUser('equipment.items', equipment_id, req.user.sub)) {
+      return res.status(404).json({ message: 'Предмет не знайдено' });
+    }
     const item = await EquipmentModel.add(req.params.id, equipment_id);
     res.status(201).json({ item });
   },

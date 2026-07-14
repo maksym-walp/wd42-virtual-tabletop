@@ -252,7 +252,7 @@ export default function CharacterSheet({ publicView = false }) {
   const INSPIRATION_DIE = { 1:'—',2:'d4',3:'d6',4:'d8',5:'d10',6:'d12' };
 
   const passiveDefense = equipment.reduce((s, e) => {
-    const catalogItem = allEquipment.find(a => a.id === e.equipment_id);
+    const catalogItem = e.item || allEquipment.find(a => a.id === e.equipment_id);
     return catalogItem?.type === 'armor' ? s + (catalogItem.defense_value || 0) : s;
   }, 0);
   const totalDefense   = passiveDefense + (c.defense_bonus ?? 0);
@@ -498,6 +498,9 @@ export default function CharacterSheet({ publicView = false }) {
             onLock={lockTreeNode}
             onUseBreakthrough={useBreakthrough}
             onRevokeBreakthrough={revokeBreakthrough}
+            allAbilities={allAbilities}
+            allSpells={allSpells}
+            allManeuvers={allManeuvers}
           />
         )}
         {tab === 'notes' && (
@@ -1045,7 +1048,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
         <div>
           {spells.length === 0 && <p className="my-2 text-sm text-text-dim">Заклинань ще немає</p>}
           {spells.map(entry => {
-            const spell = allSpells.find(s => s.id === entry.spell_id);
+            const spell = entry.spell || allSpells.find(s => s.id === entry.spell_id);
             const met = !spell || prereqMet(spell, unlockedNodeIds);
             return (
               <SpellEntry key={entry.spell_id} entry={entry} spell={spell}
@@ -1311,7 +1314,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
       )}
 
       {['weapon', 'armor', 'artifact', 'item'].map(type => {
-        const items = equipment.filter(e => allEquipment.find(a => a.id === e.equipment_id)?.type === type);
+        const items = equipment.filter(e => (e.item || allEquipment.find(a => a.id === e.equipment_id))?.type === type);
         if (!items.length) return null;
         return (
           <div key={type} className="mb-6">
@@ -1320,7 +1323,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
             </div>
             {items.map(entry => (
               <EquipmentItem key={entry.equipment_id} entry={entry}
-                item={allEquipment.find(a => a.id === entry.equipment_id)}
+                item={entry.item || allEquipment.find(a => a.id === entry.equipment_id)}
                 is_owner={is_owner}
                 onRemove={() => onRemove(entry.equipment_id)}
                 onPatch={patch => onPatch(entry.equipment_id, patch)}
@@ -1423,7 +1426,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
 
       {maneuvers.length === 0 && !showPicker && <p className="text-sm text-text-dim">Маневрів ще немає</p>}
       {maneuvers.map(entry => {
-        const m = allManeuvers.find(x => x.id === entry.maneuver_id);
+        const m = entry.maneuver || allManeuvers.find(x => x.id === entry.maneuver_id);
         const met = !m || prereqMet(m, unlockedNodeIds);
         return (
           <div key={entry.maneuver_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
@@ -1501,7 +1504,7 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
 
       {abilities.length === 0 && !showPicker && <p className="text-sm text-text-dim">Вмінь ще немає</p>}
       {abilities.map(entry => {
-        const a = allAbilities.find(x => x.id === entry.ability_id);
+        const a = entry.ability || allAbilities.find(x => x.id === entry.ability_id);
         const met = !a || prereqMet(a, unlockedNodeIds);
         return (
           <div key={entry.ability_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
@@ -1703,7 +1706,7 @@ function getEffectiveRace(c) {
   return c.race === 'sangvi' ? (c.race_ancestry || 'human') : c.race;
 }
 
-function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onUnlock, onLock, onUseBreakthrough }) {
+function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onUnlock, onLock, onUseBreakthrough, allAbilities, allSpells, allManeuvers }) {
   const [nodes, setNodes]               = useState([]);
   const [edges, setEdges]               = useState([]);
   const [treeLoading, setTreeLoading]   = useState(true);
@@ -2041,6 +2044,9 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
             onLock={() => { onLock(selectedNode.id); setSelectedNode(null); }}
             onBreakthrough={(skippedNodeId) => handleBreakthrough(selectedNode.id, skippedNodeId)}
             onClose={() => setSelectedNode(null)}
+            allAbilities={allAbilities}
+            allSpells={allSpells}
+            allManeuvers={allManeuvers}
           />
         )}
       </div>
@@ -2048,11 +2054,15 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
   );
 }
 
-function TreeNodePanel({ node, nodes, edges, unlocked, skipped, canUnlock, availableBreakthroughs, is_owner, canRevoke, onUnlock, onLock, onBreakthrough, onClose }) {
+function TreeNodePanel({ node, nodes, edges, unlocked, skipped, canUnlock, availableBreakthroughs, is_owner, canRevoke, onUnlock, onLock, onBreakthrough, onClose, allAbilities, allSpells, allManeuvers }) {
   const prereqEdges = edges.filter(e => e.target_id === node.id && e.edge_type !== 'bridge');
   const prereqs = prereqEdges
     .map(e => ({ node: nodes.find(n => n.id === e.source_id), type: e.edge_type }))
     .filter(x => x.node);
+
+  const unlockedAbilities = (allAbilities || []).filter(a => (a.prerequisite_node_ids || []).includes(node.id));
+  const unlockedSpells    = (allSpells || []).filter(s => (s.prerequisite_node_ids || []).includes(node.id));
+  const unlockedManeuvers = (allManeuvers || []).filter(m => (m.prerequisite_node_ids || []).includes(node.id));
 
   return (
     <Sheet open onClose={onClose} title={node.icon ? `${node.icon} ${node.title}` : node.title}>
@@ -2064,6 +2074,33 @@ function TreeNodePanel({ node, nodes, edges, unlocked, skipped, canUnlock, avail
         <div className="mt-2 rounded-md border border-border bg-bg p-3">
           <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Ефект</p>
           <p className="text-sm leading-relaxed text-text-muted">{node.effect}</p>
+        </div>
+      )}
+
+      {unlockedAbilities.length > 0 && (
+        <div className="mt-2 rounded-md border border-border bg-bg p-3">
+          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні вміння</p>
+          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
+            {unlockedAbilities.map(a => <li key={a.id}>{a.name}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {unlockedSpells.length > 0 && (
+        <div className="mt-2 rounded-md border border-border bg-bg p-3">
+          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні заклинання</p>
+          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
+            {unlockedSpells.map(s => <li key={s.id}>{s.name}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {unlockedManeuvers.length > 0 && (
+        <div className="mt-2 rounded-md border border-border bg-bg p-3">
+          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні маневри</p>
+          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
+            {unlockedManeuvers.map(m => <li key={m.id}>{m.name}</li>)}
+          </ul>
         </div>
       )}
 

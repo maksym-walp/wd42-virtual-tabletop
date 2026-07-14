@@ -30,7 +30,10 @@ export default function ManeuverCatalog() {
           <h1 className="font-display text-2xl text-accent sm:text-3xl">Маневри</h1>
           <p className="mt-0.5 text-sm text-text-dim">{maneuvers.length} маневрів</p>
         </div>
-        <Button to="/maneuvers/new" className="hidden md:inline-flex">+ Новий маневр</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" to="/maneuvers/collections">Колекції</Button>
+          <Button to="/maneuvers/new" className="hidden md:inline-flex">+ Новий маневр</Button>
+        </div>
       </div>
 
       <div className="relative mb-5">

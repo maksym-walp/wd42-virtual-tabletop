@@ -1,6 +1,6 @@
 const CharacterModel = require('../models/character.model');
 const SpellProgressModel = require('../models/spell.model');
-const { checkPrerequisites } = require('../models/prerequisite.model');
+const { checkPrerequisites, isVisibleToUser } = require('../models/prerequisite.model');
 
 async function assertOwner(req, res) {
   const char = await CharacterModel.findById(req.params.id);
@@ -19,6 +19,9 @@ const SpellController = {
     if (!await assertOwner(req, res)) return;
     const { spell_id } = req.body;
     if (!spell_id) return res.status(400).json({ message: 'spell_id є обовʼязковим' });
+    if (!await isVisibleToUser('spellbook.spells', spell_id, req.user.sub)) {
+      return res.status(404).json({ message: 'Заклинання не знайдено' });
+    }
     const { met, missing } = await checkPrerequisites(req.params.id, 'spellbook.spells', spell_id);
     if (!met) return res.status(403).json({ message: 'Не виконано вимоги дерева розвитку', missing_node_ids: missing });
     const entry = await SpellProgressModel.add(req.params.id, spell_id);
