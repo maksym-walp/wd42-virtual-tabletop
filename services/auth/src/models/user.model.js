@@ -25,6 +25,31 @@ const UserModel = {
     return rows[0] || null;
   },
 
+  async findByIdWithPassword(id) {
+    const { rows } = await pool.query('SELECT * FROM auth.users WHERE id = $1', [id]);
+    return rows[0] || null;
+  },
+
+  async updateAccount(id, { email, username }) {
+    const { rows } = await pool.query(
+      `UPDATE auth.users
+       SET email      = COALESCE($2, email),
+           username   = COALESCE($3, username),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, email, username, role, is_active, created_at`,
+      [id, email ?? null, username ?? null]
+    );
+    return rows[0] || null;
+  },
+
+  async updatePassword(id, passwordHash) {
+    await pool.query(
+      'UPDATE auth.users SET password_hash = $2, updated_at = NOW() WHERE id = $1',
+      [id, passwordHash]
+    );
+  },
+
   async create({ email, username, passwordHash }) {
     const { rows } = await pool.query(
       `INSERT INTO auth.users (email, username, password_hash)

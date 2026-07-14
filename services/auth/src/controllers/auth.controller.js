@@ -46,6 +46,19 @@ const AuthController = {
     res.json({ user: req.user });
   },
 
+  async updateAccount(req, res) {
+    const { email, username } = req.body;
+    const { user, accessToken } = await AuthService.updateAccount(req.user.sub, { email, username });
+    res.json({ user, accessToken });
+  },
+
+  async changePassword(req, res) {
+    const { currentPassword, newPassword } = req.body;
+    await AuthService.changePassword(req.user.sub, { currentPassword, newPassword });
+    res.clearCookie(REFRESH_COOKIE, { path: '/' });
+    res.json({ message: 'Password changed' });
+  },
+
   // Used by other services or external clients to validate a token
   async validate(req, res) {
     const authHeader = req.headers.authorization;

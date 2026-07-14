@@ -53,9 +53,28 @@ export default function Register() {
               minLength={3}
               maxLength={50}
               required
-              autoComplete="username"
+              autoComplete="nickname"
             />
           </Field>
+
+          {/*
+            Login happens by email, not nickname, but password managers
+            associate the credential with whichever text field sits closest
+            to the password input. This hidden field mirrors the email value
+            with autoComplete="username" so browsers save/offer the
+            Email-Password pair instead of Nickname-Password.
+            See: https://web.dev/sign-in-form-best-practices/#help-password-managers
+          */}
+          <input
+            type="text"
+            name="username"
+            value={form.email}
+            readOnly
+            hidden
+            autoComplete="username"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
 
           <Field label="Пароль (мінімум 8 символів)">
             <input

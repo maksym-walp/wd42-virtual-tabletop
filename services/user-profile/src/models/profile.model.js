@@ -17,20 +17,6 @@ const ProfileModel = {
     return rows[0];
   },
 
-  async update(userId, { displayName, bio, avatarUrl }) {
-    const { rows } = await pool.query(
-      `UPDATE user_profile.profiles
-       SET display_name = COALESCE($2, display_name),
-           bio          = COALESCE($3, bio),
-           avatar_url   = COALESCE($4, avatar_url),
-           updated_at   = NOW()
-       WHERE user_id = $1
-       RETURNING *`,
-      [userId, displayName ?? null, bio ?? null, avatarUrl ?? null]
-    );
-    return rows[0] || null;
-  },
-
   // Get or create profile on first access
   async upsert(userId) {
     const existing = await ProfileModel.findByUserId(userId);

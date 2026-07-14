@@ -80,6 +80,65 @@ describe('login', () => {
   });
 });
 
+describe('updateAccount', () => {
+  it('rejects an email already used by another user with 409', async () => {
+    UserModel.findByEmail.mockResolvedValue({ ...USER, id: 'other' });
+    await expect(AuthService.updateAccount('u1', { email: 'taken@b.com' }))
+      .rejects.toMatchObject({ statusCode: 409, message: 'Email already in use' });
+  });
+
+  it('rejects a username already used by another user with 409', async () => {
+    UserModel.findByEmail.mockResolvedValue(null);
+    UserModel.findByUsername.mockResolvedValue({ ...USER, id: 'other' });
+    await expect(AuthService.updateAccount('u1', { username: 'taken' }))
+      .rejects.toMatchObject({ statusCode: 409, message: 'Username already taken' });
+  });
+
+  it('allows keeping your own email/username unchanged', async () => {
+    UserModel.findByEmail.mockResolvedValue(USER);
+    UserModel.findByUsername.mockResolvedValue(USER);
+    UserModel.updateAccount.mockResolvedValue(USER);
+
+    await AuthService.updateAccount(USER.id, { email: USER.email, username: USER.username });
+
+    expect(UserModel.updateAccount).toHaveBeenCalledWith(USER.id, { email: USER.email, username: USER.username });
+  });
+
+  it('returns the updated user with a freshly signed access token', async () => {
+    UserModel.findByEmail.mockResolvedValue(null);
+    UserModel.findByUsername.mockResolvedValue(null);
+    const updated = { ...USER, username: 'new-name' };
+    UserModel.updateAccount.mockResolvedValue(updated);
+
+    const result = await AuthService.updateAccount('u1', { username: 'new-name' });
+
+    expect(result).toEqual({ user: updated, accessToken: 'signed-token' });
+  });
+});
+
+describe('changePassword', () => {
+  it('rejects when the current password is wrong', async () => {
+    UserModel.findByIdWithPassword.mockResolvedValue(USER);
+    bcrypt.compare.mockResolvedValue(false);
+
+    await expect(AuthService.changePassword('u1', { currentPassword: 'wrong', newPassword: 'new-password' }))
+      .rejects.toMatchObject({ statusCode: 401, message: 'Current password is incorrect' });
+    expect(UserModel.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('hashes the new password and revokes every refresh token', async () => {
+    UserModel.findByIdWithPassword.mockResolvedValue(USER);
+    bcrypt.compare.mockResolvedValue(true);
+    bcrypt.hash.mockResolvedValue('new-hashed-pw');
+
+    await AuthService.changePassword('u1', { currentPassword: 'old-pw', newPassword: 'new-password' });
+
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
+    expect(UserModel.updatePassword).toHaveBeenCalledWith('u1', 'new-hashed-pw');
+    expect(UserModel.deleteAllRefreshTokens).toHaveBeenCalledWith('u1');
+  });
+});
+
 describe('refresh', () => {
   it('rejects an invalid/expired refresh token with 401', async () => {
     jwt.verify.mockImplementation(() => { throw new Error('bad token'); });

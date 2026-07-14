@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api/client';
 import diceApi from '../api/dice';
 import Card from '../components/ui/Card';
 import Field, { inputClass } from '../components/ui/Field';
@@ -10,43 +9,49 @@ import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateAccount, changePassword } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
-  const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [accountForm, setAccountForm] = useState({ username: user.username, email: user.email });
+  const [accountStatus, setAccountStatus] = useState('');
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordStatus, setPasswordStatus] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [diceStats, setDiceStats] = useState(null);
-
-  useEffect(() => {
-    api.get('/api/profile/me')
-      .then(({ data }) => {
-        setForm({
-          displayName: data.profile.display_name || '',
-          bio: data.profile.bio || '',
-          avatarUrl: data.profile.avatar_url || '',
-        });
-      })
-      .catch(() => setStatus('Не вдалося завантажити профіль'))
-      .finally(() => setLoading(false));
-  }, []);
 
   useEffect(() => {
     diceApi.stats().then(setDiceStats).catch(() => {});
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleAccountSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
-    setStatus('');
+    setAccountSaving(true);
+    setAccountStatus('');
     try {
-      await api.put('/api/profile/me', form);
-      setStatus('Збережено!');
-      setTimeout(() => setStatus(''), 2500);
-    } catch {
-      setStatus('Помилка збереження');
+      await updateAccount(accountForm);
+      setAccountStatus('Збережено!');
+      setTimeout(() => setAccountStatus(''), 2500);
+    } catch (err) {
+      setAccountStatus(err.response?.data?.message || 'Помилка збереження');
     } finally {
-      setSaving(false);
+      setAccountSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordStatus('Паролі не співпадають');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordStatus('');
+    try {
+      await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      navigate('/login');
+    } catch (err) {
+      setPasswordStatus(err.response?.data?.message || 'Помилка зміни паролю');
+      setPasswordSaving(false);
     }
   };
 
@@ -55,57 +60,95 @@ export default function Profile() {
     navigate('/login');
   };
 
-  if (loading) return <div className="mx-auto max-w-xl px-4 py-8 text-text-dim">Завантаження...</div>;
-
   return (
     <div className="mx-auto max-w-xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader title="Профіль" />
 
-      <Card className="mb-4 flex flex-col gap-2">
-        <p className="text-sm"><span className="mr-2 text-xs uppercase text-text-dim">Email</span>{user.email}</p>
-        <p className="text-sm"><span className="mr-2 text-xs uppercase text-text-dim">Нікнейм</span>@{user.username}</p>
-        <p className="text-sm"><span className="mr-2 text-xs uppercase text-text-dim">Роль</span>{user.role}</p>
-      </Card>
-
-      <Card>
-        <h2 className="mb-4 font-display text-lg text-text">Про себе</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Field label="Відображуване ім'я">
+      <Card className="mb-4">
+        <h2 className="mb-4 font-display text-lg text-text">Обліковий запис</h2>
+        <form onSubmit={handleAccountSubmit} className="flex flex-col gap-4">
+          <Field label="Нікнейм">
             <input
               type="text"
               className={inputClass}
-              value={form.displayName}
-              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-              maxLength={200}
+              value={accountForm.username}
+              onChange={(e) => setAccountForm({ ...accountForm, username: e.target.value })}
+              minLength={3}
+              maxLength={50}
+              required
+              autoComplete="nickname"
             />
           </Field>
 
-          <Field label="Біографія">
-            <textarea
-              className={`${inputClass} resize-y`}
-              value={form.bio}
-              onChange={(e) => setForm({ ...form, bio: e.target.value })}
-              rows={4}
-            />
-          </Field>
-
-          <Field label="URL аватара">
+          <Field label="Email">
             <input
-              type="url"
+              type="email"
               className={inputClass}
-              value={form.avatarUrl}
-              onChange={(e) => setForm({ ...form, avatarUrl: e.target.value })}
+              value={accountForm.email}
+              onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+              required
+              autoComplete="email"
             />
           </Field>
 
-          {status && (
-            <p className={`text-sm font-semibold ${status === 'Збережено!' ? 'text-sage' : 'text-danger'}`}>
-              {status}
+          <p className="text-sm"><span className="mr-2 text-xs uppercase text-text-dim">Роль</span>{user.role}</p>
+
+          {accountStatus && (
+            <p className={`text-sm font-semibold ${accountStatus === 'Збережено!' ? 'text-sage' : 'text-danger'}`}>
+              {accountStatus}
             </p>
           )}
 
-          <Button type="submit" disabled={saving}>
-            {saving ? 'Зберігаємо...' : 'Зберегти'}
+          <Button type="submit" disabled={accountSaving}>
+            {accountSaving ? 'Зберігаємо...' : 'Зберегти'}
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="mb-4">
+        <h2 className="mb-4 font-display text-lg text-text">Зміна паролю</h2>
+        <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+          <input type="text" name="username" value={user.username} readOnly hidden autoComplete="username" tabIndex={-1} aria-hidden="true" />
+
+          <Field label="Поточний пароль">
+            <input
+              type="password"
+              className={inputClass}
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+              required
+              autoComplete="current-password"
+            />
+          </Field>
+
+          <Field label="Новий пароль (мінімум 8 символів)">
+            <input
+              type="password"
+              className={inputClass}
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+              minLength={8}
+              required
+              autoComplete="new-password"
+            />
+          </Field>
+
+          <Field label="Повторіть новий пароль">
+            <input
+              type="password"
+              className={inputClass}
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+              minLength={8}
+              required
+              autoComplete="new-password"
+            />
+          </Field>
+
+          {passwordStatus && <p className="text-sm font-semibold text-danger">{passwordStatus}</p>}
+
+          <Button type="submit" disabled={passwordSaving}>
+            {passwordSaving ? 'Змінюємо...' : 'Змінити пароль'}
           </Button>
         </form>
       </Card>

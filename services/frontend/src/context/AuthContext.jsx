@@ -42,8 +42,25 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Updates username/email. Issues a fresh access token since the old one
+  // has the previous email/username baked into its claims.
+  const updateAccount = async ({ email, username }) => {
+    const { data } = await api.patch('/api/auth/me', { email, username });
+    setAccessToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  };
+
+  // Changing the password revokes every refresh token server-side, so the
+  // current session ends too — the caller should send the user to /login.
+  const changePassword = async (currentPassword, newPassword) => {
+    await api.put('/api/auth/me/password', { currentPassword, newPassword });
+    clearAccessToken();
+    setUser(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateAccount, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

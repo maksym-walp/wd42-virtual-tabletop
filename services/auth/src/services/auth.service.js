@@ -102,6 +102,45 @@ const AuthService = {
     return { accessToken: generateAccessToken(user) };
   },
 
+  async updateAccount(userId, { email, username }) {
+    if (email) {
+      const existing = await UserModel.findByEmail(email);
+      if (existing && existing.id !== userId) {
+        const err = new Error('Email already in use');
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+    if (username) {
+      const existing = await UserModel.findByUsername(username);
+      if (existing && existing.id !== userId) {
+        const err = new Error('Username already taken');
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+
+    const user = await UserModel.updateAccount(userId, { email, username });
+    const accessToken = generateAccessToken(user);
+    return { user, accessToken };
+  },
+
+  async changePassword(userId, { currentPassword, newPassword }) {
+    const user = await UserModel.findByIdWithPassword(userId);
+    const valid = user && (await bcrypt.compare(currentPassword, user.password_hash));
+    if (!valid) {
+      const err = new Error('Current password is incorrect');
+      err.statusCode = 401;
+      throw err;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await UserModel.updatePassword(userId, passwordHash);
+    // Password changed — revoke every outstanding session so a stolen
+    // refresh token can't outlive the credential it was issued under.
+    await UserModel.deleteAllRefreshTokens(userId);
+  },
+
   async logout(userId, refreshToken) {
     if (userId && refreshToken) {
       await UserModel.deleteRefreshToken(userId, hashToken(refreshToken));
