@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ManeuverCard from '../components/ManeuverCard';
+import CollectionsRow from '../components/CollectionsRow';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -45,6 +46,8 @@ export default function ManeuverCatalog() {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <CollectionsRow domainKey="maneuvers" />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

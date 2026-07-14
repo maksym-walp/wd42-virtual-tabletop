@@ -12,6 +12,8 @@ export const MODE_BUTTONS = [
   { key: 'adv', label: 'Перевага' },
 ];
 
+export const DOUBLE_CLICK_HINT = 'Натисніть двічі для подвійної переваги/перешкоди';
+
 // clicked is always one of 'dis' | 'normal' | 'adv' (the 3 buttons shown);
 // current may additionally be 'wadv' | 'wdis'.
 export function nextMode(current, clicked) {

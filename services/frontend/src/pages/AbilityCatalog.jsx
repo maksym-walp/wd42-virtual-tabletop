@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
+import CollectionsRow from '../components/CollectionsRow';
 import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -73,6 +74,8 @@ export default function AbilityCatalog() {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <CollectionsRow domainKey="abilities" />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

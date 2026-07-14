@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Plus, LayoutGrid, Table2 } from 'lucide-react';
 import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
+import CollectionsRow from '../components/CollectionsRow';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES } from '../constants/equipment';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -17,7 +18,7 @@ export default function EquipmentCatalog() {
   const [search, setSearch] = useState('');
   const [sort, setSort]     = useState('name');
   const [dir, setDir]       = useState('asc');
-  const [view, setView]     = useState('table'); // table | cards — artifacts only
+  const [view, setView]     = useState('table'); // table | cards
 
   useEffect(() => {
     const params = new URLSearchParams({ type, sort, dir });
@@ -41,7 +42,7 @@ export default function EquipmentCatalog() {
     else { setSort(key); setDir('asc'); }
   };
 
-  const showCards = type === 'artifact' && view === 'cards';
+  const showCards = view === 'cards';
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -72,22 +73,20 @@ export default function EquipmentCatalog() {
           ))}
         </div>
 
-        {type === 'artifact' && (
-          <div className="flex overflow-hidden rounded-lg border border-border">
-            <button
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
-              onClick={() => setView('table')}
-            >
-              <Table2 size={15} /> Таблиця
-            </button>
-            <button
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'cards' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
-              onClick={() => setView('cards')}
-            >
-              <LayoutGrid size={15} /> Картки
-            </button>
-          </div>
-        )}
+        <div className="flex overflow-hidden rounded-lg border border-border">
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
+            onClick={() => setView('table')}
+          >
+            <Table2 size={15} /> Таблиця
+          </button>
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'cards' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
+            onClick={() => setView('cards')}
+          >
+            <LayoutGrid size={15} /> Картки
+          </button>
+        </div>
       </div>
 
       <div className="relative mb-5">
@@ -99,6 +98,8 @@ export default function EquipmentCatalog() {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <CollectionsRow domainKey="equipment" />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

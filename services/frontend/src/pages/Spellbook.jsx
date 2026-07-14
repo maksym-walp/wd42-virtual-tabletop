@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, SlidersHorizontal, Plus } from 'lucide-react';
 import api from '../api/client';
 import SpellCard from '../components/SpellCard';
+import CollectionsRow from '../components/CollectionsRow';
 import { MAGIC_TYPES, SPELL_KINDS } from '../constants/spellbook';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -79,6 +80,8 @@ export default function Spellbook() {
           )}
         </button>
       </div>
+
+      <CollectionsRow domainKey="spellbook" />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

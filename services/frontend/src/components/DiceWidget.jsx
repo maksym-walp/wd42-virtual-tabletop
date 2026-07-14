@@ -7,7 +7,7 @@ import Button from './ui/Button';
 import Field, { inputClass } from './ui/Field';
 import DiceResult from './DiceResult';
 import {
-  DIE_TYPES, MODE_BUTTONS, DOUBLE_OF, nextMode,
+  DIE_TYPES, MODE_BUTTONS, DOUBLE_OF, DOUBLE_CLICK_HINT, nextMode,
   stripModifier, withModifier, addPlainDie, addWrappedDie, applyModeToFormula,
 } from '../constants/dice';
 
@@ -66,25 +66,34 @@ export default function DiceWidget() {
       <Sheet open={isOpen} onClose={close} title="Кидок кубиків">
         <div className="flex flex-col gap-4">
           {/* Row 1: mode + modifier */}
-          <div className="flex items-center gap-2">
-            <div className="flex flex-1 overflow-hidden rounded-lg border border-border">
-              {MODE_BUTTONS.map(({ key, label }, i) => {
-                const isDouble = DOUBLE_OF[key] && mode === DOUBLE_OF[key];
-                const active = mode === key || isDouble;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleModeClick(key)}
-                    className={`min-w-0 flex-1 break-words px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${i > 0 ? 'border-l border-border' : ''} ${
-                      active ? (MODE_ACTIVE_STYLE[key] || 'bg-accent text-bg') : 'bg-transparent text-text-dim hover:bg-surface-hover'
-                    }`}
-                  >
-                    {label}
-                    {isDouble ? ' ×2' : ''}
-                  </button>
-                );
-              })}
+          <div className="flex items-start gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex overflow-hidden rounded-lg border border-border">
+                {MODE_BUTTONS.map(({ key, label }, i) => {
+                  const isDouble = DOUBLE_OF[key] && mode === DOUBLE_OF[key];
+                  const active = mode === key || isDouble;
+                  const hasDouble = Boolean(DOUBLE_OF[key]);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleModeClick(key)}
+                      title={hasDouble ? DOUBLE_CLICK_HINT : undefined}
+                      className={`min-w-0 flex-1 break-words px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${i > 0 ? 'border-l border-border' : ''} ${
+                        active ? (MODE_ACTIVE_STYLE[key] || 'bg-accent text-bg') : 'bg-transparent text-text-dim hover:bg-surface-hover'
+                      }`}
+                    >
+                      {label}
+                      {isDouble ? ' ×2' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Desktop gets the hint as a native title tooltip on the adv/dis
+                  buttons (no hover on touch); mobile shows it inline instead. */}
+              <p className="px-0.5 text-[10px] leading-tight text-text-dim md:hidden">
+                {DOUBLE_CLICK_HINT}
+              </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
