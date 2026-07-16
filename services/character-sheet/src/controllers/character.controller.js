@@ -7,6 +7,8 @@ const EquipmentModel = require('../models/equipment.model');
 const ManeuverModel = require('../models/maneuver.model');
 const AbilityModel = require('../models/ability.model');
 const RitualTrackerModel = require('../models/ritual-tracker.model');
+const authorizeCharacterWrite = require('./authorize-character-write');
+const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 
 const CharacterController = {
   async list(req, res) {
@@ -30,11 +32,12 @@ const CharacterController = {
 
     const isOwner = char.user_id === req.user.sub;
     const isGM = req.user.role === 'game_master';
-    if (!isOwner && !isGM && !char.is_public) {
+    const isCampaignGm = !isOwner && await isCampaignGmForCharacter(char.id, req.user.sub);
+    if (!isOwner && !isGM && !isCampaignGm && !char.is_public) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
-    const [skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals] = await Promise.all([
+    const [skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals, owner_username] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -43,38 +46,47 @@ const CharacterController = {
       ManeuverModel.findAll(char.id),
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
+      CharacterModel.findOwnerUsername(char.user_id),
     ]);
 
-    res.json({ character: char, skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals, is_owner: isOwner });
+    // is_owner drives all edit UI on the frontend — a campaign GM has the
+    // same write rights as the owner (see authorizeCharacterWrite), so they
+    // get the same flag here rather than a separate "read-only" GM view.
+    res.json({
+      character: { ...char, owner_username },
+      skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals,
+      is_owner: isOwner || isCampaignGm,
+    });
   },
 
   async getPublicSheet(req, res) {
     const char = await CharacterModel.findPublicById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено або він приватний' });
 
-    const [skills, spells, equipment, maneuvers, abilities, rituals] = await Promise.all([
+    const [skills, spells, equipment, maneuvers, abilities, rituals, owner_username] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       EquipmentModel.findAll(char.id),
       ManeuverModel.findAll(char.id),
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
+      CharacterModel.findOwnerUsername(char.user_id),
     ]);
 
-    res.json({ character: char, skills, spells, equipment, maneuvers, abilities, rituals, is_owner: false });
+    res.json({ character: { ...char, owner_username }, skills, spells, equipment, maneuvers, abilities, rituals, is_owner: false });
   },
 
   async update(req, res) {
-    const char = await CharacterModel.findById(req.params.id);
-    if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
-    if (char.user_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!await authorizeCharacterWrite(req, res)) return;
 
-    const updated = await CharacterModel.update(req.params.id, req.user.sub, req.body);
+    const updated = await CharacterModel.update(req.params.id, req.body);
     res.json({ character: updated });
   },
 
   async remove(req, res) {
-    const deleted = await CharacterModel.delete(req.params.id, req.user.sub);
+    if (!await authorizeCharacterWrite(req, res)) return;
+
+    const deleted = await CharacterModel.delete(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Персонажа не знайдено' });
     res.json({ message: 'Видалено' });
   },

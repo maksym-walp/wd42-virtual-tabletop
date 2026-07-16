@@ -1,4 +1,4 @@
-import { Home, Users, BookOpen, Swords, Zap, Star, TreePine, CircleUserRound } from 'lucide-react';
+import { Home, Users, BookOpen, Swords, Zap, Star, TreePine, CircleUserRound, Castle } from 'lucide-react';
 
 // Full set — used by the desktop Navbar, which has plenty of horizontal
 // room and doesn't need an overflow menu.
@@ -6,6 +6,7 @@ export const NAV_ITEMS = [
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/',           label: 'Головна',     icon: Home },
   { to: '/characters', label: 'Персонажі',   icon: Users },
+  { to: '/campaigns',  label: 'Кампанії',    icon: Castle },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
   { to: '/abilities',  label: 'Вміння',      icon: Star },
   { to: '/maneuvers',  label: 'Маневри',     icon: Zap },
@@ -25,6 +26,7 @@ export const MOBILE_PRIMARY_NAV_ITEMS = [
 
 export const MOBILE_MORE_NAV_ITEMS = [
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
+  { to: '/campaigns',  label: 'Кампанії',    icon: Castle },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
   { to: '/abilities',  label: 'Вміння',      icon: Star },
   { to: '/maneuvers',  label: 'Маневри',     icon: Zap },

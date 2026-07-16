@@ -43,7 +43,10 @@ const AuthController = {
   },
 
   async me(req, res) {
-    res.json({ user: req.user });
+    // Normalize to the same shape login/register return — req.user is the
+    // raw JWT payload (sub/iat/exp), not {id, email, username, role}.
+    const { sub, email, username, role } = req.user;
+    res.json({ user: { id: sub, email, username, role } });
   },
 
   async updateAccount(req, res) {

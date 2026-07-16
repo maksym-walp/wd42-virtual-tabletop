@@ -29,6 +29,9 @@ import SkillTree from './pages/SkillTree';
 import CharacterList from './pages/CharacterList';
 import CharacterNew from './pages/CharacterNew';
 import CharacterSheet from './pages/CharacterSheet';
+import CampaignList from './pages/CampaignList';
+import CampaignNew from './pages/CampaignNew';
+import CampaignDetail from './pages/CampaignDetail';
 
 export default function App() {
   return (
@@ -85,6 +88,9 @@ export default function App() {
                   <Route path="/characters/new" element={<PrivateRoute><CharacterNew /></PrivateRoute>} />
                   <Route path="/characters/:id" element={<PrivateRoute><CharacterSheet /></PrivateRoute>} />
                   <Route path="/characters/public/:id" element={<CharacterSheet publicView />} />
+                  <Route path="/campaigns" element={<PrivateRoute><CampaignList /></PrivateRoute>} />
+                  <Route path="/campaigns/new" element={<PrivateRoute><CampaignNew /></PrivateRoute>} />
+                  <Route path="/campaigns/:id" element={<PrivateRoute><CampaignDetail /></PrivateRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>

@@ -71,23 +71,23 @@ describe('CharacterModel.update death_scale handling', () => {
   });
 
   it('leaves death_scale untouched when the field is not provided at all', async () => {
-    await CharacterModel.update('c1', 'u1', { name: 'New name' });
+    await CharacterModel.update('c1', { name: 'New name' });
     const params = pool.query.mock.calls[0][1];
-    expect(params[9]).toBe(false); // setDeathScale flag
-    expect(params[10]).toBeNull();
+    expect(params[8]).toBe(false); // setDeathScale flag
+    expect(params[9]).toBeNull();
   });
 
   it('applies an explicit null (clearing death_scale) when the key is present', async () => {
-    await CharacterModel.update('c1', 'u1', { death_scale: null });
+    await CharacterModel.update('c1', { death_scale: null });
     const params = pool.query.mock.calls[0][1];
-    expect(params[9]).toBe(true);
-    expect(params[10]).toBeNull();
+    expect(params[8]).toBe(true);
+    expect(params[9]).toBeNull();
   });
 
   it('applies a falsy-but-valid value (0) distinctly from "not provided"', async () => {
-    await CharacterModel.update('c1', 'u1', { death_scale: 0 });
+    await CharacterModel.update('c1', { death_scale: 0 });
     const params = pool.query.mock.calls[0][1];
-    expect(params[9]).toBe(true);
-    expect(params[10]).toBe(0);
+    expect(params[8]).toBe(true);
+    expect(params[9]).toBe(0);
   });
 });

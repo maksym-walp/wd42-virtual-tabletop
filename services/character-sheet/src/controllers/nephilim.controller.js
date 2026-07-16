@@ -1,6 +1,8 @@
 const CharacterModel = require('../models/character.model');
 const NephilimBreakthroughModel = require('../models/nephilim-breakthrough.model');
 const { calcAllowedBreakthroughs } = require('../rules/nephilim.rules');
+const authorizeCharacterWrite = require('./authorize-character-write');
+const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 
 const NephilimController = {
   async list(req, res) {
@@ -8,7 +10,7 @@ const NephilimController = {
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
     const isOwner = char.user_id === req.user.sub;
     const isGM    = req.user.role === 'game_master';
-    if (!isOwner && !isGM && !char.is_public) {
+    if (!isOwner && !isGM && !char.is_public && !await isCampaignGmForCharacter(char.id, req.user.sub)) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
     const breakthroughs = await NephilimBreakthroughModel.findAll(req.params.id);
@@ -16,9 +18,7 @@ const NephilimController = {
   },
 
   async use(req, res) {
-    const char = await CharacterModel.findById(req.params.id);
-    if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
-    if (char.user_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!await authorizeCharacterWrite(req, res)) return;
 
     const unlockedCount = await NephilimBreakthroughModel.countUnlocked(req.params.id);
     const usedBreakthroughs = await NephilimBreakthroughModel.findAll(req.params.id);
@@ -34,9 +34,7 @@ const NephilimController = {
   },
 
   async revoke(req, res) {
-    const char = await CharacterModel.findById(req.params.id);
-    if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
-    if (char.user_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!await authorizeCharacterWrite(req, res)) return;
 
     const deleted = await NephilimBreakthroughModel.revoke(req.params.id, req.params.nodeId);
     if (!deleted) return res.status(404).json({ message: 'Прорив не знайдено' });

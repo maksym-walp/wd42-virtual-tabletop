@@ -37,6 +37,16 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
+  // Cross-schema lookup (character-sheet -> auth), mirroring the existing
+  // convention (e.g. campaigns service -> character_sheet/auth).
+  async findOwnerUsername(userId) {
+    const { rows } = await pool.query(
+      `SELECT username FROM auth.users WHERE id = $1`,
+      [userId]
+    );
+    return rows[0]?.username ?? null;
+  },
+
   async create(userId, { name, archetype, race, race_ancestry, skills }) {
     const client = await pool.connect();
     try {
@@ -86,7 +96,10 @@ const CharacterModel = {
     }
   },
 
-  async update(id, userId, data) {
+  // Authorization (owner or campaign GM) is fully resolved by the controller
+  // (authorizeCharacterWrite) before this is called, so no user_id gate here —
+  // same convention as every child-table model (skill.model.js, equipment.model.js, ...).
+  async update(id, data) {
     const {
       name, is_public, backstory, notes,
       current_hp, current_magic, heroic_actions_used,
@@ -105,32 +118,32 @@ const CharacterModel = {
 
     const { rows } = await pool.query(
       `UPDATE character_sheet.characters
-       SET name                = COALESCE($3, name),
-           is_public           = COALESCE($4, is_public),
-           backstory           = COALESCE($5, backstory),
-           notes               = COALESCE($6, notes),
-           current_hp          = COALESCE($7, current_hp),
-           current_magic       = COALESCE($8, current_magic),
-           heroic_actions_used = COALESCE($9, heroic_actions_used),
-           death_scale         = CASE WHEN $10 THEN $11::smallint ELSE death_scale END,
-           health_dice_values  = COALESCE($12::integer[], health_dice_values),
-           conditions          = COALESCE($13::jsonb, conditions),
-           dev_points          = COALESCE($14, dev_points),
-           money               = COALESCE($15::jsonb, money),
-           spell_bonus         = COALESCE($16, spell_bonus),
-           temp_hp             = COALESCE($17, temp_hp),
-           defense_bonus       = COALESCE($18, defense_bonus),
-           inspiration_used    = COALESCE($19, inspiration_used),
-           narrative_inspiration_die = CASE WHEN $20 THEN $21 ELSE narrative_inspiration_die END,
-           luck_current        = COALESCE($22, luck_current),
-           luck_max            = COALESCE($23, luck_max),
-           rogue_inspiration_die      = CASE WHEN $24 THEN $25 ELSE rogue_inspiration_die END,
-           rogue_inspiration_given_to = CASE WHEN $26 THEN $27 ELSE rogue_inspiration_given_to END,
+       SET name                = COALESCE($2, name),
+           is_public           = COALESCE($3, is_public),
+           backstory           = COALESCE($4, backstory),
+           notes               = COALESCE($5, notes),
+           current_hp          = COALESCE($6, current_hp),
+           current_magic       = COALESCE($7, current_magic),
+           heroic_actions_used = COALESCE($8, heroic_actions_used),
+           death_scale         = CASE WHEN $9 THEN $10::smallint ELSE death_scale END,
+           health_dice_values  = COALESCE($11::integer[], health_dice_values),
+           conditions          = COALESCE($12::jsonb, conditions),
+           dev_points          = COALESCE($13, dev_points),
+           money               = COALESCE($14::jsonb, money),
+           spell_bonus         = COALESCE($15, spell_bonus),
+           temp_hp             = COALESCE($16, temp_hp),
+           defense_bonus       = COALESCE($17, defense_bonus),
+           inspiration_used    = COALESCE($18, inspiration_used),
+           narrative_inspiration_die = CASE WHEN $19 THEN $20 ELSE narrative_inspiration_die END,
+           luck_current        = COALESCE($21, luck_current),
+           luck_max            = COALESCE($22, luck_max),
+           rogue_inspiration_die      = CASE WHEN $23 THEN $24 ELSE rogue_inspiration_die END,
+           rogue_inspiration_given_to = CASE WHEN $25 THEN $26 ELSE rogue_inspiration_given_to END,
            updated_at          = NOW()
-       WHERE id = $1 AND user_id = $2
+       WHERE id = $1
        RETURNING *`,
       [
-        id, userId,
+        id,
         name ?? null, is_public ?? null, backstory ?? null, notes ?? null,
         current_hp ?? null, current_magic ?? null, heroic_actions_used ?? null,
         setDeathScale, setDeathScale ? (death_scale ?? null) : null,
@@ -152,10 +165,10 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
-  async delete(id, userId) {
+  async delete(id) {
     const { rowCount } = await pool.query(
-      `DELETE FROM character_sheet.characters WHERE id = $1 AND user_id = $2`,
-      [id, userId]
+      `DELETE FROM character_sheet.characters WHERE id = $1`,
+      [id]
     );
     return rowCount > 0;
   },

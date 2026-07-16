@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
@@ -68,6 +68,14 @@ export default function CharacterSheet({ publicView = false }) {
   const [editingDefense, setEditingDefense]         = useState(false);
   const [defenseDraft, setDefenseDraft]             = useState(0);
   const [editingInspiration, setEditingInspiration] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+
+  const handleCopyId = (characterId) => {
+    navigator.clipboard.writeText(characterId).then(() => {
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 1500);
+    });
+  };
 
   useEffect(() => {
     const fetchSheet = publicView
@@ -314,6 +322,19 @@ export default function CharacterSheet({ publicView = false }) {
             </span> · {race.label}
             {c.race_ancestry ? ` (${RACES[c.race_ancestry]?.label ?? c.race_ancestry})` : ''}
           </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-text-dim">
+            <button
+              onClick={() => handleCopyId(c.id)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 hover:bg-surface-hover hover:text-text"
+              title="Скопіювати ID персонажа"
+            >
+              {idCopied ? <Check size={13} /> : <Copy size={13} />}
+              <span className="font-mono">{c.id}</span>
+            </button>
+            {c.owner_username && (
+              <span>Власник: <span className="text-text">{c.owner_username}</span></span>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           {is_owner && (

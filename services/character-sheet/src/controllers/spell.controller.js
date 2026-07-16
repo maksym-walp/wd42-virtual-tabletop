@@ -1,13 +1,6 @@
-const CharacterModel = require('../models/character.model');
 const SpellProgressModel = require('../models/spell.model');
 const { checkPrerequisites, isVisibleToUser } = require('../models/prerequisite.model');
-
-async function assertOwner(req, res) {
-  const char = await CharacterModel.findById(req.params.id);
-  if (!char) { res.status(404).json({ message: 'Персонажа не знайдено' }); return null; }
-  if (char.user_id !== req.user.sub) { res.status(403).json({ message: 'Доступ заборонено' }); return null; }
-  return char;
-}
+const authorizeCharacterWrite = require('./authorize-character-write');
 
 const SpellController = {
   async list(req, res) {
@@ -16,7 +9,7 @@ const SpellController = {
   },
 
   async add(req, res) {
-    if (!await assertOwner(req, res)) return;
+    if (!await authorizeCharacterWrite(req, res)) return;
     const { spell_id } = req.body;
     if (!spell_id) return res.status(400).json({ message: 'spell_id є обовʼязковим' });
     if (!await isVisibleToUser('spellbook.spells', spell_id, req.user.sub)) {
@@ -29,7 +22,7 @@ const SpellController = {
   },
 
   async patch(req, res) {
-    if (!await assertOwner(req, res)) return;
+    if (!await authorizeCharacterWrite(req, res)) return;
     const { mastered, cast_count } = req.body;
     const updated = await SpellProgressModel.patch(req.params.id, req.params.spellId, { mastered, cast_count });
     if (!updated) return res.status(404).json({ message: 'Заклинання не знайдено в листі' });
@@ -37,7 +30,7 @@ const SpellController = {
   },
 
   async remove(req, res) {
-    if (!await assertOwner(req, res)) return;
+    if (!await authorizeCharacterWrite(req, res)) return;
     const deleted = await SpellProgressModel.remove(req.params.id, req.params.spellId);
     if (!deleted) return res.status(404).json({ message: 'Заклинання не знайдено' });
     res.json({ message: 'Видалено' });

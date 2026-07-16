@@ -173,6 +173,23 @@ services:
     networks:
       - walp-network
 
+  campaigns:
+    build:
+      context: ./services/campaigns
+      target: development
+    container_name: walp-campaigns
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3010
+    volumes:
+      - ./services/campaigns/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   frontend:
     build:
       context: ./services/frontend
@@ -202,6 +219,7 @@ services:
       - equipment
       - maneuvers
       - abilities
+      - campaigns
       - frontend
     networks:
       - walp-network
