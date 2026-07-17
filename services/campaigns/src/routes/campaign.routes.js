@@ -13,10 +13,13 @@ router.post('/join', wrap(CampaignCharacterController.join));
 router.post('/', wrap(CampaignController.create));
 router.get('/', wrap(CampaignController.listMine));
 router.get('/:id', wrap(CampaignController.getOne));
+router.patch('/:id', wrap(CampaignController.rename));
+router.delete('/:id', wrap(CampaignController.remove));
 router.patch('/:id/shared-notes', wrap(CampaignController.updateSharedNotes));
 router.patch('/:id/gm-notes', wrap(CampaignController.updateGmNotes));
 
 router.post('/:id/characters', wrap(CampaignCharacterController.addByGm));
 router.get('/:id/characters', wrap(CampaignCharacterController.list));
+router.delete('/:id/characters/:characterId', wrap(CampaignCharacterController.remove));
 
 module.exports = router;

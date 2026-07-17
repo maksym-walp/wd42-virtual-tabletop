@@ -52,6 +52,16 @@ const CampaignCharacterController = {
     const withOwnership = characters.map((ch) => ({ ...ch, is_mine: ch.owner_id === req.user.sub }));
     res.json({ characters: withOwnership });
   },
+
+  // Майстер відв'язує персонажа від кампанії (сам лист персонажа не видаляється)
+  async remove(req, res) {
+    const campaign = await CampaignModel.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
+    if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    await CampaignCharacterModel.remove(campaign.id, req.params.characterId);
+    res.status(204).send();
+  },
 };
 
 module.exports = CampaignCharacterController;

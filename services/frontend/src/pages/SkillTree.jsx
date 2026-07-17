@@ -123,6 +123,7 @@ export default function SkillTree() {
   const { transform, setTransform } = panZoom;
   const svgRef = useRef(null);
   const dragMovedRef = useRef(false); // true once a node drag exceeds the click-vs-drag threshold
+  const pendingCenterRef = useRef(false); // armed on each (re)load so the next render centers on the root node
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -149,6 +150,7 @@ export default function SkillTree() {
 
   const loadTree = (archetype, race) => {
     setLoading(true);
+    pendingCenterRef.current = true;
     Promise.all([
       skillTreeApi.getNodes({ archetype, race: race || undefined }),
       skillTreeApi.getEdges({ archetype }),
@@ -160,6 +162,21 @@ export default function SkillTree() {
   };
 
   useEffect(() => { loadTree('fighter'); }, []);
+
+  // Centers the camera on the root node once a (re)load finishes, so opening
+  // the tab never leaves the player staring at empty canvas because the
+  // node graph sits away from the fixed default {x:120,y:120} origin.
+  useEffect(() => {
+    if (!pendingCenterRef.current || loading || !svgRef.current || nodes.length === 0) return;
+    const root = nodes.find((n) => n.is_root) || nodes[0];
+    const rect = svgRef.current.getBoundingClientRect();
+    setTransform((t) => ({
+      ...t,
+      x: rect.width / 2 - root.pos_x * t.k,
+      y: rect.height / 2 - root.pos_y * t.k,
+    }));
+    pendingCenterRef.current = false;
+  }, [nodes, loading, setTransform]);
 
   const handleFilterChange = (race) => {
     loadTree(activeArchetype, race);
@@ -438,6 +455,7 @@ export default function SkillTree() {
         skillTreeApi.getNodes({ archetype: activeArchetype }),
         skillTreeApi.getEdges({ archetype: activeArchetype }),
       ]);
+      pendingCenterRef.current = true;
       setNodes(n); setEdges(ed);
       setSelectedNode(null);
     } catch {

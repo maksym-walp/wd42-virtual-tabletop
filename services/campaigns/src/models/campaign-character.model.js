@@ -28,6 +28,14 @@ const CampaignCharacterModel = {
     return rows;
   },
 
+  async remove(campaignId, characterId) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM campaigns.campaign_characters WHERE campaign_id = $1 AND character_id = $2`,
+      [campaignId, characterId]
+    );
+    return rowCount > 0;
+  },
+
   // Is this user a member of the campaign (owns >=1 character attached to it)?
   async isMember(campaignId, userId) {
     const { rows } = await pool.query(

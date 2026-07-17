@@ -96,4 +96,28 @@ describe('CampaignModel notes updates', () => {
     expect(sql).toMatch(/SET gm_notes = \$2/);
     expect(params).toEqual(['c1', 'secret']);
   });
+
+  it('rename updates name only', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', name: 'New Name' }] });
+    const updated = await CampaignModel.rename('c1', 'New Name');
+    expect(updated).toEqual({ id: 'c1', name: 'New Name' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SET name = \$2/);
+    expect(params).toEqual(['c1', 'New Name']);
+  });
+});
+
+describe('CampaignModel.remove', () => {
+  it('deletes the campaign and returns true when a row was removed', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 1 });
+    expect(await CampaignModel.remove('c1')).toBe(true);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/DELETE FROM campaigns\.campaigns WHERE id = \$1/);
+    expect(params).toEqual(['c1']);
+  });
+
+  it('returns false when no matching campaign existed', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 0 });
+    expect(await CampaignModel.remove('c1')).toBe(false);
+  });
 });

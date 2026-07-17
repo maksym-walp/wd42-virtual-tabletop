@@ -28,6 +28,19 @@ const campaignApi = {
     return data.campaign;
   },
 
+  async rename(id, name) {
+    const { data } = await api.patch(`${BASE}/${id}`, { name });
+    return data.campaign;
+  },
+
+  async remove(id) {
+    await api.delete(`${BASE}/${id}`);
+  },
+
+  async removeCharacter(id, characterId) {
+    await api.delete(`${BASE}/${id}/characters/${characterId}`);
+  },
+
   // Спосіб А: гравець приєднує власного персонажа за кодом-запрошенням
   async join(invite_code, character_id) {
     const { data } = await api.post(`${BASE}/join`, { invite_code, character_id });

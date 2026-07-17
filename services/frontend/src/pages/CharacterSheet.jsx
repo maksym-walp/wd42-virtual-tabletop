@@ -1733,12 +1733,14 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
   const [treeLoading, setTreeLoading]   = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
   const panZoom = useSvgPanZoom({ initial: { x: 80, y: 80, k: 0.85 }, maxK: 3 });
-  const { transform } = panZoom;
+  const { transform, setTransform } = panZoom;
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft]   = useState('');
   const svgRef   = useRef(null);
+  const pendingCenterRef = useRef(false); // armed on load so the next render centers on the root node
 
   useEffect(() => {
+    pendingCenterRef.current = true;
     Promise.all([
       skillTreeApi.getNodes({ archetype: c.archetype }),
       skillTreeApi.getEdges({ archetype: c.archetype }),
@@ -1747,6 +1749,21 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
       .catch(() => {})
       .finally(() => setTreeLoading(false));
   }, []);
+
+  // Centers the camera on the root node once the tree loads, so opening this
+  // tab never leaves the player staring at empty canvas because the node
+  // graph sits away from the fixed default {x:80,y:80} origin.
+  useEffect(() => {
+    if (!pendingCenterRef.current || treeLoading || !svgRef.current || nodes.length === 0) return;
+    const root = nodes.find((n) => n.is_root) || nodes[0];
+    const rect = svgRef.current.getBoundingClientRect();
+    setTransform((t) => ({
+      ...t,
+      x: rect.width / 2 - root.pos_x * t.k,
+      y: rect.height / 2 - root.pos_y * t.k,
+    }));
+    pendingCenterRef.current = false;
+  }, [nodes, treeLoading, setTransform]);
 
   const effectiveRace  = getEffectiveRace(c);
   const isNephilimRace = effectiveRace === 'nephilim';

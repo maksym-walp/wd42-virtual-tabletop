@@ -38,6 +38,21 @@ describe('CampaignCharacterModel.listWithOwners', () => {
   });
 });
 
+describe('CampaignCharacterModel.remove', () => {
+  it('deletes the campaign/character pair and returns true when a row was removed', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 1 });
+    expect(await CampaignCharacterModel.remove('c1', 'ch1')).toBe(true);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/DELETE FROM campaigns\.campaign_characters WHERE campaign_id = \$1 AND character_id = \$2/);
+    expect(params).toEqual(['c1', 'ch1']);
+  });
+
+  it('returns false when no matching row existed', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 0 });
+    expect(await CampaignCharacterModel.remove('c1', 'ch1')).toBe(false);
+  });
+});
+
 describe('CampaignCharacterModel.isMember', () => {
   it('returns true when the user owns a character attached to the campaign', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Pencil, Trash2, Check, X as XIcon } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -30,6 +31,11 @@ export default function CampaignDetail() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState('characters');
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     Promise.all([campaignApi.getOne(id), campaignApi.listCharacters(id)])
       .then(([c, chars]) => { setCampaign(c); setCharacters(chars); })
@@ -49,25 +55,100 @@ export default function CampaignDetail() {
 
   const isGm = campaign.is_gm;
 
+  const startRename = () => {
+    setNameDraft(campaign.name);
+    setEditingName(true);
+  };
+
+  const cancelRename = () => {
+    setEditingName(false);
+    setNameDraft('');
+  };
+
+  const saveRename = async () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === campaign.name) { cancelRename(); return; }
+    setRenaming(true);
+    try {
+      const updated = await campaignApi.rename(campaign.id, trimmed);
+      setCampaign((prev) => ({ ...prev, name: updated.name }));
+      setEditingName(false);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при перейменуванні');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleDeleteCampaign = async () => {
+    if (!confirm(`Видалити кампанію "${campaign.name}"? Персонажі гравців не видаляться, лише відв'яжуться від кампанії. Це незворотно.`)) return;
+    setDeleting(true);
+    try {
+      await campaignApi.remove(campaign.id);
+      navigate('/campaigns');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видаленні кампанії');
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-[900px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
       <div className="mb-4">
         <Link to="/campaigns" className="text-sm text-accent">← Кампанії</Link>
       </div>
 
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
+
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 font-display text-3xl font-bold text-text">{campaign.name}</h1>
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                className={`${inputClass} font-display text-lg`}
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveRename();
+                  if (e.key === 'Escape') cancelRename();
+                }}
+                maxLength={200}
+              />
+              <button onClick={saveRename} disabled={renaming} aria-label="Зберегти назву" className="p-1.5 text-sage">
+                <Check size={20} />
+              </button>
+              <button onClick={cancelRename} disabled={renaming} aria-label="Скасувати" className="p-1.5 text-text-dim">
+                <XIcon size={20} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="m-0 font-display text-3xl font-bold text-text">{campaign.name}</h1>
+              {isGm && (
+                <button onClick={startRename} aria-label="Перейменувати кампанію" className="p-1 text-text-dim hover:text-accent">
+                  <Pencil size={16} />
+                </button>
+              )}
+            </div>
+          )}
           {isGm && (
             <p className="mt-1 text-sm text-text-dim">
               Код запрошення: <span className="font-mono text-gold">{campaign.invite_code}</span>
             </p>
           )}
         </div>
-        <Badge bg={isGm ? '#d4af37' : undefined} color={isGm ? '#1a1a1a' : undefined}
-          className={isGm ? '' : 'border border-border text-text-dim'}>
-          {isGm ? 'Майстер' : 'Гравець'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge bg={isGm ? '#d4af37' : undefined} color={isGm ? '#1a1a1a' : undefined}
+            className={isGm ? '' : 'border border-border text-text-dim'}>
+            {isGm ? 'Майстер' : 'Гравець'}
+          </Badge>
+          {isGm && (
+            <Button variant="danger" size="sm" onClick={handleDeleteCampaign} disabled={deleting}>
+              <Trash2 size={14} /> {deleting ? 'Видалення...' : 'Видалити кампанію'}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 flex gap-2 border-b border-border">
@@ -104,6 +185,16 @@ function CharactersTab({ campaignId, characters, setCharacters, isGm, navigate }
   const [error, setError] = useState('');
 
   const refresh = () => campaignApi.listCharacters(campaignId).then(setCharacters);
+
+  const handleRemove = async (characterId, characterName) => {
+    if (!confirm(`Видалити персонажа "${characterName}" з кампанії? Сам лист персонажа не буде видалено.`)) return;
+    try {
+      await campaignApi.removeCharacter(campaignId, characterId);
+      setCharacters((prev) => prev.filter((c) => c.character_id !== characterId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видаленні персонажа з кампанії');
+    }
+  };
 
   const handleAdd = async () => {
     if (!newCharacterId.trim()) return;
@@ -156,7 +247,18 @@ function CharactersTab({ campaignId, characters, setCharacters, isGm, navigate }
                 className={clickable ? 'cursor-pointer hover:border-accent/50' : ''}
                 onClick={clickable ? () => navigate(`/characters/${ch.character_id}`) : undefined}
               >
-                <h3 className="font-display text-base text-text">{ch.character_name}</h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-display text-base text-text">{ch.character_name}</h3>
+                  {isGm && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemove(ch.character_id, ch.character_name); }}
+                      aria-label="Видалити персонажа з кампанії"
+                      className="shrink-0 p-1 text-text-dim hover:text-danger"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
                 <p className="text-sm text-text-dim">{ch.archetype} · {ch.race}</p>
                 <p className="mt-2 text-xs text-text-dim">
                   Власник: {ch.owner_username} {isMine && <span className="text-accent">(ви)</span>}

@@ -56,6 +56,27 @@ const CampaignController = {
     const updated = await CampaignModel.updateGmNotes(campaign.id, req.body.gm_notes ?? '');
     res.json({ campaign: updated });
   },
+
+  async rename(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ message: 'name є обовʼязковим' });
+
+    const updated = await CampaignModel.rename(campaign.id, name.trim());
+    res.json({ campaign: updated });
+  },
+
+  async remove(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    await CampaignModel.remove(campaign.id);
+    res.status(204).send();
+  },
 };
 
 module.exports = CampaignController;

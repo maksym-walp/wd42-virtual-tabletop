@@ -80,6 +80,24 @@ const CampaignModel = {
     return rows[0] || null;
   },
 
+  async rename(id, name) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.campaigns SET name = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, name]
+    );
+    return rows[0] || null;
+  },
+
+  // campaign_characters rows cascade-delete with the campaign (FK ON DELETE
+  // CASCADE); the characters themselves live in character_sheet and are untouched.
+  async remove(id) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM campaigns.campaigns WHERE id = $1`,
+      [id]
+    );
+    return rowCount > 0;
+  },
+
   // Cross-schema check (campaigns -> character_sheet), mirroring the
   // existing cross-schema convention used by character-sheet itself
   // (e.g. prerequisite.model.js -> spellbook/equipment/abilities).
