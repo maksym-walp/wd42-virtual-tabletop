@@ -25,8 +25,14 @@ services:
     container_name: walp-adminer
     restart: unless-stopped
     environment:
+      # Sets the Server field only — Adminer has no env var for the DB driver,
+      # so the System dropdown still defaults to MySQL. Reach PostgreSQL directly
+      # with http://localhost:8080/?pgsql=postgres&username=...&db=...
       ADMINER_DEFAULT_SERVER: ${POSTGRES_HOST:-postgres}
-      ADMINER_DESIGN: ${ADMINER_DESIGN:-pepa-linha-dark}
+      # Must match a directory under /var/www/html/designs in the image
+      # (pepa-linha, bilal-dark, dracula, ...) — an unknown name silently
+      # produces a broken symlink and unstyled pages.
+      ADMINER_DESIGN: ${ADMINER_DESIGN:-bilal-dark}
     ports:
       - "${ADMINER_PORT:-8080}:8080"
     depends_on:
