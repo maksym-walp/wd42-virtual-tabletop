@@ -15,9 +15,13 @@ function buildOrderBy(sort, dir) {
 }
 
 const ItemModel = {
-  async findAll(userId, { type, weaponType, armorWeight, rarity, search, sort, dir, scope } = {}) {
+  async findAll(userId, { type, weaponType, armorWeight, search, sort, dir, scope } = {}) {
     const params = [userId];
-    const conditions = ['(i.user_id = $1 OR i.is_public = true)'];
+    // The artifact exclusion bridges the two split migrations: between them
+    // artifacts are copied into artifacts.entries but not yet deleted here, and
+    // callers that merge both catalogs (the character sheet's item picker)
+    // would list each one twice. 25-equipment-drop-artifacts.sql makes it moot.
+    const conditions = ["(i.user_id = $1 OR i.is_public = true)", "i.type <> 'artifact'"];
 
     // Canonical = authored by an admin; user = everyone else. Constant SQL
     // (no interpolated input), so it is injection-safe.
@@ -35,10 +39,6 @@ const ItemModel = {
     if (armorWeight) {
       params.push(armorWeight);
       conditions.push(`i.armor_weight = $${params.length}`);
-    }
-    if (rarity) {
-      params.push(rarity);
-      conditions.push(`i.rarity = $${params.length}`);
     }
     if (search) {
       params.push(`%${search}%`);
@@ -72,14 +72,14 @@ const ItemModel = {
   async create(userId, data) {
     const {
       name, type, damage_die, defense_value, description, is_public,
-      price, image_url, weapon_type, weapon_grip, armor_weight, creator, rarity,
+      price, image_url, weapon_type, weapon_grip, armor_weight,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO equipment.items
          (user_id, name, type, damage_die, defense_value, description, is_public,
-          price, image_url, weapon_type, weapon_grip, armor_weight, creator, rarity)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          price, image_url, weapon_type, weapon_grip, armor_weight)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         userId, name, type ?? 'item',
@@ -87,7 +87,6 @@ const ItemModel = {
         description ?? null, is_public ?? false,
         price ?? null, image_url ?? null,
         weapon_type ?? null, weapon_grip ?? null, armor_weight ?? null,
-        creator ?? null, rarity ?? null,
       ]
     );
     return rows[0];
@@ -96,7 +95,7 @@ const ItemModel = {
   async update(id, userId, data) {
     const {
       name, type, damage_die, defense_value, description, is_public,
-      price, image_url, weapon_type, weapon_grip, armor_weight, creator, rarity,
+      price, image_url, weapon_type, weapon_grip, armor_weight,
     } = data;
 
     const { rows } = await pool.query(
@@ -104,7 +103,7 @@ const ItemModel = {
        SET name=$3, type=$4, damage_die=$5, defense_value=$6,
            description=$7, is_public=$8, updated_at=NOW(),
            price=$9, image_url=$10, weapon_type=$11, weapon_grip=$12,
-           armor_weight=$13, creator=$14, rarity=$15
+           armor_weight=$13
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
       [
@@ -113,7 +112,6 @@ const ItemModel = {
         description ?? null, is_public ?? false,
         price ?? null, image_url ?? null,
         weapon_type ?? null, weapon_grip ?? null, armor_weight ?? null,
-        creator ?? null, rarity ?? null,
       ]
     );
     return rows[0] || null;

@@ -1,9 +1,11 @@
 import equipmentApi from './api/equipment';
+import artifactsApi from './api/artifacts';
 import abilitiesApi from './api/abilities';
 import maneuversApi from './api/maneuvers';
 import spellbookApi from './api/spellbook';
 import { createCollectionsApi } from './api/collections';
 import { EQUIPMENT_TYPES } from './constants/equipment';
+import { RARITIES } from './constants/artifacts';
 import { MAGIC_TYPES } from './constants/spellbook';
 
 // One config per catalog service that owns a `collections` module —
@@ -26,6 +28,22 @@ export const COLLECTION_DOMAINS = {
     // Equipment items have no prerequisite_node_ids concept of their own
     // (unlike abilities/maneuvers/spells), so equipment collections don't
     // carry a skill-tree node dependency either — nothing for it to inherit into.
+    supportsPrerequisites: false,
+  },
+  artifacts: {
+    title: 'Артефакти',
+    basePath: '/artifacts',
+    itemLabel: 'артефактів',
+    collectionsApi: createCollectionsApi('/api/artifacts/collections/'),
+    catalogApi: artifactsApi,
+    itemIdField: 'artifact_id',
+    itemLink: (item) => `/artifacts/${item.id}`,
+    itemMeta: (item) => [
+      RARITIES[item.rarity]?.label,
+      item.creator,
+    ].filter(Boolean).join(' · '),
+    // Same reasoning as equipment: artifact entries carry no
+    // prerequisite_node_ids for a collection dependency to inherit into.
     supportsPrerequisites: false,
   },
   abilities: {

@@ -5,12 +5,12 @@ import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES } from '../constants/equipment';
+import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 
-const TYPE_TABS = ['weapon', 'armor', 'artifact', 'item'];
+const TYPE_TABS = ['weapon', 'armor', 'item'];
 
 export default function EquipmentCatalog() {
   const [type, setType]     = useState('weapon');
@@ -168,12 +168,6 @@ function EquipmentTable({ type, items, sort, dir, onSort }) {
                 <Th label="Захист" sortKey="defense_value" sort={sort} dir={dir} onSort={onSort} />
               </>
             )}
-            {type === 'artifact' && (
-              <>
-                <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Творець</th>
-                <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Рідкість</th>
-              </>
-            )}
             <Th label="Ціна" sortKey="price" sort={sort} dir={dir} onSort={onSort} />
           </tr>
         </thead>
@@ -195,16 +189,6 @@ function EquipmentTable({ type, items, sort, dir, onSort }) {
                 <>
                   <td className="border-b border-bg px-3 py-2 text-text-muted">{ARMOR_WEIGHTS[item.armor_weight]?.label ?? '—'}</td>
                   <td className="border-b border-bg px-3 py-2 text-text-muted">{item.defense_value ?? '—'}</td>
-                </>
-              )}
-              {type === 'artifact' && (
-                <>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{item.creator ?? '—'}</td>
-                  <td className="border-b border-bg px-3 py-2">
-                    {item.rarity
-                      ? <span style={{ color: RARITIES[item.rarity]?.color }}>{RARITIES[item.rarity]?.label}</span>
-                      : <span className="text-text-muted">—</span>}
-                  </td>
                 </>
               )}
               <td className="border-b border-bg px-3 py-2 text-text-muted">{item.price ?? '—'}</td>

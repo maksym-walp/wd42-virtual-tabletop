@@ -2,9 +2,9 @@ const ItemModel = require('../models/item.model');
 
 const ItemController = {
   async list(req, res) {
-    const { type, weapon_type, armor_weight, rarity, search, sort, dir, scope } = req.query;
+    const { type, weapon_type, armor_weight, search, sort, dir, scope } = req.query;
     const items = await ItemModel.findAll(req.user.sub, {
-      type, weaponType: weapon_type, armorWeight: armor_weight, rarity, search, sort, dir, scope,
+      type, weaponType: weapon_type, armorWeight: armor_weight, search, sort, dir, scope,
     });
     res.json({ items });
   },

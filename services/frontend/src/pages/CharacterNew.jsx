@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { TreePine } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import equipmentApi from '../api/equipment';
-import { EQUIPMENT_TYPES } from '../constants/equipment';
+import artifactsApi from '../api/artifacts';
+import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, RACE_ANCESTRY_OPTIONS, ARCHETYPE_COLORS,
   PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES,
@@ -71,8 +72,13 @@ export default function CharacterNew() {
   const [equipment, setEquipment] = useState([]);
   const [allEquipment, setAllEquipment] = useState([]);
 
+  // Weapons/armor/items and artifacts are separate catalog services; the
+  // starting-gear picker offers both from one list.
   useEffect(() => {
-    equipmentApi.getAll().then(setAllEquipment).catch(() => {});
+    Promise.all([
+      equipmentApi.getAll().catch(() => []),
+      artifactsApi.getAll().catch(() => []),
+    ]).then(([items, artifacts]) => setAllEquipment([...items, ...artifacts]));
   }, []);
 
   const goBack = () => setStep((s) => Math.max(1, s - 1));
@@ -534,7 +540,10 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
       <Card>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="font-display text-lg text-accent">Бойове спорядження</h2>
-          <a href="/equipment" target="_blank" rel="noreferrer" className="text-sm text-accent">Увесь каталог →</a>
+          <span className="flex gap-3">
+            <a href="/equipment" target="_blank" rel="noreferrer" className="text-sm text-accent">Спорядження →</a>
+            <a href="/artifacts" target="_blank" rel="noreferrer" className="text-sm text-accent">Артефакти →</a>
+          </span>
         </div>
 
         <button
@@ -557,7 +566,7 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних предметів</p>}
               {filteredAll.map((item) => (
                 <div key={item.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                  <span>{item.name} <em className="text-xs text-text-dim">{EQUIPMENT_TYPES[item.type]?.label ?? item.type}</em></span>
+                  <span>{item.name} <em className="text-xs text-text-dim">{CATALOG_TYPES[item.type]?.label ?? item.type}</em></span>
                   <button type="button" className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => handleAddItem(item.id)}>+</button>
                 </div>
               ))}
@@ -576,7 +585,7 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
               <div>
                 <strong className="text-text">{item?.name ?? '(невідоме)'}</strong>
                 <span className="ml-2 text-xs text-text-dim">
-                  {item && (EQUIPMENT_TYPES[item.type]?.label ?? item.type)}
+                  {item && (CATALOG_TYPES[item.type]?.label ?? item.type)}
                   {item?.damage_die ? ` · ${item.damage_die}` : ''}
                   {item?.defense_value ? ` · захист ${item.defense_value}` : ''}
                 </span>

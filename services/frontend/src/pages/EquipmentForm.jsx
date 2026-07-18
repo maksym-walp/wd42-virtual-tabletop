@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES,
+  EQUIPMENT_TYPES, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
@@ -18,7 +18,6 @@ const EMPTY = {
   price: '', image_url: '',
   weapon_type: '', weapon_grip: '',
   armor_weight: '',
-  creator: '', rarity: '',
   collectionIds: [],
 };
 
@@ -56,7 +55,6 @@ export default function EquipmentForm() {
           price: i.price ?? '', image_url: i.image_url || '',
           weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || '',
           armor_weight: i.armor_weight || '',
-          creator: i.creator || '', rarity: i.rarity || '',
         }));
       })
       .catch(() => navigate('/equipment'))
@@ -103,8 +101,6 @@ export default function EquipmentForm() {
         weapon_type: form.weapon_type || null,
         weapon_grip: form.weapon_grip || null,
         armor_weight: form.armor_weight || null,
-        creator: form.creator || null,
-        rarity: form.rarity || null,
       };
       if (isEdit) {
         await api.put(`/api/equipment/${id}`, payload);
@@ -123,7 +119,7 @@ export default function EquipmentForm() {
   };
 
   const activeType = EQUIPMENT_TYPES[form.type] || EQUIPMENT_TYPES.item;
-  const hasImage = form.type === 'weapon' || form.type === 'armor' || form.type === 'artifact';
+  const hasImage = form.type === 'weapon' || form.type === 'armor';
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -202,19 +198,6 @@ export default function EquipmentForm() {
                 <select className={inputClass} value={form.armor_weight} onChange={set('armor_weight')}>
                   <option value="">Не обрано</option>
                   {Object.entries(ARMOR_WEIGHTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-              </Field>
-            </div>
-          )}
-          {form.type === 'artifact' && (
-            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Творець">
-                <input type="text" className={inputClass} value={form.creator} onChange={set('creator')} maxLength={200} />
-              </Field>
-              <Field label="Рідкість">
-                <select className={inputClass} value={form.rarity} onChange={set('rarity')}>
-                  <option value="">Не обрано</option>
-                  {Object.entries(RARITIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </Field>
             </div>

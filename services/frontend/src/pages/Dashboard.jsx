@@ -1,4 +1,4 @@
-import { ScrollText, BookOpen, TreePine, Swords, Zap, Star, CircleUserRound, Castle } from 'lucide-react';
+import { ScrollText, BookOpen, TreePine, Swords, Zap, Star, CircleUserRound, Castle, Gem } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -13,6 +13,7 @@ const TOOLS = [
   { id: 'abilities',  label: 'Вміння',            icon: Star,            href: '/abilities' },
   { id: 'maneuvers',  label: 'Маневри',           icon: Zap,             href: '/maneuvers' },
   { id: 'equipment',  label: 'Спорядження',       icon: Swords,          href: '/equipment' },
+  { id: 'artifacts',  label: 'Артефакти',         icon: Gem,             href: '/artifacts' },
 ];
 
 export default function Dashboard() {

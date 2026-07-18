@@ -17,6 +17,9 @@ import SpellForm from './pages/SpellForm';
 import EquipmentCatalog from './pages/EquipmentCatalog';
 import EquipmentView from './pages/EquipmentView';
 import EquipmentForm from './pages/EquipmentForm';
+import ArtifactsCatalog from './pages/ArtifactsCatalog';
+import ArtifactView from './pages/ArtifactView';
+import ArtifactForm from './pages/ArtifactForm';
 import ManeuverCatalog from './pages/ManeuverCatalog';
 import ManeuverView from './pages/ManeuverView';
 import ManeuverForm from './pages/ManeuverForm';
@@ -67,6 +70,16 @@ export default function App() {
                   <Route path="/equipment/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
                   <Route path="/equipment/:id" element={<PrivateRoute><EquipmentView /></PrivateRoute>} />
                   <Route path="/equipment/:id/edit" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
+
+                  <Route path="/artifacts" element={<PrivateRoute><ArtifactsCatalog /></PrivateRoute>} />
+                  <Route path="/artifacts/new" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
+                  <Route path="/artifacts/collections" element={<PrivateRoute><CollectionsList domainKey="artifacts" /></PrivateRoute>} />
+                  <Route path="/artifacts/collections/new" element={<PrivateRoute><CollectionForm domainKey="artifacts" /></PrivateRoute>} />
+                  <Route path="/artifacts/collections/public/:id" element={<CollectionView domainKey="artifacts" publicView />} />
+                  <Route path="/artifacts/collections/:id" element={<PrivateRoute><CollectionView domainKey="artifacts" /></PrivateRoute>} />
+                  <Route path="/artifacts/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="artifacts" /></PrivateRoute>} />
+                  <Route path="/artifacts/:id" element={<PrivateRoute><ArtifactView /></PrivateRoute>} />
+                  <Route path="/artifacts/:id/edit" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
                   <Route path="/maneuvers" element={<PrivateRoute><ManeuverCatalog /></PrivateRoute>} />
                   <Route path="/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/maneuvers/collections" element={<PrivateRoute><CollectionsList domainKey="maneuvers" /></PrivateRoute>} />

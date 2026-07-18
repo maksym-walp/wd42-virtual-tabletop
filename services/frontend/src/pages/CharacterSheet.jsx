@@ -4,11 +4,12 @@ import { ChevronUp, ChevronDown, Pencil, Copy, Check } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
+import artifactsApi from '../api/artifacts';
 import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import { MAGIC_TYPES, RITUAL_TYPES, formatDuration } from '../constants/spellbook';
-import { EQUIPMENT_TYPES } from '../constants/equipment';
+import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, LEVEL_MIN_VALUE, ARCHETYPE_COLORS,
@@ -86,14 +87,21 @@ export default function CharacterSheet({ publicView = false }) {
     Promise.all([
       fetchSheet,
       publicView ? Promise.resolve([]) : (spellbookApi?.getAll?.() ?? Promise.resolve([])),
+      publicView ? Promise.resolve([]) : (artifactsApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (equipmentApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (maneuversApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (abilitiesApi?.getAll?.() ?? Promise.resolve([])),
     ])
-      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
+      .then(([sheet, spells, artifactCatalog, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
         setData(sheet);
         setAllSpells(Array.isArray(spells) ? spells : []);
-        setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
+        // The sheet's equipment tab spans both catalogs (weapons/armor/items
+        // and artifacts), which are separate services — merge them into the
+        // single list the tab and its picker work off.
+        setAllEquipment([
+          ...(Array.isArray(equipmentCatalog) ? equipmentCatalog : []),
+          ...(Array.isArray(artifactCatalog) ? artifactCatalog : []),
+        ]);
         setAllManeuvers(Array.isArray(maneuverCatalog) ? maneuverCatalog : []);
         setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
       })
@@ -1320,7 +1328,10 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
           <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
             {showPicker ? '✕ Закрити' : '+ Додати предмет'}
           </button>
-          <Link to="/equipment" className="text-sm text-accent">Увесь каталог →</Link>
+          <div className="flex gap-3">
+            <Link to="/equipment" className="text-sm text-accent">Спорядження →</Link>
+            <Link to="/artifacts" className="text-sm text-accent">Артефакти →</Link>
+          </div>
         </div>
       )}
 
@@ -1334,7 +1345,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних предметів</p>}
             {filteredAll.map(item => (
               <div key={item.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                <span>{item.name} <em className="text-xs text-text-dim">{EQUIPMENT_TYPES[item.type]?.label ?? item.type}</em>{item.is_canonical && <CanonBadge className="ml-1.5" />}</span>
+                <span>{item.name} <em className="text-xs text-text-dim">{CATALOG_TYPES[item.type]?.label ?? item.type}</em>{item.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                 <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => { onAdd(item.id); setShowPicker(false); }}>+</button>
               </div>
             ))}
@@ -1348,7 +1359,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
         return (
           <div key={type} className="mb-6">
             <div className="mb-2.5 border-b border-border pb-1.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-gold">{EQUIPMENT_TYPES[type].label}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-gold">{CATALOG_TYPES[type].label}</span>
             </div>
             {items.map(entry => (
               <EquipmentItem key={entry.equipment_id} entry={entry}
@@ -1372,7 +1383,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
 function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
   return (
     <div className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
-      <Link to={item ? `/equipment/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
+      <Link to={item ? `${item.type === 'artifact' ? '/artifacts' : '/equipment'}/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
         <span className="text-sm text-text">{item?.name ?? '(невідоме)'}</span>
         <span className="text-xs text-text-dim">
           {[item?.damage_die && `Шкода: ${item.damage_die}`, item?.defense_value != null && `Захист: ${item.defense_value}`].filter(Boolean).join(' · ')}

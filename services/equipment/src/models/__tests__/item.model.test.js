@@ -56,15 +56,14 @@ describe('ItemModel.findAll dynamic filter builder', () => {
 
   it('adds a parameterized condition per active filter, in order', async () => {
     await ItemModel.findAll('u1', {
-      type: 'weapon', weaponType: 'melee', armorWeight: 'light', rarity: 'rare', search: 'sword',
+      type: 'weapon', weaponType: 'melee', armorWeight: 'light', search: 'sword',
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/i\.type = \$2/);
     expect(sql).toMatch(/i\.weapon_type = \$3/);
     expect(sql).toMatch(/i\.armor_weight = \$4/);
-    expect(sql).toMatch(/i\.rarity = \$5/);
-    expect(sql).toMatch(/i\.name ILIKE \$6/);
-    expect(params).toEqual(['u1', 'weapon', 'melee', 'light', 'rare', '%sword%']);
+    expect(sql).toMatch(/i\.name ILIKE \$5/);
+    expect(params).toEqual(['u1', 'weapon', 'melee', 'light', '%sword%']);
   });
 });
 
@@ -114,18 +113,18 @@ describe('ItemModel.create / update new fields', () => {
     const params = pool.query.mock.calls[0][1];
     expect(params).toEqual([
       'u1', 'Меч', 'weapon', null, null, null, false,
-      40, 'https://x/y.png', 'melee', 'one_handed', null, null, null,
+      40, 'https://x/y.png', 'melee', 'one_handed', null,
     ]);
   });
 
-  it('persists creator/rarity for an artifact on update', async () => {
+  it('persists armor fields on update, nulling the weapon-only ones', async () => {
     await ItemModel.update('i1', 'u1', {
-      name: 'Клинок', type: 'artifact', creator: 'Аранель', rarity: 'legendary',
+      name: 'Кіраса', type: 'armor', defense_value: 3, armor_weight: 'heavy',
     });
     const params = pool.query.mock.calls[0][1];
     expect(params).toEqual([
-      'i1', 'u1', 'Клинок', 'artifact', null, null, null, false,
-      null, null, null, null, null, 'Аранель', 'legendary',
+      'i1', 'u1', 'Кіраса', 'armor', null, 3, null, false,
+      null, null, null, null, 'heavy',
     ]);
   });
 });

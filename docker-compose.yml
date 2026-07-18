@@ -191,6 +191,23 @@ services:
     networks:
       - walp-network
 
+  artifacts:
+    build:
+      context: ./services/artifacts
+      target: development
+    container_name: walp-artifacts
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3011
+    volumes:
+      - ./services/artifacts/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   frontend:
     build:
       context: ./services/frontend
@@ -221,6 +238,7 @@ services:
       - maneuvers
       - abilities
       - campaigns
+      - artifacts
       - frontend
     networks:
       - walp-network

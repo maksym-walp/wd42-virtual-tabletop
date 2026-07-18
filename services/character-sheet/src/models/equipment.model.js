@@ -1,7 +1,33 @@
 const pool = require('../config/db');
 
+// character_sheet.equipment holds one bare catalog UUID per row, but artifacts
+// live in their own schema since 24-artifacts-service.sql while weapons/armor/
+// items stayed in equipment.items. Resolving the id against the union of both
+// catalogs keeps a single sheet row type working for either, and keeps the
+// artifact rows that predate the split pointing at their (id-preserving) new
+// home. Columns absent from artifacts.entries are projected as NULL so both
+// arms share one shape.
+//
+// The type <> 'artifact' filter matters between the two migrations: phase 1
+// copies artifacts into artifacts.entries without removing them from
+// equipment.items, so for that window the same id is in both tables and an
+// unfiltered union would return a sheet's artifact twice. Phase 2 deletes
+// those rows and the filter becomes a no-op.
+const CATALOG = `(
+        SELECT id, name, type, damage_die, defense_value, description, is_public,
+               price, image_url, weapon_type, weapon_grip, armor_weight,
+               NULL::varchar AS creator, NULL::varchar AS rarity
+        FROM equipment.items
+        WHERE type <> 'artifact'
+        UNION ALL
+        SELECT id, name, 'artifact' AS type, NULL, NULL, description, is_public,
+               price, image_url, NULL, NULL, NULL,
+               creator, rarity
+        FROM artifacts.entries
+      )`;
+
 const EquipmentModel = {
-  // LEFT JOIN cross-schema into equipment.items so the sheet can render the
+  // LEFT JOIN cross-schema into the catalogs so the sheet can render the
   // item's name/description/stats read-only even when the viewer isn't its
   // owner and it's private — visibility onto the sheet itself is already
   // gated by character.controller's is_owner/is_public/GM check.
@@ -17,7 +43,7 @@ const EquipmentModel = {
                 'armor_weight', ei.armor_weight, 'creator', ei.creator, 'rarity', ei.rarity
               ) END AS item
        FROM character_sheet.equipment ce
-       LEFT JOIN equipment.items ei ON ei.id = ce.equipment_id
+       LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id
        WHERE ce.character_id = $1
        ORDER BY ce.mastered ASC, ce.mastery_count DESC`,
       [characterId]
@@ -58,7 +84,7 @@ const EquipmentModel = {
                 'armor_weight', ei.armor_weight, 'creator', ei.creator, 'rarity', ei.rarity
               ) END AS item
        FROM updated ce
-       LEFT JOIN equipment.items ei ON ei.id = ce.equipment_id`,
+       LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id`,
       [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null]
     );
     return rows[0] || null;

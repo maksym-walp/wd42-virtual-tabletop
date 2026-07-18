@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES } from '../constants/equipment';
+import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import Button from '../components/ui/Button';
 
 export default function EquipmentView() {
@@ -34,7 +34,6 @@ export default function EquipmentView() {
   if (!item) return null;
 
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
-  const rarity = RARITIES[item.rarity];
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -59,16 +58,10 @@ export default function EquipmentView() {
           >
             {type.label}
           </span>
-          {rarity && (
-            <span className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide" style={{ color: rarity.color, borderColor: rarity.color }}>
-              {rarity.label}
-            </span>
-          )}
           {item.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{item.name}</h1>
-        {item.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {item.creator}</p>}
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
           {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} accent={type.color} />}
