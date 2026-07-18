@@ -20,6 +20,21 @@ services:
     networks:
       - walp-network
 
+  adminer:
+    image: adminer:4-standalone
+    container_name: walp-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: ${POSTGRES_HOST:-postgres}
+      ADMINER_DESIGN: ${ADMINER_DESIGN:-pepa-linha-dark}
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   auth:
     build:
       context: ./services/auth
