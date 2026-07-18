@@ -4,6 +4,7 @@ import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
 import CollectionsRow from '../components/CollectionsRow';
+import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -13,6 +14,7 @@ const ARCHETYPE_TABS = ['fighter', 'spellcaster', 'rogue'];
 
 export default function AbilityCatalog() {
   const [archetype, setArchetype] = useState('');
+  const [scope, setScope] = useState('');
   const [abilities, setAbilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -21,13 +23,18 @@ export default function AbilityCatalog() {
     const params = new URLSearchParams();
     if (archetype) params.set('archetype', archetype);
     if (search) params.set('search', search);
+    if (scope) params.set('scope', scope);
 
     setLoading(true);
     api.get(`/api/abilities/?${params}`)
       .then(({ data }) => setAbilities(data.abilities))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [archetype, search]);
+  }, [archetype, search, scope]);
+
+  // Hide collections when a narrowing filter (search or archetype) is active.
+  // Scope is excluded — it keeps collections split, not hidden.
+  const filtersActive = !!(search || archetype);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -41,6 +48,8 @@ export default function AbilityCatalog() {
           <Button to="/abilities/new" className="hidden md:inline-flex">+ Нове вміння</Button>
         </div>
       </div>
+
+      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
 
       <div className="mb-5 flex flex-wrap gap-1.5">
         <button
@@ -75,7 +84,7 @@ export default function AbilityCatalog() {
         />
       </div>
 
-      <CollectionsRow domainKey="abilities" />
+      {!filtersActive && <CollectionsRow domainKey="abilities" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

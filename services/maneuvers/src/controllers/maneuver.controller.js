@@ -2,8 +2,8 @@ const ManeuverModel = require('../models/maneuver.model');
 
 const ManeuverController = {
   async list(req, res) {
-    const { search, sort } = req.query;
-    const maneuvers = await ManeuverModel.findAll(req.user.sub, { search, sort });
+    const { search, sort, scope } = req.query;
+    const maneuvers = await ManeuverModel.findAll(req.user.sub, { search, sort, scope });
     res.json({ maneuvers });
   },
 

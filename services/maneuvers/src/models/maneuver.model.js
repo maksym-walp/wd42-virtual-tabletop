@@ -12,9 +12,12 @@ const prereqNodesSelect = (alias) => `COALESCE(
   ) AS prerequisite_nodes`;
 
 const ManeuverModel = {
-  async findAll(userId, { search, sort } = {}) {
+  async findAll(userId, { search, sort, scope } = {}) {
     const params = [userId];
     const conditions = ['(m.user_id = $1 OR m.is_public = true)'];
+
+    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
+    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
 
     if (search) {
       params.push(`%${search}%`);
@@ -24,8 +27,10 @@ const ManeuverModel = {
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
     const { rows } = await pool.query(
-      `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')}
+      `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM maneuvers.entries m
+       LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}`,
       params
@@ -35,8 +40,10 @@ const ManeuverModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')}
+      `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM maneuvers.entries m
+       LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE m.id = $1 AND (m.user_id = $2 OR m.is_public = true)`,
       [id, userId]
     );

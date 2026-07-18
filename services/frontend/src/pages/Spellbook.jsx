@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal, Plus } from 'lucide-react';
 import api from '../api/client';
 import SpellCard from '../components/SpellCard';
 import CollectionsRow from '../components/CollectionsRow';
+import ScopeFilter from '../components/ScopeFilter';
 import { MAGIC_TYPES, SPELL_KINDS } from '../constants/spellbook';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -21,7 +22,7 @@ export default function Spellbook() {
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filter, setFilter] = useState({
-    magic_type: '', spell_kind: '', ritual: '', search: '', sort: 'name',
+    magic_type: '', spell_kind: '', ritual: '', search: '', sort: 'name', scope: '',
   });
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function Spellbook() {
     if (filter.ritual)     params.set('ritual', filter.ritual);
     if (filter.search)     params.set('search', filter.search);
     if (filter.sort)       params.set('sort', filter.sort);
+    if (filter.scope)      params.set('scope', filter.scope);
 
     setLoading(true);
     api.get(`/api/spellbook/?${params}`)
@@ -42,7 +44,10 @@ export default function Spellbook() {
   const toggle = (field, key) =>
     setFilter((f) => ({ ...f, [field]: f[field] === key ? '' : key }));
 
-  const activeFilterCount = ['magic_type', 'spell_kind', 'ritual'].filter((k) => filter[k]).length;
+  const activeFilterCount = ['magic_type', 'spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length;
+  // Hide collections once a narrowing filter is active (search or a category
+  // filter). Scope is excluded — it keeps collections split, not hidden.
+  const filtersActive = !!(filter.search || filter.magic_type || filter.spell_kind || filter.ritual);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -81,7 +86,7 @@ export default function Spellbook() {
         </button>
       </div>
 
-      <CollectionsRow domainKey="spellbook" />
+      {!filtersActive && <CollectionsRow domainKey="spellbook" scope={filter.scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
@@ -104,6 +109,11 @@ export default function Spellbook() {
 
       <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Фільтри">
         <div className="flex flex-col gap-5">
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+            <ScopeFilter scope={filter.scope} onChange={(v) => setFilter((f) => ({ ...f, scope: v }))} />
+          </div>
+
           <div>
             <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Тип магії</span>
             <div className="flex flex-wrap gap-1.5">

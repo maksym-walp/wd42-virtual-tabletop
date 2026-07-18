@@ -5,20 +5,23 @@ import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
+import ScopeFilter from '../components/ScopeFilter';
+import CanonBadge from '../components/CanonBadge';
 
 export default function CollectionsList({ domainKey }) {
   const domain = COLLECTION_DOMAINS[domainKey];
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [scope, setScope] = useState('');
 
   useEffect(() => {
     setLoading(true);
-    domain.collectionsApi.getAll({ search })
+    domain.collectionsApi.getAll({ search, scope })
       .then(setCollections)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, domainKey]);
+  }, [search, scope, domainKey]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -33,6 +36,8 @@ export default function CollectionsList({ domainKey }) {
         </div>
         <Button to={`${domain.basePath}/collections/new`} className="hidden md:inline-flex">+ Нова колекція</Button>
       </div>
+
+      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
 
       <div className="relative mb-5">
         <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
@@ -61,8 +66,9 @@ export default function CollectionsList({ domainKey }) {
                 <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-dim">
                   {(c.items || []).length} {domain.itemLabel}
                 </span>
-                {c.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічна</span>}
-                {!c.is_owner && <span className="ml-auto text-[0.65rem] italic text-text-dim">чужа</span>}
+                {c.is_canonical && <CanonBadge className="ml-auto" />}
+                {c.is_public && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical ? '' : 'ml-auto'}`}>публічна</span>}
+                {!c.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical || c.is_public ? '' : 'ml-auto'}`}>чужа</span>}
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
               {c.description && (

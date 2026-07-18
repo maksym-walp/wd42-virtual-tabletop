@@ -4,25 +4,32 @@ import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ManeuverCard from '../components/ManeuverCard';
 import CollectionsRow from '../components/CollectionsRow';
+import ScopeFilter from '../components/ScopeFilter';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 
 export default function ManeuverCatalog() {
   const [maneuvers, setManeuvers] = useState([]);
+  const [scope, setScope] = useState('');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
+    if (scope) params.set('scope', scope);
 
     setLoading(true);
     api.get(`/api/maneuvers/?${params}`)
       .then(({ data }) => setManeuvers(data.maneuvers))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [search, scope]);
+
+  // Hide collections when the user narrows the list with a search. Scope is
+  // excluded — it keeps collections split, not hidden.
+  const filtersActive = search.trim() !== '';
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -37,6 +44,8 @@ export default function ManeuverCatalog() {
         </div>
       </div>
 
+      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
+
       <div className="relative mb-5">
         <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
         <input
@@ -47,7 +56,7 @@ export default function ManeuverCatalog() {
         />
       </div>
 
-      <CollectionsRow domainKey="maneuvers" />
+      {!filtersActive && <CollectionsRow domainKey="maneuvers" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

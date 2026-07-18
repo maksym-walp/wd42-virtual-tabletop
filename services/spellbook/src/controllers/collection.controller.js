@@ -2,8 +2,8 @@ const CollectionModel = require('../models/collection.model');
 
 const CollectionController = {
   async list(req, res) {
-    const { search } = req.query;
-    const collections = await CollectionModel.findAll(req.user.sub, { search });
+    const { search, scope } = req.query;
+    const collections = await CollectionModel.findAll(req.user.sub, { search, scope });
     res.json({ collections });
   },
 

@@ -13,9 +13,12 @@ const prereqNodesSelect = (alias) => `COALESCE(
   ) AS prerequisite_nodes`;
 
 const SpellModel = {
-  async findAll(userId, { magicType, spellKind, ritual, search, sort } = {}) {
+  async findAll(userId, { magicType, spellKind, ritual, search, sort, scope } = {}) {
     const params = [userId];
     const conditions = ['(s.user_id = $1 OR s.is_public = true)'];
+
+    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
+    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
 
     if (magicType) {
       params.push(magicType);
@@ -37,8 +40,10 @@ const SpellModel = {
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')}
+      `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM spellbook.spells s
+       LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}`,
       params
@@ -48,8 +53,10 @@ const SpellModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')}
+      `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM spellbook.spells s
+       LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE s.id = $1 AND (s.user_id = $2 OR s.is_public = true)`,
       [id, userId]
     );

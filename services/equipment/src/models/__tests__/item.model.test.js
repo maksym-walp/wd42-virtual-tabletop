@@ -68,6 +68,43 @@ describe('ItemModel.findAll dynamic filter builder', () => {
   });
 });
 
+describe('ItemModel canonical/user split', () => {
+  it('projects is_canonical from the creator role via an auth.users join in findAll', async () => {
+    await ItemModel.findAll('u1', {});
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LEFT JOIN auth\.users cu ON cu\.id = i\.user_id/);
+    expect(sql).toMatch(/COALESCE\(cu\.role = 'admin', false\) AS is_canonical/);
+  });
+
+  it('projects is_canonical in findById too', async () => {
+    await ItemModel.findById('i1', 'u1');
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LEFT JOIN auth\.users cu ON cu\.id = i\.user_id/);
+    expect(sql).toMatch(/COALESCE\(cu\.role = 'admin', false\) AS is_canonical/);
+  });
+
+  it('restricts to admin-authored rows when scope=canonical', async () => {
+    await ItemModel.findAll('u1', { scope: 'canonical' });
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/AND cu\.role = 'admin'/);
+    expect(sql).not.toMatch(/IS DISTINCT FROM/);
+  });
+
+  it('restricts to non-admin rows when scope=user', async () => {
+    await ItemModel.findAll('u1', { scope: 'user' });
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/cu\.role IS DISTINCT FROM 'admin'/);
+  });
+
+  it('adds no scope condition when scope is omitted', async () => {
+    await ItemModel.findAll('u1', {});
+    const [sql] = pool.query.mock.calls[0];
+    // The projection always references cu.role; a scope *condition* is joined with AND.
+    expect(sql).not.toMatch(/AND cu\.role = 'admin'/);
+    expect(sql).not.toMatch(/IS DISTINCT FROM/);
+  });
+});
+
 describe('ItemModel.create / update new fields', () => {
   it('persists the new catalog-detail fields on create', async () => {
     await ItemModel.create('u1', {

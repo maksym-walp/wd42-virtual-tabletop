@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { EQUIPMENT_TYPES, RARITIES } from '../constants/equipment';
+import CanonBadge from './CanonBadge';
 
 export default function EquipmentCard({ item }) {
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
@@ -32,8 +33,9 @@ export default function EquipmentCard({ item }) {
             {rarity.label}
           </span>
         )}
-        {item.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічне</span>}
-        {!item.is_owner && <span className="ml-auto text-[0.65rem] italic text-text-dim">чуже</span>}
+        {item.is_canonical && <CanonBadge className="ml-auto" />}
+        {item.is_public && <span className={`text-[0.65rem] italic text-text-dim ${item.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
+        {!item.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${item.is_canonical || item.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{item.name}</h3>

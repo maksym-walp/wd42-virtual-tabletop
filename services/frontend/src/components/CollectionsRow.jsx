@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import CanonBadge from './CanonBadge';
 
 // Grid columns follow the same breakpoints as the item grids below
 // (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3), so "first row" means index 0
@@ -24,14 +25,14 @@ function toggleVisibility(count) {
   ].join(' ');
 }
 
-export default function CollectionsRow({ domainKey }) {
+export default function CollectionsRow({ domainKey, scope = '' }) {
   const domain = COLLECTION_DOMAINS[domainKey];
   const [collections, setCollections] = useState([]);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    domain.collectionsApi.getAll({}).then(setCollections).catch(console.error);
-  }, [domainKey]);
+    domain.collectionsApi.getAll({ scope }).then(setCollections).catch(console.error);
+  }, [domainKey, scope]);
 
   if (collections.length === 0) return null;
 
@@ -51,8 +52,9 @@ export default function CollectionsRow({ domainKey }) {
               <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-dim">
                 {(c.items || []).length} {domain.itemLabel}
               </span>
-              {c.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічна</span>}
-              {!c.is_owner && <span className="ml-auto text-[0.65rem] italic text-text-dim">чужа</span>}
+              {c.is_canonical && <CanonBadge className="ml-auto" />}
+              {c.is_public && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical ? '' : 'ml-auto'}`}>публічна</span>}
+              {!c.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical || c.is_public ? '' : 'ml-auto'}`}>чужа</span>}
             </div>
             <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
             {c.description && (

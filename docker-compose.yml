@@ -29,6 +29,7 @@ services:
     env_file: .env
     environment:
       PORT: 3001
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
     volumes:
       - ./services/auth/src:/app/src:delegated
     depends_on:

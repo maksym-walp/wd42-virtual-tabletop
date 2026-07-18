@@ -18,16 +18,21 @@ const itemsSelect = `COALESCE(
   ) AS items`;
 
 const CollectionModel = {
-  async findAll(userId, { search } = {}) {
+  async findAll(userId, { search, scope } = {}) {
     const params = [userId];
     const conditions = ['(c.user_id = $1 OR c.is_public = true)'];
     if (search) {
       params.push(`%${search}%`);
       conditions.push(`c.name ILIKE $${params.length}`);
     }
+    // Canonical = authored by an admin; user = everyone else. Constant SQL.
+    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
+    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
     const { rows } = await pool.query(
-      `SELECT c.*, (c.user_id = $1) AS is_owner, ${itemsSelect}
+      `SELECT c.*, (c.user_id = $1) AS is_owner,
+              COALESCE(cu.role = 'admin', false) AS is_canonical, ${itemsSelect}
        FROM equipment.collections c
+       LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY c.name ASC`,
       params
@@ -37,8 +42,10 @@ const CollectionModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT c.*, (c.user_id = $2) AS is_owner, ${itemsSelect}
+      `SELECT c.*, (c.user_id = $2) AS is_owner,
+              COALESCE(cu.role = 'admin', false) AS is_canonical, ${itemsSelect}
        FROM equipment.collections c
+       LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE c.id = $1 AND (c.user_id = $2 OR c.is_public = true)`,
       [id, userId]
     );
@@ -47,8 +54,10 @@ const CollectionModel = {
 
   async findPublicById(id) {
     const { rows } = await pool.query(
-      `SELECT c.*, false AS is_owner, ${itemsSelect}
+      `SELECT c.*, false AS is_owner,
+              COALESCE(cu.role = 'admin', false) AS is_canonical, ${itemsSelect}
        FROM equipment.collections c
+       LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE c.id = $1 AND c.is_public = true`,
       [id]
     );

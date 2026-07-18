@@ -21,6 +21,8 @@ import Field, { inputClass } from '../components/ui/Field';
 import IntInput from '../components/ui/IntInput';
 import DiceFormulaText from '../components/DiceFormulaText';
 import RollButton from '../components/RollButton';
+import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
+import CanonBadge from '../components/CanonBadge';
 import { useDice } from '../context/DiceContext';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
@@ -332,7 +334,7 @@ export default function CharacterSheet({ publicView = false }) {
               <span className="font-mono">{c.id}</span>
             </button>
             {c.owner_username && (
-              <span>Власник: <span className="text-text">{c.owner_username}</span></span>
+              <span>Власник: <Link to={`/profile/${c.owner_username}`} className="text-accent hover:underline">{c.owner_username}</Link></span>
             )}
           </div>
         </div>
@@ -946,6 +948,7 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
 
 function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, unlockedNodeIds }) {
   const [spellSearch, setSpellSearch] = useState('');
+  const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
   const [editingMaxSpells, setEditingMaxSpells] = useState(false);
   const [maxSpellsDraft, setMaxSpellsDraft] = useState(maxKnownSpells);
@@ -953,6 +956,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   const knownIds   = new Set(spells.map(s => s.spell_id));
   const filteredAll = allSpells.filter(s =>
     !knownIds.has(s.id) &&
+    matchesScope(s, spellScope) &&
     s.name?.toLowerCase().includes(spellSearch.toLowerCase())
   );
   const atMaxSpells = spells.length >= maxKnownSpells;
@@ -1044,6 +1048,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
             <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={spellSearch}
               onChange={e => setSpellSearch(e.target.value)}
             />
+            <ScopeFilter scope={spellScope} onChange={setSpellScope} size="sm" className="mb-2" />
             <div className="max-h-[180px] overflow-y-auto">
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних заклинань</p>}
               {filteredAll.map(s => {
@@ -1051,7 +1056,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
                 return (
                   <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
                     <div className="flex flex-col">
-                      <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em></span>
+                      <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em>{s.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                       {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
                     </div>
                     <button
@@ -1296,11 +1301,13 @@ function MoneySection({ c, is_owner, patchCharacter }) {
 
 function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
   const [search, setSearch]         = useState('');
+  const [scope, setScope]           = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
   const knownIds    = new Set(equipment.map(e => e.equipment_id));
   const filteredAll = allEquipment.filter(item =>
     !knownIds.has(item.id) &&
+    matchesScope(item, scope) &&
     item.name?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -1322,11 +1329,12 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
           <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <ScopeFilter scope={scope} onChange={setScope} size="sm" className="mb-2" />
           <div className="max-h-[220px] overflow-y-auto">
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних предметів</p>}
             {filteredAll.map(item => (
               <div key={item.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                <span>{item.name} <em className="text-xs text-text-dim">{EQUIPMENT_TYPES[item.type]?.label ?? item.type}</em></span>
+                <span>{item.name} <em className="text-xs text-text-dim">{EQUIPMENT_TYPES[item.type]?.label ?? item.type}</em>{item.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                 <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => { onAdd(item.id); setShowPicker(false); }}>+</button>
               </div>
             ))}
@@ -1399,11 +1407,13 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
 
 function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlockedNodeIds }) {
   const [search, setSearch]         = useState('');
+  const [scope, setScope]           = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
   const knownIds    = new Set(maneuvers.map(m => m.maneuver_id));
   const filteredAll = allManeuvers.filter(m =>
     !knownIds.has(m.id) &&
+    matchesScope(m, scope) &&
     m.name?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -1423,6 +1433,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
           <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <ScopeFilter scope={scope} onChange={setScope} size="sm" className="mb-2" />
           <div className="max-h-[220px] overflow-y-auto">
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних маневрів</p>}
             {filteredAll.map(m => {
@@ -1430,7 +1441,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
               return (
                 <div key={m.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
                   <div className="flex flex-col">
-                    <span>{m.name} <em className="text-xs text-text-dim">{m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</em></span>
+                    <span>{m.name} <em className="text-xs text-text-dim">{m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</em>{m.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                     {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(m)}</span>}
                   </div>
                   <button
@@ -1476,12 +1487,14 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
 // the ability was created.
 function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onRemove, unlockedNodeIds }) {
   const [search, setSearch]         = useState('');
+  const [scope, setScope]           = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
   const relevant    = allAbilities.filter(a => (a.archetypes || []).includes(archetype));
   const knownIds    = new Set(abilities.map(a => a.ability_id));
   const filteredAll = relevant.filter(a =>
     !knownIds.has(a.id) &&
+    matchesScope(a, scope) &&
     a.name?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -1501,6 +1514,7 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
           <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <ScopeFilter scope={scope} onChange={setScope} size="sm" className="mb-2" />
           <div className="max-h-[220px] overflow-y-auto">
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних вмінь</p>}
             {filteredAll.map(a => {
@@ -1508,7 +1522,7 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
               return (
                 <div key={a.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
                   <div className="flex flex-col">
-                    <span>{a.name}</span>
+                    <span>{a.name}{a.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                     {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(a)}</span>}
                   </div>
                   <button

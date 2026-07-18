@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import PublicProfile from './pages/PublicProfile';
 import Spellbook from './pages/Spellbook';
 import SpellView from './pages/SpellView';
 import SpellForm from './pages/SpellForm';
@@ -47,6 +48,7 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
                   <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                   <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+                  <Route path="/profile/:username" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
                   <Route path="/spellbook" element={<PrivateRoute><Spellbook /></PrivateRoute>} />
                   <Route path="/spellbook/new" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
                   <Route path="/spellbook/collections" element={<PrivateRoute><CollectionsList domainKey="spellbook" /></PrivateRoute>} />

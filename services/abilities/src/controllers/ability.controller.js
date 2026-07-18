@@ -2,8 +2,8 @@ const AbilityModel = require('../models/ability.model');
 
 const AbilityController = {
   async list(req, res) {
-    const { search, sort, archetype } = req.query;
-    const abilities = await AbilityModel.findAll(req.user.sub, { search, sort, archetype });
+    const { search, sort, archetype, scope } = req.query;
+    const abilities = await AbilityModel.findAll(req.user.sub, { search, sort, archetype, scope });
     res.json({ abilities });
   },
 

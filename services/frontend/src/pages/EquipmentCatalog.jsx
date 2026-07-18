@@ -4,6 +4,7 @@ import { Search, Plus, LayoutGrid, Table2 } from 'lucide-react';
 import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
 import CollectionsRow from '../components/CollectionsRow';
+import ScopeFilter from '../components/ScopeFilter';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS, RARITIES } from '../constants/equipment';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -13,6 +14,7 @@ const TYPE_TABS = ['weapon', 'armor', 'artifact', 'item'];
 
 export default function EquipmentCatalog() {
   const [type, setType]     = useState('weapon');
+  const [scope, setScope]   = useState('');
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -23,13 +25,14 @@ export default function EquipmentCatalog() {
   useEffect(() => {
     const params = new URLSearchParams({ type, sort, dir });
     if (search) params.set('search', search);
+    if (scope) params.set('scope', scope);
 
     setLoading(true);
     api.get(`/api/equipment/?${params}`)
       .then(({ data }) => setItems(data.items))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [type, search, sort, dir]);
+  }, [type, search, sort, dir, scope]);
 
   const changeType = (t) => {
     setType(t);
@@ -43,6 +46,10 @@ export default function EquipmentCatalog() {
   };
 
   const showCards = view === 'cards';
+  // Collections are hidden once the user narrows the list with a filter (search),
+  // so the filtered results stay clean. The type tab (always set) and the
+  // source/scope filter don't count — scope keeps collections split, not hidden.
+  const filtersActive = search.trim() !== '';
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -56,6 +63,8 @@ export default function EquipmentCatalog() {
           <Button to="/equipment/new" className="hidden md:inline-flex">+ Новий предмет</Button>
         </div>
       </div>
+
+      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
@@ -99,7 +108,7 @@ export default function EquipmentCatalog() {
         />
       </div>
 
-      <CollectionsRow domainKey="equipment" />
+      {!filtersActive && <CollectionsRow domainKey="equipment" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

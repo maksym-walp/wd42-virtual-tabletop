@@ -11,9 +11,12 @@ const prereqNodesSelect = (alias) => `COALESCE(
   ) AS prerequisite_nodes`;
 
 const AbilityModel = {
-  async findAll(userId, { search, sort, archetype } = {}) {
+  async findAll(userId, { search, sort, archetype, scope } = {}) {
     const params = [userId];
     const conditions = ['(a.user_id = $1 OR a.is_public = true)'];
+
+    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
+    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
 
     if (search) {
       params.push(`%${search}%`);
@@ -27,8 +30,10 @@ const AbilityModel = {
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
     const { rows } = await pool.query(
-      `SELECT a.*, (a.user_id = $1) AS is_owner, ${prereqNodesSelect('a')}
+      `SELECT a.*, (a.user_id = $1) AS is_owner, ${prereqNodesSelect('a')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM abilities.entries a
+       LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}`,
       params
@@ -38,8 +43,10 @@ const AbilityModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT a.*, (a.user_id = $2) AS is_owner, ${prereqNodesSelect('a')}
+      `SELECT a.*, (a.user_id = $2) AS is_owner, ${prereqNodesSelect('a')},
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM abilities.entries a
+       LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE a.id = $1 AND (a.user_id = $2 OR a.is_public = true)`,
       [id, userId]
     );

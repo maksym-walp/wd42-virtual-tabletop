@@ -4,9 +4,10 @@ import api from './client';
 // own collections module on its own service, at its own /collections base path.
 export function createCollectionsApi(base) {
   return {
-    async getAll({ search } = {}) {
+    async getAll({ search, scope } = {}) {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
+      if (scope) params.set('scope', scope);
       const qs = params.toString();
       const { data } = await api.get(`${base}${qs ? `?${qs}` : ''}`);
       return data.collections ?? [];

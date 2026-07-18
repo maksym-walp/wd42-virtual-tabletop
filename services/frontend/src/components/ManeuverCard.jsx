@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import CanonBadge from './CanonBadge';
 
 export default function ManeuverCard({ maneuver }) {
   return (
@@ -11,8 +12,9 @@ export default function ManeuverCard({ maneuver }) {
         <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
           {maneuver.duration_actions} {maneuver.duration_actions === 1 ? 'дія' : 'дії'}
         </span>
-        {maneuver.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічне</span>}
-        {!maneuver.is_owner && <span className="ml-auto text-[0.65rem] italic text-text-dim">чуже</span>}
+        {maneuver.is_canonical && <CanonBadge className="ml-auto" />}
+        {maneuver.is_public && <span className={`text-[0.65rem] italic text-text-dim ${maneuver.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
+        {!maneuver.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${maneuver.is_canonical || maneuver.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{maneuver.name}</h3>

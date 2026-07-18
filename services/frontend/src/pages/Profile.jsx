@@ -62,7 +62,10 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <PageHeader title="Профіль" />
+      <PageHeader
+        title="Профіль"
+        action={<Button variant="ghost" size="sm" to={`/profile/${user.username}`}>Мій публічний профіль</Button>}
+      />
 
       <Card className="mb-4">
         <h2 className="mb-4 font-display text-lg text-text">Обліковий запис</h2>

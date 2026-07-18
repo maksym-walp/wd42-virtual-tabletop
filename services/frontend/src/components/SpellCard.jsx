@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
+import CanonBadge from './CanonBadge';
 
 export default function SpellCard({ spell }) {
   const type = MAGIC_TYPES[spell.magic_type] || MAGIC_TYPES.arcana;
@@ -25,8 +26,9 @@ export default function SpellCard({ spell }) {
           {type.label}
         </span>
         {kind && <span className="rounded border border-border px-1.5 py-0.5 text-[0.68rem] font-semibold text-text-dim">{kind.label}</span>}
-        {spell.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічне</span>}
-        {!spell.is_owner && <span className="ml-auto text-[0.65rem] italic text-text-dim">чуже</span>}
+        {spell.is_canonical && <CanonBadge className="ml-auto" />}
+        {spell.is_public && <span className={`text-[0.65rem] italic text-text-dim ${spell.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
+        {!spell.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${spell.is_canonical || spell.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       {/* Title */}

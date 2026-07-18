@@ -15,9 +15,14 @@ function buildOrderBy(sort, dir) {
 }
 
 const ItemModel = {
-  async findAll(userId, { type, weaponType, armorWeight, rarity, search, sort, dir } = {}) {
+  async findAll(userId, { type, weaponType, armorWeight, rarity, search, sort, dir, scope } = {}) {
     const params = [userId];
     const conditions = ['(i.user_id = $1 OR i.is_public = true)'];
+
+    // Canonical = authored by an admin; user = everyone else. Constant SQL
+    // (no interpolated input), so it is injection-safe.
+    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
+    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
 
     if (type) {
       params.push(type);
@@ -41,8 +46,10 @@ const ItemModel = {
     }
 
     const { rows } = await pool.query(
-      `SELECT i.*, (i.user_id = $1) AS is_owner
+      `SELECT i.*, (i.user_id = $1) AS is_owner,
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM equipment.items i
+       LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${buildOrderBy(sort, dir)}`,
       params
@@ -52,8 +59,10 @@ const ItemModel = {
 
   async findById(id, userId) {
     const { rows } = await pool.query(
-      `SELECT i.*, (i.user_id = $2) AS is_owner
+      `SELECT i.*, (i.user_id = $2) AS is_owner,
+              COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM equipment.items i
+       LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE i.id = $1 AND (i.user_id = $2 OR i.is_public = true)`,
       [id, userId]
     );
