@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Trash2, Check, X as XIcon } from 'lucide-react';
+import { Pencil, Trash2, Check, X as XIcon, Upload } from 'lucide-react';
 import campaignApi from '../api/campaigns';
+import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
+import Lightbox from '../components/ui/Lightbox';
 
 function useDebounce(fn, delay = 600) {
   const timer = useRef(null);
@@ -297,34 +299,179 @@ function NotesTab({ campaign, isGm, onChange }) {
     }
   });
 
+  // Зовнішній flex-стовпчик, щоб галерея лягла на всю ширину під обома
+  // колонками нотаток, не ламаючи їхній двоколонковий грід.
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_1fr]">
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <label className="block text-xs text-text-dim">Спільні нотатки</label>
-          {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
-        </div>
-        <textarea
-          className={`${inputClass} w-full resize-y`}
-          rows={12}
-          value={sharedNotes}
-          onChange={(e) => { setSharedNotes(e.target.value); if (isGm) saveShared(e.target.value); }}
-          placeholder="Нотатки, які бачать усі учасники кампанії..."
-          disabled={!isGm}
-        />
-      </div>
-      {isGm && (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_1fr]">
         <div>
-          <label className="mb-1 block text-xs text-text-dim">Нотатки майстра (лише для вас)</label>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-xs text-text-dim">Спільні нотатки</label>
+            {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
+          </div>
           <textarea
             className={`${inputClass} w-full resize-y`}
             rows={12}
-            value={gmNotes}
-            onChange={(e) => { setGmNotes(e.target.value); saveGm(e.target.value); }}
-            placeholder="Секретні нотатки, плани, сюжетні твісти..."
+            value={sharedNotes}
+            onChange={(e) => { setSharedNotes(e.target.value); if (isGm) saveShared(e.target.value); }}
+            placeholder="Нотатки, які бачать усі учасники кампанії..."
+            disabled={!isGm}
           />
         </div>
+        {isGm && (
+          <div>
+            <label className="mb-1 block text-xs text-text-dim">Нотатки майстра (лише для вас)</label>
+            <textarea
+              className={`${inputClass} w-full resize-y`}
+              rows={12}
+              value={gmNotes}
+              onChange={(e) => { setGmNotes(e.target.value); saveGm(e.target.value); }}
+              placeholder="Секретні нотатки, плани, сюжетні твісти..."
+            />
+          </div>
+        )}
+      </div>
+
+      <CampaignGallery campaign={campaign} isGm={isGm} />
+    </div>
+  );
+}
+
+function CampaignGallery({ campaign, isGm }) {
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    campaignApi.listGallery(campaign.id)
+      .then((rows) => { if (alive) setImages(rows); })
+      .catch(() => { if (alive) setError('Не вдалось завантажити галерею'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [campaign.id]);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+
+    setError('');
+    setUploading(true);
+    try {
+      // Послідовно, а не Promise.all: так помилка на одному файлі не губить
+      // уже завантажені, і порядок у стрічці лишається передбачуваним.
+      for (const file of files) {
+        if (file.size > MAX_UPLOAD_BYTES) {
+          setError(`«${file.name}» завеликий — максимум 10 МБ`);
+          continue;
+        }
+        const url = await mediaApi.upload(file, {
+          entityType: 'campaign-gallery',
+          entityId: campaign.id,
+        });
+        const image = await campaignApi.addGalleryImage(campaign.id, url);
+        setImages((prev) => [image, ...prev]);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Не вдалось завантажити зображення');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async (imageId) => {
+    const previous = images;
+    setImages((prev) => prev.filter((i) => i.id !== imageId));
+    try {
+      await campaignApi.removeGalleryImage(campaign.id, imageId);
+    } catch {
+      setImages(previous);
+      setError('Не вдалось видалити зображення');
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="m-0 font-display text-base text-text">Галерея</h3>
+        <div className="flex items-center gap-3">
+          {uploading && <span className="text-xs text-text-dim">• Завантаження...</span>}
+          {isGm && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              <Upload size={14} />
+              Завантажити
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {error && <p className="mb-2 text-xs text-danger">{error}</p>}
+
+      {loading ? (
+        <p className="text-sm text-text-dim">Завантаження...</p>
+      ) : images.length === 0 ? (
+        <EmptyState icon="🖼" title="Галерея порожня">
+          {isGm
+            ? 'Завантажте зображення — мапи, портрети NPC, сцени.'
+            : 'Майстер ще не додав зображень.'}
+        </EmptyState>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {images.map((image, index) => (
+            <div key={image.id} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(index)}
+                aria-label="Переглянути зображення"
+              >
+                <img
+                  src={image.image_url}
+                  alt=""
+                  loading="lazy"
+                  className="h-28 w-28 rounded-lg border border-border object-cover"
+                />
+              </button>
+              {isGm && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleRemove(image.id); }}
+                  aria-label="Видалити зображення"
+                  className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white hover:bg-black/80"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       )}
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={images.map((i) => i.image_url)}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES}
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
     </div>
   );
 }

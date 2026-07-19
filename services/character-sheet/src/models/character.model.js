@@ -106,6 +106,7 @@ const CharacterModel = {
       death_scale, health_dice_values, conditions, dev_points, money,
       spell_bonus, temp_hp, defense_bonus, inspiration_used, narrative_inspiration_die,
       luck_current, luck_max, rogue_inspiration_die, rogue_inspiration_given_to,
+      image_url,
     } = data;
 
     // death_scale/narrative_inspiration_die/rogue_inspiration_* use a
@@ -115,6 +116,9 @@ const CharacterModel = {
     const setNarrativeDie = 'narrative_inspiration_die' in data;
     const setRogueDie = 'rogue_inspiration_die' in data;
     const setRogueGivenTo = 'rogue_inspiration_given_to' in data;
+    // image_url joins them: NULL means "no portrait", so COALESCE would make
+    // removing a portrait impossible (null would read as "leave unchanged").
+    const setImageUrl = 'image_url' in data;
 
     const { rows } = await pool.query(
       `UPDATE character_sheet.characters
@@ -139,6 +143,7 @@ const CharacterModel = {
            luck_max            = COALESCE($22, luck_max),
            rogue_inspiration_die      = CASE WHEN $23 THEN $24 ELSE rogue_inspiration_die END,
            rogue_inspiration_given_to = CASE WHEN $25 THEN $26 ELSE rogue_inspiration_given_to END,
+           image_url           = CASE WHEN $27 THEN $28 ELSE image_url END,
            updated_at          = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -160,6 +165,7 @@ const CharacterModel = {
         luck_max ?? null,
         setRogueDie, setRogueDie ? (rogue_inspiration_die ?? null) : null,
         setRogueGivenTo, setRogueGivenTo ? (rogue_inspiration_given_to ?? null) : null,
+        setImageUrl, setImageUrl ? (image_url ?? null) : null,
       ]
     );
     return rows[0] || null;

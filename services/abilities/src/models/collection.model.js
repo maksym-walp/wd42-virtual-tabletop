@@ -4,7 +4,8 @@ const itemFields = `jsonb_build_object(
     'id', a.id, 'name', a.name, 'description', a.description,
     'archetypes', a.archetypes, 'is_public', a.is_public,
     'prerequisite_node_ids', a.prerequisite_node_ids,
-    'prerequisite_logic', a.prerequisite_logic
+    'prerequisite_logic', a.prerequisite_logic,
+    'image_url', a.image_url
   )`;
 
 const itemsSelect = `COALESCE(

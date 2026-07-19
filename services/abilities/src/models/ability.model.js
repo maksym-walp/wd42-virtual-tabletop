@@ -54,28 +54,28 @@ const AbilityModel = {
   },
 
   async create(userId, data) {
-    const { name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
-         (user_id, name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+         (user_id, name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
-      [userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0];
   },
 
   async update(id, userId, data) {
-    const { name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
       `UPDATE abilities.entries
        SET name=$3, archetypes=$4, description=$5, is_public=$6,
-           prerequisite_node_ids=$7, prerequisite_logic=$8, updated_at=NOW()
+           prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
-      [id, userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [id, userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0] || null;
   },

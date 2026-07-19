@@ -7,6 +7,7 @@ import {
 } from '../constants/equipment';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 
@@ -119,7 +120,6 @@ export default function EquipmentForm() {
   };
 
   const activeType = EQUIPMENT_TYPES[form.type] || EQUIPMENT_TYPES.item;
-  const hasImage = form.type === 'weapon' || form.type === 'armor';
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -139,7 +139,7 @@ export default function EquipmentForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Тип" className={hasImage ? 'mb-4' : ''}>
+          <Field label="Тип" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(EQUIPMENT_TYPES).map(([key, { label, color }]) => (
                 <button
@@ -156,14 +156,11 @@ export default function EquipmentForm() {
             </div>
           </Field>
 
-          {hasImage && (
-            <Field label="Посилання на зображення">
-              <input
-                type="text" className={inputClass} value={form.image_url} onChange={set('image_url')}
-                placeholder="https://..."
-              />
-            </Field>
-          )}
+          <ImageUploadField
+            value={form.image_url}
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            entityType="item"
+          />
         </FormSection>
 
         <FormSection title="Механіка" accentColor={activeType.color}>

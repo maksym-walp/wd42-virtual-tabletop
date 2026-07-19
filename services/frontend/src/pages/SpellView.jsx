@@ -50,6 +50,12 @@ export default function SpellView() {
         className="overflow-hidden rounded-lg border border-border bg-surface"
         style={{ borderTop: `3px solid ${type.color}` }}
       >
+        {spell.image_url && (
+          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+            <img src={spell.image_url} alt={spell.name} className="h-full w-full object-cover" />
+          </div>
+        )}
+
         {/* Type header */}
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: type.bg }}>
           <span

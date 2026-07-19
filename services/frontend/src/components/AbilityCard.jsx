@@ -9,6 +9,12 @@ export default function AbilityCard({ ability }) {
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid #8a5a2b' }}
     >
+      {ability.image_url && (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
+          <img src={ability.image_url} alt={ability.name} className="h-full w-full object-cover" loading="lazy" />
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3.5 py-2">
         {(ability.archetypes ?? []).map((a) => (
           <span

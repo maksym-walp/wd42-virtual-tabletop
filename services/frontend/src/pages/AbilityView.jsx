@@ -41,6 +41,12 @@ export default function AbilityView() {
       </Link>
 
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid #8a5a2b' }}>
+        {ability.image_url && (
+          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+            <img src={ability.image_url} alt={ability.name} className="h-full w-full object-cover" />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
           {(ability.archetypes ?? []).map((a) => (
             <span

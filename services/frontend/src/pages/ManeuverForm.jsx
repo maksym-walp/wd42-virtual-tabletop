@@ -5,12 +5,14 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import { DURATION_OPTIONS } from '../constants/maneuvers';
 import Field, { inputClass } from '../components/ui/Field';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 
 const EMPTY = {
   name: '', duration_actions: 1, description: '', is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
+  image_url: '',
 };
 
 export default function ManeuverForm() {
@@ -38,6 +40,7 @@ export default function ManeuverForm() {
           description: m.description || '', is_public: m.is_public,
           prerequisite_node_ids: m.prerequisite_node_ids || [],
           prerequisite_logic: m.prerequisite_logic || 'or',
+          image_url: m.image_url || '',
         });
       })
       .catch(() => navigate('/maneuvers'))
@@ -53,7 +56,11 @@ export default function ManeuverForm() {
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, duration_actions: Number(form.duration_actions) };
+      const payload = {
+        ...form,
+        duration_actions: Number(form.duration_actions),
+        image_url: form.image_url || null,
+      };
       if (isEdit) {
         await api.put(`/api/maneuvers/${id}`, payload);
         navigate(`/maneuvers/${id}`);
@@ -86,11 +93,17 @@ export default function ManeuverForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Тривалість">
+          <Field label="Тривалість" className="mb-4">
             <select className={inputClass} value={form.duration_actions} onChange={setNum('duration_actions')}>
               {DURATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Field>
+
+          <ImageUploadField
+            value={form.image_url}
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            entityType="item"
+          />
         </FormSection>
 
         <FormSection title="Опис">

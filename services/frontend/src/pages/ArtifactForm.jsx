@@ -5,6 +5,7 @@ import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 
@@ -127,12 +128,11 @@ export default function ArtifactForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Посилання на зображення">
-            <input
-              type="text" className={inputClass} value={form.image_url} onChange={set('image_url')}
-              placeholder="https://..."
-            />
-          </Field>
+          <ImageUploadField
+            value={form.image_url}
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            entityType="item"
+          />
         </FormSection>
 
         <FormSection title="Походження" accentColor={ARTIFACT_TYPE.color}>

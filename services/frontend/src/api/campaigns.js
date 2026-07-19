@@ -57,6 +57,22 @@ const campaignApi = {
     const { data } = await api.get(`${BASE}/${id}/characters`);
     return data.characters;
   },
+
+  // Галерея майстра: файл спершу летить у media-service, а сюди приходить
+  // уже готовий URL — саме цей запис і робить зображення власністю кампанії.
+  async listGallery(id) {
+    const { data } = await api.get(`${BASE}/${id}/gallery`);
+    return data.images;
+  },
+
+  async addGalleryImage(id, image_url) {
+    const { data } = await api.post(`${BASE}/${id}/gallery`, { image_url });
+    return data.image;
+  },
+
+  async removeGalleryImage(id, imageId) {
+    await api.delete(`${BASE}/${id}/gallery/${imageId}`);
+  },
 };
 
 export default campaignApi;

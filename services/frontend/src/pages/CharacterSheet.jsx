@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2 } from 'lucide-react';
 import characterApi from '../api/characterSheet';
+import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
 import artifactsApi from '../api/artifacts';
@@ -17,6 +18,7 @@ import {
 } from '../constants/characterSheet';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
+import Lightbox from '../components/ui/Lightbox';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import IntInput from '../components/ui/IntInput';
@@ -300,7 +302,9 @@ export default function CharacterSheet({ publicView = false }) {
     <div className="mx-auto max-w-[1100px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
       {/* ─── Header ─── */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="flex items-start gap-4">
+          <CharacterPortrait character={c} isOwner={is_owner} onChange={patchCharacter} />
+          <div>
           <div className="mb-1 flex items-center gap-4">
             <Link to="/characters" className="text-sm text-accent">← Персонажі</Link>
             {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
@@ -344,6 +348,7 @@ export default function CharacterSheet({ publicView = false }) {
             {c.owner_username && (
               <span>Власник: <Link to={`/profile/${c.owner_username}`} className="text-accent hover:underline">{c.owner_username}</Link></span>
             )}
+          </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -603,6 +608,109 @@ export default function CharacterSheet({ publicView = false }) {
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+// ── CharacterPortrait ────────────────────────────────────────────────────────
+
+// Зберігається через звичайний patchCharacter, тобто дебаунсом разом з
+// рештою полів. Очищення шле image_url: null — це працює лише тому, що
+// модель на бекенді використовує CASE WHEN, а не COALESCE.
+function CharacterPortrait({ character, isOwner, onChange }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [zoomed, setZoomed] = useState(false);
+
+  const url = character.image_url;
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setError('');
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('Файл завеликий — максимум 10 МБ');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploaded = await mediaApi.upload(file, {
+        entityType: 'character',
+        entityId: character.id,
+      });
+      onChange({ image_url: uploaded });
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Не вдалось завантажити зображення');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Чужий лист без портрета — не показуємо порожню рамку взагалі.
+  if (!url && !isOwner) return null;
+
+  const box = 'h-20 w-20 shrink-0 rounded-lg border border-border sm:h-24 sm:w-24';
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {url ? (
+        <div className="group relative">
+          <button type="button" onClick={() => setZoomed(true)} aria-label="Переглянути портрет">
+            <img src={url} alt="" className={`${box} object-cover`} />
+          </button>
+          {isOwner && (
+            <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 rounded-b-lg bg-black/55 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                aria-label="Замінити портрет"
+                className="rounded p-0.5 text-white hover:bg-white/20"
+              >
+                <Upload size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ image_url: null })}
+                disabled={uploading}
+                aria-label="Видалити портрет"
+                className="rounded p-0.5 text-white hover:bg-white/20"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          aria-label="Завантажити портрет"
+          className={`${box} flex items-center justify-center border-2 border-dashed text-text-dim hover:bg-surface-hover hover:text-text`}
+        >
+          <ImagePlus size={20} />
+        </button>
+      )}
+
+      {uploading && <span className="text-[10px] text-text-dim">Завантаження...</span>}
+      {error && <span className="max-w-24 text-center text-[10px] text-danger">{error}</span>}
+
+      {isOwner && (
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES}
+          className="hidden"
+          onChange={handleFile}
+        />
+      )}
+
+      {zoomed && url && <Lightbox images={[url]} onClose={() => setZoomed(false)} />}
     </div>
   );
 }

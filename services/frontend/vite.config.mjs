@@ -38,7 +38,23 @@ export default defineConfig({
             urlPattern: /^\/api\//,
             handler: 'NetworkOnly',
           },
+          // Завантажені зображення — навпаки, кешуються агресивно: імʼя файлу
+          // є випадковим UUID, тож байти за конкретною URL ніколи не
+          // змінюються. Заміна зображення дає нову URL, тож застарілий кеш
+          // структурно неможливий.
+          {
+            urlPattern: /^\/uploads\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'uploads',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
+        // Пряме відкриття URL зображення у вкладці — це навігаційний запит;
+        // без denylist сервіс-воркер віддав би на нього index.html.
+        navigateFallbackDenylist: [/^\/uploads\//, /^\/api\//],
       },
     }),
   ],

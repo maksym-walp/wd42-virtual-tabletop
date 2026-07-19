@@ -51,28 +51,28 @@ const ManeuverModel = {
   },
 
   async create(userId, data) {
-    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO maneuvers.entries
-         (user_id, name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+         (user_id, name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
-      [userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0];
   },
 
   async update(id, userId, data) {
-    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
       `UPDATE maneuvers.entries
        SET name=$3, duration_actions=$4, description=$5, is_public=$6,
-           prerequisite_node_ids=$7, prerequisite_logic=$8, updated_at=NOW()
+           prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
-      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0] || null;
   },

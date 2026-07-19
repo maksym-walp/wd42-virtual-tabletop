@@ -6,6 +6,7 @@ import skillTreeApi from '../api/skillTree';
 import { ARCHETYPES } from '../constants/characterSheet';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
@@ -16,6 +17,7 @@ const domain = COLLECTION_DOMAINS.abilities;
 const EMPTY = {
   name: '', archetypes: [], description: '', is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
+  image_url: '',
   collectionIds: [],
 };
 
@@ -56,6 +58,7 @@ export default function AbilityForm() {
           description: a.description || '', is_public: a.is_public,
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
+          image_url: a.image_url || '',
         }));
       })
       .catch(() => navigate('/abilities'))
@@ -99,7 +102,8 @@ export default function AbilityForm() {
     setSaving(true);
     setError('');
     try {
-      const { collectionIds, ...payload } = form;
+      const { collectionIds, ...rest } = form;
+      const payload = { ...rest, image_url: form.image_url || null };
       if (isEdit) {
         await api.put(`/api/abilities/${id}`, payload);
         await reconcileCollections(id);
@@ -134,7 +138,7 @@ export default function AbilityForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Доступно архетипам">
+          <Field label="Доступно архетипам" className="mb-4">
             <div className="flex flex-wrap gap-3">
               {ARCHETYPE_KEYS.map((key) => (
                 <label key={key} className="flex cursor-pointer items-center gap-2 text-sm text-text">
@@ -149,6 +153,12 @@ export default function AbilityForm() {
               ))}
             </div>
           </Field>
+
+          <ImageUploadField
+            value={form.image_url}
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            entityType="item"
+          />
         </FormSection>
 
         <FormSection title="Опис">

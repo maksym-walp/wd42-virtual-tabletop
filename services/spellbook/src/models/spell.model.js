@@ -69,15 +69,16 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
-      prerequisite_node_ids, prerequisite_logic,
+      prerequisite_node_ids, prerequisite_logic, image_url,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO spellbook.spells
          (user_id, name, magic_type, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
-          range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
+          image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING *`,
       [
         userId, name, magic_type, spell_kind ?? 'utility',
@@ -86,6 +87,7 @@ const SpellModel = {
         duration_value ?? null, duration_unit ?? 'instant',
         range_desc ?? null, components ?? [], is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
+        image_url ?? null,
       ]
     );
     return rows[0];
@@ -97,7 +99,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
-      prerequisite_node_ids, prerequisite_logic,
+      prerequisite_node_ids, prerequisite_logic, image_url,
     } = data;
 
     const { rows } = await pool.query(
@@ -107,7 +109,8 @@ const SpellModel = {
            energy_cost=$8, action_time=$9, ritual=$10,
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14, is_public=$15,
-           prerequisite_node_ids=$16, prerequisite_logic=$17, updated_at=NOW()
+           prerequisite_node_ids=$16, prerequisite_logic=$17,
+           image_url=$18, updated_at=NOW()
        WHERE id=$1 AND user_id=$2
        RETURNING *`,
       [
@@ -117,6 +120,7 @@ const SpellModel = {
         duration_value ?? null, duration_unit, range_desc ?? null,
         components ?? [], is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
+        image_url ?? null,
       ]
     );
     return rows[0] || null;

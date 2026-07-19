@@ -9,6 +9,7 @@ import {
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
@@ -22,6 +23,7 @@ const EMPTY = {
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
+  image_url: '',
   collectionIds: [],
 };
 
@@ -67,6 +69,7 @@ export default function SpellForm() {
           components: s.components || [], is_public: s.is_public,
           prerequisite_node_ids: s.prerequisite_node_ids || [],
           prerequisite_logic: s.prerequisite_logic || 'or',
+          image_url: s.image_url || '',
         }));
       })
       .catch(() => navigate('/spellbook'))
@@ -117,6 +120,7 @@ export default function SpellForm() {
         duration_value: form.duration_value === '' ? null : Number(form.duration_value),
         energy_cost: Number(form.energy_cost),
         action_time: Number(form.action_time),
+        image_url: form.image_url || null,
       };
       if (isEdit) {
         await api.put(`/api/spellbook/${id}`, payload);
@@ -173,7 +177,7 @@ export default function SpellForm() {
             </div>
           </Field>
 
-          <Field label="Вид заклинання">
+          <Field label="Вид заклинання" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
                 <button
@@ -190,6 +194,12 @@ export default function SpellForm() {
               ))}
             </div>
           </Field>
+
+          <ImageUploadField
+            value={form.image_url}
+            onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            entityType="item"
+          />
         </FormSection>
 
         {/* — Механіка — */}

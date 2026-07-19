@@ -1,15 +1,6 @@
 const CampaignModel = require('../models/campaign.model');
 const CampaignCharacterModel = require('../models/campaign-character.model');
-
-function isGm(campaign, userId) {
-  return campaign.gm_id === userId;
-}
-
-async function loadCampaignOr404(req, res) {
-  const campaign = await CampaignModel.findById(req.params.id);
-  if (!campaign) { res.status(404).json({ message: 'Кампанію не знайдено' }); return null; }
-  return campaign;
-}
+const { loadCampaignOr404, isGm } = require('./load-campaign');
 
 const CampaignController = {
   async create(req, res) {

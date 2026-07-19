@@ -8,6 +8,12 @@ export default function ManeuverCard({ maneuver }) {
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid #8a5a2b' }}
     >
+      {maneuver.image_url && (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
+          <img src={maneuver.image_url} alt={maneuver.name} className="h-full w-full object-cover" loading="lazy" />
+        </div>
+      )}
+
       <div className="flex items-center gap-2 border-b border-border px-3.5 py-2">
         <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
           {maneuver.duration_actions} {maneuver.duration_actions === 1 ? 'дія' : 'дії'}

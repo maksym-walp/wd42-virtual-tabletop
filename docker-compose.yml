@@ -229,6 +229,23 @@ services:
     networks:
       - walp-network
 
+  # Єдиний сервіс без depends_on postgres — він stateless, уся метаінформація
+  # про файли живе в БД інших сервісів (campaign_gallery, characters.image_url).
+  media:
+    build:
+      context: ./services/media
+      target: development
+    container_name: walp-media
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3012
+    volumes:
+      - ./services/media/src:/app/src:delegated
+      - media_data:/uploads
+    networks:
+      - walp-network
+
   frontend:
     build:
       context: ./services/frontend
@@ -248,6 +265,9 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Той самий volume, що й у media — nginx віддає /uploads/ як статику,
+      # повз Node. Read-only: nginx лише читає, пише виключно media-service.
+      - media_data:/uploads:ro
     depends_on:
       - auth
       - user-profile
@@ -260,12 +280,14 @@ services:
       - abilities
       - campaigns
       - artifacts
+      - media
       - frontend
     networks:
       - walp-network
 
 volumes:
   postgres_data:
+  media_data:
 
 networks:
   walp-network:

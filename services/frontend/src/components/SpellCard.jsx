@@ -14,6 +14,12 @@ export default function SpellCard({ spell }) {
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: `4px solid ${type.color}` }}
     >
+      {spell.image_url && (
+        <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
+          <img src={spell.image_url} alt={spell.name} className="h-full w-full object-cover" loading="lazy" />
+        </div>
+      )}
+
       {/* Header */}
       <div
         className="flex items-center gap-2 border-b px-3.5 py-2"
