@@ -28,10 +28,12 @@ services:
       # so the System dropdown still defaults to MySQL. Reach PostgreSQL directly
       # with http://localhost:8080/?pgsql=postgres&username=...&db=...
       ADMINER_DEFAULT_SERVER: ${POSTGRES_HOST:-postgres}
-      # Must match a directory under /var/www/html/designs in the image
-      # (pepa-linha, bilal-dark, dracula, ...) — an unknown name silently
-      # produces a broken symlink and unstyled pages.
-      ADMINER_DESIGN: ${ADMINER_DESIGN:-bilal-dark}
+      # Must name a directory under /var/www/html/designs in the image, and that
+      # design must be self-contained: the image ships only each design's
+      # adminer.css, with no fonts/ or images/ dirs, so themes referencing
+      # ../fonts/entypo.woff (bilal-dark, dracula, ...) render every icon as "?".
+      # Known-good: pepa-linha, flat, nette, rmsoft_blue, hever.
+      ADMINER_DESIGN: ${ADMINER_DESIGN:-pepa-linha}
     # Bound to loopback by default — reachable only through an SSH tunnel.
     # Set ADMINER_BIND to a LAN IP (e.g. 192.168.1.10) to expose it on the local network.
     ports:

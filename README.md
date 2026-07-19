@@ -32,6 +32,23 @@
 
 Кожен бекенд-сервіс має однакову структуру: `src/{config,controllers,middleware,models,routes}`, `src/index.js` — точка входу, тести в `src/**/__tests__`.
 
+## Документація сервісів
+
+Кожен бекенд-сервіс має власний `README.md` з переліком ендпоінтів, схемою БД (включно з міжсхемними читаннями), змінними оточення та інструкцією запуску тестів:
+
+- [auth](services/auth/README.md) — реєстрація/логін, JWT
+- [user-profile](services/user-profile/README.md) — профіль користувача
+- [spellbook](services/spellbook/README.md) — заклинання
+- [skill-tree](services/skill-tree/README.md) — дерево навичок
+- [character-sheet](services/character-sheet/README.md) — лист персонажа
+- [dice-roller](services/dice-roller/README.md) — кидки кубиків
+- [equipment](services/equipment/README.md) — зброя/обладунки/предмети
+- [maneuvers](services/maneuvers/README.md) — маневри бійців
+- [abilities](services/abilities/README.md) — вміння за архетипами
+- [campaigns](services/campaigns/README.md) — кампанії ГМ/гравців
+- [artifacts](services/artifacts/README.md) — артефакти
+- [media](services/media/README.md) — завантаження зображень
+
 Nginx проксує запити з порту 80:
 - `/api/auth/` → auth
 - `/api/profile/` → user-profile

@@ -14,6 +14,7 @@ const SpellController = {
   },
 
   async create(req, res) {
+    if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
     const spell = await SpellModel.create(req.user.sub, req.body);
     res.status(201).json({ spell });
   },

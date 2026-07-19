@@ -14,6 +14,7 @@ const ManeuverController = {
   },
 
   async create(req, res) {
+    if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
     const maneuver = await ManeuverModel.create(req.user.sub, req.body);
     res.status(201).json({ maneuver });
   },
