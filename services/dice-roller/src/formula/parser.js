@@ -23,7 +23,11 @@ function validateDice(count, sides) {
 // Signed       := ('-')? Term
 // Term         := WrappedGroup | DiceGroup | Integer
 // DiceGroup    := Integer 'd' Integer        (N can be > 1)
-// WrappedGroup := ('adv'|'dis'|'wadv'|'wdis') '(' DiceGroup ')'
+// WrappedGroup := ('adv'|'dis'|'wadv'|'wdis'|'bal'|'ext') '(' DiceGroup ')'
+//   adv/dis   — roll each die twice, keep the better/worse
+//   wadv/wdis — roll each die three times, keep the best/worst (double adv/dis)
+//   bal       — roll each die three times, keep the median (Balance)
+//   ext       — roll each die twice, keep whichever is closer to an edge (Extremum)
 function parseTerm(tokens, pos) {
   const tok = tokens[pos];
   if (!tok) throw new FormulaError('Неочікуваний кінець формули');

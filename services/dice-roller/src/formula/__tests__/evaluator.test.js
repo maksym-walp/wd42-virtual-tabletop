@@ -58,6 +58,35 @@ describe('evaluate', () => {
     expect(groups[0].dice[0]).toEqual({ rolls: [4, 6, 1], kept: 1 });
   });
 
+  it('rolls 3 and keeps the median for balance (bal)', () => {
+    jest.spyOn(crypto, 'randomInt').mockReturnValueOnce(9).mockReturnValueOnce(3).mockReturnValueOnce(12);
+    const { groups } = evaluate([
+      { sign: 1, node: { kind: 'wrapped', mode: 'bal', count: 1, sides: 20 } },
+    ]);
+    expect(groups[0].dice[0]).toEqual({ rolls: [9, 3, 12], kept: 9 });
+  });
+
+  it('keeps whichever roll is closer to an edge for extremum (ext)', () => {
+    jest.spyOn(crypto, 'randomInt').mockReturnValueOnce(17).mockReturnValueOnce(9);
+    const { groups } = evaluate([
+      { sign: 1, node: { kind: 'wrapped', mode: 'ext', count: 1, sides: 20 } },
+    ]);
+    expect(groups[0]).toEqual({
+      type: 'ext', sides: 20, dice: [{ rolls: [17, 9], kept: 17 }], sign: 1, subtotal: 17,
+    });
+  });
+
+  it('rerolls both extremum dice on a tied distance-to-edge', () => {
+    jest.spyOn(crypto, 'randomInt')
+      .mockReturnValueOnce(2).mockReturnValueOnce(19) // tie: both at distance 1 from an edge
+      .mockReturnValueOnce(5).mockReturnValueOnce(14); // resolves: distance 4 vs 6
+    const { groups } = evaluate([
+      { sign: 1, node: { kind: 'wrapped', mode: 'ext', count: 1, sides: 20 } },
+    ]);
+    expect(groups[0].dice[0]).toEqual({ rolls: [5, 14], kept: 5 });
+    expect(crypto.randomInt).toHaveBeenCalledTimes(4);
+  });
+
   it('evaluates advantage over a multi-dice group per-die', () => {
     jest.spyOn(crypto, 'randomInt')
       .mockReturnValueOnce(1).mockReturnValueOnce(6) // die 1: keep 6

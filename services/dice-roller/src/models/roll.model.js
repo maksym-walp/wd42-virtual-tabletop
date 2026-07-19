@@ -43,7 +43,7 @@ const RollModel = {
            FROM dice_roller.rolls r,
                 jsonb_array_elements(r.groups) AS g,
                 jsonb_array_elements(g->'dice') AS d
-           WHERE r.user_id = $1 AND g->>'type' IN ('adv', 'dis', 'wadv', 'wdis')
+           WHERE r.user_id = $1 AND g->>'type' IN ('adv', 'dis', 'wadv', 'wdis', 'bal', 'ext')
          ),
          all_dice AS (
            SELECT * FROM plain_dice

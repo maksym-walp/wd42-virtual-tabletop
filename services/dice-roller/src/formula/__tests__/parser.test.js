@@ -32,6 +32,15 @@ describe('parse', () => {
     ]);
   });
 
+  it('parses bal()/ext() the same way as adv()/dis()', () => {
+    expect(parseFormula('bal(1d20)')).toEqual([
+      { sign: 1, node: { kind: 'wrapped', mode: 'bal', count: 1, sides: 20 } },
+    ]);
+    expect(parseFormula('ext(1d20)')).toEqual([
+      { sign: 1, node: { kind: 'wrapped', mode: 'ext', count: 1, sides: 20 } },
+    ]);
+  });
+
   it('rejects a dangling operator', () => {
     expect(() => parseFormula('2d6+')).toThrow(FormulaError);
   });

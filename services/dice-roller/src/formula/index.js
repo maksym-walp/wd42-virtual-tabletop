@@ -5,7 +5,7 @@ const { FormulaError } = require('./errors');
 
 const MAX_TERMS = 20;
 const MAX_TOTAL_DICE = 500;
-const DICE_MULTIPLIER = { adv: 2, dis: 2, wadv: 3, wdis: 3 };
+const DICE_MULTIPLIER = { adv: 2, dis: 2, wadv: 3, wdis: 3, bal: 3, ext: 2 };
 
 function countDice(terms) {
   return terms.reduce((sum, { node }) => {

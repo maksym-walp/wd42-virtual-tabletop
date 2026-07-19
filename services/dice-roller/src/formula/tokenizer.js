@@ -1,6 +1,6 @@
 const { FormulaError } = require('./errors');
 
-const KEYWORD_RE = /^(wadv|wdis|adv|dis)\b/i;
+const KEYWORD_RE = /^(wadv|wdis|adv|dis|bal|ext)\b/i;
 const DICE_RE = /^(\d+)d(\d+)/i;
 const INT_RE = /^(\d+)/;
 

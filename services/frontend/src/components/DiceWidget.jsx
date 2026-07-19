@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dices } from 'lucide-react';
+import { Dices, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDice } from '../context/DiceContext';
 import Sheet from './ui/Sheet';
@@ -7,11 +7,12 @@ import Button from './ui/Button';
 import Field, { inputClass } from './ui/Field';
 import DiceResult from './DiceResult';
 import {
-  DIE_TYPES, MODE_BUTTONS, DOUBLE_OF, DOUBLE_CLICK_HINT, nextMode,
+  DIE_TYPES, MODE_BUTTONS, SPECIAL_OPTIONS,
   stripModifier, withModifier, addPlainDie, addWrappedDie, applyModeToFormula,
 } from '../constants/dice';
 
 const MODE_ACTIVE_STYLE = { dis: 'bg-danger text-bg', adv: 'bg-sage text-bg' };
+const SPECIAL_KEYS = new Set(SPECIAL_OPTIONS.map((o) => o.key));
 
 export default function DiceWidget() {
   const { user } = useAuth();
@@ -19,13 +20,27 @@ export default function DiceWidget() {
   const [mode, setMode] = useState('normal');
   const [modifier, setModifier] = useState(0);
   const [formulaInput, setFormulaInput] = useState('');
+  const [specialOpen, setSpecialOpen] = useState(false);
 
   if (!user) return null;
 
-  const handleModeClick = (clicked) => {
-    const newMode = nextMode(mode, clicked);
+  const handleClose = () => {
+    setSpecialOpen(false);
+    close();
+  };
+
+  // Applies a new roll-type mode to the formula; any non-"normal" mode
+  // defaults its wrapper to d20 so the user doesn't have to pick a die too.
+  const applyMode = (newMode) => {
     setFormulaInput((prev) => withModifier(applyModeToFormula(stripModifier(prev), mode, newMode), modifier));
     setMode(newMode);
+  };
+
+  const handleModeClick = (clicked) => applyMode(mode === clicked ? 'normal' : clicked);
+
+  const handleSpecialSelect = (key) => {
+    applyMode(key);
+    setSpecialOpen(false);
   };
 
   const handleDieClick = (sides) => {
@@ -63,37 +78,61 @@ export default function DiceWidget() {
         <Dices size={26} />
       </button>
 
-      <Sheet open={isOpen} onClose={close} title="Кидок кубиків">
+      <Sheet open={isOpen} onClose={handleClose} title="Кидок кубиків">
         <div className="flex flex-col gap-4">
           {/* Row 1: mode + modifier */}
           <div className="flex items-start gap-2">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="relative flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex overflow-hidden rounded-lg border border-border">
-                {MODE_BUTTONS.map(({ key, label }, i) => {
-                  const isDouble = DOUBLE_OF[key] && mode === DOUBLE_OF[key];
-                  const active = mode === key || isDouble;
-                  const hasDouble = Boolean(DOUBLE_OF[key]);
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleModeClick(key)}
-                      title={hasDouble ? DOUBLE_CLICK_HINT : undefined}
-                      className={`min-w-0 flex-1 break-words px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${i > 0 ? 'border-l border-border' : ''} ${
-                        active ? (MODE_ACTIVE_STYLE[key] || 'bg-accent text-bg') : 'bg-transparent text-text-dim hover:bg-surface-hover'
-                      }`}
-                    >
-                      {label}
-                      {isDouble ? ' ×2' : ''}
-                    </button>
-                  );
-                })}
+                {MODE_BUTTONS.map(({ key, label }, i) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleModeClick(key)}
+                    className={`min-w-0 flex-1 break-words px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${i > 0 ? 'border-l border-border' : ''} ${
+                      mode === key ? (MODE_ACTIVE_STYLE[key] || 'bg-accent text-bg') : 'bg-transparent text-text-dim hover:bg-surface-hover'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSpecialOpen((o) => !o)}
+                  aria-haspopup="true"
+                  aria-expanded={specialOpen}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 border-l border-border px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${
+                    SPECIAL_KEYS.has(mode) ? 'bg-accent text-bg' : 'bg-transparent text-text-dim hover:bg-surface-hover'
+                  }`}
+                >
+                  <Sparkles size={14} />
+                  {SPECIAL_KEYS.has(mode) && (
+                    <span className="hidden truncate sm:inline">
+                      {SPECIAL_OPTIONS.find((o) => o.key === mode)?.label}
+                    </span>
+                  )}
+                </button>
               </div>
-              {/* Desktop gets the hint as a native title tooltip on the adv/dis
-                  buttons (no hover on touch); mobile shows it inline instead. */}
-              <p className="px-0.5 text-[10px] leading-tight text-text-dim md:hidden">
-                {DOUBLE_CLICK_HINT}
-              </p>
+
+              {specialOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setSpecialOpen(false)} />
+                  <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                    {SPECIAL_OPTIONS.map(({ key, label }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleSpecialSelect(key)}
+                        className={`block w-full px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                          mode === key ? 'bg-accent text-bg' : 'text-text hover:bg-surface-hover'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">

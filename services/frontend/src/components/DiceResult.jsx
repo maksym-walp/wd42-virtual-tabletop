@@ -1,6 +1,6 @@
 import DieFace from './DieFace';
 
-const WRAPPED_TYPES = new Set(['adv', 'dis', 'wadv', 'wdis']);
+const WRAPPED_TYPES = new Set(['adv', 'dis', 'wadv', 'wdis', 'bal', 'ext']);
 
 function ModifierChip({ group }) {
   return (

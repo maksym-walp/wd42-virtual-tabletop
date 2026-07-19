@@ -36,6 +36,21 @@ describe('tokenize', () => {
     ]);
   });
 
+  it('recognizes bal/ext keywords', () => {
+    expect(tokenize('bal(3d6)')).toEqual([
+      { type: 'mod', value: 'bal' },
+      { type: '(' },
+      { type: 'dice', count: 3, sides: 6 },
+      { type: ')' },
+    ]);
+    expect(tokenize('ext(1d20)')).toEqual([
+      { type: 'mod', value: 'ext' },
+      { type: '(' },
+      { type: 'dice', count: 1, sides: 20 },
+      { type: ')' },
+    ]);
+  });
+
   it('is case-insensitive on keywords and the d separator', () => {
     expect(tokenize('ADV(1D20)')).toEqual([
       { type: 'mod', value: 'adv' },

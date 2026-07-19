@@ -84,6 +84,30 @@ describe('rollFormula - MAX_TOTAL_DICE (500) with mode multipliers', () => {
     expect(result.total).toEqual(expect.any(Number));
   });
 
+  it('applies the 3x multiplier for balance groups', () => {
+    // 2 * bal(100d6): raw count = 200, but 200 * 3 = 600 > 500
+    const f = ['bal(100d6)', 'bal(100d6)'].join('+');
+    expect(() => rollFormula(f)).toThrow(FormulaError);
+    expect(() => rollFormula(f)).toThrow(/Забагато кубиків/);
+  });
+
+  it('a single balance group of 100 dice (300 effective) stays under the cap', () => {
+    const result = rollFormula('bal(100d6)');
+    expect(result.total).toEqual(expect.any(Number));
+  });
+
+  it('applies the 2x multiplier for extremum groups', () => {
+    // 3 * ext(100d6): raw count = 300, but 300 * 2 = 600 > 500
+    const f = ['ext(100d6)', 'ext(100d6)', 'ext(100d6)'].join('+');
+    expect(() => rollFormula(f)).toThrow(FormulaError);
+    expect(() => rollFormula(f)).toThrow(/Забагато кубиків/);
+  });
+
+  it('a single extremum group of 100 dice (200 effective) stays under the cap', () => {
+    const result = rollFormula('ext(100d6)');
+    expect(result.total).toEqual(expect.any(Number));
+  });
+
   it('does not count modifier terms towards the dice total', () => {
     // 5 * 100d6 = 500 (at the cap, not over) plus a bunch of flat modifiers
     const f = ['100d6', '100d6', '100d6', '100d6', '100d6', '1', '2', '3'].join('+');

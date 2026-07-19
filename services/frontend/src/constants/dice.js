@@ -1,10 +1,9 @@
 export const DIE_TYPES = [4, 6, 8, 10, 12, 20, 100];
 
-// A second click on an already-active adv/dis button escalates to the
-// homebrew "double" variant (backend keywords wadv/wdis).
-export const KEYWORD = { adv: 'adv', wadv: 'wadv', dis: 'dis', wdis: 'wdis' };
-const FAMILY = { adv: 'adv', wadv: 'adv', dis: 'dis', wdis: 'dis' };
-export const DOUBLE_OF = { adv: 'wadv', dis: 'wdis' };
+// Identity map from a mode name to its backend formula keyword.
+export const KEYWORD = {
+  adv: 'adv', dis: 'dis', bal: 'bal', ext: 'ext', wadv: 'wadv', wdis: 'wdis',
+};
 
 export const MODE_BUTTONS = [
   { key: 'dis', label: 'Перешкода' },
@@ -12,17 +11,14 @@ export const MODE_BUTTONS = [
   { key: 'adv', label: 'Перевага' },
 ];
 
-export const DOUBLE_CLICK_HINT = 'Натисніть двічі для подвійної переваги/перешкоди';
-
-// clicked is always one of 'dis' | 'normal' | 'adv' (the 3 buttons shown);
-// current may additionally be 'wadv' | 'wdis'.
-export function nextMode(current, clicked) {
-  if (clicked === 'normal') return 'normal';
-  const double = DOUBLE_OF[clicked];
-  if (current === clicked) return double;
-  if (current === double) return clicked;
-  return clicked;
-}
+// The 4th "Спеціальні" option in the roll-type row opens a dropdown with
+// these homebrew mechanics.
+export const SPECIAL_OPTIONS = [
+  { key: 'bal', label: 'Баланс' },
+  { key: 'ext', label: 'Екстремум' },
+  { key: 'wadv', label: 'Подвійна перевага' },
+  { key: 'wdis', label: 'Подвійна перешкода' },
+];
 
 // A trailing bare "+N"/"-N" (no 'd') is always the flat modifier — dice
 // terms never end that way (e.g. "1d6" ends in 'd6', "adv(1d10)" in ')').
@@ -55,26 +51,30 @@ export function addWrappedDie(base, mode, sides) {
   return base ? `${base}+${term}` : term;
 }
 
-// Applies a mode-button click to the formula text: renames an in-progress
-// empty/same-family wrapper in place, or opens a fresh one, or (switching to
-// "normal") drops a dangling empty wrapper the user never filled.
+const DEFAULT_ROLL_SIDES = 20;
+
+// Applies a mode-button/dropdown-option click to the formula text: renames
+// the in-progress wrapper in place (keeping its dice, or defaulting to d20
+// if it was still empty), opens a fresh wrapper pre-filled with 1d20, or
+// (switching to "normal") drops a dangling empty wrapper the user never
+// filled — a wrapper the user did fill is left as a locked-in term.
 export function applyModeToFormula(base, oldMode, newMode) {
+  if (newMode === oldMode) return base;
+
   if (oldMode !== 'normal') {
     const oldKeyword = KEYWORD[oldMode];
-    const emptyRe = new RegExp(`(\\+)?${oldKeyword}\\(\\)$`);
-    if (emptyRe.test(base)) {
-      const cleaned = base.replace(emptyRe, '');
-      if (newMode === 'normal') return cleaned;
-      return cleaned ? `${cleaned}+${KEYWORD[newMode]}()` : `${KEYWORD[newMode]}()`;
+    const re = new RegExp(`(\\+)?${oldKeyword}\\(([^)]*)\\)$`);
+    const match = base.match(re);
+    if (match) {
+      const [full, , inner] = match;
+      const rest = base.slice(0, base.length - full.length);
+      if (newMode === 'normal') return inner ? base : rest;
+      const term = `${KEYWORD[newMode]}(${inner || `1d${DEFAULT_ROLL_SIDES}`})`;
+      return rest ? `${rest}+${term}` : term;
     }
   }
+
   if (newMode === 'normal') return base;
-  const sameFamily = oldMode !== 'normal' && FAMILY[oldMode] === FAMILY[newMode];
-  if (sameFamily) {
-    const oldKeyword = KEYWORD[oldMode];
-    const re = new RegExp(`${oldKeyword}(\\([^)]*\\))$`);
-    if (re.test(base)) return base.replace(re, `${KEYWORD[newMode]}$1`);
-  }
-  const term = `${KEYWORD[newMode]}()`;
+  const term = `${KEYWORD[newMode]}(1d${DEFAULT_ROLL_SIDES})`;
   return base ? `${base}+${term}` : term;
 }
