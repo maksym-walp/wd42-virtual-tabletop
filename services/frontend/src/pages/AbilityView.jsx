@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 
@@ -15,7 +16,10 @@ export default function AbilityView() {
 
   useEffect(() => {
     api.get(`/api/abilities/${id}`)
-      .then(({ data }) => setAbility(data.ability))
+      .then(({ data }) => {
+        setAbility(data.ability);
+        recordView({ type: 'ability', id, name: data.ability.name, href: `/abilities/${id}`, image_url: data.ability.image_url });
+      })
       .catch(() => navigate('/abilities', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);

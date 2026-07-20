@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
+import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 
 export default function ArtifactView() {
@@ -14,7 +15,10 @@ export default function ArtifactView() {
 
   useEffect(() => {
     api.get(`/api/artifacts/${id}`)
-      .then(({ data }) => setArtifact(data.artifact))
+      .then(({ data }) => {
+        setArtifact(data.artifact);
+        recordView({ type: 'artifact', id, name: data.artifact.name, href: `/artifacts/${id}`, image_url: data.artifact.image_url });
+      })
       .catch(() => navigate('/artifacts', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);

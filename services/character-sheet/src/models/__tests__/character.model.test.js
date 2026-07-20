@@ -65,6 +65,27 @@ describe('CharacterModel.create', () => {
   });
 });
 
+describe('CharacterModel.findAllPublic', () => {
+  beforeEach(() => {
+    pool.query.mockResolvedValue({ rows: [] });
+  });
+
+  it('filters to public, other-user, non-admin-authored characters with a default limit', async () => {
+    await CharacterModel.findAllPublic('u1');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/WHERE c\.is_public = true AND c\.user_id <> \$1 AND ou\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).toMatch(/ORDER BY c\.created_at DESC/);
+    expect(sql).toMatch(/LIMIT \$2/);
+    expect(params).toEqual(['u1', 15]);
+  });
+
+  it('honors a custom limit', async () => {
+    await CharacterModel.findAllPublic('u1', { limit: 5 });
+    const params = pool.query.mock.calls[0][1];
+    expect(params).toEqual(['u1', 5]);
+  });
+});
+
 describe('CharacterModel.update death_scale handling', () => {
   beforeEach(() => {
     pool.query.mockResolvedValue({ rows: [{ id: 'c1' }] });

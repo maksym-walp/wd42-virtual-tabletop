@@ -9,6 +9,11 @@ const characterApi = {
     return data.characters;
   },
 
+  async listCommunity({ limit } = {}) {
+    const { data } = await api.get(`${BASE}/community`, { params: { limit } });
+    return data.characters;
+  },
+
   async create(payload) {
     const { data } = await api.post(BASE + '/', payload);
     return data.character;

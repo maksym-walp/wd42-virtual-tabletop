@@ -38,3 +38,28 @@ describe('AbilityModel.findAll dynamic filter builder', () => {
     expect(params).toEqual(['u1', '%парирування%', 'rogue']);
   });
 });
+
+describe('AbilityModel.findAll scope=community', () => {
+  it('replaces the ownership clause with a public/other-user/non-admin filter', async () => {
+    await AbilityModel.findAll('u1', { scope: 'community' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/WHERE a\.is_public = true AND a\.user_id <> \$1 AND cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).not.toMatch(/a\.user_id = \$1 OR a\.is_public = true/);
+    expect(params).toEqual(['u1']);
+  });
+});
+
+describe('AbilityModel.findAll limit', () => {
+  it('appends a parameterized LIMIT clause when limit is given', async () => {
+    await AbilityModel.findAll('u1', { limit: 12 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LIMIT \$2$/);
+    expect(params).toEqual(['u1', 12]);
+  });
+
+  it('omits the LIMIT clause when limit is not given', async () => {
+    await AbilityModel.findAll('u1', {});
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/LIMIT/);
+  });
+});

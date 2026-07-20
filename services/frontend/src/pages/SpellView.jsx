@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
+import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import DiceFormulaText from '../components/DiceFormulaText';
@@ -16,7 +17,10 @@ export default function SpellView() {
 
   useEffect(() => {
     api.get(`/api/spellbook/${id}`)
-      .then(({ data }) => setSpell(data.spell))
+      .then(({ data }) => {
+        setSpell(data.spell);
+        recordView({ type: 'spell', id, name: data.spell.name, href: `/spellbook/${id}`, image_url: data.spell.image_url });
+      })
       .catch(() => navigate('/spellbook', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);

@@ -13,9 +13,14 @@ const prereqNodesSelect = (alias) => `COALESCE(
   ) AS prerequisite_nodes`;
 
 const SpellModel = {
-  async findAll(userId, { magicType, spellKind, ritual, search, sort, scope } = {}) {
+  async findAll(userId, { magicType, spellKind, ritual, search, sort, scope, limit } = {}) {
     const params = [userId];
-    const conditions = ['(s.user_id = $1 OR s.is_public = true)'];
+    // scope=community = public entries authored by other, non-admin users
+    // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
+    // default ownership clause instead of appending to it.
+    const conditions = scope === 'community'
+      ? ['s.is_public = true', 's.user_id <> $1', "cu.role IS DISTINCT FROM 'admin'"]
+      : ['(s.user_id = $1 OR s.is_public = true)'];
 
     if (scope === 'canonical') conditions.push("cu.role = 'admin'");
     else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
@@ -39,13 +44,19 @@ const SpellModel = {
 
     const orderBy = SORT_MAP[sort] || SORT_MAP.name;
 
+    let limitClause = '';
+    if (limit) {
+      params.push(limit);
+      limitClause = ` LIMIT $${params.length}`;
+    }
+
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')},
               COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY ${orderBy}`,
+       ORDER BY ${orderBy}${limitClause}`,
       params
     );
     return rows;

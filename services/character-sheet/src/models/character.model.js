@@ -29,6 +29,21 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
+  // Public characters authored by other, non-admin users — used by the
+  // Dashboard's "Творіння спільноти" rail.
+  async findAllPublic(userId, { limit = 15 } = {}) {
+    const { rows } = await pool.query(
+      `SELECT c.*, ou.username AS owner_username
+       FROM character_sheet.characters c
+       LEFT JOIN auth.users ou ON ou.id = c.user_id
+       WHERE c.is_public = true AND c.user_id <> $1 AND ou.role IS DISTINCT FROM 'admin'
+       ORDER BY c.created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+    return rows;
+  },
+
   async findPublicById(id) {
     const { rows } = await pool.query(
       `SELECT * FROM character_sheet.characters WHERE id = $1 AND is_public = true`,

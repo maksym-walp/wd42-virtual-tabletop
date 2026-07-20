@@ -46,3 +46,28 @@ describe('SpellModel.findAll dynamic filter builder', () => {
     expect(params).toEqual(['u1', 'fire', 'attack', 'possible', '%bolt%']);
   });
 });
+
+describe('SpellModel.findAll scope=community', () => {
+  it('replaces the ownership clause with a public/other-user/non-admin filter', async () => {
+    await SpellModel.findAll('u1', { scope: 'community' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/WHERE s\.is_public = true AND s\.user_id <> \$1 AND cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).not.toMatch(/s\.user_id = \$1 OR s\.is_public = true/);
+    expect(params).toEqual(['u1']);
+  });
+});
+
+describe('SpellModel.findAll limit', () => {
+  it('appends a parameterized LIMIT clause when limit is given', async () => {
+    await SpellModel.findAll('u1', { limit: 12 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LIMIT \$2$/);
+    expect(params).toEqual(['u1', 12]);
+  });
+
+  it('omits the LIMIT clause when limit is not given', async () => {
+    await SpellModel.findAll('u1', {});
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/LIMIT/);
+  });
+});

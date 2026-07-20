@@ -2,9 +2,9 @@ const ArtifactModel = require('../models/artifact.model');
 
 const ArtifactController = {
   async list(req, res) {
-    const { rarity, creator, search, sort, dir, scope } = req.query;
+    const { rarity, creator, search, sort, dir, scope, limit } = req.query;
     const artifacts = await ArtifactModel.findAll(req.user.sub, {
-      rarity, creator, search, sort, dir, scope,
+      rarity, creator, search, sort, dir, scope, limit,
     });
     res.json({ artifacts });
   },

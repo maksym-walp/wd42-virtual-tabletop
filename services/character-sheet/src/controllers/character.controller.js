@@ -16,6 +16,12 @@ const CharacterController = {
     res.json({ characters });
   },
 
+  async listCommunity(req, res) {
+    const limit = Number(req.query.limit) || 15;
+    const characters = await CharacterModel.findAllPublic(req.user.sub, { limit });
+    res.json({ characters });
+  },
+
   async create(req, res) {
     const { name, archetype, race, race_ancestry, skills } = req.body;
     if (!name || !archetype || !race) {

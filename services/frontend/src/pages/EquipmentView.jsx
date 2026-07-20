@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 
 export default function EquipmentView() {
@@ -14,7 +15,10 @@ export default function EquipmentView() {
 
   useEffect(() => {
     api.get(`/api/equipment/${id}`)
-      .then(({ data }) => setItem(data.item))
+      .then(({ data }) => {
+        setItem(data.item);
+        recordView({ type: 'equipment', id, name: data.item.name, href: `/equipment/${id}`, image_url: data.item.image_url });
+      })
       .catch(() => navigate('/equipment', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);

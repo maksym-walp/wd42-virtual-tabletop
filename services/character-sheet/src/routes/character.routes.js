@@ -21,6 +21,7 @@ router.use(requireAuth);
 
 // Characters
 router.get('/',       wrap(CharacterController.list));
+router.get('/community', wrap(CharacterController.listCommunity));
 router.post('/',      wrap(CharacterController.create));
 router.get('/:id',    wrap(CharacterController.getSheet));
 router.put('/:id',    wrap(CharacterController.update));

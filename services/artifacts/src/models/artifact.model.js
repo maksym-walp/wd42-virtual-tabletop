@@ -17,9 +17,14 @@ function buildOrderBy(sort, dir) {
 }
 
 const ArtifactModel = {
-  async findAll(userId, { rarity, creator, search, sort, dir, scope } = {}) {
+  async findAll(userId, { rarity, creator, search, sort, dir, scope, limit } = {}) {
     const params = [userId];
-    const conditions = ['(a.user_id = $1 OR a.is_public = true)'];
+    // scope=community = public entries authored by other, non-admin users
+    // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
+    // default ownership clause instead of appending to it.
+    const conditions = scope === 'community'
+      ? ['a.is_public = true', 'a.user_id <> $1', "cu.role IS DISTINCT FROM 'admin'"]
+      : ['(a.user_id = $1 OR a.is_public = true)'];
 
     // Canonical = authored by an admin; user = everyone else. Constant SQL
     // (no interpolated input), so it is injection-safe.
@@ -39,13 +44,19 @@ const ArtifactModel = {
       conditions.push(`a.name ILIKE $${params.length}`);
     }
 
+    let limitClause = '';
+    if (limit) {
+      params.push(limit);
+      limitClause = ` LIMIT $${params.length}`;
+    }
+
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $1) AS is_owner,
               COALESCE(cu.role = 'admin', false) AS is_canonical
        FROM artifacts.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY ${buildOrderBy(sort, dir)}`,
+       ORDER BY ${buildOrderBy(sort, dir)}${limitClause}`,
       params
     );
     return rows;

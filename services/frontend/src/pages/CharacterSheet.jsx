@@ -9,6 +9,7 @@ import artifactsApi from '../api/artifacts';
 import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
+import { recordView } from '../utils/recentlyViewed';
 import { MAGIC_TYPES, RITUAL_TYPES, formatDuration } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
@@ -96,6 +97,10 @@ export default function CharacterSheet({ publicView = false }) {
     ])
       .then(([sheet, spells, artifactCatalog, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
         setData(sheet);
+        recordView({
+          type: 'character', id, name: sheet.character.name,
+          href: `/characters/${id}`, image_url: sheet.character.image_url,
+        });
         setAllSpells(Array.isArray(spells) ? spells : []);
         // The sheet's equipment tab spans both catalogs (weapons/armor/items
         // and artifacts), which are separate services — merge them into the

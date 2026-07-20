@@ -93,6 +93,29 @@ describe('ArtifactModel canonical/user split', () => {
     expect(sql).not.toMatch(/AND cu\.role = 'admin'/);
     expect(sql).not.toMatch(/IS DISTINCT FROM/);
   });
+
+  it('replaces the ownership clause with a public/other-user/non-admin filter when scope=community', async () => {
+    await ArtifactModel.findAll('u1', { scope: 'community' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/WHERE a\.is_public = true AND a\.user_id <> \$1 AND cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).not.toMatch(/a\.user_id = \$1 OR a\.is_public = true/);
+    expect(params).toEqual(['u1']);
+  });
+});
+
+describe('ArtifactModel.findAll limit', () => {
+  it('appends a parameterized LIMIT clause when limit is given', async () => {
+    await ArtifactModel.findAll('u1', { limit: 12 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LIMIT \$2$/);
+    expect(params).toEqual(['u1', 12]);
+  });
+
+  it('omits the LIMIT clause when limit is not given', async () => {
+    await ArtifactModel.findAll('u1', {});
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/LIMIT/);
+  });
 });
 
 describe('ArtifactModel.create / update', () => {

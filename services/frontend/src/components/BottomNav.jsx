@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { MoreHorizontal, Dices } from 'lucide-react';
+import { MoreHorizontal, Dices, Home } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDice } from '../context/DiceContext';
 import { MOBILE_PRIMARY_NAV_ITEMS, MOBILE_MORE_NAV_ITEMS } from '../constants/navigation';
@@ -33,7 +33,7 @@ export default function BottomNav() {
         aria-label="Основна навігація"
       >
         {moreOpen && (
-          <div className="absolute inset-x-3 bottom-full mb-2 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+          <div className="absolute inset-x-3 bottom-full mb-2 max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-surface shadow-xl">
             {MOBILE_MORE_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -56,7 +56,6 @@ export default function BottomNav() {
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
               className={({ isActive }) => `${TAB_CLASS} ${isActive ? 'text-accent' : 'text-text-dim'}`}
             >
               {({ isActive }) => (
@@ -67,6 +66,15 @@ export default function BottomNav() {
               )}
             </NavLink>
           ))}
+
+          <NavLink to="/" end className={({ isActive }) => `${TAB_CLASS} ${isActive ? 'text-accent' : 'text-text-dim'}`}>
+            {({ isActive }) => (
+              <>
+                <Home size={22} strokeWidth={isActive ? 2.25 : 1.75} />
+                <span>Головна</span>
+              </>
+            )}
+          </NavLink>
 
           <button
             type="button"
