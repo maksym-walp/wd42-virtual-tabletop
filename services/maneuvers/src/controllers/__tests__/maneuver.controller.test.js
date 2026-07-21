@@ -25,7 +25,7 @@ describe('ManeuverController.list', () => {
       search: 'парирування',
       sort: 'name',
       scope: 'user',
-    });
+    }, false);
     expect(res.json).toHaveBeenCalledWith({ maneuvers: [{ id: 'm1' }] });
   });
 });
@@ -49,7 +49,7 @@ describe('ManeuverController.getOne', () => {
 
     await ManeuverController.getOne(req, res);
 
-    expect(ManeuverModel.findById).toHaveBeenCalledWith('m1', 'user-1');
+    expect(ManeuverModel.findById).toHaveBeenCalledWith('m1', 'user-1', false);
     expect(res.json).toHaveBeenCalledWith({ maneuver: { id: 'm1', name: 'Випад' } });
   });
 });
@@ -116,7 +116,7 @@ describe('ManeuverController.update', () => {
 
     await ManeuverController.update(req, res);
 
-    expect(ManeuverModel.update).toHaveBeenCalledWith('m1', 'user-1', { name: 'Нова назва' });
+    expect(ManeuverModel.update).toHaveBeenCalledWith('m1', 'user-1', { name: 'Нова назва' }, false);
     expect(res.json).toHaveBeenCalledWith({ maneuver: { id: 'm1', name: 'Нова назва' } });
   });
 });

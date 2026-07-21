@@ -7,13 +7,16 @@ import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import DiceFormulaText from '../components/DiceFormulaText';
+import { useAuth } from '../context/AuthContext';
 
 export default function SpellView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [spell, setSpell] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [settingCanonical, setSettingCanonical] = useState(false);
 
   useEffect(() => {
     api.get(`/api/spellbook/${id}`)
@@ -36,9 +39,21 @@ export default function SpellView() {
     }
   };
 
+  const handleMarkCanonical = async () => {
+    setSettingCanonical(true);
+    try {
+      const { data } = await api.patch(`/api/spellbook/${id}/canonical`, { is_canonical: true });
+      setSpell(data.spell);
+    } finally {
+      setSettingCanonical(false);
+    }
+  };
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
   if (!spell) return null;
 
+  const isAdmin = user?.role === 'admin';
+  const canManageCanonical = isAdmin || user?.role === 'game_master';
   const type = MAGIC_TYPES[spell.magic_type];
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
@@ -113,7 +128,15 @@ export default function SpellView() {
           </Section>
         )}
 
-        {spell.is_owner && (
+        {canManageCanonical && !spell.is_canonical && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            </Button>
+          </div>
+        )}
+
+        {(spell.is_owner || isAdmin) && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" to={`/spellbook/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>

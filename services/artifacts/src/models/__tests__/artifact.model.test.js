@@ -59,45 +59,48 @@ describe('ArtifactModel.findAll dynamic filter builder', () => {
 });
 
 describe('ArtifactModel canonical/user split', () => {
-  it('projects is_canonical from the creator role via an auth.users join in findAll', async () => {
+  // Canonical = authored by an admin/game_master, or explicitly flagged via
+  // the "Зробити канонічним" action (a.is_canonical) regardless of owner.
+  const CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR a.is_canonical)";
+
+  it('projects is_canonical from the creator role or explicit flag via an auth.users join in findAll', async () => {
     await ArtifactModel.findAll('u1', {});
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/LEFT JOIN auth\.users cu ON cu\.id = a\.user_id/);
-    expect(sql).toMatch(/COALESCE\(cu\.role = 'admin', false\) AS is_canonical/);
+    expect(sql).toContain(`${CANONICAL_EXPR} AS is_canonical`);
   });
 
   it('projects is_canonical in findById too', async () => {
     await ArtifactModel.findById('a1', 'u1');
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/LEFT JOIN auth\.users cu ON cu\.id = a\.user_id/);
-    expect(sql).toMatch(/COALESCE\(cu\.role = 'admin', false\) AS is_canonical/);
+    expect(sql).toContain(`${CANONICAL_EXPR} AS is_canonical`);
   });
 
-  it('restricts to admin-authored rows when scope=canonical', async () => {
+  it('restricts to canonical rows when scope=canonical', async () => {
     await ArtifactModel.findAll('u1', { scope: 'canonical' });
     const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/AND cu\.role = 'admin'/);
-    expect(sql).not.toMatch(/IS DISTINCT FROM/);
+    // Appears once in the SELECT projection and once as a WHERE condition.
+    expect(sql.split(CANONICAL_EXPR).length - 1).toBe(2);
   });
 
-  it('restricts to non-admin rows when scope=user', async () => {
+  it('restricts to non-canonical rows when scope=user', async () => {
     await ArtifactModel.findAll('u1', { scope: 'user' });
     const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).toContain(`NOT ${CANONICAL_EXPR}`);
   });
 
   it('adds no scope condition when scope is omitted', async () => {
     await ArtifactModel.findAll('u1', {});
     const [sql] = pool.query.mock.calls[0];
-    // The projection always references cu.role; a scope *condition* is joined with AND.
-    expect(sql).not.toMatch(/AND cu\.role = 'admin'/);
-    expect(sql).not.toMatch(/IS DISTINCT FROM/);
+    // Only the SELECT projection references the canonical expression; no WHERE condition is added.
+    expect(sql.split(CANONICAL_EXPR).length - 1).toBe(1);
   });
 
-  it('replaces the ownership clause with a public/other-user/non-admin filter when scope=community', async () => {
+  it('replaces the ownership clause with a public/other-user/non-canonical filter when scope=community', async () => {
     await ArtifactModel.findAll('u1', { scope: 'community' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE a\.is_public = true AND a\.user_id <> \$1 AND cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).toContain(`WHERE a.is_public = true AND a.user_id <> $1 AND NOT ${CANONICAL_EXPR}`);
     expect(sql).not.toMatch(/a\.user_id = \$1 OR a\.is_public = true/);
     expect(params).toEqual(['u1']);
   });

@@ -1,7 +1,7 @@
 jest.mock('jsonwebtoken');
 
 const jwt = require('jsonwebtoken');
-const requireAuth = require('../auth.middleware');
+const { requireAuth, requireCanonicalManager } = require('../auth.middleware');
 
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -36,4 +36,27 @@ it('attaches req.user and calls next on success', () => {
   requireAuth(req, res, next);
   expect(req.user).toEqual({ sub: 'u1' });
   expect(next).toHaveBeenCalled();
+});
+
+describe('requireCanonicalManager', () => {
+  it('rejects a regular user', () => {
+    jwt.verify.mockReturnValue({ sub: 'u1', role: 'user' });
+    const req = { headers: { authorization: 'Bearer good' } };
+    const res = mockRes();
+    const next = jest.fn();
+    requireCanonicalManager(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows game_master and admin through', () => {
+    for (const role of ['game_master', 'admin']) {
+      jwt.verify.mockReturnValue({ sub: 'u1', role });
+      const req = { headers: { authorization: 'Bearer good' } };
+      const res = mockRes();
+      const next = jest.fn();
+      requireCanonicalManager(req, res, next);
+      expect(next).toHaveBeenCalled();
+    }
+  });
 });

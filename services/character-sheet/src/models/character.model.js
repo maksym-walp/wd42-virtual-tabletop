@@ -9,12 +9,16 @@ const ALL_SKILLS = [
 ];
 
 const CharacterModel = {
-  async findAllByUser(userId) {
+  // isAdmin lists every user's characters (with owner_username attached so
+  // an admin can tell them apart), not just the caller's own.
+  async findAllByUser(userId, isAdmin = false) {
+    const ownerClause = isAdmin ? 'TRUE' : 'c.user_id = $1';
     const { rows } = await pool.query(
-      `SELECT c.*,
+      `SELECT c.*, ou.username AS owner_username,
         (SELECT COUNT(*) FROM character_sheet.skills WHERE character_id = c.id) AS skill_count
        FROM character_sheet.characters c
-       WHERE c.user_id = $1
+       LEFT JOIN auth.users ou ON ou.id = c.user_id
+       WHERE ${ownerClause}
        ORDER BY c.created_at DESC`,
       [userId]
     );

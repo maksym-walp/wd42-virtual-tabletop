@@ -11,18 +11,22 @@ const prereqNodesSelect = (alias) => `COALESCE(
     '[]'::jsonb
   ) AS prerequisite_nodes`;
 
+// Canonical = authored by an admin/game_master, or explicitly flagged via the
+// "Зробити канонічним" action (m.is_canonical) regardless of owner.
+const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR m.is_canonical)";
+
 const ManeuverModel = {
-  async findAll(userId, { search, sort, scope, limit } = {}) {
+  async findAll(userId, { search, sort, scope, limit } = {}, isAdmin = false) {
     const params = [userId];
-    // scope=community = public entries authored by other, non-admin users
+    // scope=community = public entries authored by other, non-canonical users
     // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
     // default ownership clause instead of appending to it.
     const conditions = scope === 'community'
-      ? ['m.is_public = true', 'm.user_id <> $1', "cu.role IS DISTINCT FROM 'admin'"]
-      : ['(m.user_id = $1 OR m.is_public = true)'];
+      ? ['m.is_public = true', 'm.user_id <> $1', `NOT ${IS_CANONICAL_EXPR}`]
+      : [isAdmin ? 'TRUE' : '(m.user_id = $1 OR m.is_public = true)'];
 
-    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
-    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
+    if (scope === 'canonical') conditions.push(IS_CANONICAL_EXPR);
+    else if (scope === 'user') conditions.push(`NOT ${IS_CANONICAL_EXPR}`);
 
     if (search) {
       params.push(`%${search}%`);
@@ -39,7 +43,7 @@ const ManeuverModel = {
 
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')},
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM maneuvers.entries m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE ${conditions.join(' AND ')}
@@ -49,13 +53,14 @@ const ManeuverModel = {
     return rows;
   },
 
-  async findById(id, userId) {
+  async findById(id, userId, isAdmin = false) {
+    const visibility = isAdmin ? 'TRUE' : '(m.user_id = $2 OR m.is_public = true)';
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')},
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM maneuvers.entries m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
-       WHERE m.id = $1 AND (m.user_id = $2 OR m.is_public = true)`,
+       WHERE m.id = $1 AND ${visibility}`,
       [id, userId]
     );
     return rows[0] || null;
@@ -74,26 +79,37 @@ const ManeuverModel = {
     return rows[0];
   },
 
-  async update(id, userId, data) {
+  async update(id, userId, data, isAdmin = false) {
     const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE maneuvers.entries
        SET name=$3, duration_actions=$4, description=$5, is_public=$6,
            prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
-       WHERE id=$1 AND user_id=$2
+       WHERE id=$1 AND ${ownerCheck}
        RETURNING *`,
       [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0] || null;
   },
 
-  async delete(id, userId) {
+  async delete(id, userId, isAdmin = false) {
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      'DELETE FROM maneuvers.entries WHERE id = $1 AND user_id = $2',
+      `DELETE FROM maneuvers.entries WHERE id = $1 AND ${ownerCheck}`,
       [id, userId]
     );
     return rowCount > 0;
+  },
+
+  // GM/admin only — flags a maneuver canonical regardless of who owns it.
+  async setCanonical(id, isCanonical) {
+    const { rows } = await pool.query(
+      `UPDATE maneuvers.entries SET is_canonical=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [id, isCanonical]
+    );
+    return rows[0] || null;
   },
 };
 

@@ -23,7 +23,7 @@ describe('ArtifactController.list', () => {
 
     expect(ArtifactModel.findAll).toHaveBeenCalledWith('user-1', {
       rarity: 'rare', creator: 'gm', search: 'sword', sort: 'price', dir: 'desc', scope: 'canonical',
-    });
+    }, false);
     expect(res.json).toHaveBeenCalledWith({ artifacts: [{ id: 'a1' }] });
   });
 
@@ -44,7 +44,7 @@ describe('ArtifactController.getOne', () => {
 
     await ArtifactController.getOne(req, res);
 
-    expect(ArtifactModel.findById).toHaveBeenCalledWith('missing', 'user-1');
+    expect(ArtifactModel.findById).toHaveBeenCalledWith('missing', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Артефакт не знайдено' });
   });
@@ -110,7 +110,7 @@ describe('ArtifactController.update', () => {
 
     await ArtifactController.update(req, res);
 
-    expect(ArtifactModel.update).toHaveBeenCalledWith('a1', 'user-1', { name: 'New' });
+    expect(ArtifactModel.update).toHaveBeenCalledWith('a1', 'user-1', { name: 'New' }, false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Артефакт не знайдено або недостатньо прав' });
   });
@@ -143,7 +143,7 @@ describe('ArtifactController.remove', () => {
 
     await ArtifactController.remove(req, res);
 
-    expect(ArtifactModel.delete).toHaveBeenCalledWith('a1', 'user-1');
+    expect(ArtifactModel.delete).toHaveBeenCalledWith('a1', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Артефакт не знайдено або недостатньо прав' });
   });

@@ -21,7 +21,7 @@ describe('CollectionController.list', () => {
 
     await CollectionController.list(req, res);
 
-    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'бойові', scope: 'canonical' });
+    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'бойові', scope: 'canonical' }, false);
     expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c1' }] });
   });
 });
@@ -45,7 +45,7 @@ describe('CollectionController.getOne', () => {
 
     await CollectionController.getOne(req, res);
 
-    expect(CollectionModel.findById).toHaveBeenCalledWith('c1', 'user-1');
+    expect(CollectionModel.findById).toHaveBeenCalledWith('c1', 'user-1', false);
     expect(res.json).toHaveBeenCalledWith({ collection: { id: 'c1', name: 'Набір' } });
   });
 });
@@ -136,7 +136,7 @@ describe('CollectionController.update', () => {
 
     await CollectionController.update(req, res);
 
-    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Нова назва' });
+    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Нова назва' }, false);
     expect(res.json).toHaveBeenCalledWith({ collection: { id: 'c1', name: 'Нова назва' } });
   });
 });
@@ -212,7 +212,7 @@ describe('CollectionController.addItem', () => {
 
     await CollectionController.addItem(req, res);
 
-    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'm1');
+    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'm1', false);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', maneuver_id: 'm1' } });
   });
@@ -246,7 +246,7 @@ describe('CollectionController.removeItem', () => {
 
     await CollectionController.removeItem(req, res);
 
-    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'm1');
+    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'm1', false);
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });

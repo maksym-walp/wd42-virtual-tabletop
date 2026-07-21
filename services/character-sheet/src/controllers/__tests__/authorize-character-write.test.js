@@ -53,6 +53,19 @@ describe('authorizeCharacterWrite', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
+  it('allows a non-owner admin without a campaign GM lookup', async () => {
+    const char = { id: 'c1', user_id: 'owner-1' };
+    CharacterModel.findById.mockResolvedValue(char);
+    const req = { params: { id: 'c1' }, user: { sub: 'admin-1', role: 'admin' } };
+    const res = mockRes();
+
+    const result = await authorizeCharacterWrite(req, res);
+
+    expect(result).toBe(char);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(isCampaignGmForCharacter).not.toHaveBeenCalled();
+  });
+
   it('403s and returns null when neither owner nor campaign GM', async () => {
     const char = { id: 'c1', user_id: 'owner-1' };
     CharacterModel.findById.mockResolvedValue(char);

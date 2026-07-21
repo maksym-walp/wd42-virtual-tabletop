@@ -21,7 +21,7 @@ describe('CollectionController.list', () => {
 
     await CollectionController.list(req, res);
 
-    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'chest', scope: 'canonical' });
+    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'chest', scope: 'canonical' }, false);
     expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c1' }] });
   });
 });
@@ -135,7 +135,7 @@ describe('CollectionController.update', () => {
 
     await CollectionController.update(req, res);
 
-    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Big Chest' });
+    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Big Chest' }, false);
     expect(res.json).toHaveBeenCalledWith({ collection: { id: 'c1', name: 'Big Chest' } });
   });
 });
@@ -211,7 +211,7 @@ describe('CollectionController.addItem', () => {
 
     await CollectionController.addItem(req, res);
 
-    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'i1');
+    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'i1', false);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', item_id: 'i1' } });
   });
@@ -245,7 +245,7 @@ describe('CollectionController.removeItem', () => {
 
     await CollectionController.removeItem(req, res);
 
-    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'i1');
+    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'i1', false);
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });

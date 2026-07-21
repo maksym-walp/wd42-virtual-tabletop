@@ -12,18 +12,22 @@ const prereqNodesSelect = (alias) => `COALESCE(
     '[]'::jsonb
   ) AS prerequisite_nodes`;
 
+// Canonical = authored by an admin/game_master, or explicitly flagged via the
+// "Зробити канонічним" action (s.is_canonical) regardless of owner.
+const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR s.is_canonical)";
+
 const SpellModel = {
-  async findAll(userId, { magicType, spellKind, ritual, search, sort, scope, limit } = {}) {
+  async findAll(userId, { magicType, spellKind, ritual, search, sort, scope, limit } = {}, isAdmin = false) {
     const params = [userId];
-    // scope=community = public entries authored by other, non-admin users
+    // scope=community = public entries authored by other, non-canonical users
     // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
     // default ownership clause instead of appending to it.
     const conditions = scope === 'community'
-      ? ['s.is_public = true', 's.user_id <> $1', "cu.role IS DISTINCT FROM 'admin'"]
-      : ['(s.user_id = $1 OR s.is_public = true)'];
+      ? ['s.is_public = true', 's.user_id <> $1', `NOT ${IS_CANONICAL_EXPR}`]
+      : [isAdmin ? 'TRUE' : '(s.user_id = $1 OR s.is_public = true)'];
 
-    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
-    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
+    if (scope === 'canonical') conditions.push(IS_CANONICAL_EXPR);
+    else if (scope === 'user') conditions.push(`NOT ${IS_CANONICAL_EXPR}`);
 
     if (magicType) {
       params.push(magicType);
@@ -52,7 +56,7 @@ const SpellModel = {
 
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')},
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE ${conditions.join(' AND ')}
@@ -62,13 +66,14 @@ const SpellModel = {
     return rows;
   },
 
-  async findById(id, userId) {
+  async findById(id, userId, isAdmin = false) {
+    const visibility = isAdmin ? 'TRUE' : '(s.user_id = $2 OR s.is_public = true)';
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')},
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
-       WHERE s.id = $1 AND (s.user_id = $2 OR s.is_public = true)`,
+       WHERE s.id = $1 AND ${visibility}`,
       [id, userId]
     );
     return rows[0] || null;
@@ -104,7 +109,7 @@ const SpellModel = {
     return rows[0];
   },
 
-  async update(id, userId, data) {
+  async update(id, userId, data, isAdmin = false) {
     const {
       name, magic_type, spell_kind, mechanical_desc, narrative_desc,
       energy_cost, action_time, ritual,
@@ -112,6 +117,7 @@ const SpellModel = {
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
     } = data;
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE spellbook.spells
@@ -122,7 +128,7 @@ const SpellModel = {
            components=$14, is_public=$15,
            prerequisite_node_ids=$16, prerequisite_logic=$17,
            image_url=$18, updated_at=NOW()
-       WHERE id=$1 AND user_id=$2
+       WHERE id=$1 AND ${ownerCheck}
        RETURNING *`,
       [
         id, userId, name, magic_type, spell_kind ?? 'utility',
@@ -137,12 +143,22 @@ const SpellModel = {
     return rows[0] || null;
   },
 
-  async delete(id, userId) {
+  async delete(id, userId, isAdmin = false) {
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      'DELETE FROM spellbook.spells WHERE id = $1 AND user_id = $2',
+      `DELETE FROM spellbook.spells WHERE id = $1 AND ${ownerCheck}`,
       [id, userId]
     );
     return rowCount > 0;
+  },
+
+  // GM/admin only — flags a spell canonical regardless of who owns it.
+  async setCanonical(id, isCanonical) {
+    const { rows } = await pool.query(
+      `UPDATE spellbook.spells SET is_canonical=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [id, isCanonical]
+    );
+    return rows[0] || null;
   },
 };
 

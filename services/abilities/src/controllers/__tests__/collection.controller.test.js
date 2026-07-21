@@ -21,7 +21,7 @@ describe('CollectionController.list', () => {
 
     await CollectionController.list(req, res);
 
-    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'бойові', scope: 'canonical' });
+    expect(CollectionModel.findAll).toHaveBeenCalledWith('user-1', { search: 'бойові', scope: 'canonical' }, false);
     expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c1' }] });
   });
 
@@ -43,7 +43,7 @@ describe('CollectionController.getOne', () => {
 
     await CollectionController.getOne(req, res);
 
-    expect(CollectionModel.findById).toHaveBeenCalledWith('missing', 'user-1');
+    expect(CollectionModel.findById).toHaveBeenCalledWith('missing', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію не знайдено' });
   });
@@ -144,7 +144,7 @@ describe('CollectionController.update', () => {
 
     await CollectionController.update(req, res);
 
-    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Нове' });
+    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'user-1', { name: 'Нове' }, false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію не знайдено або недостатньо прав' });
   });
@@ -178,7 +178,7 @@ describe('CollectionController.remove', () => {
 
     await CollectionController.remove(req, res);
 
-    expect(CollectionModel.delete).toHaveBeenCalledWith('c1', 'user-1');
+    expect(CollectionModel.delete).toHaveBeenCalledWith('c1', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію не знайдено або недостатньо прав' });
   });
@@ -223,7 +223,7 @@ describe('CollectionController.addItem', () => {
 
     await CollectionController.addItem(req, res);
 
-    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'a1');
+    expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'a1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію або вміння не знайдено' });
   });
@@ -270,7 +270,7 @@ describe('CollectionController.removeItem', () => {
 
     await CollectionController.removeItem(req, res);
 
-    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'a1');
+    expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'a1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Не знайдено' });
   });

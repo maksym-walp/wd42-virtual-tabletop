@@ -16,20 +16,22 @@ function buildOrderBy(sort, dir) {
   return `${expr} ${direction} NULLS LAST, a.name ASC`;
 }
 
+// Canonical = authored by an admin/game_master, or explicitly flagged via the
+// "Зробити канонічним" action (a.is_canonical) regardless of owner.
+const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR a.is_canonical)";
+
 const ArtifactModel = {
-  async findAll(userId, { rarity, creator, search, sort, dir, scope, limit } = {}) {
+  async findAll(userId, { rarity, creator, search, sort, dir, scope, limit } = {}, isAdmin = false) {
     const params = [userId];
-    // scope=community = public entries authored by other, non-admin users
+    // scope=community = public entries authored by other, non-canonical users
     // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
     // default ownership clause instead of appending to it.
     const conditions = scope === 'community'
-      ? ['a.is_public = true', 'a.user_id <> $1', "cu.role IS DISTINCT FROM 'admin'"]
-      : ['(a.user_id = $1 OR a.is_public = true)'];
+      ? ['a.is_public = true', 'a.user_id <> $1', `NOT ${IS_CANONICAL_EXPR}`]
+      : [isAdmin ? 'TRUE' : '(a.user_id = $1 OR a.is_public = true)'];
 
-    // Canonical = authored by an admin; user = everyone else. Constant SQL
-    // (no interpolated input), so it is injection-safe.
-    if (scope === 'canonical') conditions.push("cu.role = 'admin'");
-    else if (scope === 'user') conditions.push("cu.role IS DISTINCT FROM 'admin'");
+    if (scope === 'canonical') conditions.push(IS_CANONICAL_EXPR);
+    else if (scope === 'user') conditions.push(`NOT ${IS_CANONICAL_EXPR}`);
 
     if (rarity) {
       params.push(rarity);
@@ -52,7 +54,7 @@ const ArtifactModel = {
 
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $1) AS is_owner,
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM artifacts.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE ${conditions.join(' AND ')}
@@ -62,13 +64,14 @@ const ArtifactModel = {
     return rows;
   },
 
-  async findById(id, userId) {
+  async findById(id, userId, isAdmin = false) {
+    const visibility = isAdmin ? 'TRUE' : '(a.user_id = $2 OR a.is_public = true)';
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $2) AS is_owner,
-              COALESCE(cu.role = 'admin', false) AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical
        FROM artifacts.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
-       WHERE a.id = $1 AND (a.user_id = $2 OR a.is_public = true)`,
+       WHERE a.id = $1 AND ${visibility}`,
       [id, userId]
     );
     return rows[0] || null;
@@ -92,14 +95,15 @@ const ArtifactModel = {
     return rows[0];
   },
 
-  async update(id, userId, data) {
+  async update(id, userId, data, isAdmin = false) {
     const { name, description, is_public, price, image_url, creator, rarity } = data;
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE artifacts.entries
        SET name=$3, description=$4, is_public=$5, updated_at=NOW(),
            price=$6, image_url=$7, creator=$8, rarity=$9
-       WHERE id=$1 AND user_id=$2
+       WHERE id=$1 AND ${ownerCheck}
        RETURNING *`,
       [
         id, userId, name,
@@ -111,12 +115,22 @@ const ArtifactModel = {
     return rows[0] || null;
   },
 
-  async delete(id, userId) {
+  async delete(id, userId, isAdmin = false) {
+    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      'DELETE FROM artifacts.entries WHERE id = $1 AND user_id = $2',
+      `DELETE FROM artifacts.entries WHERE id = $1 AND ${ownerCheck}`,
       [id, userId]
     );
     return rowCount > 0;
+  },
+
+  // GM/admin only — flags an artifact canonical regardless of who owns it.
+  async setCanonical(id, isCanonical) {
+    const { rows } = await pool.query(
+      `UPDATE artifacts.entries SET is_canonical=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [id, isCanonical]
+    );
+    return rows[0] || null;
   },
 };
 

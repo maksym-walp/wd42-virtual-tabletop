@@ -23,7 +23,7 @@ describe('SpellController.list', () => {
 
     expect(SpellModel.findAll).toHaveBeenCalledWith('user-1', {
       magicType: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user',
-    });
+    }, false);
     expect(res.json).toHaveBeenCalledWith({ spells: [{ id: 's1' }] });
   });
 
@@ -44,7 +44,7 @@ describe('SpellController.getOne', () => {
 
     await SpellController.getOne(req, res);
 
-    expect(SpellModel.findById).toHaveBeenCalledWith('s1', 'user-1');
+    expect(SpellModel.findById).toHaveBeenCalledWith('s1', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Заклинання не знайдено' });
   });

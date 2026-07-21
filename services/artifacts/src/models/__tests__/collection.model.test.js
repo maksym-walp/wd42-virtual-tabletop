@@ -51,9 +51,9 @@ describe('CollectionModel visibility', () => {
     expect(sql).toMatch(/JOIN artifacts\.entries a ON a\.id = ci\.artifact_id/);
   });
 
-  it('restricts to admin-authored collections when scope=canonical', async () => {
+  it('restricts to canonical collections when scope=canonical', async () => {
     await CollectionModel.findAll('u1', { scope: 'canonical' });
     const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/AND cu\.role = 'admin'/);
+    expect(sql).toMatch(/AND \(COALESCE\(cu\.role IN \('admin', 'game_master'\), false\) OR c\.is_canonical\)/);
   });
 });

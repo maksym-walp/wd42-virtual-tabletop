@@ -12,7 +12,7 @@ const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 
 const CharacterController = {
   async list(req, res) {
-    const characters = await CharacterModel.findAllByUser(req.user.sub);
+    const characters = await CharacterModel.findAllByUser(req.user.sub, req.user.role === 'admin');
     res.json({ characters });
   },
 
@@ -38,8 +38,9 @@ const CharacterController = {
 
     const isOwner = char.user_id === req.user.sub;
     const isGM = req.user.role === 'game_master';
+    const isAdmin = req.user.role === 'admin';
     const isCampaignGm = !isOwner && await isCampaignGmForCharacter(char.id, req.user.sub);
-    if (!isOwner && !isGM && !isCampaignGm && !char.is_public) {
+    if (!isOwner && !isGM && !isAdmin && !isCampaignGm && !char.is_public) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
@@ -55,13 +56,13 @@ const CharacterController = {
       CharacterModel.findOwnerUsername(char.user_id),
     ]);
 
-    // is_owner drives all edit UI on the frontend — a campaign GM has the
-    // same write rights as the owner (see authorizeCharacterWrite), so they
-    // get the same flag here rather than a separate "read-only" GM view.
+    // is_owner drives all edit UI on the frontend — a campaign GM or an admin
+    // has the same write rights as the owner (see authorizeCharacterWrite),
+    // so they get the same flag here rather than a separate "read-only" view.
     res.json({
       character: { ...char, owner_username },
       skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals,
-      is_owner: isOwner || isCampaignGm,
+      is_owner: isOwner || isCampaignGm || isAdmin,
     });
   },
 

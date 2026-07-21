@@ -45,10 +45,12 @@ describe('ManeuverModel.findAll dynamic filter builder', () => {
 });
 
 describe('ManeuverModel.findAll scope=community', () => {
-  it('replaces the ownership clause with a public/other-user/non-admin filter', async () => {
+  it('replaces the ownership clause with a public/other-user/non-canonical filter', async () => {
     await ManeuverModel.findAll('u1', { scope: 'community' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE m\.is_public = true AND m\.user_id <> \$1 AND cu\.role IS DISTINCT FROM 'admin'/);
+    expect(sql).toMatch(
+      /WHERE m\.is_public = true AND m\.user_id <> \$1 AND NOT \(COALESCE\(cu\.role IN \('admin', 'game_master'\), false\) OR m\.is_canonical\)/
+    );
     expect(sql).not.toMatch(/m\.user_id = \$1 OR m\.is_public = true/);
     expect(params).toEqual(['u1']);
   });

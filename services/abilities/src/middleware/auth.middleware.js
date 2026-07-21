@@ -13,4 +13,14 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = requireAuth;
+// Can flag someone else's record as canonical without taking ownership of it.
+function requireCanonicalManager(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!['admin', 'game_master'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Forbidden: admin or game master only' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAuth, requireCanonicalManager };

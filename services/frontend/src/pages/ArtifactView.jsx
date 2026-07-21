@@ -5,13 +5,16 @@ import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 
 export default function ArtifactView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [artifact, setArtifact] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [settingCanonical, setSettingCanonical] = useState(false);
 
   useEffect(() => {
     api.get(`/api/artifacts/${id}`)
@@ -34,9 +37,21 @@ export default function ArtifactView() {
     }
   };
 
+  const handleMarkCanonical = async () => {
+    setSettingCanonical(true);
+    try {
+      const { data } = await api.patch(`/api/artifacts/${id}/canonical`, { is_canonical: true });
+      setArtifact(data.artifact);
+    } finally {
+      setSettingCanonical(false);
+    }
+  };
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
   if (!artifact) return null;
 
+  const isAdmin = user?.role === 'admin';
+  const canManageCanonical = isAdmin || user?.role === 'game_master';
   const rarity = RARITIES[artifact.rarity];
 
   return (
@@ -85,7 +100,15 @@ export default function ArtifactView() {
           </Section>
         )}
 
-        {artifact.is_owner && (
+        {canManageCanonical && !artifact.is_canonical && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            </Button>
+          </div>
+        )}
+
+        {(artifact.is_owner || isAdmin) && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" to={`/artifacts/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>

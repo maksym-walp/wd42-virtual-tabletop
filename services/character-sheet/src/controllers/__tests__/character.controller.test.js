@@ -55,8 +55,18 @@ describe('CharacterController.list', () => {
 
     await CharacterController.list(req, res);
 
-    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('u1');
+    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('u1', false);
     expect(res.json).toHaveBeenCalledWith({ characters: [{ id: 'c1' }] });
+  });
+
+  it('passes isAdmin=true for an admin so the model lists every user\'s characters', async () => {
+    CharacterModel.findAllByUser.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
+    const req = mockReq({ user: { sub: 'admin-1', role: 'admin' } });
+    const res = mockRes();
+
+    await CharacterController.list(req, res);
+
+    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('admin-1', true);
   });
 });
 
@@ -147,6 +157,19 @@ describe('CharacterController.getSheet', () => {
 
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json.mock.calls[0][0].is_owner).toBe(false);
+  });
+
+  it('allows an admin even when private and not campaign GM, and marks is_owner true', async () => {
+    CharacterModel.findById.mockResolvedValue({ id: 'c1', user_id: 'owner-1', is_public: false });
+    isCampaignGmForCharacter.mockResolvedValue(false);
+    mockAggregationModels();
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'admin-1', role: 'admin' } });
+    const res = mockRes();
+
+    await CharacterController.getSheet(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].is_owner).toBe(true);
   });
 
   it('allows a campaign GM and marks is_owner true', async () => {

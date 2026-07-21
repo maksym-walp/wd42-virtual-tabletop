@@ -5,15 +5,18 @@ import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
+import { useAuth } from '../context/AuthContext';
 
 export default function CollectionView({ domainKey, publicView = false }) {
   const domain = COLLECTION_DOMAINS[domainKey];
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [collection, setCollection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [settingCanonical, setSettingCanonical] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [search, setSearch] = useState('');
@@ -62,6 +65,15 @@ export default function CollectionView({ domainKey, publicView = false }) {
     setCollection(await load());
   };
 
+  const handleMarkCanonical = async () => {
+    setSettingCanonical(true);
+    try {
+      setCollection(await domain.collectionsApi.setCanonical(id, true));
+    } finally {
+      setSettingCanonical(false);
+    }
+  };
+
   const copyShareLink = () => {
     navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
@@ -84,6 +96,9 @@ export default function CollectionView({ domainKey, publicView = false }) {
     (i) => !knownIds.has(i.id) && i.name?.toLowerCase().includes(search.toLowerCase())
   );
   const shareUrl = `${window.location.origin}${domain.basePath}/collections/public/${id}`;
+  const isAdmin = user?.role === 'admin';
+  const canManageCanonical = isAdmin || user?.role === 'game_master';
+  const canManage = collection.is_owner || isAdmin;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -124,7 +139,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
         <div className="border-t border-border">
           <div className="flex items-center justify-between bg-bg px-5 py-2">
             <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Елементи</span>
-            {!publicView && collection.is_owner && (
+            {!publicView && canManage && (
               <button type="button" className="text-xs font-semibold text-accent" onClick={() => setShowPicker(true)}>
                 + Додати
               </button>
@@ -138,7 +153,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
                   <span className="text-sm text-text">{item.name}</span>
                   {domain.itemMeta(item) && <span className="text-xs text-text-dim">{domain.itemMeta(item)}</span>}
                 </Link>
-                {!publicView && collection.is_owner && (
+                {!publicView && canManage && (
                   <button type="button" className="px-2 text-sm text-danger" onClick={() => handleRemoveItem(item.id)}>✕</button>
                 )}
               </div>
@@ -146,7 +161,15 @@ export default function CollectionView({ domainKey, publicView = false }) {
           </div>
         </div>
 
-        {!publicView && collection.is_owner && (
+        {!publicView && canManageCanonical && !collection.is_canonical && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            </Button>
+          </div>
+        )}
+
+        {!publicView && canManage && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" to={`${domain.basePath}/collections/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>

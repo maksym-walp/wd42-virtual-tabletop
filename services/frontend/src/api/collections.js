@@ -31,6 +31,10 @@ export function createCollectionsApi(base) {
     async remove(id) {
       await api.delete(`${base}${id}`);
     },
+    async setCanonical(id, isCanonical = true) {
+      const { data } = await api.patch(`${base}${id}/canonical`, { is_canonical: isCanonical });
+      return data.collection;
+    },
     async addItem(collectionId, itemIdField, itemId) {
       const { data } = await api.post(`${base}${collectionId}/items`, { [itemIdField]: itemId });
       return data.item;

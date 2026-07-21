@@ -5,13 +5,16 @@ import api from '../api/client';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 
 export default function EquipmentView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [settingCanonical, setSettingCanonical] = useState(false);
 
   useEffect(() => {
     api.get(`/api/equipment/${id}`)
@@ -34,9 +37,21 @@ export default function EquipmentView() {
     }
   };
 
+  const handleMarkCanonical = async () => {
+    setSettingCanonical(true);
+    try {
+      const { data } = await api.patch(`/api/equipment/${id}/canonical`, { is_canonical: true });
+      setItem(data.item);
+    } finally {
+      setSettingCanonical(false);
+    }
+  };
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
   if (!item) return null;
 
+  const isAdmin = user?.role === 'admin';
+  const canManageCanonical = isAdmin || user?.role === 'game_master';
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
 
   return (
@@ -82,7 +97,15 @@ export default function EquipmentView() {
           </Section>
         )}
 
-        {item.is_owner && (
+        {canManageCanonical && !item.is_canonical && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            </Button>
+          </div>
+        )}
+
+        {(item.is_owner || isAdmin) && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" to={`/equipment/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>

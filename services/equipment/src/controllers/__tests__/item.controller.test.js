@@ -26,7 +26,7 @@ describe('ItemController.list', () => {
     expect(ItemModel.findAll).toHaveBeenCalledWith('user-1', {
       type: 'weapon', weaponType: 'sword', armorWeight: 'light',
       search: 'axe', sort: 'name', dir: 'desc', scope: 'user',
-    });
+    }, false);
     expect(res.json).toHaveBeenCalledWith({ items: [{ id: 'i1' }] });
   });
 });
@@ -116,7 +116,7 @@ describe('ItemController.update', () => {
 
     await ItemController.update(req, res);
 
-    expect(ItemModel.update).toHaveBeenCalledWith('i1', 'user-1', { name: 'Great Sword' });
+    expect(ItemModel.update).toHaveBeenCalledWith('i1', 'user-1', { name: 'Great Sword' }, false);
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'i1', name: 'Great Sword' } });
   });
 });

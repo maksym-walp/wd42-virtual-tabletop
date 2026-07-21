@@ -23,7 +23,7 @@ describe('AbilityController.list', () => {
 
     expect(AbilityModel.findAll).toHaveBeenCalledWith('user-1', {
       search: 'fire', sort: 'name', archetype: 'mage', scope: 'user',
-    });
+    }, false);
     expect(res.json).toHaveBeenCalledWith({ abilities: [{ id: 'a1' }] });
   });
 
@@ -45,7 +45,7 @@ describe('AbilityController.getOne', () => {
 
     await AbilityController.getOne(req, res);
 
-    expect(AbilityModel.findById).toHaveBeenCalledWith('missing', 'user-1');
+    expect(AbilityModel.findById).toHaveBeenCalledWith('missing', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Вміння не знайдено' });
   });
@@ -113,7 +113,7 @@ describe('AbilityController.update', () => {
 
     await AbilityController.update(req, res);
 
-    expect(AbilityModel.update).toHaveBeenCalledWith('a1', 'user-1', { name: 'Нове' });
+    expect(AbilityModel.update).toHaveBeenCalledWith('a1', 'user-1', { name: 'Нове' }, false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Вміння не знайдено або недостатньо прав' });
   });
@@ -147,7 +147,7 @@ describe('AbilityController.remove', () => {
 
     await AbilityController.remove(req, res);
 
-    expect(AbilityModel.delete).toHaveBeenCalledWith('a1', 'user-1');
+    expect(AbilityModel.delete).toHaveBeenCalledWith('a1', 'user-1', false);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: 'Вміння не знайдено або недостатньо прав' });
   });

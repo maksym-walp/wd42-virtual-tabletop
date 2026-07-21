@@ -10,7 +10,8 @@ const NephilimController = {
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
     const isOwner = char.user_id === req.user.sub;
     const isGM    = req.user.role === 'game_master';
-    if (!isOwner && !isGM && !char.is_public && !await isCampaignGmForCharacter(char.id, req.user.sub)) {
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isGM && !isAdmin && !char.is_public && !await isCampaignGmForCharacter(char.id, req.user.sub)) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
     const breakthroughs = await NephilimBreakthroughModel.findAll(req.params.id);
