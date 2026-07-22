@@ -136,15 +136,15 @@ describe('ArtifactModel.create / update', () => {
   it('nulls out omitted optional fields on update', async () => {
     await ArtifactModel.update('a1', 'u1', { name: 'Клинок', rarity: 'rare' });
     const params = pool.query.mock.calls[0][1];
-    expect(params).toEqual(['a1', 'u1', 'Клинок', null, false, null, null, null, 'rare']);
+    expect(params).toEqual(['a1', 'u1', 'Клинок', null, false, null, null, null, 'rare', false]);
   });
 
   it('scopes deletion to the owner', async () => {
     pool.query.mockResolvedValue({ rowCount: 0 });
     const deleted = await ArtifactModel.delete('a1', 'u2');
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE id = \$1 AND user_id = \$2/);
-    expect(params).toEqual(['a1', 'u2']);
+    expect(sql).toMatch(/WHERE id = \$1 AND \(user_id = \$2 OR \$3 = true\)/);
+    expect(params).toEqual(['a1', 'u2', false]);
     expect(deleted).toBe(false);
   });
 });

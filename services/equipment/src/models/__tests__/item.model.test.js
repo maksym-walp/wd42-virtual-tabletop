@@ -127,7 +127,7 @@ describe('ItemModel.create / update new fields', () => {
     const params = pool.query.mock.calls[0][1];
     expect(params).toEqual([
       'i1', 'u1', 'Кіраса', 'armor', null, 3, null, false,
-      null, null, null, null, 'heavy',
+      null, null, null, null, 'heavy', false,
     ]);
   });
 });
