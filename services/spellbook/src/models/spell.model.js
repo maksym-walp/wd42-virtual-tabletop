@@ -56,7 +56,7 @@ const SpellModel = {
 
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE ${conditions.join(' AND ')}
@@ -70,7 +70,7 @@ const SpellModel = {
     const visibility = isAdmin ? 'TRUE' : '(s.user_id = $2 OR s.is_public = true)';
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
        WHERE s.id = $1 AND ${visibility}`,
@@ -117,7 +117,6 @@ const SpellModel = {
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
     } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE spellbook.spells
@@ -128,7 +127,7 @@ const SpellModel = {
            components=$14, is_public=$15,
            prerequisite_node_ids=$16, prerequisite_logic=$17,
            image_url=$18, updated_at=NOW()
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $19 = true)
        RETURNING *`,
       [
         id, userId, name, magic_type, spell_kind ?? 'utility',
@@ -137,17 +136,16 @@ const SpellModel = {
         duration_value ?? null, duration_unit, range_desc ?? null,
         components ?? [], is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
-        image_url ?? null,
+        image_url ?? null, isAdmin,
       ]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      `DELETE FROM spellbook.spells WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
+      `DELETE FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [id, userId, isAdmin]
     );
     return rowCount > 0;
   },

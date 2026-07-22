@@ -53,7 +53,7 @@ const ItemModel = {
 
     const { rows } = await pool.query(
       `SELECT i.*, (i.user_id = $1) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM equipment.items i
        LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE ${conditions.join(' AND ')}
@@ -67,7 +67,7 @@ const ItemModel = {
     const visibility = isAdmin ? 'TRUE' : '(i.user_id = $2 OR i.is_public = true)';
     const { rows } = await pool.query(
       `SELECT i.*, (i.user_id = $2) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM equipment.items i
        LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE i.id = $1 AND ${visibility}`,
@@ -104,7 +104,6 @@ const ItemModel = {
       name, type, damage_die, defense_value, description, is_public,
       price, image_url, weapon_type, weapon_grip, armor_weight,
     } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE equipment.items
@@ -112,24 +111,23 @@ const ItemModel = {
            description=$7, is_public=$8, updated_at=NOW(),
            price=$9, image_url=$10, weapon_type=$11, weapon_grip=$12,
            armor_weight=$13
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $14 = true)
        RETURNING *`,
       [
         id, userId, name, type ?? 'item',
         damage_die ?? null, defense_value ?? null,
         description ?? null, is_public ?? false,
         price ?? null, image_url ?? null,
-        weapon_type ?? null, weapon_grip ?? null, armor_weight ?? null,
+        weapon_type ?? null, weapon_grip ?? null, armor_weight ?? null, isAdmin,
       ]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      `DELETE FROM equipment.items WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
+      `DELETE FROM equipment.items WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [id, userId, isAdmin]
     );
     return rowCount > 0;
   },

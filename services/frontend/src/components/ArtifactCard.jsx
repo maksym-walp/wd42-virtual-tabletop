@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import CanonBadge from './CanonBadge';
+import AuthorBadge from './AuthorBadge';
 
 export default function ArtifactCard({ artifact }) {
   const rarity = RARITIES[artifact.rarity];
@@ -33,6 +34,7 @@ export default function ArtifactCard({ artifact }) {
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{artifact.name}</h3>
       {artifact.creator && <p className="px-3.5 pb-1 text-xs italic text-text-dim">Творець: {artifact.creator}</p>}
+      <AuthorBadge username={artifact.owner_username} variant="inline" className="px-3.5 pb-1" />
 
       {artifact.price != null && (
         <div className="my-2 grid grid-cols-1 gap-px border-y border-border bg-border">

@@ -6,6 +6,7 @@ import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
+import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
 export default function AbilityView() {
@@ -81,6 +82,7 @@ export default function AbilityView() {
         </div>
 
         <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{ability.name}</h1>
+        <AuthorBadge username={ability.owner_username} size="sm" className="px-5 pb-2" />
 
         {ability.description && (
           <Section title="Опис">

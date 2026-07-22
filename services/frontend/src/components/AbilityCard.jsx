@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import CanonBadge from './CanonBadge';
+import AuthorBadge from './AuthorBadge';
 
 export default function AbilityCard({ ability }) {
   return (
@@ -31,6 +32,7 @@ export default function AbilityCard({ ability }) {
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{ability.name}</h3>
+      <AuthorBadge username={ability.owner_username} variant="inline" className="px-3.5 pb-1" />
 
       {ability.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{ability.description}</p>

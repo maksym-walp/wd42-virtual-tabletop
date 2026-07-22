@@ -46,7 +46,7 @@ const AbilityModel = {
 
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $1) AS is_owner, ${prereqNodesSelect('a')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM abilities.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE ${conditions.join(' AND ')}
@@ -60,7 +60,7 @@ const AbilityModel = {
     const visibility = isAdmin ? 'TRUE' : '(a.user_id = $2 OR a.is_public = true)';
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $2) AS is_owner, ${prereqNodesSelect('a')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM abilities.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE a.id = $1 AND ${visibility}`,
@@ -84,24 +84,22 @@ const AbilityModel = {
 
   async update(id, userId, data, isAdmin = false) {
     const { name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE abilities.entries
        SET name=$3, archetypes=$4, description=$5, is_public=$6,
            prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $10 = true)
        RETURNING *`,
-      [id, userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
+      [id, userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      `DELETE FROM abilities.entries WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
+      `DELETE FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [id, userId, isAdmin]
     );
     return rowCount > 0;
   },

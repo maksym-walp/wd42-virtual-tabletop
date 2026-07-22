@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import CanonBadge from './CanonBadge';
+import AuthorBadge from './AuthorBadge';
 
 export default function ManeuverCard({ maneuver }) {
   return (
@@ -24,6 +25,7 @@ export default function ManeuverCard({ maneuver }) {
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{maneuver.name}</h3>
+      <AuthorBadge username={maneuver.owner_username} variant="inline" className="px-3.5 pb-1" />
 
       {maneuver.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{maneuver.description}</p>

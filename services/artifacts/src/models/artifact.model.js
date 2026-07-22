@@ -54,7 +54,7 @@ const ArtifactModel = {
 
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $1) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM artifacts.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE ${conditions.join(' AND ')}
@@ -68,7 +68,7 @@ const ArtifactModel = {
     const visibility = isAdmin ? 'TRUE' : '(a.user_id = $2 OR a.is_public = true)';
     const { rows } = await pool.query(
       `SELECT a.*, (a.user_id = $2) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM artifacts.entries a
        LEFT JOIN auth.users cu ON cu.id = a.user_id
        WHERE a.id = $1 AND ${visibility}`,
@@ -97,29 +97,27 @@ const ArtifactModel = {
 
   async update(id, userId, data, isAdmin = false) {
     const { name, description, is_public, price, image_url, creator, rarity } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE artifacts.entries
        SET name=$3, description=$4, is_public=$5, updated_at=NOW(),
            price=$6, image_url=$7, creator=$8, rarity=$9
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $10 = true)
        RETURNING *`,
       [
         id, userId, name,
         description ?? null, is_public ?? false,
         price ?? null, image_url ?? null,
-        creator ?? null, rarity ?? null,
+        creator ?? null, rarity ?? null, isAdmin,
       ]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      `DELETE FROM artifacts.entries WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
+      `DELETE FROM artifacts.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [id, userId, isAdmin]
     );
     return rowCount > 0;
   },

@@ -7,6 +7,7 @@ import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import DiceFormulaText from '../components/DiceFormulaText';
+import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
 export default function SpellView() {
@@ -88,6 +89,7 @@ export default function SpellView() {
         </div>
 
         <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{spell.name}</h1>
+        <AuthorBadge username={spell.owner_username} size="sm" className="px-5 pb-2" />
 
         {/* Stats grid */}
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">

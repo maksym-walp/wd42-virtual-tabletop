@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { EQUIPMENT_TYPES } from '../constants/equipment';
 import CanonBadge from './CanonBadge';
+import AuthorBadge from './AuthorBadge';
 
 export default function EquipmentCard({ item }) {
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
@@ -33,6 +34,7 @@ export default function EquipmentCard({ item }) {
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{item.name}</h3>
+      <AuthorBadge username={item.owner_username} variant="inline" className="px-3.5 pb-1" />
 
       {(item.damage_die || item.defense_value != null || item.price != null) && (
         <div className="my-2 grid grid-cols-3 gap-px border-y border-border bg-border">

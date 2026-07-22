@@ -5,6 +5,7 @@ import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
 export default function ArtifactView() {
@@ -87,6 +88,7 @@ export default function ArtifactView() {
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{artifact.name}</h1>
         {artifact.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {artifact.creator}</p>}
+        <AuthorBadge username={artifact.owner_username} size="sm" className="px-5 pb-2" />
 
         {artifact.price != null && (
           <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">

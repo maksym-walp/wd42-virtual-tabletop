@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
 import CanonBadge from './CanonBadge';
+import AuthorBadge from './AuthorBadge';
 
 export default function SpellCard({ spell }) {
   const type = MAGIC_TYPES[spell.magic_type] || MAGIC_TYPES.arcana;
@@ -39,6 +40,7 @@ export default function SpellCard({ spell }) {
 
       {/* Title */}
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{spell.name}</h3>
+      <AuthorBadge username={spell.owner_username} variant="inline" className="px-3.5 pb-1" />
 
       {/* Stats row */}
       <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-4">

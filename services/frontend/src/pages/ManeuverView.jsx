@@ -5,6 +5,7 @@ import api from '../api/client';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
+import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
 export default function ManeuverView() {
@@ -74,6 +75,7 @@ export default function ManeuverView() {
         </div>
 
         <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{maneuver.name}</h1>
+        <AuthorBadge username={maneuver.owner_username} size="sm" className="px-5 pb-2" />
 
         {maneuver.description && (
           <Section title="Опис">

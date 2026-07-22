@@ -43,7 +43,7 @@ const ManeuverModel = {
 
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM maneuvers.entries m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE ${conditions.join(' AND ')}
@@ -57,7 +57,7 @@ const ManeuverModel = {
     const visibility = isAdmin ? 'TRUE' : '(m.user_id = $2 OR m.is_public = true)';
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')},
-              ${IS_CANONICAL_EXPR} AS is_canonical
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM maneuvers.entries m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE m.id = $1 AND ${visibility}`,
@@ -81,24 +81,22 @@ const ManeuverModel = {
 
   async update(id, userId, data, isAdmin = false) {
     const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
 
     const { rows } = await pool.query(
       `UPDATE maneuvers.entries
        SET name=$3, duration_actions=$4, description=$5, is_public=$6,
            prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $10 = true)
        RETURNING *`,
-      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
+      [id, userId, name, duration_actions ?? 1, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const { rowCount } = await pool.query(
-      `DELETE FROM maneuvers.entries WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
+      `DELETE FROM maneuvers.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [id, userId, isAdmin]
     );
     return rowCount > 0;
   },

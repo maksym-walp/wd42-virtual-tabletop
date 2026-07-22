@@ -5,6 +5,7 @@ import api from '../api/client';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
 export default function EquipmentView() {
@@ -81,6 +82,7 @@ export default function EquipmentView() {
         </div>
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{item.name}</h1>
+        <AuthorBadge username={item.owner_username} size="sm" className="px-5 pb-2" />
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
           {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} accent={type.color} />}
