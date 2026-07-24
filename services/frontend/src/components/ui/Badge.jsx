@@ -1,4 +1,4 @@
-// Renders the {color, bg} pattern shared by MAGIC_TYPES/ARCHETYPE_COLORS —
+// Renders the {color, bg} pattern shared by NATURE_TYPES/ARCHETYPE_COLORS —
 // these are runtime-computed values, so they stay inline style rather than
 // Tailwind classes (Tailwind can't see dynamically-built class strings).
 export default function Badge({ color, bg, className = '', children }) {

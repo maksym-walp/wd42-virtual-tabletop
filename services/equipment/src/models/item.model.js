@@ -19,6 +19,23 @@ function buildOrderBy(sort, dir) {
 // SQL (no interpolated input), so it is injection-safe.
 const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR i.is_canonical)";
 
+// Reverse reference into another catalog service's schema — same Postgres
+// instance/connection (see services/character-sheet's equipment+artifacts
+// CATALOG union for precedent), so a plain cross-schema subquery is fine.
+// Only used on the single-item detail fetch (findById), not findAll, since
+// it's an EXISTS-over-jsonb scan per item and the list view doesn't need it.
+// Respects the same visibility rule as spellbook's own queries so a spell
+// private to someone else never leaks through an item's "used in" list.
+const usedInSpellsSelect = `COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name)
+     FROM spellbook.spells sp
+     WHERE EXISTS (
+       SELECT 1 FROM jsonb_array_elements(sp.components) c
+       WHERE (c->>'item_id')::uuid = i.id
+     ) AND (sp.user_id = $2 OR sp.is_public = true)),
+    '[]'::jsonb
+  ) AS used_in_spells`;
+
 const ItemModel = {
   async findAll(userId, { type, weaponType, armorWeight, search, sort, dir, scope } = {}, isAdmin = false) {
     const params = [userId];
@@ -67,7 +84,8 @@ const ItemModel = {
     const visibility = isAdmin ? 'TRUE' : '(i.user_id = $2 OR i.is_public = true)';
     const { rows } = await pool.query(
       `SELECT i.*, (i.user_id = $2) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username,
+              ${usedInSpellsSelect}
        FROM equipment.items i
        LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE i.id = $1 AND ${visibility}`,

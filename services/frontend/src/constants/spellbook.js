@@ -1,10 +1,25 @@
-export const MAGIC_TYPES = {
+export const NATURE_TYPES = {
   arcana:    { label: 'Аркана',       color: '#4a3d66', bg: 'rgba(74,61,102,0.12)' },
   elemental: { label: 'Стихійна',     color: '#2e5240', bg: 'rgba(46,82,64,0.12)' },
   integral:  { label: 'Інтегральна',  color: '#8a5a2b', bg: 'rgba(138,90,43,0.12)' },
   infernal:  { label: 'Інфернальна',  color: '#7a3320', bg: 'rgba(122,51,32,0.12)' },
   blight:    { label: 'Скверна',      color: '#5a3358', bg: 'rgba(90,51,88,0.12)' },
 };
+
+// A spell can now have multiple natures at once — these read the first
+// entry as the "primary" one wherever the UI only has room for a single
+// color/label (card borders, accent colors), and join all of them for
+// full-text display.
+export function primaryNature(nature) {
+  return NATURE_TYPES[nature?.[0]] || NATURE_TYPES.arcana;
+}
+
+export function natureLabels(nature) {
+  return (nature || []).map((n) => NATURE_TYPES[n]?.label ?? n).join(', ');
+}
+
+export const COMPONENT_UNITS = ['шт.', 'г', 'мг', 'унції', 'краплі', 'щіпки', 'флакони', 'жмені', 'пучки'];
+export const CUSTOM_UNIT = '__custom__';
 
 export const RITUAL_TYPES = {
   impossible: { label: 'Неможливий', symbol: '✗' },

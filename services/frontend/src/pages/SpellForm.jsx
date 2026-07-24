@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
+import equipmentApi from '../api/equipment';
+import traditionsApi from '../api/traditions';
 import {
-  MAGIC_TYPES, RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_KINDS,
+  NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
+  ACTION_OPTIONS, SPELL_KINDS, primaryNature,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
@@ -13,18 +15,20 @@ import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
 
 const domain = COLLECTION_DOMAINS.spellbook;
 
 const EMPTY = {
-  name: '', magic_type: 'arcana', spell_kind: 'utility',
-  mechanical_desc: '', narrative_desc: '',
+  name: '', nature: ['arcana'], spell_kind: 'utility',
+  mechanical_desc: '', narrative_desc: '', lore_creator: '',
   energy_cost: 0, action_time: 1, ritual: 'impossible',
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '',
   collectionIds: [],
+  traditionIds: [],
 };
 
 export default function SpellForm() {
@@ -37,13 +41,24 @@ export default function SpellForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [nodes, setNodes] = useState([]);
+  const [equipmentItems, setEquipmentItems] = useState([]);
   const [collections, setCollections] = useState([]);
   const [collectionsLoaded, setCollectionsLoaded] = useState(false);
   const initialCollectionIds = useRef([]);
   const membershipInitialized = useRef(false);
+  const [traditions, setTraditions] = useState([]);
+  const initialTraditionIds = useRef([]);
 
   useEffect(() => {
     skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    equipmentApi.getAll().then(setEquipmentItems).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    traditionsApi.getAll().then(setTraditions).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -58,18 +73,23 @@ export default function SpellForm() {
     api.get(`/api/spellbook/${id}`)
       .then(({ data }) => {
         const s = data.spell;
+        const traditionIds = (s.traditions || []).map((t) => t.id);
+        initialTraditionIds.current = traditionIds;
         setForm((f) => ({
           ...f,
-          name: s.name, magic_type: s.magic_type, spell_kind: s.spell_kind || 'utility',
+          name: s.name, nature: s.nature || [], spell_kind: s.spell_kind || 'utility',
           mechanical_desc: s.mechanical_desc || '',
           narrative_desc: s.narrative_desc || '',
+          lore_creator: s.lore_creator || '',
           energy_cost: s.energy_cost, action_time: s.action_time,
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
-          components: s.components || [], is_public: s.is_public,
+          components: (s.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
+          is_public: s.is_public,
           prerequisite_node_ids: s.prerequisite_node_ids || [],
           prerequisite_logic: s.prerequisite_logic || 'or',
           image_url: s.image_url || '',
+          traditionIds,
         }));
       })
       .catch(() => navigate('/spellbook'))
@@ -98,14 +118,16 @@ export default function SpellForm() {
     ]);
   };
 
-  const addComponent = () => setForm((f) => ({ ...f, components: [...f.components, ''] }));
-  const removeComponent = (i) => setForm((f) => ({
-    ...f, components: f.components.filter((_, idx) => idx !== i),
-  }));
-  const setComponent = (i, val) => setForm((f) => ({
-    ...f,
-    components: f.components.map((c, idx) => (idx === i ? val : c)),
-  }));
+  const reconcileTraditions = async (spellId) => {
+    const before = initialTraditionIds.current;
+    const after = form.traditionIds;
+    const toAdd = after.filter((tid) => !before.includes(tid));
+    const toRemove = before.filter((tid) => !after.includes(tid));
+    await Promise.all([
+      ...toAdd.map((tid) => traditionsApi.addSpell(tid, spellId)),
+      ...toRemove.map((tid) => traditionsApi.removeSpell(tid, spellId)),
+    ]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,10 +135,26 @@ export default function SpellForm() {
     setSaving(true);
     setError('');
     try {
-      const { collectionIds, ...rest } = form;
+      // Quick-create flow: any component row flagged "create as new item"
+      // that isn't already linked to an equipment item gets created first,
+      // always public — never as the author's private item.
+      const toCreate = form.components.filter((c) => c.createAsNew && !c.item_id && c.name.trim());
+      const created = await Promise.all(
+        toCreate.map((c) => equipmentApi.create({ name: c.name.trim() }).then((item) => [c.key, item.id]))
+      );
+      const createdIds = Object.fromEntries(created);
+
+      const { collectionIds, traditionIds, ...rest } = form;
       const payload = {
         ...rest,
-        components: form.components.filter((c) => c.trim() !== ''),
+        components: form.components
+          .filter((c) => c.name.trim() !== '')
+          .map((c) => ({
+            item_id: createdIds[c.key] ?? c.item_id ?? null,
+            name: c.name.trim(),
+            quantity: c.quantity || 1,
+            unit: c.unit || '',
+          })),
         duration_value: form.duration_value === '' ? null : Number(form.duration_value),
         energy_cost: Number(form.energy_cost),
         action_time: Number(form.action_time),
@@ -125,10 +163,12 @@ export default function SpellForm() {
       if (isEdit) {
         await api.put(`/api/spellbook/${id}`, payload);
         await reconcileCollections(id);
+        await reconcileTraditions(id);
         navigate(`/spellbook/${id}`);
       } else {
         const { data } = await api.post('/api/spellbook/', payload);
         await reconcileCollections(data.spell.id);
+        await reconcileTraditions(data.spell.id);
         navigate(`/spellbook/${data.spell.id}`);
       }
     } catch (err) {
@@ -138,7 +178,15 @@ export default function SpellForm() {
     }
   };
 
-  const activeType = MAGIC_TYPES[form.magic_type] || MAGIC_TYPES.arcana;
+  const activeType = primaryNature(form.nature);
+  const toggleNature = (key) => setForm((f) => ({
+    ...f,
+    nature: f.nature.includes(key) ? f.nature.filter((n) => n !== key) : [...f.nature, key],
+  }));
+  const toggleTradition = (tid) => setForm((f) => ({
+    ...f,
+    traditionIds: f.traditionIds.includes(tid) ? f.traditionIds.filter((x) => x !== tid) : [...f.traditionIds, tid],
+  }));
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -160,14 +208,14 @@ export default function SpellForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Тип магії" className="mb-4">
+          <Field label="Природа заклинання" hint="Можна обрати декілька" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(MAGIC_TYPES).map(([key, { label, color }]) => (
+              {Object.entries(NATURE_TYPES).map(([key, { label, color }]) => (
                 <button
                   key={key} type="button"
-                  onClick={() => setForm((f) => ({ ...f, magic_type: key }))}
+                  onClick={() => toggleNature(key)}
                   className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-                  style={form.magic_type === key
+                  style={form.nature.includes(key)
                     ? { borderColor: color, color, background: color + '1a' }
                     : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
                 >
@@ -193,6 +241,28 @@ export default function SpellForm() {
                 </button>
               ))}
             </div>
+          </Field>
+
+          <Field label="Магічна традиція" hint="Можна обрати декілька" className="mb-4">
+            {traditions.length === 0 ? (
+              <p className="text-sm text-text-dim">Ще немає жодної традиції.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {traditions.map((t) => (
+                  <button
+                    key={t.id} type="button"
+                    onClick={() => toggleTradition(t.id)}
+                    className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      form.traditionIds.includes(t.id)
+                        ? 'border-accent bg-accent/10 text-accent'
+                        : 'border-border text-text-dim'
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
 
           <ImageUploadField
@@ -247,34 +317,11 @@ export default function SpellForm() {
           </div>
 
           <Field label="Компоненти">
-            <div className="flex flex-col gap-2">
-              {form.components.map((comp, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    className={`${inputClass} flex-1`}
-                    value={comp}
-                    onChange={(e) => setComponent(i, e.target.value)}
-                    placeholder={`Компонент ${i + 1}`}
-                    maxLength={100}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeComponent(i)}
-                    title="Видалити"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-danger/40 text-danger"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button" onClick={addComponent}
-                className="inline-flex w-fit items-center gap-1.5 rounded border border-dashed border-border px-3 py-1.5 text-sm text-text-dim"
-              >
-                <Plus size={14} /> Додати компонент
-              </button>
-            </div>
+            <SpellComponentsField
+              components={form.components}
+              onChange={(next) => setForm((f) => ({ ...f, components: next }))}
+              equipmentItems={equipmentItems}
+            />
           </Field>
         </FormSection>
 
@@ -288,7 +335,7 @@ export default function SpellForm() {
               placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
             />
           </Field>
-          <Field label="Наративний опис">
+          <Field label="Наративний опис" className="mb-4">
             <textarea
               className={`${inputClass} resize-y italic`}
               value={form.narrative_desc} onChange={set('narrative_desc')}
@@ -296,10 +343,16 @@ export default function SpellForm() {
               placeholder="Як це виглядає та відчувається у світі гри..."
             />
           </Field>
+          <Field label="Творець" hint="Лорне поле — напр. ім'я архімага, що винайшов це заклинання">
+            <input
+              type="text" className={inputClass} value={form.lore_creator} onChange={set('lore_creator')}
+              placeholder="напр. Архімаг Ельдран Сірий..." maxLength={200}
+            />
+          </Field>
         </FormSection>
 
         {/* — Вимоги дерева розвитку — */}
-        <FormSection title="Вимоги дерева розвитку" accentColor={activeType.color}>
+        <FormSection title="Вимоги дерева розвитку" accentColor={activeType.color} collapsible defaultOpen={false}>
           <NodePrerequisitePicker
             nodes={nodes}
             value={form}
@@ -345,13 +398,28 @@ export default function SpellForm() {
   );
 }
 
-function FormSection({ title, accentColor, children }) {
+function FormSection({ title, accentColor, collapsible = false, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const showContent = !collapsible || open;
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
-        <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
-      </div>
-      <div className="p-4">{children}</div>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex w-full items-center justify-between border-b bg-bg px-4 py-2"
+          style={{ borderBottomColor: accentColor + '55' }}
+        >
+          <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
+          <ChevronDown size={16} className={`text-text-dim transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      ) : (
+        <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
+          <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
+        </div>
+      )}
+      {showContent && <div className="p-4">{children}</div>}
     </div>
   );
 }

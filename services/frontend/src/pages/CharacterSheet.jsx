@@ -10,7 +10,7 @@ import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import { recordView } from '../utils/recentlyViewed';
-import { MAGIC_TYPES, RITUAL_TYPES, formatDuration } from '../constants/spellbook';
+import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
@@ -1177,7 +1177,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
                 return (
                   <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
                     <div className="flex flex-col">
-                      <span>{s.name} <em className="text-xs text-text-dim">{s.magic_type}</em>{s.is_canonical && <CanonBadge className="ml-1.5" />}</span>
+                      <span>{s.name} <em className="text-xs text-text-dim">{natureLabels(s.nature)}</em>{s.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                       {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
                     </div>
                     <button
@@ -1241,7 +1241,7 @@ function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
         <div className="flex flex-1 flex-col gap-0.5">
           <span className="text-sm text-text">{spell?.name ?? '(невідоме)'}</span>
           <span className="text-xs text-text-dim">
-            {[spell?.magic_type && (MAGIC_TYPES[spell.magic_type]?.label ?? spell.magic_type), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
+            {[spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
           {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
@@ -1274,7 +1274,7 @@ function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
 // ── SpellDetailModal ──────────────────────────────────────────────────────────
 
 function SpellDetailModal({ spell, spellId, onClose }) {
-  const type   = MAGIC_TYPES[spell.magic_type] ?? MAGIC_TYPES.arcana;
+  const type   = primaryNature(spell.nature);
   const ritual = RITUAL_TYPES[spell.ritual];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>

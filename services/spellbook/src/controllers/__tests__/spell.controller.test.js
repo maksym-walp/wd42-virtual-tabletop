@@ -16,13 +16,13 @@ beforeEach(() => jest.clearAllMocks());
 describe('SpellController.list', () => {
   it('passes query filters through to the model and returns spells', async () => {
     SpellModel.findAll.mockResolvedValue([{ id: 's1' }]);
-    const req = mockReq({ query: { magic_type: 'fire', spell_kind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user' } });
+    const req = mockReq({ query: { nature: 'fire', spell_kind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user', tradition: 't1' } });
     const res = mockRes();
 
     await SpellController.list(req, res);
 
     expect(SpellModel.findAll).toHaveBeenCalledWith('user-1', {
-      magicType: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user',
+      nature: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user', traditionId: 't1',
     }, false);
     expect(res.json).toHaveBeenCalledWith({ spells: [{ id: 's1' }] });
   });
@@ -71,7 +71,7 @@ describe('SpellController.getOne', () => {
 
 describe('SpellController.create', () => {
   it('returns 400 when name is missing', async () => {
-    const req = mockReq({ body: { magic_type: 'fire' } });
+    const req = mockReq({ body: { nature: ['fire'] } });
     const res = mockRes();
 
     await SpellController.create(req, res);

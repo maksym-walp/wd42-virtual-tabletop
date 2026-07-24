@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
 import { recordView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
@@ -55,10 +55,9 @@ export default function SpellView() {
 
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
-  const type = MAGIC_TYPES[spell.magic_type];
+  const type = primaryNature(spell.nature);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
-  const componentLabels = (spell.components || []).filter(Boolean).join(', ');
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -78,12 +77,19 @@ export default function SpellView() {
 
         {/* Type header */}
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: type.bg }}>
-          <span
-            className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
-            style={{ color: type.color, borderColor: type.color }}
-          >
-            {type.label}
-          </span>
+          {(spell.nature || []).map((key) => {
+            const n = NATURE_TYPES[key];
+            if (!n) return null;
+            return (
+              <span
+                key={key}
+                className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
+                style={{ color: n.color, borderColor: n.color }}
+              >
+                {n.label}
+              </span>
+            );
+          })}
           {kind && <span className="rounded border border-border px-1.5 py-0.5 text-xs font-semibold text-text-dim">{kind.label}</span>}
           {spell.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
@@ -98,8 +104,25 @@ export default function SpellView() {
           <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} accent={type.color} />
           <SheetStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} accent={type.color} />
           {spell.range_desc && <SheetStat label="Дальність" value={spell.range_desc} accent={type.color} />}
-          {componentLabels && <SheetStat label="Компоненти" value={componentLabels} accent={type.color} />}
+          {spell.lore_creator && <SheetStat label="Творець" value={spell.lore_creator} accent={type.color} />}
         </div>
+
+        {spell.components?.length > 0 && (
+          <Section title="Компоненти">
+            <ul className="flex flex-col gap-1.5">
+              {spell.components.map((c, i) => {
+                const label = [c.name, c.quantity ? `×${c.quantity}` : null, c.unit || null].filter(Boolean).join(' ');
+                return (
+                  <li key={i} className="text-sm text-text">
+                    {c.item_id ? (
+                      <Link to={`/equipment/${c.item_id}`} className="text-accent hover:underline">{label}</Link>
+                    ) : label}
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+        )}
 
         {spell.mechanical_desc && (
           <Section title="Механічний опис">

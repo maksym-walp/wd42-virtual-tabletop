@@ -13,7 +13,7 @@ export const ARCHETYPES = {
   },
 };
 
-// Same {color, bg} badge pattern as MAGIC_TYPES (constants/spellbook.js) —
+// Same {color, bg} badge pattern as NATURE_TYPES (constants/spellbook.js) —
 // text colored as the hue, translucent tint as background. Kept centralized
 // here (not duplicated per-page) since both CharacterList and CharacterNew
 // badge archetypes.

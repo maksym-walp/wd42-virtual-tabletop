@@ -37,13 +37,41 @@ describe('SpellModel.findAll dynamic filter builder', () => {
   });
 
   it('adds a parameterized condition per active filter, in order', async () => {
-    await SpellModel.findAll('u1', { magicType: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt' });
+    await SpellModel.findAll('u1', { nature: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/s\.magic_type = \$2/);
+    expect(sql).toMatch(/s\.nature && \$2::text\[\]/);
     expect(sql).toMatch(/s\.spell_kind = \$3/);
     expect(sql).toMatch(/s\.ritual = \$4/);
     expect(sql).toMatch(/s\.name ILIKE \$5/);
-    expect(params).toEqual(['u1', 'fire', 'attack', 'possible', '%bolt%']);
+    expect(params).toEqual(['u1', ['fire'], 'attack', 'possible', '%bolt%']);
+  });
+
+  it('wraps a single nature value in an array for the overlap check', async () => {
+    await SpellModel.findAll('u1', { nature: 'fire' });
+    const [, params] = pool.query.mock.calls[0];
+    expect(params).toEqual(['u1', ['fire']]);
+  });
+
+  it('passes multiple nature values through as-is (OR semantics via overlap)', async () => {
+    await SpellModel.findAll('u1', { nature: ['fire', 'arcana'] });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/s\.nature && \$2::text\[\]/);
+    expect(params).toEqual(['u1', ['fire', 'arcana']]);
+  });
+
+  it('adds an EXISTS subquery against tradition_spells when traditionId is given', async () => {
+    await SpellModel.findAll('u1', { traditionId: 't1' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(
+      /EXISTS \(SELECT 1 FROM spellbook\.tradition_spells ts WHERE ts\.spell_id = s\.id AND ts\.tradition_id = ANY\(\$2::uuid\[\]\)\)/
+    );
+    expect(params).toEqual(['u1', ['t1']]);
+  });
+
+  it('accepts multiple tradition ids (OR semantics via ANY)', async () => {
+    await SpellModel.findAll('u1', { traditionId: ['t1', 't2'] });
+    const [, params] = pool.query.mock.calls[0];
+    expect(params).toEqual(['u1', ['t1', 't2']]);
   });
 });
 

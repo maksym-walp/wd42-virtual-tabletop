@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, SlidersHorizontal, Plus } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
+import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { MAGIC_TYPES, SPELL_KINDS } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_KINDS } from '../constants/spellbook';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
-import Sheet from '../components/ui/Sheet';
+import FilterAccordion from '../components/ui/FilterAccordion';
+import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 
 const SORT_OPTIONS = [
@@ -21,15 +23,21 @@ export default function Spellbook() {
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [traditions, setTraditions] = useState([]);
   const [filter, setFilter] = useState({
-    magic_type: '', spell_kind: '', ritual: '', search: '', sort: 'name', scope: '',
+    nature: [], spell_kind: '', ritual: '', tradition: [], search: '', sort: 'name', scope: '',
   });
 
   useEffect(() => {
+    traditionsApi.getAll().then(setTraditions).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams();
-    if (filter.magic_type) params.set('magic_type', filter.magic_type);
+    filter.nature.forEach((n) => params.append('nature', n));
     if (filter.spell_kind) params.set('spell_kind', filter.spell_kind);
     if (filter.ritual)     params.set('ritual', filter.ritual);
+    filter.tradition.forEach((t) => params.append('tradition', t));
     if (filter.search)     params.set('search', filter.search);
     if (filter.sort)       params.set('sort', filter.sort);
     if (filter.scope)      params.set('scope', filter.scope);
@@ -44,10 +52,18 @@ export default function Spellbook() {
   const toggle = (field, key) =>
     setFilter((f) => ({ ...f, [field]: f[field] === key ? '' : key }));
 
-  const activeFilterCount = ['magic_type', 'spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length;
+  const toggleMulti = (field, key) =>
+    setFilter((f) => ({
+      ...f,
+      [field]: f[field].includes(key) ? f[field].filter((v) => v !== key) : [...f[field], key],
+    }));
+
+  const activeFilterCount = ['spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length
+    + (filter.nature.length > 0 ? 1 : 0)
+    + (filter.tradition.length > 0 ? 1 : 0);
   // Hide collections once a narrowing filter is active (search or a category
   // filter). Scope is excluded — it keeps collections split, not hidden.
-  const filtersActive = !!(filter.search || filter.magic_type || filter.spell_kind || filter.ritual);
+  const filtersActive = !!(filter.search || filter.nature.length || filter.spell_kind || filter.ritual || filter.tradition.length);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -58,12 +74,13 @@ export default function Spellbook() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" to="/spellbook/collections">Колекції</Button>
+          <Button variant="ghost" size="sm" to="/spellbook/traditions">Традиції</Button>
           <Button to="/spellbook/new" className="hidden md:inline-flex">+ Нове заклинання</Button>
         </div>
       </div>
 
       {/* Search — always visible, prominent */}
-      <div className="mb-5 flex gap-2.5">
+      <div className="mb-3 flex gap-2.5">
         <div className="relative flex-1">
           <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
           <input
@@ -73,18 +90,84 @@ export default function Spellbook() {
             onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
           />
         </div>
-        <button
-          onClick={() => setFiltersOpen(true)}
-          className="relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-semibold text-text"
-        >
-          <SlidersHorizontal size={16} /> Фільтри
-          {activeFilterCount > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[0.65rem] font-bold text-bg">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
       </div>
+
+      <FilterAccordion open={filtersOpen}>
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+          <ScopeFilter scope={filter.scope} onChange={(v) => setFilter((f) => ({ ...f, scope: v }))} />
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Природа</span>
+          <div className="flex flex-wrap gap-1.5">
+            <FilterPill active={filter.nature.length === 0} onClick={() => setFilter((f) => ({ ...f, nature: [] }))}>
+              Усі
+            </FilterPill>
+            {Object.entries(NATURE_TYPES).map(([key, { label, color }]) => (
+              <FilterPill key={key} active={filter.nature.includes(key)} color={color} onClick={() => toggleMulti('nature', key)}>
+                {label}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Вид</span>
+          <div className="flex flex-wrap gap-1.5">
+            <FilterPill active={filter.spell_kind === ''} onClick={() => setFilter((f) => ({ ...f, spell_kind: '' }))}>
+              Усі
+            </FilterPill>
+            {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
+              <FilterPill key={key} active={filter.spell_kind === key} onClick={() => toggle('spell_kind', key)}>
+                {label}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Традиція</span>
+          <div className="flex flex-wrap gap-1.5">
+            <FilterPill active={filter.tradition.length === 0} onClick={() => setFilter((f) => ({ ...f, tradition: [] }))}>
+              Усі
+            </FilterPill>
+            {traditions.map((t) => (
+              <FilterPill key={t.id} active={filter.tradition.includes(t.id)} onClick={() => toggleMulti('tradition', t.id)}>
+                {t.name}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Ритуал</span>
+          <select
+            className={inputClass}
+            value={filter.ritual}
+            onChange={(e) => setFilter((f) => ({ ...f, ritual: e.target.value }))}
+          >
+            <option value="">Будь-який ритуал</option>
+            <option value="impossible">Неможливий</option>
+            <option value="possible">Можливий</option>
+            <option value="required">Необхідний</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Сортування</span>
+          <select
+            className={inputClass}
+            value={filter.sort}
+            onChange={(e) => setFilter((f) => ({ ...f, sort: e.target.value }))}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+      </FilterAccordion>
 
       {!filtersActive && <CollectionsRow domainKey="spellbook" scope={filter.scope} />}
 
@@ -106,72 +189,6 @@ export default function Spellbook() {
       >
         <Plus size={26} />
       </Link>
-
-      <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Фільтри">
-        <div className="flex flex-col gap-5">
-          <div>
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
-            <ScopeFilter scope={filter.scope} onChange={(v) => setFilter((f) => ({ ...f, scope: v }))} />
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Тип магії</span>
-            <div className="flex flex-wrap gap-1.5">
-              <FilterPill active={filter.magic_type === ''} onClick={() => setFilter((f) => ({ ...f, magic_type: '' }))}>
-                Усі
-              </FilterPill>
-              {Object.entries(MAGIC_TYPES).map(([key, { label, color }]) => (
-                <FilterPill key={key} active={filter.magic_type === key} color={color} onClick={() => toggle('magic_type', key)}>
-                  {label}
-                </FilterPill>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Вид</span>
-            <div className="flex flex-wrap gap-1.5">
-              <FilterPill active={filter.spell_kind === ''} onClick={() => setFilter((f) => ({ ...f, spell_kind: '' }))}>
-                Усі
-              </FilterPill>
-              {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
-                <FilterPill key={key} active={filter.spell_kind === key} onClick={() => toggle('spell_kind', key)}>
-                  {label}
-                </FilterPill>
-              ))}
-            </div>
-          </div>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Ритуал</span>
-            <select
-              className={inputClass}
-              value={filter.ritual}
-              onChange={(e) => setFilter((f) => ({ ...f, ritual: e.target.value }))}
-            >
-              <option value="">Будь-який ритуал</option>
-              <option value="impossible">Неможливий</option>
-              <option value="possible">Можливий</option>
-              <option value="required">Необхідний</option>
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Сортування</span>
-            <select
-              className={inputClass}
-              value={filter.sort}
-              onChange={(e) => setFilter((f) => ({ ...f, sort: e.target.value }))}
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <Button onClick={() => setFiltersOpen(false)} className="w-full">Показати {spells.length} заклинань</Button>
-        </div>
-      </Sheet>
     </div>
   );
 }
@@ -182,6 +199,7 @@ function FilterPill({ active, color, onClick, children }) {
   const activeColor = color || '#5b440a';
   return (
     <button
+      type="button"
       onClick={onClick}
       className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
       style={active

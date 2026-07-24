@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 const itemFields = `jsonb_build_object(
-    'id', s.id, 'name', s.name, 'magic_type', s.magic_type, 'spell_kind', s.spell_kind,
+    'id', s.id, 'name', s.name, 'nature', s.nature, 'spell_kind', s.spell_kind,
     'mechanical_desc', s.mechanical_desc, 'narrative_desc', s.narrative_desc,
     'energy_cost', s.energy_cost, 'action_time', s.action_time, 'ritual', s.ritual,
     'duration_value', s.duration_value, 'duration_unit', s.duration_unit,

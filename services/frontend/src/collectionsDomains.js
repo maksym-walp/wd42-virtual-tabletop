@@ -6,7 +6,7 @@ import spellbookApi from './api/spellbook';
 import { createCollectionsApi } from './api/collections';
 import { EQUIPMENT_TYPES } from './constants/equipment';
 import { RARITIES } from './constants/artifacts';
-import { MAGIC_TYPES } from './constants/spellbook';
+import { natureLabels } from './constants/spellbook';
 
 // One config per catalog service that owns a `collections` module —
 // drives the generic CollectionsList/CollectionForm/CollectionView pages
@@ -76,7 +76,7 @@ export const COLLECTION_DOMAINS = {
     catalogApi: spellbookApi,
     itemIdField: 'spell_id',
     itemLink: (item) => `/spellbook/${item.id}`,
-    itemMeta: (item) => MAGIC_TYPES[item.magic_type]?.label ?? '',
+    itemMeta: (item) => natureLabels(item.nature),
     supportsPrerequisites: true,
   },
 };

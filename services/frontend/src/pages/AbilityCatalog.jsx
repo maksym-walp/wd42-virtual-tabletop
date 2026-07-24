@@ -8,6 +8,8 @@ import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import FilterAccordion from '../components/ui/FilterAccordion';
+import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 
 const ARCHETYPE_TABS = ['fighter', 'spellcaster', 'rogue'];
@@ -18,6 +20,7 @@ export default function AbilityCatalog() {
   const [abilities, setAbilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -35,6 +38,7 @@ export default function AbilityCatalog() {
   // Hide collections when a narrowing filter (search or archetype) is active.
   // Scope is excluded — it keeps collections split, not hidden.
   const filtersActive = !!(search || archetype);
+  const activeFilterCount = (scope ? 1 : 0) + (archetype ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -49,40 +53,51 @@ export default function AbilityCatalog() {
         </div>
       </div>
 
-      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
-
-      <div className="mb-5 flex flex-wrap gap-1.5">
-        <button
-          onClick={() => setArchetype('')}
-          className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-            archetype === '' ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
-          }`}
-        >
-          Усі
-        </button>
-        {ARCHETYPE_TABS.map((a) => (
-          <button
-            key={a}
-            onClick={() => setArchetype(a)}
-            className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-            style={archetype === a
-              ? { borderColor: ARCHETYPE_COLORS[a].color, color: ARCHETYPE_COLORS[a].color, background: ARCHETYPE_COLORS[a].color + '18' }
-              : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-          >
-            {ARCHETYPES[a].label}
-          </button>
-        ))}
+      <div className="mb-3 flex gap-2.5">
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            className={`${inputClass} pl-10`}
+            placeholder="Пошук за назвою..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
       </div>
 
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <FilterAccordion open={filtersOpen}>
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+          <ScopeFilter scope={scope} onChange={setScope} />
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Архетип</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setArchetype('')}
+              className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                archetype === '' ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+              }`}
+            >
+              Усі
+            </button>
+            {ARCHETYPE_TABS.map((a) => (
+              <button
+                key={a}
+                onClick={() => setArchetype(a)}
+                className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
+                style={archetype === a
+                  ? { borderColor: ARCHETYPE_COLORS[a].color, color: ARCHETYPE_COLORS[a].color, background: ARCHETYPE_COLORS[a].color + '18' }
+                  : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+              >
+                {ARCHETYPES[a].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FilterAccordion>
 
       {!filtersActive && <CollectionsRow domainKey="abilities" scope={scope} />}
 

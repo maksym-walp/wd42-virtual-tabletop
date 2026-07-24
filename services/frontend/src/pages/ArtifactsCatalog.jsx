@@ -8,6 +8,8 @@ import ScopeFilter from '../components/ScopeFilter';
 import { RARITIES } from '../constants/artifacts';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import FilterAccordion from '../components/ui/FilterAccordion';
+import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 
 export default function ArtifactsCatalog() {
@@ -19,6 +21,7 @@ export default function ArtifactsCatalog() {
   const [sort, setSort]       = useState('name');
   const [dir, setDir]         = useState('asc');
   const [view, setView]       = useState('table'); // table | cards
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams({ sort, dir });
@@ -43,6 +46,7 @@ export default function ArtifactsCatalog() {
   // hidden once search or a rarity filter narrows the list — same rule as the
   // equipment catalog.
   const filtersActive = search.trim() !== '' || rarity !== '';
+  const activeFilterCount = (scope ? 1 : 0) + (rarity ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -57,33 +61,7 @@ export default function ArtifactsCatalog() {
         </div>
       </div>
 
-      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
-
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setRarity('')}
-            className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-            style={rarity === ''
-              ? { borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }
-              : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-          >
-            Усі
-          </button>
-          {Object.entries(RARITIES).map(([key, { label, color }]) => (
-            <button
-              key={key}
-              onClick={() => setRarity(key)}
-              className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-              style={rarity === key
-                ? { borderColor: color, color, background: color + '18' }
-                : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
+      <div className="mb-5 flex justify-end">
         <div className="flex overflow-hidden rounded-lg border border-border">
           <button
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
@@ -100,15 +78,52 @@ export default function ArtifactsCatalog() {
         </div>
       </div>
 
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-3 flex gap-2.5">
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            className={`${inputClass} pl-10`}
+            placeholder="Пошук за назвою..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
       </div>
+
+      <FilterAccordion open={filtersOpen}>
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+          <ScopeFilter scope={scope} onChange={setScope} />
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Рідкість</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setRarity('')}
+              className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
+              style={rarity === ''
+                ? { borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }
+                : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+            >
+              Усі
+            </button>
+            {Object.entries(RARITIES).map(([key, { label, color }]) => (
+              <button
+                key={key}
+                onClick={() => setRarity(key)}
+                className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
+                style={rarity === key
+                  ? { borderColor: color, color, background: color + '18' }
+                  : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FilterAccordion>
 
       {!filtersActive && <CollectionsRow domainKey="artifacts" scope={scope} />}
 

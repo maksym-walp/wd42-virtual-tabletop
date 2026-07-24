@@ -2,8 +2,8 @@ const SpellModel = require('../models/spell.model');
 
 const SpellController = {
   async list(req, res) {
-    const { magic_type, spell_kind, ritual, search, sort, scope, limit } = req.query;
-    const spells = await SpellModel.findAll(req.user.sub, { magicType: magic_type, spellKind: spell_kind, ritual, search, sort, scope, limit }, req.user.role === 'admin');
+    const { nature, spell_kind, ritual, search, sort, scope, limit, tradition } = req.query;
+    const spells = await SpellModel.findAll(req.user.sub, { nature, spellKind: spell_kind, ritual, search, sort, scope, limit, traditionId: tradition }, req.user.role === 'admin');
     res.json({ spells });
   },
 

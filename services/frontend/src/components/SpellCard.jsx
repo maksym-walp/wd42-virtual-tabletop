@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
-import { MAGIC_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function SpellCard({ spell }) {
-  const type = MAGIC_TYPES[spell.magic_type] || MAGIC_TYPES.arcana;
+  const type = primaryNature(spell.nature);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 
@@ -26,12 +26,19 @@ export default function SpellCard({ spell }) {
         className="flex items-center gap-2 border-b px-3.5 py-2"
         style={{ background: type.bg, borderBottomColor: type.color + '44' }}
       >
-        <span
-          className="rounded border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide"
-          style={{ color: type.color, borderColor: type.color + '66' }}
-        >
-          {type.label}
-        </span>
+        {(spell.nature || []).map((key) => {
+          const n = NATURE_TYPES[key];
+          if (!n) return null;
+          return (
+            <span
+              key={key}
+              className="rounded border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide"
+              style={{ color: n.color, borderColor: n.color + '66' }}
+            >
+              {n.label}
+            </span>
+          );
+        })}
         {kind && <span className="rounded border border-border px-1.5 py-0.5 text-[0.68rem] font-semibold text-text-dim">{kind.label}</span>}
         {spell.is_canonical && <CanonBadge className="ml-auto" />}
         {spell.is_public && <span className={`text-[0.65rem] italic text-text-dim ${spell.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}

@@ -29,6 +29,8 @@ import AbilityForm from './pages/AbilityForm';
 import CollectionsList from './pages/CollectionsList';
 import CollectionForm from './pages/CollectionForm';
 import CollectionView from './pages/CollectionView';
+import TraditionsList from './pages/TraditionsList';
+import TraditionForm from './pages/TraditionForm';
 import SkillTree from './pages/SkillTree';
 import CharacterList from './pages/CharacterList';
 import CharacterNew from './pages/CharacterNew';
@@ -59,6 +61,9 @@ export default function App() {
                   <Route path="/spellbook/collections/public/:id" element={<CollectionView domainKey="spellbook" publicView />} />
                   <Route path="/spellbook/collections/:id" element={<PrivateRoute><CollectionView domainKey="spellbook" /></PrivateRoute>} />
                   <Route path="/spellbook/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
+                  <Route path="/spellbook/traditions" element={<PrivateRoute><TraditionsList /></PrivateRoute>} />
+                  <Route path="/spellbook/traditions/new" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
+                  <Route path="/spellbook/traditions/:id/edit" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
                   <Route path="/spellbook/:id" element={<PrivateRoute><SpellView /></PrivateRoute>} />
                   <Route path="/spellbook/:id/edit" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
                   <Route path="/equipment" element={<PrivateRoute><EquipmentCatalog /></PrivateRoute>} />

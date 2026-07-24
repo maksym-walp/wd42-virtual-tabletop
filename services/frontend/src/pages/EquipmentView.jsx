@@ -99,6 +99,18 @@ export default function EquipmentView() {
           </Section>
         )}
 
+        {item.used_in_spells?.length > 0 && (
+          <Section title="Використовується у">
+            <div className="flex flex-col gap-1.5">
+              {item.used_in_spells.map((s) => (
+                <Link key={s.id} to={`/spellbook/${s.id}`} className="text-sm text-accent hover:underline">
+                  {s.name}
+                </Link>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {canManageCanonical && !item.is_canonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>

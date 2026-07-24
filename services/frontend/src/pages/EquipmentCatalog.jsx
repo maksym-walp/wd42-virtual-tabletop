@@ -8,6 +8,8 @@ import ScopeFilter from '../components/ScopeFilter';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import FilterAccordion from '../components/ui/FilterAccordion';
+import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 
 const TYPE_TABS = ['weapon', 'armor', 'item'];
@@ -21,6 +23,7 @@ export default function EquipmentCatalog() {
   const [sort, setSort]     = useState('name');
   const [dir, setDir]       = useState('asc');
   const [view, setView]     = useState('table'); // table | cards
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams({ type, sort, dir });
@@ -50,6 +53,7 @@ export default function EquipmentCatalog() {
   // so the filtered results stay clean. The type tab (always set) and the
   // source/scope filter don't count — scope keeps collections split, not hidden.
   const filtersActive = search.trim() !== '';
+  const activeFilterCount = scope ? 1 : 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -63,8 +67,6 @@ export default function EquipmentCatalog() {
           <Button to="/equipment/new" className="hidden md:inline-flex">+ Новий предмет</Button>
         </div>
       </div>
-
-      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
@@ -98,15 +100,25 @@ export default function EquipmentCatalog() {
         </div>
       </div>
 
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-3 flex gap-2.5">
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            className={`${inputClass} pl-10`}
+            placeholder="Пошук за назвою..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
       </div>
+
+      <FilterAccordion open={filtersOpen}>
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+          <ScopeFilter scope={scope} onChange={setScope} />
+        </div>
+      </FilterAccordion>
 
       {!filtersActive && <CollectionsRow domainKey="equipment" scope={scope} />}
 
