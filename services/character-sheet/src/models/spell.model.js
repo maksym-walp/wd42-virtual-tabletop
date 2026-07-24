@@ -12,7 +12,7 @@ const SpellProgressModel = {
     const { rows } = await pool.query(
       `SELECT ks.*,
               CASE WHEN sp.id IS NULL THEN NULL ELSE jsonb_build_object(
-                'id', sp.id, 'name', sp.name, 'magic_type', sp.magic_type,
+                'id', sp.id, 'name', sp.name, 'nature', sp.nature,
                 'spell_kind', sp.spell_kind,
                 'mechanical_desc', sp.mechanical_desc, 'narrative_desc', sp.narrative_desc,
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,
@@ -56,7 +56,7 @@ const SpellProgressModel = {
        )
        SELECT ks.*,
               CASE WHEN sp.id IS NULL THEN NULL ELSE jsonb_build_object(
-                'id', sp.id, 'name', sp.name, 'magic_type', sp.magic_type,
+                'id', sp.id, 'name', sp.name, 'nature', sp.nature,
                 'spell_kind', sp.spell_kind,
                 'mechanical_desc', sp.mechanical_desc, 'narrative_desc', sp.narrative_desc,
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
-import { recordView } from '../utils/recentlyViewed';
+import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import DiceFormulaText from '../components/DiceFormulaText';
@@ -34,6 +34,7 @@ export default function SpellView() {
     setDeleting(true);
     try {
       await api.delete(`/api/spellbook/${id}`);
+      removeView('spell', id);
       navigate('/spellbook');
     } catch {
       setDeleting(false);

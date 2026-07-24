@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const SORT_MAP = {
   name: 'a.name ASC',
@@ -97,11 +98,17 @@ const AbilityModel = {
   },
 
   async delete(id, userId, isAdmin = false) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
-      [id, userId, isAdmin]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'abilities',
+      tableName: 'entries',
+      deleteQuery: `DELETE FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM abilities.collection_items WHERE ability_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags an ability canonical regardless of who owns it.

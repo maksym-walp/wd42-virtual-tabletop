@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 // Rarity sorts by its in-world scale, not alphabetically.
 const RARITY_ORDER = "array_position(ARRAY['common','uncommon','rare','legendary'], a.rarity)";
@@ -115,11 +116,17 @@ const ArtifactModel = {
   },
 
   async delete(id, userId, isAdmin = false) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM artifacts.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
-      [id, userId, isAdmin]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'artifacts',
+      tableName: 'entries',
+      deleteQuery: `DELETE FROM artifacts.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM artifacts.collection_items WHERE artifact_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags an artifact canonical regardless of who owns it.

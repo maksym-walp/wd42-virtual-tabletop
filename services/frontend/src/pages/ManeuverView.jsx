@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { recordView } from '../utils/recentlyViewed';
+import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import AuthorBadge from '../components/AuthorBadge';
@@ -32,6 +32,7 @@ export default function ManeuverView() {
     setDeleting(true);
     try {
       await api.delete(`/api/maneuvers/${id}`);
+      removeView('maneuver', id);
       navigate('/maneuvers');
     } catch {
       setDeleting(false);

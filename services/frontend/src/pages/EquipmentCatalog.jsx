@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, LayoutGrid, Table2 } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
 import CollectionsRow from '../components/CollectionsRow';
@@ -11,6 +11,8 @@ import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
+import ViewToggle from '../components/ui/ViewToggle';
+import useViewMode from '../hooks/useViewMode';
 
 const TYPE_TABS = ['weapon', 'armor', 'item'];
 
@@ -22,7 +24,7 @@ export default function EquipmentCatalog() {
   const [search, setSearch] = useState('');
   const [sort, setSort]     = useState('name');
   const [dir, setDir]       = useState('asc');
-  const [view, setView]     = useState('table'); // table | cards
+  const [view, setView]     = useViewMode('equipment'); // table | cards
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
@@ -84,20 +86,7 @@ export default function EquipmentCatalog() {
           ))}
         </div>
 
-        <div className="flex overflow-hidden rounded-lg border border-border">
-          <button
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'table' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
-            onClick={() => setView('table')}
-          >
-            <Table2 size={15} /> Таблиця
-          </button>
-          <button
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${view === 'cards' ? 'bg-accent/10 text-accent' : 'text-text-dim'}`}
-            onClick={() => setView('cards')}
-          >
-            <LayoutGrid size={15} /> Картки
-          </button>
-        </div>
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <div className="mb-3 flex gap-2.5">

@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const SORT_MAP = {
   name:        's.name ASC',
@@ -164,11 +165,18 @@ const SpellModel = {
   },
 
   async delete(id, userId, isAdmin = false) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
-      [id, userId, isAdmin]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'spellbook',
+      tableName: 'spells',
+      deleteQuery: `DELETE FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM spellbook.collection_items WHERE spell_id = $1`, params: [id] },
+        { key: 'tradition_spells', sql: `SELECT * FROM spellbook.tradition_spells WHERE spell_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags a spell canonical regardless of who owns it.

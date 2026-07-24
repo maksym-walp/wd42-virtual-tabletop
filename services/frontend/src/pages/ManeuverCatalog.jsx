@@ -10,6 +10,21 @@ import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
+import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
+import CanonBadge from '../components/CanonBadge';
+import useViewMode from '../hooks/useViewMode';
+
+const MANEUVER_TABLE_COLUMNS = [
+  { key: 'name', label: 'Назва', render: (m) => (
+    <span className="inline-flex items-center gap-1.5">
+      {m.name}
+      {m.is_canonical && <CanonBadge />}
+    </span>
+  ) },
+  { key: 'duration_actions', label: 'Дії', render: (m) => `${m.duration_actions}/3` },
+  { key: 'owner', label: 'Автор', render: (m) => m.owner_username ? `@${m.owner_username}` : '—' },
+];
 
 export default function ManeuverCatalog() {
   const [maneuvers, setManeuvers] = useState([]);
@@ -17,6 +32,7 @@ export default function ManeuverCatalog() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [view, setView] = useViewMode('maneuvers');
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -59,6 +75,7 @@ export default function ManeuverCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -74,6 +91,13 @@ export default function ManeuverCatalog() {
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : maneuvers.length === 0 ? (
         <EmptyState title="Маневрів не знайдено" action={<Button to="/maneuvers/new">Створити перший</Button>} />
+      ) : view === 'table' ? (
+        <DataTable
+          items={maneuvers}
+          columns={MANEUVER_TABLE_COLUMNS}
+          getKey={(m) => m.id}
+          getHref={(m) => `/maneuvers/${m.id}`}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {maneuvers.map((m) => <ManeuverCard key={m.id} maneuver={m} />)}

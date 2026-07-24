@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
-import { recordView } from '../utils/recentlyViewed';
+import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,7 @@ export default function ArtifactView() {
     setDeleting(true);
     try {
       await api.delete(`/api/artifacts/${id}`);
+      removeView('artifact', id);
       navigate('/artifacts');
     } catch {
       setDeleting(false);

@@ -77,13 +77,26 @@ describe('TraditionModel.update', () => {
 });
 
 describe('TraditionModel.delete', () => {
+  let client;
+
+  beforeEach(() => {
+    client = { query: jest.fn(), release: jest.fn() };
+    pool.connect.mockResolvedValue(client);
+  });
+
   it('returns true when a row was deleted', async () => {
-    pool.query.mockResolvedValue({ rowCount: 1 });
+    client.query.mockImplementation((sql) => {
+      if (sql.startsWith('DELETE FROM spellbook.traditions')) return Promise.resolve({ rows: [{ id: 't1' }] });
+      return Promise.resolve({ rows: [] });
+    });
     await expect(TraditionModel.delete('t1')).resolves.toBe(true);
   });
 
   it('returns false when no row was deleted', async () => {
-    pool.query.mockResolvedValue({ rowCount: 0 });
+    client.query.mockImplementation((sql) => {
+      if (sql.startsWith('DELETE FROM spellbook.traditions')) return Promise.resolve({ rows: [] });
+      return Promise.resolve({ rows: [] });
+    });
     await expect(TraditionModel.delete('missing')).resolves.toBe(false);
   });
 });
@@ -95,16 +108,17 @@ describe('TraditionModel.addSpell', () => {
     expect(result).toBeNull();
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE id = \$1 AND user_id = \$2/);
-    expect(params).toEqual(['s1', 'user-1']);
+    expect(sql).toMatch(/WHERE id = \$1 AND \(user_id = \$2 OR \$3 = true\)/);
+    expect(params).toEqual(['s1', 'user-1', false]);
   });
 
   it('skips the ownership filter for admins', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
     pool.query.mockResolvedValueOnce({ rows: [{ tradition_id: 't1', spell_id: 's1' }] });
     await TraditionModel.addSpell('t1', 'user-1', 's1', true);
-    const [ownerSql] = pool.query.mock.calls[0];
-    expect(ownerSql).toMatch(/WHERE id = \$1 AND TRUE/);
+    const [ownerSql, ownerParams] = pool.query.mock.calls[0];
+    expect(ownerSql).toMatch(/WHERE id = \$1 AND \(user_id = \$2 OR \$3 = true\)/);
+    expect(ownerParams).toEqual(['s1', 'user-1', true]);
   });
 
   it('inserts into the join table when the caller owns the spell', async () => {
@@ -126,15 +140,16 @@ describe('TraditionModel.removeSpell', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/DELETE FROM spellbook\.tradition_spells/);
     expect(sql).toMatch(/s\.user_id = \$2/);
-    expect(params).toEqual(['t1', 'user-1', 's1']);
+    expect(params).toEqual(['t1', 'user-1', 's1', false]);
     expect(result).toBe(true);
   });
 
   it('bypasses ownership for admins', async () => {
     pool.query.mockResolvedValue({ rowCount: 1 });
     await TraditionModel.removeSpell('t1', 'user-1', 's1', true);
-    const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/AND TRUE AND/);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/AND \(s\.user_id = \$2 OR \$4 = true\) AND/);
+    expect(params).toEqual(['t1', 'user-1', 's1', true]);
   });
 
   it('returns false when no row was deleted', async () => {

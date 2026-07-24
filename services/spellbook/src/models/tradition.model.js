@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const spellsSelect = `COALESCE(
     (SELECT jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name) ORDER BY s.name)
@@ -62,22 +63,27 @@ const TraditionModel = {
     return rows[0] || null;
   },
 
-  async delete(id) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM spellbook.traditions WHERE id = $1`,
-      [id]
-    );
-    return rowCount > 0;
+  async delete(id, deletedBy = null) {
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'spellbook',
+      tableName: 'traditions',
+      deleteQuery: `DELETE FROM spellbook.traditions WHERE id = $1 RETURNING *`,
+      deleteParams: [id],
+      childQueries: [
+        { key: 'tradition_spells', sql: `SELECT * FROM spellbook.tradition_spells WHERE tradition_id = $1`, params: [id] },
+      ],
+      deletedBy,
+    });
+    return !!record;
   },
 
   // Ownership is checked against the SPELL (traditions have no owner) —
   // attaching an existing tradition to your own spell is part of editing
   // that spell, not managing the tradition itself.
   async addSpell(traditionId, userId, spellId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const owns = await pool.query(
-      `SELECT 1 FROM spellbook.spells WHERE id = $1 AND ${ownerCheck}`,
-      [spellId, userId]
+      `SELECT 1 FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [spellId, userId, isAdmin]
     );
     if (!owns.rows.length) return null;
 
@@ -92,12 +98,11 @@ const TraditionModel = {
   },
 
   async removeSpell(traditionId, userId, spellId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 's.user_id = $2';
     const { rowCount } = await pool.query(
       `DELETE FROM spellbook.tradition_spells ts
        USING spellbook.spells s
-       WHERE ts.spell_id = s.id AND s.id = $3 AND ${ownerCheck} AND ts.tradition_id = $1`,
-      [traditionId, userId, spellId]
+       WHERE ts.spell_id = s.id AND s.id = $3 AND (s.user_id = $2 OR $4 = true) AND ts.tradition_id = $1`,
+      [traditionId, userId, spellId, isAdmin]
     );
     return rowCount > 0;
   },

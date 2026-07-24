@@ -21,7 +21,7 @@ const TraditionController = {
     res.json({ tradition });
   },
   async remove(req, res) {
-    const deleted = await TraditionModel.delete(req.params.id);
+    const deleted = await TraditionModel.delete(req.params.id, req.user.sub);
     if (!deleted) return res.status(404).json({ message: 'Традицію не знайдено' });
     res.json({ message: 'Видалено' });
   },

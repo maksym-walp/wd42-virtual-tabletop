@@ -140,9 +140,10 @@ describe('ArtifactModel.create / update', () => {
   });
 
   it('scopes deletion to the owner', async () => {
-    pool.query.mockResolvedValue({ rowCount: 0 });
+    const client = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
+    pool.connect.mockResolvedValue(client);
     const deleted = await ArtifactModel.delete('a1', 'u2');
-    const [sql, params] = pool.query.mock.calls[0];
+    const [sql, params] = client.query.mock.calls.find(([s]) => s.startsWith('DELETE FROM artifacts.entries'));
     expect(sql).toMatch(/WHERE id = \$1 AND \(user_id = \$2 OR \$3 = true\)/);
     expect(params).toEqual(['a1', 'u2', false]);
     expect(deleted).toBe(false);

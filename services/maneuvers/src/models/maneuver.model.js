@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const SORT_MAP = {
   name:             'm.name ASC',
@@ -94,11 +95,17 @@ const ManeuverModel = {
   },
 
   async delete(id, userId, isAdmin = false) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM maneuvers.entries WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
-      [id, userId, isAdmin]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'maneuvers',
+      tableName: 'entries',
+      deleteQuery: `DELETE FROM maneuvers.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM maneuvers.collection_items WHERE maneuver_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags a maneuver canonical regardless of who owns it.

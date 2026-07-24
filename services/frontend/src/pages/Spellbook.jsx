@@ -6,12 +6,32 @@ import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_KINDS } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
+import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
+import CanonBadge from '../components/CanonBadge';
+import useViewMode from '../hooks/useViewMode';
+
+const SPELL_TABLE_COLUMNS = [
+  { key: 'name', label: 'Назва', render: (s) => (
+    <span className="inline-flex items-center gap-1.5">
+      {s.name}
+      {s.is_canonical && <CanonBadge />}
+    </span>
+  ) },
+  { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
+  { key: 'spell_kind', label: 'Вид', render: (s) => SPELL_KINDS[s.spell_kind]?.label ?? s.spell_kind },
+  { key: 'energy_cost', label: 'Енергія', render: (s) => s.energy_cost },
+  { key: 'action_time', label: 'Дії', render: (s) => `${s.action_time}/3` },
+  { key: 'ritual', label: 'Ритуал', render: (s) => RITUAL_TYPES[s.ritual]?.label ?? s.ritual },
+  { key: 'duration', label: 'Тривалість', render: (s) => formatDuration(s.duration_value, s.duration_unit) },
+  { key: 'owner', label: 'Автор', render: (s) => s.owner_username ? `@${s.owner_username}` : '—' },
+];
 
 const SORT_OPTIONS = [
   { value: 'name',        label: 'За алфавітом' },
@@ -23,6 +43,7 @@ export default function Spellbook() {
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useViewMode('spellbook');
   const [traditions, setTraditions] = useState([]);
   const [filter, setFilter] = useState({
     nature: [], spell_kind: '', ritual: '', tradition: [], search: '', sort: 'name', scope: '',
@@ -91,6 +112,7 @@ export default function Spellbook() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -175,6 +197,13 @@ export default function Spellbook() {
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : spells.length === 0 ? (
         <EmptyState title="Заклинань не знайдено" action={<Button to="/spellbook/new">Створити перше</Button>} />
+      ) : viewMode === 'table' ? (
+        <DataTable
+          items={spells}
+          columns={SPELL_TABLE_COLUMNS}
+          getKey={(s) => s.id}
+          getHref={(s) => `/spellbook/${s.id}`}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {spells.map((spell) => <SpellCard key={spell.id} spell={spell} />)}

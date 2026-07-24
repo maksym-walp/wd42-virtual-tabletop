@@ -14,6 +14,7 @@ export default function TraditionsList() {
   const [traditions, setTraditions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -22,6 +23,17 @@ export default function TraditionsList() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [search]);
+
+  const handleDelete = async (t) => {
+    if (!confirm(`Видалити традицію «${t.name}»?`)) return;
+    setDeletingId(t.id);
+    try {
+      await traditionsApi.remove(t.id);
+      setTraditions((prev) => prev.filter((x) => x.id !== t.id));
+    } catch {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -69,9 +81,19 @@ export default function TraditionsList() {
                   {(t.spells || []).length} заклинань
                 </span>
                 {canManageTraditions && (
-                  <Link to={`/spellbook/traditions/${t.id}/edit`} className="ml-auto text-[0.7rem] font-semibold text-accent">
-                    Редагувати
-                  </Link>
+                  <div className="ml-auto flex items-center gap-3">
+                    <Link to={`/spellbook/traditions/${t.id}/edit`} className="text-[0.7rem] font-semibold text-accent">
+                      Редагувати
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(t)}
+                      disabled={deletingId === t.id}
+                      className="text-[0.7rem] font-semibold text-danger disabled:opacity-50"
+                    >
+                      {deletingId === t.id ? 'Видалення...' : 'Видалити'}
+                    </button>
+                  </div>
                 )}
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{t.name}</h3>

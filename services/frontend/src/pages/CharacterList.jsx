@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import characterApi from '../api/characterSheet';
+import { removeView } from '../utils/recentlyViewed';
 import { ARCHETYPES, RACES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -26,6 +27,7 @@ export default function CharacterList() {
     if (!confirm(`Видалити персонажа "${name}"? Це незворотно.`)) return;
     try {
       await characterApi.remove(id);
+      removeView('character', id);
       setCharacters((prev) => prev.filter((c) => c.id !== id));
     } catch {
       alert('Помилка при видаленні');

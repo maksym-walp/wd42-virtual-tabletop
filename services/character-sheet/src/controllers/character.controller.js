@@ -93,7 +93,7 @@ const CharacterController = {
   async remove(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
 
-    const deleted = await CharacterModel.delete(req.params.id);
+    const deleted = await CharacterModel.delete(req.params.id, req.user.sub);
     if (!deleted) return res.status(404).json({ message: 'Персонажа не знайдено' });
     res.json({ message: 'Видалено' });
   },

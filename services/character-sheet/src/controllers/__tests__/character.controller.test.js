@@ -287,7 +287,7 @@ describe('CharacterController.remove', () => {
 
     await CharacterController.remove(req, res);
 
-    expect(CharacterModel.delete).toHaveBeenCalledWith('c1');
+    expect(CharacterModel.delete).toHaveBeenCalledWith('c1', 'user-1');
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });

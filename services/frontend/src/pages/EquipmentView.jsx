@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
-import { recordView } from '../utils/recentlyViewed';
+import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,7 @@ export default function EquipmentView() {
     setDeleting(true);
     try {
       await api.delete(`/api/equipment/${id}`);
+      removeView('equipment', id);
       navigate('/equipment');
     } catch {
       setDeleting(false);

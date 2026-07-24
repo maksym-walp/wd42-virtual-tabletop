@@ -11,8 +11,23 @@ import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
+import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
+import CanonBadge from '../components/CanonBadge';
+import useViewMode from '../hooks/useViewMode';
 
 const ARCHETYPE_TABS = ['fighter', 'spellcaster', 'rogue'];
+
+const ABILITY_TABLE_COLUMNS = [
+  { key: 'name', label: 'Назва', render: (a) => (
+    <span className="inline-flex items-center gap-1.5">
+      {a.name}
+      {a.is_canonical && <CanonBadge />}
+    </span>
+  ) },
+  { key: 'archetypes', label: 'Архетипи', render: (a) => (a.archetypes ?? []).map((k) => ARCHETYPES[k]?.label ?? k).join(', ') || '—' },
+  { key: 'owner', label: 'Автор', render: (a) => a.owner_username ? `@${a.owner_username}` : '—' },
+];
 
 export default function AbilityCatalog() {
   const [archetype, setArchetype] = useState('');
@@ -21,6 +36,7 @@ export default function AbilityCatalog() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [view, setView] = useViewMode('abilities');
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -64,6 +80,7 @@ export default function AbilityCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -105,6 +122,13 @@ export default function AbilityCatalog() {
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : abilities.length === 0 ? (
         <EmptyState title="Вмінь не знайдено" action={<Button to="/abilities/new">Створити перше</Button>} />
+      ) : view === 'table' ? (
+        <DataTable
+          items={abilities}
+          columns={ABILITY_TABLE_COLUMNS}
+          getKey={(a) => a.id}
+          getHref={(a) => `/abilities/${a.id}`}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {abilities.map((a) => <AbilityCard key={a.id} ability={a} />)}

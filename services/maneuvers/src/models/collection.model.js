@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const itemFields = `jsonb_build_object(
     'id', m.id, 'name', m.name, 'duration_actions', m.duration_actions,
@@ -81,25 +82,29 @@ const CollectionModel = {
 
   async update(id, userId, data, isAdmin = false) {
     const { name, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id=$2';
     const { rows } = await pool.query(
       `UPDATE maneuvers.collections
        SET name=$3, description=$4, is_public=$5,
            prerequisite_node_ids=$6, prerequisite_logic=$7, updated_at=NOW()
-       WHERE id=$1 AND ${ownerCheck}
+       WHERE id=$1 AND (user_id=$2 OR $8 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', isAdmin]
     );
     return rows[0] || null;
   },
 
   async delete(id, userId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
-    const { rowCount } = await pool.query(
-      `DELETE FROM maneuvers.collections WHERE id = $1 AND ${ownerCheck}`,
-      [id, userId]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'maneuvers',
+      tableName: 'collections',
+      deleteQuery: `DELETE FROM maneuvers.collections WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM maneuvers.collection_items WHERE collection_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags a collection canonical regardless of who owns it.
@@ -114,17 +119,15 @@ const CollectionModel = {
   // Only the collection owner (or admin) can add items, and only items they
   // can see (own or public, or anything if admin).
   async addItem(collectionId, userId, maneuverId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'user_id = $2';
     const owns = await pool.query(
-      `SELECT 1 FROM maneuvers.collections WHERE id = $1 AND ${ownerCheck}`,
-      [collectionId, userId]
+      `SELECT 1 FROM maneuvers.collections WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [collectionId, userId, isAdmin]
     );
     if (!owns.rows.length) return null;
 
-    const visibleCheck = isAdmin ? 'TRUE' : '(user_id = $2 OR is_public = true)';
     const visible = await pool.query(
-      `SELECT 1 FROM maneuvers.entries WHERE id = $1 AND ${visibleCheck}`,
-      [maneuverId, userId]
+      `SELECT 1 FROM maneuvers.entries WHERE id = $1 AND (user_id = $2 OR is_public = true OR $3 = true)`,
+      [maneuverId, userId, isAdmin]
     );
     if (!visible.rows.length) return null;
 
@@ -139,12 +142,11 @@ const CollectionModel = {
   },
 
   async removeItem(collectionId, userId, maneuverId, isAdmin = false) {
-    const ownerCheck = isAdmin ? 'TRUE' : 'c.user_id = $2';
     const { rowCount } = await pool.query(
       `DELETE FROM maneuvers.collection_items ci
        USING maneuvers.collections c
-       WHERE ci.collection_id = c.id AND c.id = $1 AND ${ownerCheck} AND ci.maneuver_id = $3`,
-      [collectionId, userId, maneuverId]
+       WHERE ci.collection_id = c.id AND c.id = $1 AND (c.user_id = $2 OR $4 = true) AND ci.maneuver_id = $3`,
+      [collectionId, userId, maneuverId, isAdmin]
     );
     return rowCount > 0;
   },

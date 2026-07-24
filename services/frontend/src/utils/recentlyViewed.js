@@ -15,3 +15,10 @@ export function getRecentlyViewed() {
     return [];
   }
 }
+
+// Called on delete so a removed record doesn't keep haunting the recently
+// viewed rail until it naturally ages out of the MAX-entry cap.
+export function removeView(type, id) {
+  const list = getRecentlyViewed().filter((e) => !(e.type === type && e.id === id));
+  localStorage.setItem(KEY, JSON.stringify(list));
+}

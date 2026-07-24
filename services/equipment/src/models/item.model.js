@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
 
 const SORT_EXPR = {
   name:          'i.name',
@@ -143,11 +144,17 @@ const ItemModel = {
   },
 
   async delete(id, userId, isAdmin = false) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM equipment.items WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
-      [id, userId, isAdmin]
-    );
-    return rowCount > 0;
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'equipment',
+      tableName: 'items',
+      deleteQuery: `DELETE FROM equipment.items WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      deleteParams: [id, userId, isAdmin],
+      childQueries: [
+        { key: 'collection_items', sql: `SELECT * FROM equipment.collection_items WHERE item_id = $1`, params: [id] },
+      ],
+      deletedBy: userId,
+    });
+    return !!record;
   },
 
   // GM/admin only — flags an item canonical regardless of who owns it.

@@ -1,4 +1,10 @@
 const pool = require('../config/db');
+const { deleteWithTrash } = require('../utils/trash');
+
+const CHILD_TABLES = [
+  'skills', 'known_spells', 'tree_progress', 'equipment',
+  'nephilim_breakthroughs', 'maneuvers', 'ritual_trackers', 'abilities',
+];
 
 const ALL_SKILLS = [
   'evasion','acrobatics','stealth','sleight_of_hand',
@@ -12,15 +18,14 @@ const CharacterModel = {
   // isAdmin lists every user's characters (with owner_username attached so
   // an admin can tell them apart), not just the caller's own.
   async findAllByUser(userId, isAdmin = false) {
-    const ownerClause = isAdmin ? 'TRUE' : 'c.user_id = $1';
     const { rows } = await pool.query(
       `SELECT c.*, ou.username AS owner_username,
         (SELECT COUNT(*) FROM character_sheet.skills WHERE character_id = c.id) AS skill_count
        FROM character_sheet.characters c
        LEFT JOIN auth.users ou ON ou.id = c.user_id
-       WHERE ${ownerClause}
+       WHERE c.user_id = $1 OR $2 = true
        ORDER BY c.created_at DESC`,
-      [userId]
+      [userId, isAdmin]
     );
     return rows;
   },
@@ -190,12 +195,20 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
-  async delete(id) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM character_sheet.characters WHERE id = $1`,
-      [id]
-    );
-    return rowCount > 0;
+  async delete(id, deletedBy = null) {
+    const record = await deleteWithTrash(pool, {
+      schemaName: 'character_sheet',
+      tableName: 'characters',
+      deleteQuery: `DELETE FROM character_sheet.characters WHERE id = $1 RETURNING *`,
+      deleteParams: [id],
+      childQueries: CHILD_TABLES.map((table) => ({
+        key: table,
+        sql: `SELECT * FROM character_sheet.${table} WHERE character_id = $1`,
+        params: [id],
+      })),
+      deletedBy,
+    });
+    return !!record;
   },
 };
 
