@@ -1403,36 +1403,71 @@ function MoneySection({ c, is_owner, patchCharacter }) {
 
 // ── EquipmentTab ──────────────────────────────────────────────────────────────
 
+const EQUIPMENT_SECTIONS = [
+  { type: 'weapon', addLabel: 'зброю' },
+  { type: 'armor', addLabel: 'обладунок' },
+  { type: 'artifact', addLabel: 'артефакт' },
+  { type: 'item', addLabel: 'предмет' },
+];
+
 function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
+  return (
+    <div>
+      <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
+
+      {is_owner && (
+        <div className="mb-5 flex justify-end gap-3">
+          <Link to="/equipment" className="text-sm text-accent">Спорядження →</Link>
+          <Link to="/artifacts" className="text-sm text-accent">Артефакти →</Link>
+        </div>
+      )}
+
+      {EQUIPMENT_SECTIONS.map(({ type, addLabel }) => (
+        <EquipmentTypeSection
+          key={type}
+          type={type}
+          addLabel={addLabel}
+          equipment={equipment}
+          allEquipment={allEquipment}
+          is_owner={is_owner}
+          onAdd={onAdd}
+          onPatch={onPatch}
+          onRemove={onRemove}
+        />
+      ))}
+    </div>
+  );
+}
+
+// One independent add-picker + owned-item list per equipment type (weapon,
+// armor, artifact, item) — each section searches/filters only within its own type.
+function EquipmentTypeSection({ type, addLabel, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
   const [search, setSearch]         = useState('');
   const [scope, setScope]           = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
-  const knownIds    = new Set(equipment.map(e => e.equipment_id));
+  const items = equipment.filter(e => (e.item || allEquipment.find(a => a.id === e.equipment_id))?.type === type);
+  const knownIds = new Set(equipment.map(e => e.equipment_id));
   const filteredAll = allEquipment.filter(item =>
+    item.type === type &&
     !knownIds.has(item.id) &&
     matchesScope(item, scope) &&
     item.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div>
-      <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
-
-      {is_owner && (
-        <div className="mb-5 flex items-center justify-between">
-          <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
-            {showPicker ? '✕ Закрити' : '+ Додати предмет'}
+    <div className="mb-6">
+      <div className="mb-2.5 flex items-center justify-between border-b border-border pb-1.5">
+        <span className="text-xs font-bold uppercase tracking-wide text-gold">{CATALOG_TYPES[type].label}</span>
+        {is_owner && (
+          <button className="min-h-7 rounded border border-border px-2.5 py-1 text-xs text-accent" onClick={() => setShowPicker(v => !v)}>
+            {showPicker ? '✕ Закрити' : `+ Додати ${addLabel}`}
           </button>
-          <div className="flex gap-3">
-            <Link to="/equipment" className="text-sm text-accent">Спорядження →</Link>
-            <Link to="/artifacts" className="text-sm text-accent">Артефакти →</Link>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {showPicker && (
-        <div className="mb-4 rounded-md border border-border bg-bg p-3">
+        <div className="mb-3 rounded-md border border-border bg-bg p-3">
           <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -1441,7 +1476,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних предметів</p>}
             {filteredAll.map(item => (
               <div key={item.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                <span>{item.name} <em className="text-xs text-text-dim">{CATALOG_TYPES[item.type]?.label ?? item.type}</em>{item.is_canonical && <CanonBadge className="ml-1.5" />}</span>
+                <span>{item.name}{item.is_canonical && <CanonBadge className="ml-1.5" />}</span>
                 <button className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent" onClick={() => { onAdd(item.id); setShowPicker(false); }}>+</button>
               </div>
             ))}
@@ -1449,28 +1484,17 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
         </div>
       )}
 
-      {['weapon', 'armor', 'artifact', 'item'].map(type => {
-        const items = equipment.filter(e => (e.item || allEquipment.find(a => a.id === e.equipment_id))?.type === type);
-        if (!items.length) return null;
-        return (
-          <div key={type} className="mb-6">
-            <div className="mb-2.5 border-b border-border pb-1.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-gold">{CATALOG_TYPES[type].label}</span>
-            </div>
-            {items.map(entry => (
-              <EquipmentItem key={entry.equipment_id} entry={entry}
-                item={entry.item || allEquipment.find(a => a.id === entry.equipment_id)}
-                is_owner={is_owner}
-                onRemove={() => onRemove(entry.equipment_id)}
-                onPatch={patch => onPatch(entry.equipment_id, patch)}
-              />
-            ))}
-          </div>
-        );
-      })}
-
-      {equipment.length === 0 && !showPicker && (
-        <p className="my-2 text-sm text-text-dim">Спорядження відсутнє</p>
+      {items.length === 0 && !showPicker ? (
+        <p className="mb-2 text-sm text-text-dim">Немає</p>
+      ) : (
+        items.map(entry => (
+          <EquipmentItem key={entry.equipment_id} entry={entry}
+            item={entry.item || allEquipment.find(a => a.id === entry.equipment_id)}
+            is_owner={is_owner}
+            onRemove={() => onRemove(entry.equipment_id)}
+            onPatch={patch => onPatch(entry.equipment_id, patch)}
+          />
+        ))
       )}
     </div>
   );

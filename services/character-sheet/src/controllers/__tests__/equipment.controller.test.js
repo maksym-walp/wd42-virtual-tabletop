@@ -53,7 +53,7 @@ describe('EquipmentController.add', () => {
     expect(isVisibleToUser).not.toHaveBeenCalled();
   });
 
-  it('404s when the item is not visible to the user', async () => {
+  it('404s when the item is not visible in either catalog', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(false);
     const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: 'e1' }, user: { sub: 'u1' } });
@@ -62,11 +62,12 @@ describe('EquipmentController.add', () => {
     await EquipmentController.add(req, res);
 
     expect(isVisibleToUser).toHaveBeenCalledWith('equipment.items', 'e1', 'u1');
+    expect(isVisibleToUser).toHaveBeenCalledWith('artifacts.entries', 'e1', 'u1');
     expect(res.status).toHaveBeenCalledWith(404);
     expect(EquipmentModel.add).not.toHaveBeenCalled();
   });
 
-  it('201s and adds the item when visible (no prerequisite gate for equipment)', async () => {
+  it('201s and adds the item when visible in equipment.items (no prerequisite gate for equipment)', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
     EquipmentModel.add.mockResolvedValue({ id: 'link-1', equipment_id: 'e1' });
@@ -78,6 +79,21 @@ describe('EquipmentController.add', () => {
     expect(EquipmentModel.add).toHaveBeenCalledWith('c1', 'e1');
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'link-1', equipment_id: 'e1' } });
+  });
+
+  it('201s when the item is only visible in artifacts.entries, not equipment.items', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    isVisibleToUser.mockImplementation((table) => Promise.resolve(table === 'artifacts.entries'));
+    EquipmentModel.add.mockResolvedValue({ id: 'link-1', equipment_id: 'a1' });
+    const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: 'a1' }, user: { sub: 'u1' } });
+    const res = mockRes();
+
+    await EquipmentController.add(req, res);
+
+    expect(isVisibleToUser).toHaveBeenCalledWith('equipment.items', 'a1', 'u1');
+    expect(isVisibleToUser).toHaveBeenCalledWith('artifacts.entries', 'a1', 'u1');
+    expect(EquipmentModel.add).toHaveBeenCalledWith('c1', 'a1');
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 });
 

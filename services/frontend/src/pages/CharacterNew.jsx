@@ -76,7 +76,10 @@ export default function CharacterNew() {
   // Step 2 — skills
   const [skills, setSkills] = useState({});
   const skillBudget = budgetFor(race);
-  const skillRemaining = skillBudget - Object.values(skills).reduce((s, v) => s + (v - 1), 0);
+  // The racial +1 to 4 skills is a bonus on top of the 42-point pool, not paid
+  // out of it — so those 4 "free" points are added back before computing what's left.
+  const skillBonusCount = boostedSkillKeysFor(race).size;
+  const skillRemaining = skillBudget - Object.values(skills).reduce((s, v) => s + (v - 1), 0) + skillBonusCount;
 
   // Step 3 — vitals
   const [healthDice, setHealthDice] = useState([]);

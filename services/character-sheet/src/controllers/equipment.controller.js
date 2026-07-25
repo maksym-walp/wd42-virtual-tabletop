@@ -12,7 +12,12 @@ const EquipmentController = {
     if (!await authorizeCharacterWrite(req, res)) return;
     const { equipment_id } = req.body;
     if (!equipment_id) return res.status(400).json({ message: 'equipment_id є обовʼязковим' });
-    if (!await isVisibleToUser('equipment.items', equipment_id, req.user.sub)) {
+    // equipment_id may reference either catalog — weapons/armor/items stayed in
+    // equipment.items while artifacts split out into artifacts.entries (see
+    // equipment.model.js's CATALOG union) — so visibility must check both.
+    const visible = await isVisibleToUser('equipment.items', equipment_id, req.user.sub)
+      || await isVisibleToUser('artifacts.entries', equipment_id, req.user.sub);
+    if (!visible) {
       return res.status(404).json({ message: 'Предмет не знайдено' });
     }
     const item = await EquipmentModel.add(req.params.id, equipment_id);
