@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Trash2, Check, X as XIcon, Upload } from 'lucide-react';
+import { Pencil, Trash2, Check, X as XIcon, Upload, Map, Globe, Lock, Plus } from 'lucide-react';
 import campaignApi from '../api/campaigns';
+import mapsApi from '../api/maps';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -21,6 +22,7 @@ function useDebounce(fn, delay = 600) {
 const TABS = [
   { key: 'characters', label: 'Персонажі' },
   { key: 'notes', label: 'Нотатки' },
+  { key: 'maps', label: 'Мапи' },
 ];
 
 export default function CampaignDetail() {
@@ -176,6 +178,117 @@ export default function CampaignDetail() {
       )}
       {tab === 'notes' && (
         <NotesTab campaign={campaign} isGm={isGm} onChange={setCampaign} />
+      )}
+      {tab === 'maps' && (
+        <MapsTab campaignId={campaign.id} isGm={isGm} />
+      )}
+    </div>
+  );
+}
+
+// Map "cards": links from a campaign to standalone maps (which live in the
+// separate maps service). The GM links existing maps; players just follow them.
+function MapsTab({ campaignId, isGm }) {
+  const navigate = useNavigate();
+  const [cards, setCards] = useState([]);
+  const [myMaps, setMyMaps] = useState([]);
+  const [pick, setPick] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const tasks = [campaignApi.listMapCards(campaignId)];
+    if (isGm) tasks.push(mapsApi.list());
+    Promise.all(tasks)
+      .then(([cardRows, maps]) => {
+        if (!alive) return;
+        setCards(cardRows);
+        if (maps) setMyMaps(maps.filter((m) => m.is_owner));
+      })
+      .catch(() => { if (alive) setError('Не вдалось завантажити мапи кампанії'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [campaignId, isGm]);
+
+  // Maps not yet linked, offered in the picker.
+  const linkedIds = new Set(cards.map((c) => c.map_id));
+  const available = myMaps.filter((m) => !linkedIds.has(m.id));
+
+  const handleAdd = async () => {
+    if (!pick) return;
+    setError('');
+    try {
+      await campaignApi.addMapCard(campaignId, pick);
+      const rows = await campaignApi.listMapCards(campaignId);
+      setCards(rows);
+      setPick('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалось додати мапу');
+    }
+  };
+
+  const handleRemove = async (cardId) => {
+    const previous = cards;
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
+    try {
+      await campaignApi.removeMapCard(campaignId, cardId);
+    } catch {
+      setCards(previous);
+      setError('Не вдалось прибрати мапу');
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isGm && (
+        <Card>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Додати посилання на мапу</p>
+          {available.length === 0 ? (
+            <p className="text-sm text-text-dim">
+              Немає вільних мап. Створіть їх у розділі <Link to="/maps" className="text-accent">Мапи</Link>.
+            </p>
+          ) : (
+            <div className="flex gap-2">
+              <select className={`${inputClass} flex-1`} value={pick} onChange={(e) => setPick(e.target.value)}>
+                <option value="">Оберіть мапу…</option>
+                {available.map((m) => <option key={m.id} value={m.id}>{m.name}{m.is_public ? '' : ' (приватна)'}</option>)}
+              </select>
+              <Button onClick={handleAdd} disabled={!pick}><Plus size={15} /> Додати</Button>
+            </div>
+          )}
+          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+        </Card>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-text-dim">Завантаження…</p>
+      ) : cards.length === 0 ? (
+        <EmptyState icon="🗺" title="До кампанії не прив'язано жодної мапи">
+          {isGm ? 'Додайте картку-посилання на створену мапу.' : 'Майстер ще не додав мап.'}
+        </EmptyState>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {cards.map((card) => (
+            <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}`)}>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="flex items-center gap-2 font-display text-base text-text">
+                  <Map size={16} className="text-text-dim" /> {card.map_name}
+                </h3>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-text-dim" title={card.is_public ? 'Публічна' : 'Приватна'}>
+                    {card.is_public ? <Globe size={13} /> : <Lock size={13} />}
+                  </span>
+                  {isGm && (
+                    <button onClick={(e) => { e.stopPropagation(); handleRemove(card.id); }} aria-label="Прибрати мапу" className="text-text-dim hover:text-danger">
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

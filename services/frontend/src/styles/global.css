@@ -44,3 +44,66 @@
     color: var(--color-accent);
   }
 }
+
+/* ---- Leaflet (campaign maps) ----
+   Kept unlayered on purpose: these target Leaflet's own classes, never Tailwind
+   utilities, so they don't clash with the base-layer note above. */
+.leaflet-container {
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  outline: none;
+}
+
+/* Custom emoji markers. L.divIcon is created with className 'walp-pin', which
+   replaces Leaflet's default 'leaflet-div-icon' — so there's no white box to
+   undo; we only size and animate the glyph. */
+.walp-pin {
+  background: transparent;
+  border: 0;
+}
+.walp-pin__glyph {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  transition: transform 0.12s ease;
+}
+.walp-pin__glyph:hover {
+  transform: scale(1.25);
+}
+.walp-pin__img {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  transition: transform 0.12s ease;
+}
+.walp-pin__img:hover {
+  transform: scale(1.2);
+}
+
+/* Pin-placement mode: crosshair over the whole map. */
+.map-placing .leaflet-container,
+.map-placing .leaflet-grab {
+  cursor: crosshair;
+}
+
+/* Zoom control themed to the parchment palette. */
+.leaflet-bar {
+  border: 1px solid var(--color-border);
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-bottom-color: var(--color-border);
+}
+.leaflet-bar a:hover {
+  background: var(--color-surface-hover);
+}

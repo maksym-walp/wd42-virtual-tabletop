@@ -221,6 +221,22 @@ services:
     networks:
       - walp-network
 
+  maps:
+    build:
+      context: ./services/maps
+      target: production
+    container_name: walp-maps
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3013
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless. Так само єдиний
   # prod-сервіс із volumes: правило «без volumes у prod» стосується
   # bind-монтування вихідників, а не named volume зі сховищем файлів.
@@ -274,6 +290,7 @@ services:
       - abilities
       - campaigns
       - artifacts
+      - maps
       - media
       - frontend
     networks:

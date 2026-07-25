@@ -12,9 +12,11 @@
     "@fontsource/lora": "^5.2.8",
     "@tailwindcss/vite": "^4.3.2",
     "axios": "^1.6.8",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.23.1",
     "tailwindcss": "^4.3.2"
   },

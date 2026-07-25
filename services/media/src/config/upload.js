@@ -9,7 +9,7 @@ const MIME_EXT = {
   'image/gif':  '.gif',
 };
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ; nginx пропускає 12m на цей location
+const MAX_BYTES = 25 * 1024 * 1024; // 25 МБ (високороздільні мапи); nginx на цьому location — 25M
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/uploads';
 
 // memoryStorage, а не diskStorage: destination() у diskStorage спрацьовує в

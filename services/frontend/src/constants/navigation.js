@@ -1,4 +1,4 @@
-import { Users, BookOpen, Swords, Zap, Star, TreePine, CircleUserRound, Castle, Gem } from 'lucide-react';
+import { Users, BookOpen, Swords, Zap, Star, TreePine, CircleUserRound, Castle, Gem, Map } from 'lucide-react';
 
 // Desktop Navbar: main inline links (logo already covers Home).
 export const NAV_MAIN_ITEMS = [
@@ -9,6 +9,7 @@ export const NAV_MAIN_ITEMS = [
 
 // Desktop Navbar: "Ще" dropdown.
 export const NAV_MORE_ITEMS = [
+  { to: '/maps',       label: 'Мапи',        icon: Map },
   { to: '/artifacts',  label: 'Артефакти',   icon: Gem },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
   { to: '/abilities',  label: 'Вміння',      icon: Star },
@@ -26,6 +27,7 @@ export const MOBILE_PRIMARY_NAV_ITEMS = [
 ];
 
 export const MOBILE_MORE_NAV_ITEMS = [
+  { to: '/maps',       label: 'Мапи',        icon: Map },
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
   { to: '/abilities',  label: 'Вміння',      icon: Star },

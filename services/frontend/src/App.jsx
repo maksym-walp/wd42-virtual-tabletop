@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { DiceProvider } from './context/DiceContext';
+import { MarkerTypesProvider } from './context/MarkerTypesContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
@@ -38,6 +39,9 @@ import CharacterSheet from './pages/CharacterSheet';
 import CampaignList from './pages/CampaignList';
 import CampaignNew from './pages/CampaignNew';
 import CampaignDetail from './pages/CampaignDetail';
+import MapList from './pages/MapList';
+import LocationLibrary from './pages/LocationLibrary';
+import MapView from './pages/MapView';
 
 export default function App() {
   return (
@@ -45,6 +49,7 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <DiceProvider>
+           <MarkerTypesProvider>
             <div className="flex h-dvh flex-col">
               <Navbar />
               <div className="flex-1 overflow-y-auto">
@@ -111,12 +116,16 @@ export default function App() {
                   <Route path="/campaigns" element={<PrivateRoute><CampaignList /></PrivateRoute>} />
                   <Route path="/campaigns/new" element={<PrivateRoute><CampaignNew /></PrivateRoute>} />
                   <Route path="/campaigns/:id" element={<PrivateRoute><CampaignDetail /></PrivateRoute>} />
+                  <Route path="/maps" element={<PrivateRoute><MapList /></PrivateRoute>} />
+                  <Route path="/maps/locations" element={<PrivateRoute><LocationLibrary /></PrivateRoute>} />
+                  <Route path="/maps/:id" element={<PrivateRoute><MapView /></PrivateRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>
               <BottomNav />
               <DiceWidget />
             </div>
+           </MarkerTypesProvider>
           </DiceProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -231,6 +231,23 @@ services:
     networks:
       - walp-network
 
+  maps:
+    build:
+      context: ./services/maps
+      target: development
+    container_name: walp-maps
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3013
+    volumes:
+      - ./services/maps/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless, уся метаінформація
   # про файли живе в БД інших сервісів (campaign_gallery, characters.image_url).
   media:
@@ -256,6 +273,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./services/frontend/src:/app/src:delegated
+      # public/ теж монтуємо, щоб редаговані на льоту файли (map-markers/
+      # types.json та іконки) віддавались vite без перебілду образу.
+      - ./services/frontend/public:/app/public:delegated
     networks:
       - walp-network
 
@@ -282,6 +302,7 @@ services:
       - abilities
       - campaigns
       - artifacts
+      - maps
       - media
       - frontend
     networks:

@@ -3,6 +3,7 @@ const requireAuth = require('../middleware/auth.middleware');
 const CampaignController = require('../controllers/campaign.controller');
 const CampaignCharacterController = require('../controllers/campaign-character.controller');
 const CampaignGalleryController = require('../controllers/campaign-gallery.controller');
+const CampaignMapController = require('../controllers/campaign-map.controller');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -26,5 +27,9 @@ router.delete('/:id/characters/:characterId', wrap(CampaignCharacterController.r
 router.get('/:id/gallery', wrap(CampaignGalleryController.list));
 router.post('/:id/gallery', wrap(CampaignGalleryController.add));
 router.delete('/:id/gallery/:imageId', wrap(CampaignGalleryController.remove));
+
+router.get('/:id/maps', wrap(CampaignMapController.list));
+router.post('/:id/maps', wrap(CampaignMapController.add));
+router.delete('/:id/maps/:cardId', wrap(CampaignMapController.remove));
 
 module.exports = router;

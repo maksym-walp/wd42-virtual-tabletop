@@ -21,7 +21,7 @@ app.use((err, req, res, next) => {
   // Зауваж: при завеликому тілі nginx зазвичай відхиляє запит сам (413 з
   // HTML-тілом) ще до Node — сюди доходить лише те, що пролізло крізь нього.
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ message: 'Файл завеликий — максимум 10 МБ' });
+    return res.status(413).json({ message: 'Файл завеликий — максимум 25 МБ' });
   }
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({ message: 'Очікується одне поле файлу з назвою "file"' });

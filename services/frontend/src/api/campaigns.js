@@ -73,6 +73,22 @@ const campaignApi = {
   async removeGalleryImage(id, imageId) {
     await api.delete(`${BASE}/${id}/gallery/${imageId}`);
   },
+
+  // Map "cards": a campaign references standalone maps (maps live in the maps
+  // service; here we only keep links to them).
+  async listMapCards(id) {
+    const { data } = await api.get(`${BASE}/${id}/maps`);
+    return data.maps;
+  },
+
+  async addMapCard(id, map_id) {
+    const { data } = await api.post(`${BASE}/${id}/maps`, { map_id });
+    return data.card;
+  },
+
+  async removeMapCard(id, cardId) {
+    await api.delete(`${BASE}/${id}/maps/${cardId}`);
+  },
 };
 
 export default campaignApi;

@@ -2,17 +2,17 @@ import api from './client';
 
 const BASE = '/api/media';
 
-// Ліміт дублює серверний (multer) і nginx (client_max_body_size 12m).
+// Ліміт дублює серверний (multer) і nginx (client_max_body_size 25M).
 // Перевірка на клієнті потрібна не для безпеки, а щоб не ганяти даремно
 // мегабайти й показати зрозумілу помилку замість HTML-сторінки 413 від nginx.
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
 
 const mediaApi = {
   /**
    * Завантажує файл і повертає site-relative URL (/uploads/...).
-   * entityType: 'campaign-gallery' | 'character' | 'item'
-   * entityId потрібен для перших двох.
+   * entityType: 'campaign-gallery' | 'map-lenses' | 'character' | 'item'
+   * entityId потрібен для всіх, окрім 'item' (для 'map-lenses' — це id кампанії).
    */
   async upload(file, { entityType, entityId } = {}) {
     const fd = new FormData();

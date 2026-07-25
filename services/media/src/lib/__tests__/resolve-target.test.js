@@ -16,6 +16,18 @@ describe('valid targets', () => {
     });
   });
 
+  it('maps map-lenses under the map id in a lenses/ subdirectory', () => {
+    expect(resolveTarget('map-lenses', UUID, DIR)).toEqual({
+      relDir: `maps/${UUID}/lenses`,
+      absDir: `/uploads/maps/${UUID}/lenses`,
+    });
+  });
+
+  it('maps location to a flat maps/locations directory and ignores entity_id', () => {
+    expect(resolveTarget('location', undefined, DIR).relDir).toBe('maps/locations');
+    expect(resolveTarget('location', '../../etc', DIR).relDir).toBe('maps/locations');
+  });
+
   it('maps character under the character id', () => {
     expect(resolveTarget('character', UUID, DIR)).toEqual({
       relDir: `characters/${UUID}`,
@@ -46,7 +58,7 @@ describe('entity_type whitelist', () => {
 });
 
 describe('entity_id validation', () => {
-  it.each(['campaign-gallery', 'character'])('requires an id for %s', (type) => {
+  it.each(['campaign-gallery', 'map-lenses', 'character'])('requires an id for %s', (type) => {
     expectBadRequest(() => resolveTarget(type, undefined, DIR));
   });
 
