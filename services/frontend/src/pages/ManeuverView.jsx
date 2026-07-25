@@ -5,6 +5,7 @@ import api from '../api/client';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
+import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -80,7 +81,7 @@ export default function ManeuverView() {
 
         {maneuver.description && (
           <Section title="Опис">
-            <p className="text-[0.95rem] leading-relaxed text-text">{maneuver.description}</p>
+            <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={maneuver.description} /></p>
           </Section>
         )}
 

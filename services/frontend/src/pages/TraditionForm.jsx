@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import traditionsApi from '../api/traditions';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import Button from '../components/ui/Button';
 
 const EMPTY = { name: '', description: '', founders: '' };
@@ -86,13 +87,12 @@ export default function TraditionForm() {
               maxLength={200}
             />
           </Field>
-          <Field label="Опис">
-            <textarea
-              className={`${inputClass} resize-y`} rows={4} value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Історія та принципи традиції..."
-            />
-          </Field>
+          <SmartTextarea
+            label="Опис"
+            rows={4} value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="Історія та принципи традиції..."
+          />
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

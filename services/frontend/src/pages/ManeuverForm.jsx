@@ -5,6 +5,7 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import { DURATION_OPTIONS } from '../constants/maneuvers';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
@@ -107,8 +108,7 @@ export default function ManeuverForm() {
         </FormSection>
 
         <FormSection title="Опис">
-          <textarea
-            className={`${inputClass} resize-y`}
+          <SmartTextarea
             value={form.description} onChange={set('description')}
             rows={4}
             placeholder="Що відбувається механічно, коли персонаж виконує цей маневр..."

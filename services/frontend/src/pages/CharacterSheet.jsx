@@ -23,7 +23,7 @@ import Lightbox from '../components/ui/Lightbox';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import IntInput from '../components/ui/IntInput';
-import DiceFormulaText from '../components/DiceFormulaText';
+import SmartTextReader from '../components/SmartTextReader';
 import RollButton from '../components/RollButton';
 import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
@@ -1286,12 +1286,12 @@ function SpellDetailModal({ spell, spellId, onClose }) {
           </div>
           {spell.narrative_desc && (
             <p className="mb-3 text-sm italic leading-relaxed text-text-dim">
-              <DiceFormulaText text={spell.narrative_desc} />
+              <SmartTextReader text={spell.narrative_desc} />
             </p>
           )}
           {spell.mechanical_desc && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">
-              <DiceFormulaText text={spell.mechanical_desc} />
+              <SmartTextReader text={spell.mechanical_desc} />
             </p>
           )}
         </div>

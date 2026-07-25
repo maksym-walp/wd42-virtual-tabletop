@@ -5,6 +5,7 @@ import api from '../api/client';
 import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -96,7 +97,7 @@ export default function EquipmentView() {
 
         {item.description && (
           <Section title="Опис">
-            <p className="text-[0.95rem] leading-relaxed text-text">{item.description}</p>
+            <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={item.description} /></p>
           </Section>
         )}
 

@@ -11,6 +11,7 @@ import {
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
@@ -327,22 +328,18 @@ export default function SpellForm() {
 
         {/* — Описи — */}
         <FormSection title="Описи" accentColor={activeType.color}>
-          <Field label="Механічний опис" className="mb-4">
-            <textarea
-              className={`${inputClass} resize-y`}
-              value={form.mechanical_desc} onChange={set('mechanical_desc')}
-              rows={4}
-              placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
-            />
-          </Field>
-          <Field label="Наративний опис" className="mb-4">
-            <textarea
-              className={`${inputClass} resize-y italic`}
-              value={form.narrative_desc} onChange={set('narrative_desc')}
-              rows={3}
-              placeholder="Як це виглядає та відчувається у світі гри..."
-            />
-          </Field>
+          <SmartTextarea
+            label="Механічний опис" className="mb-4"
+            value={form.mechanical_desc} onChange={set('mechanical_desc')}
+            rows={4}
+            placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
+          />
+          <SmartTextarea
+            label="Наративний опис" className="mb-4"
+            value={form.narrative_desc} onChange={set('narrative_desc')}
+            rows={3}
+            placeholder="Як це виглядає та відчувається у світі гри..."
+          />
           <Field label="Творець" hint="Лорне поле — напр. ім'я архімага, що винайшов це заклинання">
             <input
               type="text" className={inputClass} value={form.lore_creator} onChange={set('lore_creator')}

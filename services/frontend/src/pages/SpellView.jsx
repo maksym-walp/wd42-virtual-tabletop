@@ -6,7 +6,7 @@ import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature 
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
-import DiceFormulaText from '../components/DiceFormulaText';
+import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
 
@@ -128,7 +128,7 @@ export default function SpellView() {
         {spell.mechanical_desc && (
           <Section title="Механічний опис">
             <p className="text-[0.95rem] leading-relaxed text-text">
-              <DiceFormulaText text={spell.mechanical_desc} />
+              <SmartTextReader text={spell.mechanical_desc} />
             </p>
           </Section>
         )}
@@ -136,7 +136,7 @@ export default function SpellView() {
         {spell.narrative_desc && (
           <Section title="Наративний опис">
             <p className="text-[0.95rem] italic leading-relaxed text-text-dim">
-              <DiceFormulaText text={spell.narrative_desc} />
+              <SmartTextReader text={spell.narrative_desc} />
             </p>
           </Section>
         )}

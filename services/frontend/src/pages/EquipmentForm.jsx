@@ -7,6 +7,7 @@ import {
 } from '../constants/equipment';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
@@ -209,8 +210,7 @@ export default function EquipmentForm() {
         </FormSection>
 
         <FormSection title="Опис" accentColor={activeType.color}>
-          <textarea
-            className={`${inputClass} resize-y`}
+          <SmartTextarea
             value={form.description} onChange={set('description')}
             rows={4}
             placeholder="Що це за предмет, як виглядає, які має властивості..."
