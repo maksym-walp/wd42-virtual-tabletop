@@ -11,9 +11,6 @@ CREATE TABLE IF NOT EXISTS character_sheet.characters (
                          CHECK (archetype IN ('fighter', 'spellcaster', 'rogue')),
     race                 VARCHAR(20)  NOT NULL
                          CHECK (race IN ('human', 'gnome', 'dwarf', 'elf', 'sangvi', 'nephilim', 'other')),
-    race_ancestry        VARCHAR(20)
-                         CHECK (race_ancestry IS NULL OR race_ancestry IN
-                           ('human','gnome','dwarf','elf','nephilim','other')),
     is_public            BOOLEAN      NOT NULL DEFAULT true,
     backstory            TEXT,
     notes                TEXT,

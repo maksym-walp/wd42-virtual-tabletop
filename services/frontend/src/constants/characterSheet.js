@@ -25,36 +25,47 @@ export const ARCHETYPE_COLORS = {
 
 export const RACES = {
   human: {
-    label: 'Людина', ability: 'Перерозподіл',
-    description: 'Швидкоплинна й адаптивна натура — при кожному новому вузлі дерева розвитку може перерозподілити один кінцевий вузол.',
+    label: 'Людина', ability: 'Спритність від народження',
+    description: 'Швидкоплинна й адаптивна натура — навички Спритності при створенні персонажа починаються з 2 замість 1.',
   },
   gnome: {
-    label: 'Гном', ability: 'Унікальні мости',
-    description: 'Постійне прагнення до розвитку — доступ до унікальних мостових зв\'язків між гілками різних архетипів.',
+    label: 'Гном', ability: 'Природна мудрість',
+    description: 'Розважливість, властива народу гномів, — навички Мудрості при створенні персонажа починаються з 2 замість 1.',
   },
   dwarf: {
-    label: 'Дворф', ability: 'Унікальні мости',
-    description: 'Постійне прагнення до розвитку — доступ до унікальних мостових зв\'язків між гілками різних архетипів.',
+    label: 'Дворф', ability: 'Міцна статура',
+    description: 'Витривала й загартована природа — навички Тілобудови при створенні персонажа починаються з 2 замість 1.',
   },
   elf: {
-    label: 'Ельф', ability: 'Додаткові вузли',
-    description: 'Фейське походження — на дереві розвитку має додаткові унікальні вузли понад стандартні.',
+    label: 'Ельф', ability: 'Гострий розум',
+    description: 'Фейське походження живить кмітливість — навички Інтелекту при створенні персонажа починаються з 2 замість 1.',
   },
   sangvi: {
-    label: 'Санґви', ability: 'Спадок пращурів', hasAncestry: true,
-    description: 'Нащадок кількох народів — при створенні обирає особливість одного з народів-пращурів.',
+    label: 'Санґви', ability: 'Розмаїття кровей',
+    description: 'Нащадок кількох народів одразу — замість бонусу до однієї характеристики отримує на 4 очки більше при розподілі навичок.',
   },
   nephilim: {
-    label: 'Нефілім', ability: 'Прорив',
-    description: 'Надприродне походження — може здійснити прорив, перескочивши через вузол дерева розвитку (обмежена кількість разів).',
+    label: 'Нефілім', ability: 'Надприродна харизма',
+    description: 'Надприродне походження вирізняє серед інших — навички Харизми при створенні персонажа починаються з 2 замість 1.',
   },
   other: {
-    label: 'Інший народ', ability: 'Замінені вузли',
-    description: 'Принципово інший шлях розвитку — частина стандартних вузлів дерева замінена унікальними.',
+    label: 'Інший народ', ability: '—',
+    description: 'Принципово інший шлях, що не підпадає під жодну з відомих особливостей.',
   },
 };
 
-export const RACE_ANCESTRY_OPTIONS = ['human', 'gnome', 'dwarf', 'elf', 'nephilim', 'other'];
+// key = RACES key, value = CHARACTERISTICS[].key whose 4 skills default to 2 (not 1)
+// on new-character creation. sangvi/other are intentionally absent — sangvi gets
+// SANGVI_BONUS_BUDGET extra points instead, other gets no bonus at all.
+export const RACE_BONUS_CHARACTERISTIC = {
+  human: 'agility',
+  elf: 'intellect',
+  dwarf: 'physique',
+  gnome: 'wisdom',
+  nephilim: 'charisma',
+};
+
+export const SANGVI_BONUS_BUDGET = 4;
 
 // Characteristic groups: each contains 4 skills
 export const CHARACTERISTICS = [

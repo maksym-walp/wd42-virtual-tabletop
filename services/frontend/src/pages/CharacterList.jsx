@@ -75,7 +75,6 @@ function CharacterCard({ character: c, onDelete, onClick }) {
           <h2 className="font-display text-lg text-text">{c.name}</h2>
           <p className="text-sm text-text-dim">
             {archetype?.label} · {race?.label}
-            {c.race_ancestry ? ` (${RACES[c.race_ancestry]?.label ?? c.race_ancestry})` : ''}
           </p>
         </div>
         {archetypeColor && (

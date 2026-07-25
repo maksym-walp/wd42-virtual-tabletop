@@ -176,18 +176,6 @@ export default function CharacterSheet({ publicView = false }) {
     const entry = await characterApi.unlockNode(id, nodeId);
     if (entry) setData(prev => ({ ...prev, tree: [...(prev.tree || []), entry] }));
   };
-  const lockTreeNode = async (nodeId) => {
-    await characterApi.lockNode(id, nodeId);
-    setData(prev => ({ ...prev, tree: (prev.tree || []).filter(t => t.node_id !== nodeId) }));
-  };
-  const useBreakthrough = async (nodeId) => {
-    await characterApi.useBreakthrough(id, nodeId);
-    setData(prev => ({ ...prev, nephilim_breakthroughs: [...(prev.nephilim_breakthroughs || []), nodeId] }));
-  };
-  const revokeBreakthrough = async (nodeId) => {
-    await characterApi.revokeBreakthrough(id, nodeId);
-    setData(prev => ({ ...prev, nephilim_breakthroughs: (prev.nephilim_breakthroughs || []).filter(n => n !== nodeId) }));
-  };
 
   const addSpell    = async (spellId) => {
     if (spells.length >= maxKnownSpells) return;
@@ -339,7 +327,6 @@ export default function CharacterSheet({ publicView = false }) {
             <span style={{ color: ARCHETYPE_COLORS[c.archetype]?.color }} className="font-semibold">
               {archetype.label}
             </span> · {race.label}
-            {c.race_ancestry ? ` (${RACES[c.race_ancestry]?.label ?? c.race_ancestry})` : ''}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-text-dim">
             <button
@@ -532,13 +519,9 @@ export default function CharacterSheet({ publicView = false }) {
           <TreeTab
             c={c}
             tree={data.tree || []}
-            nephilimBreakthroughs={data.nephilim_breakthroughs || []}
             is_owner={is_owner}
             patchCharacter={patchCharacter}
             onUnlock={unlockTreeNode}
-            onLock={lockTreeNode}
-            onUseBreakthrough={useBreakthrough}
-            onRevokeBreakthrough={revokeBreakthrough}
             allAbilities={allAbilities}
             allSpells={allSpells}
             allManeuvers={allManeuvers}
@@ -1861,11 +1844,7 @@ function LuckTab({ c, is_owner, patchCharacter }) {
 
 const TREE_NODE_R = 28;
 
-function getEffectiveRace(c) {
-  return c.race === 'sangvi' ? (c.race_ancestry || 'human') : c.race;
-}
-
-function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onUnlock, onLock, onUseBreakthrough, allAbilities, allSpells, allManeuvers }) {
+function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, allSpells, allManeuvers }) {
   const [nodes, setNodes]               = useState([]);
   const [edges, setEdges]               = useState([]);
   const [treeLoading, setTreeLoading]   = useState(true);
@@ -1903,58 +1882,23 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
     pendingCenterRef.current = false;
   }, [nodes, treeLoading, setTransform]);
 
-  const effectiveRace  = getEffectiveRace(c);
-  const isNephilimRace = effectiveRace === 'nephilim';
-  const canSeeBridges  = effectiveRace === 'gnome' || effectiveRace === 'dwarf';
-
-  // ── Node visibility by race ──
-  let visibleNodes;
-  if (effectiveRace === 'elf') {
-    visibleNodes = nodes.filter(n => !n.races?.length || n.races.includes('elf'));
-  } else if (effectiveRace === 'other') {
-    const replacedIds = new Set(
-      nodes.filter(n => n.races?.includes('other') && n.replaces_node_id).map(n => n.replaces_node_id)
-    );
-    visibleNodes = nodes.filter(n => n.races?.includes('other') || (!n.races?.length && !replacedIds.has(n.id)));
-  } else {
-    visibleNodes = nodes.filter(n => !n.races?.length || n.races.includes(effectiveRace));
-  }
-  const visibleIdSet = new Set(visibleNodes.map(n => n.id));
+  const visibleIdSet = new Set(nodes.map(n => n.id));
 
   // ── Edge visibility ──
-  const visibleEdges = edges.filter(e => {
-    if (!visibleIdSet.has(e.source_id) || !visibleIdSet.has(e.target_id)) return false;
-    if (e.edge_type === 'bridge' && !canSeeBridges) return false;
-    return true;
-  });
+  const visibleEdges = edges.filter(e => visibleIdSet.has(e.source_id) && visibleIdSet.has(e.target_id));
 
   // ── Unlocked set (root nodes auto-included) ──
-  const rootNodeIds = new Set(visibleNodes.filter(n => n.is_root).map(n => n.id));
+  const rootNodeIds = new Set(nodes.filter(n => n.is_root).map(n => n.id));
   const unlockedIds = new Set([...(tree || []).map(t => t.node_id), ...rootNodeIds]);
 
-  // ── Nephilim breakthroughs (skipped nodes — purely visual, not treated as unlocked) ──
-  const breakthroughSet        = new Set(nephilimBreakthroughs || []);
-  const earnedBreakthroughs = isNephilimRace
-    ? Math.max(0, Math.floor((-9 + Math.sqrt(81 + 8 * unlockedIds.size)) / 2))
-    : 0;
-  const availableBreakthroughs = isNephilimRace
-    ? Math.max(0, earnedBreakthroughs - breakthroughSet.size)
-    : 0;
-  const nextBreakthroughThreshold = isNephilimRace
-    ? (earnedBreakthroughs + 1) * (earnedBreakthroughs + 10) / 2
-    : 0;
-  const nodesUntilNextBreakthrough = isNephilimRace
-    ? nextBreakthroughThreshold - unlockedIds.size
-    : 0;
-
   const budget    = c.dev_points || 0;
-  const spent     = visibleNodes.filter(n => unlockedIds.has(n.id) && !n.is_root).reduce((s, n) => s + (n.cost || 0), 0);
+  const spent     = nodes.filter(n => unlockedIds.has(n.id) && !n.is_root).reduce((s, n) => s + (n.cost || 0), 0);
   const remaining = budget - spent;
 
   const checkCanUnlock = (node) => {
     if (unlockedIds.has(node.id)) return { unlocked: true };
 
-    const prereqEdges = edges.filter(e => e.target_id === node.id && e.edge_type !== 'bridge');
+    const prereqEdges = edges.filter(e => e.target_id === node.id);
     let prereqsMet = true;
     if (prereqEdges.length > 0) {
       const required = prereqEdges.filter(e => e.edge_type === 'required');
@@ -1962,22 +1906,6 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
       prereqsMet =
         required.every(e => unlockedIds.has(e.source_id)) &&
         (optional.length === 0 || optional.some(e => unlockedIds.has(e.source_id)));
-    }
-
-    // Breakthrough: skip exactly one unmet required prereq (nephilim only, own archetype)
-    let breakthrough = null;
-    if (isNephilimRace && availableBreakthroughs > 0 && !prereqsMet) {
-      const required = prereqEdges.filter(e => e.edge_type === 'required');
-      const unmet    = required.filter(e => !unlockedIds.has(e.source_id));
-      if (unmet.length === 1) {
-        const skippedId   = unmet[0].source_id;
-        if (!breakthroughSet.has(skippedId)) {
-          const skippedReqs = edges.filter(e => e.target_id === skippedId && e.edge_type === 'required');
-          if (skippedReqs.every(e => unlockedIds.has(e.source_id))) {
-            breakthrough = { skippedNodeId: skippedId };
-          }
-        }
-      }
     }
 
     const hasPoints    = node.cost > 0;
@@ -1994,27 +1922,12 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
       }
     }
 
-    return { unlocked: false, prereqsMet, points, narrative, bothAvail, breakthrough };
+    return { unlocked: false, prereqsMet, points, narrative, bothAvail };
   };
-
-  // Human redistribution: can manually revoke any terminal (leaf) unlocked node
-  const selectedIsTerminal = selectedNode &&
-    unlockedIds.has(selectedNode.id) &&
-    !selectedNode.is_root &&
-    edges.filter(e => e.source_id === selectedNode.id && e.edge_type !== 'bridge')
-         .every(e => !unlockedIds.has(e.target_id));
-  const canRevoke = is_owner && effectiveRace === 'human' && !!selectedIsTerminal;
 
   // ── Handlers ──
   const handleUnlock = async (nodeId) => {
     await onUnlock(nodeId);
-    setSelectedNode(null);
-  };
-
-  const handleBreakthrough = async (targetNodeId, skippedNodeId) => {
-    await onUseBreakthrough(skippedNodeId);
-    await onUnlock(skippedNodeId);
-    await onUnlock(targetNodeId);
     setSelectedNode(null);
   };
 
@@ -2027,8 +1940,8 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
   };
 
   const edgePoints = (srcId, dstId) => {
-    const s = visibleNodes.find(n => n.id === srcId);
-    const d = visibleNodes.find(n => n.id === dstId);
+    const s = nodes.find(n => n.id === srcId);
+    const d = nodes.find(n => n.id === dstId);
     if (!s || !d) return null;
     const dx = d.pos_x - s.pos_x, dy = d.pos_y - s.pos_y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -2079,22 +1992,7 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
             <span className="text-sm text-text-dim">
               Залишилось: <strong className={remaining >= 0 ? 'text-sage' : 'text-danger'}>{remaining}</strong>
             </span>
-            {isNephilimRace && (
-              <>
-                <span className="text-sm text-border">·</span>
-                <span className="text-sm text-text-dim">
-                  Прориви: <strong className={availableBreakthroughs > 0 ? 'text-accent' : 'text-text-dim'}>{availableBreakthroughs}</strong>
-                </span>
-                <span className="text-sm text-border">·</span>
-                <span className="text-sm text-text-dim">
-                  До прориву: <strong className="text-accent">{nodesUntilNextBreakthrough}</strong>
-                </span>
-              </>
-            )}
           </div>
-          {RACES[c.race] && (
-            <span className="rounded border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs text-accent">{RACES[c.race].ability}</span>
-          )}
         </div>
 
       {/* Canvas */}
@@ -2114,9 +2012,6 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
             <marker id="tree-tab-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
               <path d="M0,0 L0,6 L7,3 z" fill="#8a6a3e" />
             </marker>
-            <marker id="tree-tab-arrow-bridge" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L7,3 z" fill="#3d2350" />
-            </marker>
           </defs>
           <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
             {visibleEdges.map(edge => {
@@ -2125,38 +2020,33 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
               const srcUnlocked = unlockedIds.has(edge.source_id);
               const dstUnlocked = unlockedIds.has(edge.target_id);
               const bothUnlocked = srcUnlocked && dstUnlocked;
-              const isBridge   = edge.edge_type === 'bridge';
               const isOptional = edge.edge_type === 'optional';
               const stroke = bothUnlocked ? '#3f5b3a'
-                : isBridge   ? '#3d2350'
                 : isOptional ? '#a68a55'
                 : '#8a6a3e';
               return (
                 <line key={edge.id}
                   x1={pts.x1} y1={pts.y1} x2={pts.x2} y2={pts.y2}
                   stroke={stroke}
-                  strokeWidth={isBridge || isOptional ? 1.5 : 2}
-                  strokeDasharray={isBridge ? '8,3' : isOptional ? '5,4' : undefined}
-                  markerEnd={isBridge ? 'url(#tree-tab-arrow-bridge)' : 'url(#tree-tab-arrow)'}
+                  strokeWidth={isOptional ? 1.5 : 2}
+                  strokeDasharray={isOptional ? '5,4' : undefined}
+                  markerEnd="url(#tree-tab-arrow)"
                   style={{ pointerEvents: 'none' }}
                 />
               );
             })}
 
-            {visibleNodes.map(node => {
+            {nodes.map(node => {
               const unlocked   = unlockedIds.has(node.id);
-              const skipped    = !unlocked && breakthroughSet.has(node.id);
               const selected   = selectedNode?.id === node.id;
               const avail      = checkCanUnlock(node);
               const stroke = selected   ? '#5b440a'
                 : unlocked  ? '#3f5b3a'
-                : skipped   ? '#5a3a6a'
                 : avail.points      ? '#8a5a2b'
                 : avail.narrative   ? '#5a3a6a'
-                : avail.breakthrough ? '#3d2350'
                 : '#b5ab91';
-              const fill      = unlocked ? '#dce8d6' : skipped ? '#e3d6e8' : '#f4efe4';
-              const textColor = unlocked ? '#3f5b3a' : skipped ? '#5a3a6a' : '#5b440a';
+              const fill      = unlocked ? '#dce8d6' : '#f4efe4';
+              const textColor = unlocked ? '#3f5b3a' : '#5b440a';
 
               return (
                 <g key={node.id}
@@ -2165,7 +2055,7 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
                   onClick={e => { e.stopPropagation(); setSelectedNode(prev => prev?.id === node.id ? null : node); }}
                 >
                   <circle r={TREE_NODE_R} fill={fill}
-                    stroke={stroke} strokeWidth={selected || unlocked || skipped ? 2.5 : 1.5} />
+                    stroke={stroke} strokeWidth={selected || unlocked ? 2.5 : 1.5} />
                   {unlocked && !node.is_root && (
                     <circle r={TREE_NODE_R + 4} fill="none" stroke="#3f5b3a"
                       strokeWidth={1} opacity={0.25} style={{ pointerEvents: 'none' }} />
@@ -2185,10 +2075,9 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
                     {node.title.length > 18 ? node.title.slice(0, 16) + '…' : node.title}
                   </text>
                   <text x={TREE_NODE_R + 8} y={18} textAnchor="start" fontSize={9}
-                    fill={unlocked ? '#3f5b3a' : skipped ? '#5a3a6a' : '#8a6a3e'}
+                    fill={unlocked ? '#3f5b3a' : '#8a6a3e'}
                     style={{ pointerEvents: 'none', userSelect: 'none' }}>
                     {unlocked ? (node.is_root ? '★ корінь' : '✓ відкрито')
-                      : skipped ? '↷ пропущено'
                       : node.cost > 0 && node.narrative_condition ? `${node.cost} оч. або наратив`
                       : node.cost > 0 ? `${node.cost} ${node.cost === 1 ? 'очко' : 'очків'}`
                       : 'наратив'}
@@ -2199,26 +2088,21 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
           </g>
         </svg>
 
-        {visibleNodes.length === 0 && (
+        {nodes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
-            {nodes.length === 0 ? 'Дерево розвитку ще порожнє' : 'Немає вузлів для цього архетипу'}
+            Дерево розвитку ще порожнє
           </div>
         )}
 
         {selectedNode && (
           <TreeNodePanel
             node={selectedNode}
-            nodes={visibleNodes}
+            nodes={nodes}
             edges={edges}
             unlocked={unlockedIds.has(selectedNode.id)}
-            skipped={breakthroughSet.has(selectedNode.id)}
             canUnlock={checkCanUnlock(selectedNode)}
-            availableBreakthroughs={availableBreakthroughs}
             is_owner={is_owner}
-            canRevoke={canRevoke}
             onUnlock={() => handleUnlock(selectedNode.id)}
-            onLock={() => { onLock(selectedNode.id); setSelectedNode(null); }}
-            onBreakthrough={(skippedNodeId) => handleBreakthrough(selectedNode.id, skippedNodeId)}
             onClose={() => setSelectedNode(null)}
             allAbilities={allAbilities}
             allSpells={allSpells}
@@ -2230,8 +2114,8 @@ function TreeTab({ c, tree, nephilimBreakthroughs, is_owner, patchCharacter, onU
   );
 }
 
-function TreeNodePanel({ node, nodes, edges, unlocked, skipped, canUnlock, availableBreakthroughs, is_owner, canRevoke, onUnlock, onLock, onBreakthrough, onClose, allAbilities, allSpells, allManeuvers }) {
-  const prereqEdges = edges.filter(e => e.target_id === node.id && e.edge_type !== 'bridge');
+function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUnlock, onClose, allAbilities, allSpells, allManeuvers }) {
+  const prereqEdges = edges.filter(e => e.target_id === node.id);
   const prereqs = prereqEdges
     .map(e => ({ node: nodes.find(n => n.id === e.source_id), type: e.edge_type }))
     .filter(x => x.node);
@@ -2317,38 +2201,29 @@ function TreeNodePanel({ node, nodes, edges, unlocked, skipped, canUnlock, avail
           </>
         )}
         {unlocked && <span className="rounded border border-sage/30 bg-sage/10 px-2 py-1 text-sm text-sage">✓ відкрито</span>}
-        {skipped  && <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-sm text-accent">↷ пропущено</span>}
       </div>
 
       {is_owner && (
         <div className="mt-1 flex flex-wrap gap-2">
-          {!unlocked && !skipped && canUnlock.bothAvail && (
+          {!unlocked && canUnlock.bothAvail && (
             <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
               Витратити {node.cost} {node.cost === 1 ? 'очко' : 'очків'} + наратив
             </button>
           )}
-          {!unlocked && !skipped && canUnlock.points && (
+          {!unlocked && canUnlock.points && (
             <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
               Витратити {node.cost} {node.cost === 1 ? 'очко' : 'очків'}
             </button>
           )}
-          {!unlocked && !skipped && canUnlock.narrative && (
+          {!unlocked && canUnlock.narrative && (
             <button className="min-h-9 rounded border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent" onClick={onUnlock}>
               Відкрити наративно
             </button>
           )}
-          {!unlocked && !skipped && canUnlock.breakthrough && (
-            <button className="min-h-9 rounded border border-accent/60 bg-accent/20 px-3 py-1.5 text-sm font-semibold text-accent" onClick={() => onBreakthrough(canUnlock.breakthrough.skippedNodeId)}>
-              Прорив ({availableBreakthroughs})
-            </button>
-          )}
-          {!unlocked && !skipped && !canUnlock.points && !canUnlock.narrative && !canUnlock.bothAvail && !canUnlock.breakthrough && (
+          {!unlocked && !canUnlock.points && !canUnlock.narrative && !canUnlock.bothAvail && (
             <span className="self-center text-sm italic text-text-dim">
               {!canUnlock.prereqsMet ? 'Вимоги не виконані' : 'Недостатньо очок'}
             </span>
-          )}
-          {canRevoke && (
-            <button className="min-h-9 rounded border border-border px-3 py-1.5 text-sm text-text-dim" onClick={onLock}>Відкликати</button>
           )}
         </div>
       )}

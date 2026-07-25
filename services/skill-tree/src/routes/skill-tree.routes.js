@@ -7,7 +7,7 @@ const { requireAuth, requireGameMaster } = require('../middleware/auth.middlewar
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Nodes — read for all (with optional ?race= / ?archetype= filter), write for game_master
+// Nodes — read for all (with optional ?archetype= filter), write for game_master
 router.get('/nodes',        requireAuth,       wrap(NodeController.list));
 router.post('/nodes',       requireGameMaster, wrap(NodeController.create));
 router.put('/nodes/:id',    requireGameMaster, wrap(NodeController.update));

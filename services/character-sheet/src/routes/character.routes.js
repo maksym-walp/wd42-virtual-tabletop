@@ -4,7 +4,6 @@ const CharacterController = require('../controllers/character.controller');
 const SkillController = require('../controllers/skill.controller');
 const SpellController = require('../controllers/spell.controller');
 const TreeProgressController = require('../controllers/tree-progress.controller');
-const NephilimController = require('../controllers/nephilim.controller');
 const EquipmentController = require('../controllers/equipment.controller');
 const ManeuverController = require('../controllers/maneuver.controller');
 const AbilityController = require('../controllers/ability.controller');
@@ -42,11 +41,6 @@ router.delete('/:id/spells/:spellId',   wrap(SpellController.remove));
 router.get('/:id/tree',             wrap(TreeProgressController.list));
 router.post('/:id/tree/:nodeId',    wrap(TreeProgressController.unlock));
 router.delete('/:id/tree/:nodeId',  wrap(TreeProgressController.lock));
-
-// Nephilim breakthroughs
-router.get('/:id/tree/breakthroughs',              wrap(NephilimController.list));
-router.post('/:id/tree/breakthroughs/:nodeId',     wrap(NephilimController.use));
-router.delete('/:id/tree/breakthroughs/:nodeId',   wrap(NephilimController.revoke));
 
 // Equipment (references equipment.items catalog)
 router.get('/:id/equipment',                 wrap(EquipmentController.list));

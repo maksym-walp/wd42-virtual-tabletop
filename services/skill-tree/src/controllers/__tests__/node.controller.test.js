@@ -10,36 +10,20 @@ function mockRes() {
 beforeEach(() => jest.clearAllMocks());
 
 describe('NodeController.list', () => {
-  it('calls NodeModel.findAll with race and archetype both undefined when neither query param is given', async () => {
+  it('calls NodeModel.findAll with archetype undefined when no query param is given', async () => {
     NodeModel.findAll.mockResolvedValue([]);
     const req = { query: {} };
     const res = mockRes();
     await NodeController.list(req, res);
-    expect(NodeModel.findAll).toHaveBeenCalledWith({ race: undefined, archetype: undefined });
+    expect(NodeModel.findAll).toHaveBeenCalledWith({ archetype: undefined });
   });
 
-  it('passes race through when only ?race= is given', async () => {
-    NodeModel.findAll.mockResolvedValue([]);
-    const req = { query: { race: 'elf' } };
-    const res = mockRes();
-    await NodeController.list(req, res);
-    expect(NodeModel.findAll).toHaveBeenCalledWith({ race: 'elf', archetype: undefined });
-  });
-
-  it('passes archetype through when only ?archetype= is given', async () => {
+  it('passes archetype through when ?archetype= is given', async () => {
     NodeModel.findAll.mockResolvedValue([]);
     const req = { query: { archetype: 'fighter' } };
     const res = mockRes();
     await NodeController.list(req, res);
-    expect(NodeModel.findAll).toHaveBeenCalledWith({ race: undefined, archetype: 'fighter' });
-  });
-
-  it('passes both race and archetype through when both query params are given', async () => {
-    NodeModel.findAll.mockResolvedValue([]);
-    const req = { query: { race: 'elf', archetype: 'fighter' } };
-    const res = mockRes();
-    await NodeController.list(req, res);
-    expect(NodeModel.findAll).toHaveBeenCalledWith({ race: 'elf', archetype: 'fighter' });
+    expect(NodeModel.findAll).toHaveBeenCalledWith({ archetype: 'fighter' });
   });
 
   it('returns the nodes from the model as JSON', async () => {

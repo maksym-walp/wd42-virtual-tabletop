@@ -6,7 +6,8 @@ import equipmentApi from '../api/equipment';
 import artifactsApi from '../api/artifacts';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS, RACE_ANCESTRY_OPTIONS, ARCHETYPE_COLORS,
+  ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS,
+  RACE_BONUS_CHARACTERISTIC, SANGVI_BONUS_BUDGET,
   PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES,
 } from '../constants/characterSheet';
 import Card from '../components/ui/Card';
@@ -15,12 +16,25 @@ import Button from '../components/ui/Button';
 import IntInput from '../components/ui/IntInput';
 import RollButton from '../components/RollButton';
 
-const BUDGET = 42;
+const BASE_BUDGET = 42;
 const ALL_SKILL_KEYS = CHARACTERISTICS.flatMap((c) => c.skills.map((s) => s.key));
-const INITIAL_SKILLS = Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, 1]));
 const INITIAL_MONEY = Object.fromEntries(
   CURRENCIES.flatMap((c) => [[c.high.key, 0], [c.low.key, 0]])
 );
+
+// Race grants +1 (base 2 instead of 1) to the 4 skills of one characteristic —
+// except sangvi, who gets extra budget instead of a fixed characteristic.
+function boostedSkillKeysFor(race) {
+  const char = CHARACTERISTICS.find((c) => c.key === RACE_BONUS_CHARACTERISTIC[race]);
+  return new Set(char?.skills.map((s) => s.key) ?? []);
+}
+function initialSkillsFor(race) {
+  const boosted = boostedSkillKeysFor(race);
+  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, boosted.has(k) ? 2 : 1]));
+}
+function budgetFor(race) {
+  return race === 'sangvi' ? BASE_BUDGET + SANGVI_BONUS_BUDGET : BASE_BUDGET;
+}
 
 const STEPS = [
   { n: 1, label: 'Основа' },
@@ -58,11 +72,11 @@ export default function CharacterNew() {
   const [name, setName] = useState('');
   const [archetype, setArchetype] = useState('');
   const [race, setRace] = useState('');
-  const [raceAncestry, setRaceAncestry] = useState('');
 
   // Step 2 — skills
-  const [skills, setSkills] = useState(INITIAL_SKILLS);
-  const skillRemaining = BUDGET - Object.values(skills).reduce((s, v) => s + (v - 1), 0);
+  const [skills, setSkills] = useState({});
+  const skillBudget = budgetFor(race);
+  const skillRemaining = skillBudget - Object.values(skills).reduce((s, v) => s + (v - 1), 0);
 
   // Step 3 — vitals
   const [healthDice, setHealthDice] = useState([]);
@@ -88,20 +102,12 @@ export default function CharacterNew() {
       setError('Заповніть імʼя, архетип та народ');
       return;
     }
-    if (race === 'sangvi' && !raceAncestry) {
-      setError('Оберіть народ-пращур для Санґви');
-      return;
-    }
     setSaving(true);
     setError('');
     try {
-      const char = await characterApi.create({
-        name: name.trim(),
-        archetype,
-        race,
-        race_ancestry: race === 'sangvi' ? raceAncestry : undefined,
-      });
+      const char = await characterApi.create({ name: name.trim(), archetype, race });
       setCharacterId(char.id);
+      setSkills(initialSkillsFor(race));
       setStep(2);
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка при створенні');
@@ -173,11 +179,13 @@ export default function CharacterNew() {
             name={name} setName={setName}
             archetype={archetype} setArchetype={setArchetype}
             race={race} setRace={setRace}
-            raceAncestry={raceAncestry} setRaceAncestry={setRaceAncestry}
           />
         )}
         {step === 2 && (
-          <Step2Skills skills={skills} setSkills={setSkills} remaining={skillRemaining} />
+          <Step2Skills
+            skills={skills} setSkills={setSkills} remaining={skillRemaining}
+            budget={skillBudget} boostedKeys={boostedSkillKeysFor(race)}
+          />
         )}
         {step === 3 && (
           <Step3Vitals
@@ -260,7 +268,7 @@ function WizardSteps({ step }) {
   );
 }
 
-function Step1Basics({ name, setName, archetype, setArchetype, race, setRace, raceAncestry, setRaceAncestry }) {
+function Step1Basics({ name, setName, archetype, setArchetype, race, setRace }) {
   return (
     <Card>
       <h2 className="mb-5 font-display text-lg text-accent">1. Ім'я, архетип, народ</h2>
@@ -299,7 +307,7 @@ function Step1Basics({ name, setName, archetype, setArchetype, race, setRace, ra
             <ChoiceCard
               key={key}
               selected={race === key}
-              onClick={() => { setRace(key); setRaceAncestry(''); }}
+              onClick={() => setRace(key)}
               title={r.label}
               description={r.description}
               subtitle={r.ability}
@@ -308,22 +316,6 @@ function Step1Basics({ name, setName, archetype, setArchetype, race, setRace, ra
           ))}
         </div>
       </Field>
-
-      {race === 'sangvi' && (
-        <Field label="Народ-пращур (Санґви)" className="mt-5">
-          <select
-            className={inputClass}
-            value={raceAncestry}
-            onChange={(e) => setRaceAncestry(e.target.value)}
-            required
-          >
-            <option value="">Оберіть пращура...</option>
-            {RACE_ANCESTRY_OPTIONS.map((r) => (
-              <option key={r} value={r}>{RACES[r]?.label ?? r}</option>
-            ))}
-          </select>
-        </Field>
-      )}
     </Card>
   );
 }
@@ -371,26 +363,33 @@ function ChoicePlaceholder({ letter, color }) {
   );
 }
 
-function Step2Skills({ skills, setSkills, remaining }) {
+function Step2Skills({ skills, setSkills, remaining, budget, boostedKeys }) {
+  const floorFor = (key) => (boostedKeys.has(key) ? 2 : 1);
+
   const setSkill = (key, delta) => {
     setSkills((prev) => {
       const next = prev[key] + delta;
-      if (next < 1 || next > 12) return prev;
+      if (next < floorFor(key) || next > 12) return prev;
       if (delta > 0 && remaining <= 0) return prev;
       return { ...prev, [key]: next };
     });
   };
+
+  const boostedLabel = CHARACTERISTICS.find((c) => c.skills.some((s) => boostedKeys.has(s.key)))?.label;
 
   return (
     <Card>
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg text-accent">2. Розподіл навичок</h2>
         <div className={`font-semibold ${remaining < 0 ? 'text-danger' : remaining === 0 ? 'text-sage' : 'text-gold'}`}>
-          Залишилось: <strong>{remaining}</strong> / {BUDGET}
+          Залишилось: <strong>{remaining}</strong> / {budget}
         </div>
       </div>
       <p className="mb-5 text-sm text-text-dim">
-        Усі навички починаються з 1. Розподіліть {BUDGET} додаткових очок між навичками (від 1 до 12).
+        {boostedLabel
+          ? `Навички характеристики «${boostedLabel}» починаються з 2, решта — з 1. `
+          : 'Усі навички починаються з 1. '}
+        Розподіліть {budget} додаткових очок між навичками (від {boostedLabel ? '2 для бустнутих' : '1'} до 12).
       </p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -405,7 +404,7 @@ function Step2Skills({ skills, setSkills, remaining }) {
                     type="button"
                     className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-text disabled:opacity-40"
                     onClick={() => setSkill(skill.key, -1)}
-                    disabled={skills[skill.key] <= 1}
+                    disabled={skills[skill.key] <= floorFor(skill.key)}
                   >−</button>
                   <span className="w-6 text-center font-semibold text-text">{skills[skill.key]}</span>
                   <button

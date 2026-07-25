@@ -2,7 +2,6 @@ const CharacterModel = require('../models/character.model');
 const SkillModel = require('../models/skill.model');
 const SpellProgressModel = require('../models/spell.model');
 const TreeProgressModel = require('../models/tree-progress.model');
-const NephilimBreakthroughModel = require('../models/nephilim-breakthrough.model');
 const EquipmentModel = require('../models/equipment.model');
 const ManeuverModel = require('../models/maneuver.model');
 const AbilityModel = require('../models/ability.model');
@@ -23,11 +22,11 @@ const CharacterController = {
   },
 
   async create(req, res) {
-    const { name, archetype, race, race_ancestry, skills } = req.body;
+    const { name, archetype, race, skills } = req.body;
     if (!name || !archetype || !race) {
       return res.status(400).json({ message: 'name, archetype та race є обовʼязковими' });
     }
-    const character = await CharacterModel.create(req.user.sub, { name, archetype, race, race_ancestry, skills });
+    const character = await CharacterModel.create(req.user.sub, { name, archetype, race, skills });
     res.status(201).json({ character });
   },
 
@@ -44,12 +43,11 @@ const CharacterController = {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
-    const [skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals, owner_username] = await Promise.all([
+    const [skills, spells, tree, equipment, maneuvers, abilities, rituals, owner_username] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
       EquipmentModel.findAll(char.id),
-      NephilimBreakthroughModel.findAll(char.id),
       ManeuverModel.findAll(char.id),
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
@@ -61,7 +59,7 @@ const CharacterController = {
     // so they get the same flag here rather than a separate "read-only" view.
     res.json({
       character: { ...char, owner_username },
-      skills, spells, tree, equipment, nephilim_breakthroughs, maneuvers, abilities, rituals,
+      skills, spells, tree, equipment, maneuvers, abilities, rituals,
       is_owner: isOwner || isCampaignGm || isAdmin,
     });
   },

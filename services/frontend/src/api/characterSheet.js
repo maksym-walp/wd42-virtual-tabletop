@@ -84,21 +84,6 @@ const characterApi = {
     await api.delete(`${BASE}/${characterId}/tree/${nodeId}`);
   },
 
-  // Nephilim breakthroughs
-  async getBreakthroughs(characterId) {
-    const { data } = await api.get(`${BASE}/${characterId}/tree/breakthroughs`);
-    return data.breakthroughs;
-  },
-
-  async useBreakthrough(characterId, nodeId) {
-    const { data } = await api.post(`${BASE}/${characterId}/tree/breakthroughs/${nodeId}`);
-    return data.node_id;
-  },
-
-  async revokeBreakthrough(characterId, nodeId) {
-    await api.delete(`${BASE}/${characterId}/tree/breakthroughs/${nodeId}`);
-  },
-
   // Equipment (references equipment.items catalog)
   async listEquipment(characterId) {
     const { data } = await api.get(`${BASE}/${characterId}/equipment`);

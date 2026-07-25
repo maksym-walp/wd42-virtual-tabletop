@@ -1,9 +1,8 @@
 import api from './client';
 
 const skillTreeApi = {
-  async getNodes({ race, archetype } = {}) {
+  async getNodes({ archetype } = {}) {
     const params = new URLSearchParams();
-    if (race) params.set('race', race);
     if (archetype) params.set('archetype', archetype);
     const qs = params.toString();
     const { data } = await api.get(`/api/skill-tree/nodes${qs ? `?${qs}` : ''}`);

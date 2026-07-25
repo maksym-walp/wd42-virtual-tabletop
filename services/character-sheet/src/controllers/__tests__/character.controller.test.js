@@ -2,7 +2,6 @@ jest.mock('../../models/character.model');
 jest.mock('../../models/skill.model');
 jest.mock('../../models/spell.model');
 jest.mock('../../models/tree-progress.model');
-jest.mock('../../models/nephilim-breakthrough.model');
 jest.mock('../../models/equipment.model');
 jest.mock('../../models/maneuver.model');
 jest.mock('../../models/ability.model');
@@ -14,7 +13,6 @@ const CharacterModel = require('../../models/character.model');
 const SkillModel = require('../../models/skill.model');
 const SpellProgressModel = require('../../models/spell.model');
 const TreeProgressModel = require('../../models/tree-progress.model');
-const NephilimBreakthroughModel = require('../../models/nephilim-breakthrough.model');
 const EquipmentModel = require('../../models/equipment.model');
 const ManeuverModel = require('../../models/maneuver.model');
 const AbilityModel = require('../../models/ability.model');
@@ -38,7 +36,6 @@ function mockAggregationModels() {
   SpellProgressModel.findAll.mockResolvedValue(['spell-x']);
   TreeProgressModel.findAll.mockResolvedValue(['tree-x']);
   EquipmentModel.findAll.mockResolvedValue(['equip-x']);
-  NephilimBreakthroughModel.findAll.mockResolvedValue(['neph-x']);
   ManeuverModel.findAll.mockResolvedValue(['maneuver-x']);
   AbilityModel.findAll.mockResolvedValue(['ability-x']);
   RitualTrackerModel.findAll.mockResolvedValue(['ritual-x']);
@@ -86,7 +83,7 @@ describe('CharacterController.create', () => {
   });
 
   it('creates the character and returns 201', async () => {
-    const body = { name: 'Bob', archetype: 'fighter', race: 'human', race_ancestry: null, skills: { evasion: 3 } };
+    const body = { name: 'Bob', archetype: 'fighter', race: 'human', skills: { evasion: 3 } };
     CharacterModel.create.mockResolvedValue({ id: 'c1', ...body });
     const req = mockReq({ body, user: { sub: 'u1' } });
     const res = mockRes();
@@ -94,7 +91,7 @@ describe('CharacterController.create', () => {
     await CharacterController.create(req, res);
 
     expect(CharacterModel.create).toHaveBeenCalledWith('u1', {
-      name: 'Bob', archetype: 'fighter', race: 'human', race_ancestry: null, skills: { evasion: 3 },
+      name: 'Bob', archetype: 'fighter', race: 'human', skills: { evasion: 3 },
     });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ character: { id: 'c1', ...body } });
@@ -140,7 +137,6 @@ describe('CharacterController.getSheet', () => {
     expect(payload.spells).toEqual(['spell-x']);
     expect(payload.tree).toEqual(['tree-x']);
     expect(payload.equipment).toEqual(['equip-x']);
-    expect(payload.nephilim_breakthroughs).toEqual(['neph-x']);
     expect(payload.maneuvers).toEqual(['maneuver-x']);
     expect(payload.abilities).toEqual(['ability-x']);
     expect(payload.rituals).toEqual(['ritual-x']);
@@ -211,7 +207,7 @@ describe('CharacterController.getPublicSheet', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it('returns the reduced payload (no tree, no nephilim_breakthroughs) with is_owner always false', async () => {
+  it('returns the reduced payload (no tree) with is_owner always false', async () => {
     CharacterModel.findPublicById.mockResolvedValue({ id: 'c1', user_id: 'owner-1', is_public: true });
     mockAggregationModels();
     const req = mockReq({ params: { id: 'c1' } });
@@ -228,7 +224,6 @@ describe('CharacterController.getPublicSheet', () => {
     expect(payload.abilities).toEqual(['ability-x']);
     expect(payload.rituals).toEqual(['ritual-x']);
     expect(payload.tree).toBeUndefined();
-    expect(payload.nephilim_breakthroughs).toBeUndefined();
     expect(payload.is_owner).toBe(false);
   });
 });

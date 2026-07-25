@@ -3,7 +3,7 @@ const { deleteWithTrash } = require('../utils/trash');
 
 const CHILD_TABLES = [
   'skills', 'known_spells', 'tree_progress', 'equipment',
-  'nephilim_breakthroughs', 'maneuvers', 'ritual_trackers', 'abilities',
+  'maneuvers', 'ritual_trackers', 'abilities',
 ];
 
 const ALL_SKILLS = [
@@ -71,16 +71,16 @@ const CharacterModel = {
     return rows[0]?.username ?? null;
   },
 
-  async create(userId, { name, archetype, race, race_ancestry, skills }) {
+  async create(userId, { name, archetype, race, skills }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       const { rows } = await client.query(
-        `INSERT INTO character_sheet.characters (user_id, name, archetype, race, race_ancestry)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO character_sheet.characters (user_id, name, archetype, race)
+         VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [userId, name, archetype, race, race_ancestry ?? null]
+        [userId, name, archetype, race]
       );
       const character = rows[0];
 
@@ -98,16 +98,15 @@ const CharacterModel = {
         );
       }
 
-      // Auto-unlock root nodes matching the character's archetype and race
+      // Auto-unlock root nodes matching the character's archetype
       await client.query(
         `INSERT INTO character_sheet.tree_progress (character_id, node_id)
          SELECT $1, n.id
          FROM skill_tree.nodes n
          WHERE n.is_root = true
            AND (array_length(n.archetypes, 1) IS NULL OR $2 = ANY(n.archetypes))
-           AND (array_length(n.races, 1) IS NULL OR $3 = ANY(n.races))
          ON CONFLICT (character_id, node_id) DO NOTHING`,
-        [character.id, archetype, race]
+        [character.id, archetype]
       );
 
       await client.query('COMMIT');

@@ -135,7 +135,6 @@ function PublicCharacterCard({ character: c }) {
           <h2 className="font-display text-lg text-text">{c.name}</h2>
           <p className="mt-0.5 text-sm text-text-dim">
             {archetype?.label} · {race?.label}
-            {c.race_ancestry ? ` (${RACES[c.race_ancestry]?.label ?? c.race_ancestry})` : ''}
           </p>
         </div>
         {archetypeColor && (

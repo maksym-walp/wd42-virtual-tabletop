@@ -2,8 +2,8 @@ const NodeModel = require('../models/node.model');
 
 const NodeController = {
   async list(req, res) {
-    const { race, archetype } = req.query;
-    const nodes = await NodeModel.findAll({ race, archetype });
+    const { archetype } = req.query;
+    const nodes = await NodeModel.findAll({ archetype });
     res.json({ nodes });
   },
 

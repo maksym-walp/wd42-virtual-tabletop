@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
-import { RACES, ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
@@ -116,7 +116,6 @@ export default function SkillTree() {
   const [edges, setEdges] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [filterRace, setFilterRace] = useState('');
   const [activeArchetype, setActiveArchetype] = useState('fighter');
 
   const panZoom = useSvgPanZoom({ initial: { x: 120, y: 120, k: 1 } });
@@ -148,11 +147,11 @@ export default function SkillTree() {
 
   const importRef = useRef(null);
 
-  const loadTree = (archetype, race) => {
+  const loadTree = (archetype) => {
     setLoading(true);
     pendingCenterRef.current = true;
     Promise.all([
-      skillTreeApi.getNodes({ archetype, race: race || undefined }),
+      skillTreeApi.getNodes({ archetype }),
       skillTreeApi.getEdges({ archetype }),
     ]).then(([n, e]) => {
       setNodes(n);
@@ -178,14 +177,9 @@ export default function SkillTree() {
     pendingCenterRef.current = false;
   }, [nodes, loading, setTransform]);
 
-  const handleFilterChange = (race) => {
-    loadTree(activeArchetype, race);
-  };
-
   const handleArchetypeChange = (archetype) => {
     setActiveArchetype(archetype);
     setSelectedNode(null);
-    setFilterRace('');
     setTransform({ x: 120, y: 120, k: 1 });
     loadTree(archetype);
   };
@@ -339,7 +333,6 @@ export default function SkillTree() {
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
       effect: [],
-      races: Object.keys(RACES).filter((k) => k !== 'other'),
       archetype: activeArchetype, require_both: false,
       pos_x: Math.round(cx), pos_y: Math.round(cy),
     });
@@ -353,7 +346,6 @@ export default function SkillTree() {
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
       effect: [],
-      races: Object.keys(RACES).filter((k) => k !== 'other'),
       archetype: activeArchetype, require_both: false,
       pos_x: Math.round(slot.pos_x), pos_y: Math.round(slot.pos_y),
       _parentId: parent.id,
@@ -494,19 +486,6 @@ export default function SkillTree() {
               {a.label}
             </button>
           ))}
-          <select
-            className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text"
-            value={filterRace}
-            onChange={(e) => {
-              setFilterRace(e.target.value);
-              handleFilterChange(e.target.value);
-            }}
-          >
-            <option value="">Всі народи</option>
-            {Object.entries(RACES).map(([key, r]) => (
-              <option key={key} value={key}>{r.label}</option>
-            ))}
-          </select>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -726,7 +705,6 @@ export default function SkillTree() {
                 enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
                 narrative_condition: n.narrative_condition || [],
                 effect: n.effect || [],
-                races: n.races || [],
                 archetype: n.archetype || activeArchetype,
                 require_both: n.require_both || false,
               });
@@ -806,12 +784,6 @@ function Tooltip({ tooltip, nodes, edges }) {
           ))}
         </div>
       )}
-      {node.races?.length > 0 && (
-        <div className="mt-2">
-          <TtLabel>Народи</TtLabel>
-          <p className="text-xs leading-relaxed text-gold">{node.races.join(', ')}</p>
-        </div>
-      )}
       {node.archetypes?.length > 0 && (
         <div className="mt-2">
           <TtLabel>Архетипи</TtLabel>
@@ -853,7 +825,6 @@ function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose 
         {node.icon && <span className="text-3xl leading-none">{node.icon}</span>}
         <div className="flex flex-wrap gap-1.5">
           {level != null && <Badge>Рівень {level}</Badge>}
-          {node.races?.map((r) => <Badge key={r} tone="gold">{r}</Badge>)}
           {node.archetypes?.map((a) => <Badge key={a} tone="accent">{a}</Badge>)}
         </div>
       </div>
@@ -1066,26 +1037,6 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Дерево</span>
             <span className="py-2 text-sm text-accent">{ARCHETYPES[form.archetype]?.label ?? form.archetype}</span>
-          </label>
-          <label className="flex flex-col gap-1.5 sm:col-span-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Народи</span>
-            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
-              {Object.entries(RACES).filter(([key]) => key !== 'other').map(([key, r]) => (
-                <label key={key} className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={(form.races || []).includes(key)}
-                    onChange={(e) => onChange((f) => ({
-                      ...f,
-                      races: e.target.checked
-                        ? [...(f.races || []), key]
-                        : (f.races || []).filter((x) => x !== key),
-                    }))}
-                  />
-                  {r.label}
-                </label>
-              ))}
-            </div>
           </label>
         </div>
 

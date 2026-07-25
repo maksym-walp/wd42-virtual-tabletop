@@ -26,33 +26,33 @@ const NodeModel = {
     return rows[0] || null;
   },
 
-  async create({ title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, races, archetype, require_both, is_root, replaces_node_id }) {
+  async create({ title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root }) {
     const { rows } = await pool.query(
       `INSERT INTO skill_tree.nodes
-         (title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, races, archetype, require_both, is_root, replaces_node_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         (title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         title, description ?? null, icon ?? null, cost ?? 0, pos_x ?? 0, pos_y ?? 0,
-        narrative_condition ?? [], effect ?? [], races ?? [],
-        archetype ?? '', require_both ?? false, is_root ?? false, replaces_node_id ?? null,
+        narrative_condition ?? [], effect ?? [],
+        archetype ?? '', require_both ?? false, is_root ?? false,
       ]
     );
     return rows[0];
   },
 
-  async update(id, { title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, races, archetype, require_both, is_root, replaces_node_id }) {
+  async update(id, { title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root }) {
     const { rows } = await pool.query(
       `UPDATE skill_tree.nodes
        SET title=$2, description=$3, icon=$4, cost=$5, pos_x=$6, pos_y=$7,
-           narrative_condition=$8, effect=$9, races=$10, archetype=$11,
-           require_both=$12, is_root=$13, replaces_node_id=$14, updated_at=NOW()
+           narrative_condition=$8, effect=$9, archetype=$10,
+           require_both=$11, is_root=$12, updated_at=NOW()
        WHERE id=$1
        RETURNING *`,
       [
         id, title, description ?? null, icon ?? null, cost ?? 0, pos_x ?? 0, pos_y ?? 0,
-        narrative_condition ?? [], effect ?? [], races ?? [],
-        archetype ?? '', require_both ?? false, is_root ?? false, replaces_node_id ?? null,
+        narrative_condition ?? [], effect ?? [],
+        archetype ?? '', require_both ?? false, is_root ?? false,
       ]
     );
     return rows[0] || null;

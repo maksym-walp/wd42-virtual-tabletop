@@ -19,7 +19,7 @@ const PublicProfileModel = {
   async getPublicActivity(userId) {
     const [characters, equipment, spells, abilities, maneuvers, collections] = await Promise.all([
       pool.query(
-        `SELECT id, name, archetype, race, race_ancestry, is_public, created_at
+        `SELECT id, name, archetype, race, is_public, created_at
            FROM character_sheet.characters
           WHERE user_id = $1 AND is_public = true
           ORDER BY created_at DESC`,
