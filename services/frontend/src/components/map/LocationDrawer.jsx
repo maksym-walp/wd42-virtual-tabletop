@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react';
 import { X, Share2, Check, Pencil, Trash2, MapPin } from 'lucide-react';
 import mapsApi from '../../api/maps';
-import { useMarkerTypes } from '../../context/MarkerTypesContext';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import SmartTextReader from '../SmartTextReader';
 import LocationFields from './LocationFields';
-import TypeIcon from './TypeIcon';
+import MarkerIcon from './MarkerIcon';
+import ImageSlider from './ImageSlider';
 
 const toEditValue = (l) => ({
   name: l.name || '',
   type: l.type || null,
   description: l.description || '',
   gm_note: l.gm_note || '',
-  image_url: l.image_url || null,
+  image_urls: l.image_urls || [],
+  marker_icon: l.marker_icon || null,
+  marker_level: l.marker_level ?? null,
 });
 
 // Side panel (right rail on desktop, bottom sheet on mobile) showing a location.
 // gm_note is returned by the server only for the owner/admin; `isGm` here also
 // unlocks editing / deleting and (when a pin is given) removing the pin.
 export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, onDeleteLocation, onLocationUpdated, onClose }) {
-  const mt = useMarkerTypes();
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,7 +64,9 @@ export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, o
         type: draft.type || null,
         description: draft.description || null,
         gm_note: draft.gm_note || null,
-        image_url: draft.image_url || null,
+        image_urls: draft.image_urls || [],
+        marker_icon: draft.marker_icon || null,
+        marker_level: draft.marker_level ?? null,
       });
       setLocation(updated);
       setEditing(false);
@@ -73,8 +77,6 @@ export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, o
       setSaving(false);
     }
   };
-
-  const meta = location ? mt.metaFor(location.type) : null;
 
   return (
     <div
@@ -111,20 +113,18 @@ export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, o
         </div>
       ) : location && (
         <div className="flex flex-col gap-4">
-          {meta && (
-            <div>
-              <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
-                <TypeIcon typeKey={location.type} size={14} /> {meta.label}
-              </Badge>
-            </div>
-          )}
+          <div>
+            <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
+              <MarkerIcon icon={location.marker_icon} size={14} /> {location.type || 'Локація'}
+            </Badge>
+          </div>
 
-          {location.image_url && (
-            <img src={location.image_url} alt="" loading="lazy" className="w-full rounded-lg border border-border object-cover" />
-          )}
+          {location.image_urls?.length > 0 && <ImageSlider images={location.image_urls} />}
 
           {location.description && (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{location.description}</p>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-text">
+              <SmartTextReader text={location.description} />
+            </div>
           )}
 
           {isGm && location.gm_note && (
@@ -134,7 +134,7 @@ export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, o
             </div>
           )}
 
-          {!location.description && !location.image_url && !(isGm && location.gm_note) && (
+          {!location.description && !location.image_urls?.length && !(isGm && location.gm_note) && (
             <p className="text-sm text-text-dim">Опис відсутній.</p>
           )}
 

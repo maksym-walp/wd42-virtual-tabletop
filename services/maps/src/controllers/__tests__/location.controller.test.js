@@ -44,9 +44,58 @@ describe('LocationController.create', () => {
     await LocationController.create(mockReq({ body: { name: '  Rivertown  ', gm_note: 'secret plot', type: 'city' }, user: OWNER }), res);
     expect(LocationModel.create).toHaveBeenCalledWith({
       createdBy: 'gm-1', name: 'Rivertown', description: null,
-      gmNote: 'secret plot', imageUrl: null, type: 'city',
+      gmNote: 'secret plot', imageUrls: [], type: 'city',
+      markerIcon: null, markerLevel: null,
     });
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('accepts a gallery of images and 400s on an invalid one', async () => {
+    LocationModel.create.mockResolvedValue(fullLocation);
+    const okRes = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', image_urls: ['/uploads/a.jpg', 'https://x/y.png'] }, user: OWNER }), okRes);
+    expect(LocationModel.create).toHaveBeenCalledWith(expect.objectContaining({ imageUrls: ['/uploads/a.jpg', 'https://x/y.png'] }));
+    expect(okRes.status).toHaveBeenCalledWith(201);
+
+    LocationModel.create.mockClear();
+    const badRes = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', image_urls: ['/uploads/a.jpg', 'javascript:alert(1)'] }, user: OWNER }), badRes);
+    expect(badRes.status).toHaveBeenCalledWith(400);
+    expect(LocationModel.create).not.toHaveBeenCalled();
+  });
+
+  it('maps an uploaded marker icon + level into model fields', async () => {
+    LocationModel.create.mockResolvedValue(fullLocation);
+    const res = mockRes();
+    await LocationController.create(mockReq({
+      body: { name: 'X', marker_icon: '/uploads/maps/marker-icons/a.png', marker_level: 2 }, user: OWNER,
+    }), res);
+    expect(LocationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      markerIcon: '/uploads/maps/marker-icons/a.png', markerLevel: 2,
+    }));
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('accepts an emoji as the marker icon', async () => {
+    LocationModel.create.mockResolvedValue(fullLocation);
+    const res = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', marker_icon: '🏰' }, user: OWNER }), res);
+    expect(LocationModel.create).toHaveBeenCalledWith(expect.objectContaining({ markerIcon: '🏰' }));
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('400 for a marker icon that is neither a URL nor a short glyph', async () => {
+    const res = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', marker_icon: 'foo/bar/baz' }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(LocationModel.create).not.toHaveBeenCalled();
+  });
+
+  it('400 for a marker level outside 1..4', async () => {
+    const res = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', marker_level: 5 }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(LocationModel.create).not.toHaveBeenCalled();
   });
 });
 

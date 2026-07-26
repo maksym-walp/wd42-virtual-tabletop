@@ -3,13 +3,13 @@ const pool = require('../config/db');
 // Locations are owned by created_by. gm_note lives on the row; stripping it from
 // non-owner responses is the controller's job (access.stripGmNote).
 const LocationModel = {
-  async create({ createdBy, name, description, gmNote, imageUrl, type }) {
+  async create({ createdBy, name, description, gmNote, imageUrls, type, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
       `INSERT INTO maps.locations
-         (created_by, name, description, gm_note, image_url, type)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (created_by, name, description, gm_note, image_urls, type, marker_icon, marker_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [createdBy, name, description ?? null, gmNote ?? null, imageUrl ?? null, type ?? null]
+      [createdBy, name, description ?? null, gmNote ?? null, imageUrls ?? [], type ?? null, markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0];
   },
@@ -48,14 +48,14 @@ const LocationModel = {
     return rows.length > 0;
   },
 
-  async update(id, { name, description, gmNote, imageUrl, type }) {
+  async update(id, { name, description, gmNote, imageUrls, type, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
       `UPDATE maps.locations
-       SET name = $2, description = $3, gm_note = $4, image_url = $5, type = $6,
-           updated_at = NOW()
+       SET name = $2, description = $3, gm_note = $4, image_urls = $5, type = $6,
+           marker_icon = $7, marker_level = $8, updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, description ?? null, gmNote ?? null, imageUrl ?? null, type ?? null]
+      [id, name, description ?? null, gmNote ?? null, imageUrls ?? [], type ?? null, markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0] || null;
   },

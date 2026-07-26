@@ -28,6 +28,10 @@ describe('valid targets', () => {
     expect(resolveTarget('location', '../../etc', DIR).relDir).toBe('maps/locations');
   });
 
+  it('maps marker-icon to a flat maps/marker-icons directory', () => {
+    expect(resolveTarget('marker-icon', undefined, DIR).relDir).toBe('maps/marker-icons');
+  });
+
   it('maps character under the character id', () => {
     expect(resolveTarget('character', UUID, DIR)).toEqual({
       relDir: `characters/${UUID}`,

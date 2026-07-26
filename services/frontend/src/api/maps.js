@@ -45,7 +45,7 @@ const mapsApi = {
     await api.delete(`${BASE}/${mapId}/lenses/${lensId}`);
   },
 
-  // Pins carry joined location_name / location_type / location_image_url (no gm_note).
+  // Pins carry joined location_name / location_type / location_marker_icon / location_marker_level.
   async listPins(mapId) {
     const { data } = await api.get(`${BASE}/${mapId}/pins`);
     return data.pins;

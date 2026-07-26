@@ -88,6 +88,14 @@
   transform: scale(1.2);
 }
 
+/* Hide the scrollbar on the location image slider (still scrollable/swipeable). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Pin-placement mode: crosshair over the whole map. */
 .map-placing .leaflet-container,
 .map-placing .leaflet-grab {

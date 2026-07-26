@@ -6,21 +6,22 @@ const LocationModel = require('../location.model');
 beforeEach(() => jest.clearAllMocks());
 
 describe('LocationModel.create', () => {
-  it('inserts created_by + six columns', async () => {
+  it('inserts created_by + all columns incl. image_urls array and marker icon/level', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({
       createdBy: 'u1', name: 'Rivertown', description: 'A town',
-      gmNote: 'secret', imageUrl: '/uploads/t.jpg', type: 'city',
+      gmNote: 'secret', imageUrls: ['/uploads/a.jpg', '/uploads/b.jpg'], type: 'city',
+      markerIcon: '🏰', markerLevel: 3,
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO maps\.locations/);
-    expect(params).toEqual(['u1', 'Rivertown', 'A town', 'secret', '/uploads/t.jpg', 'city']);
+    expect(params).toEqual(['u1', 'Rivertown', 'A town', 'secret', ['/uploads/a.jpg', '/uploads/b.jpg'], 'city', '🏰', 3]);
   });
 
-  it('passes null for omitted optional fields', async () => {
+  it('defaults omitted optional fields (image_urls -> [])', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({ createdBy: 'u1', name: 'Nowhere' });
-    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', null, null, null, null]);
+    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', null, null, [], null, null, null]);
   });
 });
 
@@ -55,11 +56,11 @@ describe('LocationModel.isPinnedOnReadableMap', () => {
 describe('LocationModel.update', () => {
   it('updates the mutable fields and updated_at', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
-    await LocationModel.update('loc1', { name: 'New', description: null, gmNote: 'n', imageUrl: null, type: 'ruin' });
+    await LocationModel.update('loc1', { name: 'New', description: null, gmNote: 'n', imageUrls: ['/uploads/x.jpg'], type: 'ruin', markerIcon: null, markerLevel: 2 });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE maps\.locations/);
     expect(sql).toMatch(/updated_at = NOW\(\)/);
-    expect(params).toEqual(['loc1', 'New', null, 'n', null, 'ruin']);
+    expect(params).toEqual(['loc1', 'New', null, 'n', ['/uploads/x.jpg'], 'ruin', null, 2]);
   });
 });
 

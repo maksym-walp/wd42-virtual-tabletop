@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, ImageOverlay, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { typeKey } from '../../constants/maps';
-import { useMarkerTypes, levelThreshold } from '../../context/MarkerTypesContext';
+import { levelThreshold, isIconUrl, DEFAULT_MARKER_LEVEL } from '../../constants/maps';
 
 // Flat images use L.CRS.Simple: [lat, lng] = [y, x], latitude grows upward.
 // Pins are stored normalized (0..1), y measured from the TOP, so we flip y.
@@ -11,18 +10,21 @@ function toLatLng(pin, dims) {
   return [dims.h * (1 - pin.y_coordinate), dims.w * pin.x_coordinate];
 }
 
-// divIcon per type: the config image if set, otherwise the emoji. Cached by a
-// signature so a changed icon/emoji rebuilds it.
+// The marker icon is either an uploaded image URL or an emoji. Both are
+// user-supplied, so escape before injecting into the divIcon HTML. Cached by value.
 const ICON_CACHE = new Map();
-function buildIcon(meta, url) {
-  const sig = `${meta.key}|${url || ''}|${meta.emoji || ''}`;
-  if (!ICON_CACHE.has(sig)) {
-    const inner = url
-      ? `<img src="${url}" class="walp-pin__img" alt=""/>`
-      : `<span class="walp-pin__glyph">${meta.emoji || '📍'}</span>`;
-    ICON_CACHE.set(sig, L.divIcon({ className: 'walp-pin', html: inner, iconSize: [32, 32], iconAnchor: [16, 30] }));
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function buildIcon(iconValue) {
+  const value = iconValue || '📍';
+  if (!ICON_CACHE.has(value)) {
+    const inner = isIconUrl(value)
+      ? `<img src="${esc(value)}" class="walp-pin__img" alt=""/>`
+      : `<span class="walp-pin__glyph">${esc(value)}</span>`;
+    ICON_CACHE.set(value, L.divIcon({ className: 'walp-pin', html: inner, iconSize: [32, 32], iconAnchor: [16, 30] }));
   }
-  return ICON_CACHE.get(sig);
+  return ICON_CACHE.get(value);
 }
 
 // Fits the image and pins the zoom scale so the fully-zoomed-out view is the
@@ -44,9 +46,9 @@ function MapController({ bounds }) {
   return null;
 }
 
-// Visibility is driven by each marker type's LEVEL (25% tiers): level 4 shows at
-// any zoom; each lower level needs +25% more of the zoom range.
-function PinMarkers({ pins, dims, onSelect, mt }) {
+// Visibility is driven by each pin's LEVEL (1..4): level 4 shows at any zoom;
+// each lower level needs more of the zoom range.
+function PinMarkers({ pins, dims, onSelect }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoom: () => setZoom(map.getZoom()), zoomend: () => setZoom(map.getZoom()) });
@@ -56,24 +58,21 @@ function PinMarkers({ pins, dims, onSelect, mt }) {
   const frac = range > 0 ? Math.min(1, Math.max(0, (zoom - min) / range)) : 0;
 
   return pins
-    .filter((p) => frac >= levelThreshold(mt.metaFor(typeKey(p.location_type)).level))
-    .map((p) => {
-      const meta = mt.metaFor(typeKey(p.location_type));
-      return (
-        <Marker
-          key={p.id}
-          position={toLatLng(p, dims)}
-          icon={buildIcon(meta, mt.iconUrl(meta))}
-          keyboard
-          eventHandlers={{ click: () => onSelect(p.location_id) }}
-        />
-      );
-    });
+    .filter((p) => frac >= levelThreshold(p.location_marker_level ?? DEFAULT_MARKER_LEVEL))
+    .map((p) => (
+      <Marker
+        key={p.id}
+        position={toLatLng(p, dims)}
+        icon={buildIcon(p.location_marker_icon)}
+        keyboard
+        eventHandlers={{ click: () => onSelect(p.location_id) }}
+      />
+    ));
 }
 
 // Centers on a pin when the selected location changes (click or deep-link), and
 // zooms in enough to reveal that marker's level. Guarded to fly once per id.
-function FocusController({ focusLocationId, pins, dims, mt }) {
+function FocusController({ focusLocationId, pins, dims }) {
   const map = useMap();
   const flownFor = useRef(null);
   useEffect(() => {
@@ -84,10 +83,10 @@ function FocusController({ focusLocationId, pins, dims, mt }) {
     flownFor.current = focusLocationId;
     const min = map.getMinZoom();
     const range = map.getMaxZoom() - min;
-    const level = mt.metaFor(typeKey(pin.location_type)).level;
+    const level = pin.location_marker_level ?? DEFAULT_MARKER_LEVEL;
     const revealZoom = min + (levelThreshold(level) + 0.05) * range;
     map.flyTo(toLatLng(pin, dims), Math.max(map.getZoom(), revealZoom), { duration: 0.6 });
-  }, [focusLocationId, pins, dims, map, mt]);
+  }, [focusLocationId, pins, dims, map]);
   return null;
 }
 
@@ -105,7 +104,6 @@ function ClickToPlace({ enabled, dims, onPick }) {
 }
 
 export default function MapCanvas({ imageUrl, pins, focusLocationId, onSelect, placing = false, onMapClick }) {
-  const mt = useMarkerTypes();
   const [dims, setDims] = useState(null);
   const [imgError, setImgError] = useState(false);
 
@@ -144,8 +142,8 @@ export default function MapCanvas({ imageUrl, pins, focusLocationId, onSelect, p
           setUrl on prop change, so switching lenses must remount the overlay. */}
       <ImageOverlay key={imageUrl} url={imageUrl} bounds={bounds} />
       <MapController bounds={bounds} />
-      <PinMarkers pins={pins} dims={dims} onSelect={onSelect} mt={mt} />
-      <FocusController focusLocationId={focusLocationId} pins={pins} dims={dims} mt={mt} />
+      <PinMarkers pins={pins} dims={dims} onSelect={onSelect} />
+      <FocusController focusLocationId={focusLocationId} pins={pins} dims={dims} />
       {onMapClick && <ClickToPlace enabled={placing} dims={dims} onPick={onMapClick} />}
     </MapContainer>
   );

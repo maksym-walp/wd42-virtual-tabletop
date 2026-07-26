@@ -5,7 +5,7 @@ import { inputClass } from '../ui/Field';
 import mapsApi from '../../api/maps';
 import LocationFields from './LocationFields';
 
-const EMPTY_LOCATION = { name: '', type: null, description: '', gm_note: '', image_url: null };
+const EMPTY_LOCATION = { name: '', type: null, description: '', gm_note: '', image_urls: [], marker_icon: null, marker_level: null };
 
 // Sheet shown after the owner clicks the map in placement mode. Creates a pin at
 // `coords` (normalized), linked to either a chosen existing location or a new one.
@@ -32,7 +32,9 @@ export default function PinForm({ mapId, coords, myLocations, onCreated, onClose
           type: loc.type || undefined,
           description: loc.description || undefined,
           gm_note: loc.gm_note || undefined,
-          image_url: loc.image_url || undefined,
+          image_urls: loc.image_urls?.length ? loc.image_urls : undefined,
+          marker_icon: loc.marker_icon || undefined,
+          marker_level: loc.marker_level ?? undefined,
         });
         locationId = created.id;
       }
@@ -70,10 +72,6 @@ export default function PinForm({ mapId, coords, myLocations, onCreated, onClose
         ) : (
           <LocationFields value={loc} onChange={setLoc} />
         )}
-
-        <p className="text-xs text-text-dim">
-          Видимість мітки за масштабом визначається рівнем її типу (налаштовується у типах локацій).
-        </p>
 
         {error && <p className="text-sm text-danger">{error}</p>}
 

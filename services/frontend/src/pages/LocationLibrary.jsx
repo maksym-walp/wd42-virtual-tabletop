@@ -3,7 +3,6 @@ import { Plus, Trash2 } from 'lucide-react';
 import mapsApi from '../api/maps';
 import { useAuth } from '../context/AuthContext';
 import useViewMode from '../hooks/useViewMode';
-import { useMarkerTypes } from '../context/MarkerTypesContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -11,10 +10,10 @@ import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
 import Sheet from '../components/ui/Sheet';
 import LocationFields from '../components/map/LocationFields';
-import TypeIcon from '../components/map/TypeIcon';
+import MarkerIcon from '../components/map/MarkerIcon';
 import MapsTabs from '../components/map/MapsTabs';
 
-const BLANK = { name: '', type: null, description: '', gm_note: '', image_url: null };
+const BLANK = { name: '', type: null, description: '', gm_note: '', image_urls: [], marker_icon: null, marker_level: null };
 
 function snippet(text, n = 90) {
   if (!text) return '—';
@@ -25,7 +24,6 @@ function snippet(text, n = 90) {
 // attaching them to a map yet. Cards or table view.
 export default function LocationLibrary() {
   const { user } = useAuth();
-  const mt = useMarkerTypes();
   const canCreate = user?.role === 'game_master' || user?.role === 'admin';
   const [mode, setMode] = useViewMode('locations');
 
@@ -47,7 +45,9 @@ export default function LocationLibrary() {
     type: loc.type || null,
     description: loc.description || '',
     gm_note: loc.gm_note || '',
-    image_url: loc.image_url || null,
+    image_urls: loc.image_urls || [],
+    marker_icon: loc.marker_icon || null,
+    marker_level: loc.marker_level ?? null,
   });
 
   return (
@@ -74,25 +74,22 @@ export default function LocationLibrary() {
         </EmptyState>
       ) : mode === 'cards' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {locations.map((loc) => {
-            const meta = mt.metaFor(loc.type);
-            return (
-              <Card key={loc.id} className="cursor-pointer hover:border-accent/50" onClick={() => openEdit(loc)}>
-                <div className="flex items-start gap-3">
-                  {loc.image_url && (
-                    <img src={loc.image_url} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-border object-cover" />
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="truncate font-display text-base text-text">{loc.name}</h3>
-                    <Badge className="mt-1 inline-flex items-center gap-1.5 border border-border text-text-muted">
-                      <TypeIcon typeKey={loc.type} size={14} /> {meta.label}
-                    </Badge>
-                    {loc.description && <p className="mt-2 line-clamp-2 text-sm text-text-dim">{loc.description}</p>}
-                  </div>
+          {locations.map((loc) => (
+            <Card key={loc.id} className="cursor-pointer hover:border-accent/50" onClick={() => openEdit(loc)}>
+              <div className="flex items-start gap-3">
+                {loc.image_urls?.[0] && (
+                  <img src={loc.image_urls[0]} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-border object-cover" />
+                )}
+                <div className="min-w-0">
+                  <h3 className="flex items-center gap-1.5 truncate font-display text-base text-text">
+                    <MarkerIcon icon={loc.marker_icon} size={16} /> {loc.name}
+                  </h3>
+                  {loc.type && <Badge className="mt-1 border border-border text-text-muted">{loc.type}</Badge>}
+                  {loc.description && <p className="mt-2 line-clamp-2 text-sm text-text-dim">{loc.description}</p>}
                 </div>
-              </Card>
-            );
-          })}
+              </div>
+            </Card>
+          ))}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -105,16 +102,15 @@ export default function LocationLibrary() {
               </tr>
             </thead>
             <tbody>
-              {locations.map((loc) => {
-                const meta = mt.metaFor(loc.type);
-                return (
-                  <tr key={loc.id} onClick={() => openEdit(loc)} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg">
-                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-accent">{loc.name}</td>
-                    <td className="whitespace-nowrap px-3 py-2"><span className="inline-flex items-center gap-1.5"><TypeIcon typeKey={loc.type} size={14} /> {meta.label}</span></td>
-                    <td className="px-3 py-2 text-text-dim">{snippet(loc.description)}</td>
-                  </tr>
-                );
-              })}
+              {locations.map((loc) => (
+                <tr key={loc.id} onClick={() => openEdit(loc)} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg">
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-accent">
+                    <span className="inline-flex items-center gap-1.5"><MarkerIcon icon={loc.marker_icon} size={14} /> {loc.name}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">{loc.type || '—'}</td>
+                  <td className="px-3 py-2 text-text-dim">{snippet(loc.description)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -142,7 +138,9 @@ function LocationEditor({ value, onClose, onSaved }) {
     type: draft.type || null,
     description: draft.description || null,
     gm_note: draft.gm_note || null,
-    image_url: draft.image_url || null,
+    image_urls: draft.image_urls || [],
+    marker_icon: draft.marker_icon || null,
+    marker_level: draft.marker_level ?? null,
   });
 
   const save = async () => {

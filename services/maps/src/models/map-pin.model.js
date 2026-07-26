@@ -8,7 +8,8 @@ const MapPinModel = {
       `SELECT p.*,
               l.name  AS location_name,
               l.type  AS location_type,
-              l.image_url AS location_image_url
+              l.marker_icon  AS location_marker_icon,
+              l.marker_level AS location_marker_level
        FROM maps.map_pins p
        JOIN maps.locations l ON l.id = p.location_id
        WHERE p.map_id = $1

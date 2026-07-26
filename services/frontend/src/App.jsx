@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { DiceProvider } from './context/DiceContext';
-import { MarkerTypesProvider } from './context/MarkerTypesContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
@@ -49,7 +48,6 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <DiceProvider>
-           <MarkerTypesProvider>
             <div className="flex h-dvh flex-col">
               <Navbar />
               <div className="flex-1 overflow-y-auto">
@@ -125,7 +123,6 @@ export default function App() {
               <BottomNav />
               <DiceWidget />
             </div>
-           </MarkerTypesProvider>
           </DiceProvider>
         </AuthProvider>
       </BrowserRouter>

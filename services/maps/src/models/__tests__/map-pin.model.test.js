@@ -12,6 +12,8 @@ describe('MapPinModel.listByMap', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/JOIN maps\.locations/);
     expect(sql).not.toMatch(/gm_note/); // GM-only field must not leak to readers
+    expect(sql).toMatch(/marker_icon/);
+    expect(sql).toMatch(/marker_level/);
     expect(params).toEqual(['m1']);
   });
 });

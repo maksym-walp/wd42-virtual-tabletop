@@ -4,11 +4,9 @@ import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Glob
 import mapsApi from '../api/maps';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { typeKey } from '../constants/maps';
-import { useMarkerTypes } from '../context/MarkerTypesContext';
 import MapCanvas from '../components/map/MapCanvas';
 import LocationDrawer from '../components/map/LocationDrawer';
 import PinForm from '../components/map/PinForm';
-import TypeIcon from '../components/map/TypeIcon';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import { inputClass } from '../components/ui/Field';
@@ -16,7 +14,6 @@ import { inputClass } from '../components/ui/Field';
 export default function MapView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const mt = useMarkerTypes();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedLocationId = searchParams.get('location');
 
@@ -357,8 +354,7 @@ export default function MapView() {
                         <button key={key} onClick={() => toggleType(key)} aria-pressed={on}
                           className={`flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:bg-surface-hover ${on ? 'text-text' : 'text-text-dim line-through'}`}>
                           {on ? <Eye size={13} /> : <EyeOff size={13} />}
-                          <TypeIcon typeKey={key} size={14} />
-                          <span className="flex-1 text-left">{mt.metaFor(key).label}</span>
+                          <span className="flex-1 text-left">{key === 'other' ? 'Без типу' : key}</span>
                           <span className="tabular-nums text-text-dim">{count}</span>
                         </button>
                       );
