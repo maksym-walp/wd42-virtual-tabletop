@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { EQUIPMENT_TYPES, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
@@ -18,6 +18,9 @@ export default function EquipmentView() {
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
 
+  // Читаємо зі спільного зрізу по всіх трьох таблицях: у посиланні лише голий
+  // id, вид наперед невідомий — він приходить у відповіді як `type`, і вже за
+  // ним ідуть подальші записи.
   useEffect(() => {
     api.get(`/api/equipment/${id}`)
       .then(({ data }) => {
@@ -32,7 +35,7 @@ export default function EquipmentView() {
     if (!confirm('Видалити цей предмет?')) return;
     setDeleting(true);
     try {
-      await api.delete(`/api/equipment/${id}`);
+      await api.delete(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}`);
       removeView('equipment', id);
       navigate('/equipment');
     } catch {
@@ -43,7 +46,7 @@ export default function EquipmentView() {
   const handleMarkCanonical = async () => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`/api/equipment/${id}/canonical`, { is_canonical: true });
+      const { data } = await api.patch(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}/canonical`, { is_canonical: true });
       setItem(data.item);
     } finally {
       setSettingCanonical(false);

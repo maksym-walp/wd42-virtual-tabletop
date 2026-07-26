@@ -1,6 +1,10 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { CATALOG_UNION, findKindById } = require('./catalog.model');
 
+// Колекція збирає спорядження будь-якого виду (набір «стартове спорядження»
+// цілком може містити і меч, і кірасу, і мотузку), тож звʼязка вказує на одну
+// з трьох таблиць каталогу: item_id + item_kind, який каже, на яку саме.
 const itemFields = `jsonb_build_object(
     'id', i.id, 'name', i.name, 'type', i.type,
     'damage_die', i.damage_die, 'defense_value', i.defense_value,
@@ -13,7 +17,7 @@ const itemFields = `jsonb_build_object(
 const itemsSelect = `COALESCE(
     (SELECT jsonb_agg(${itemFields} ORDER BY i.name)
      FROM equipment.collection_items ci
-     JOIN equipment.items i ON i.id = ci.item_id
+     JOIN ${CATALOG_UNION} i ON i.id = ci.item_id AND i.type = ci.item_kind
      WHERE ci.collection_id = c.id),
     '[]'::jsonb
   ) AS items`;
@@ -118,7 +122,8 @@ const CollectionModel = {
 
   // Only the collection owner (or admin) can add items, and only items they
   // can see (own or public, or anything if admin) — mirrors the
-  // character-sheet add-item visibility guard.
+  // character-sheet add-item visibility guard. Вид визначається тут, з тієї
+  // таблиці, у якій знайшовся id, — клієнту не треба його передавати.
   async addItem(collectionId, userId, itemId, isAdmin = false) {
     const owns = await pool.query(
       `SELECT 1 FROM equipment.collections WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
@@ -126,20 +131,17 @@ const CollectionModel = {
     );
     if (!owns.rows.length) return null;
 
-    const visible = await pool.query(
-      `SELECT 1 FROM equipment.items WHERE id = $1 AND (user_id = $2 OR is_public = true OR $3 = true)`,
-      [itemId, userId, isAdmin]
-    );
-    if (!visible.rows.length) return null;
+    const kind = await findKindById(itemId, userId, isAdmin);
+    if (!kind) return null;
 
     const { rows } = await pool.query(
-      `INSERT INTO equipment.collection_items (collection_id, item_id)
-       VALUES ($1, $2)
+      `INSERT INTO equipment.collection_items (collection_id, item_id, item_kind)
+       VALUES ($1, $2, $3)
        ON CONFLICT (collection_id, item_id) DO NOTHING
        RETURNING *`,
-      [collectionId, itemId]
+      [collectionId, itemId, kind]
     );
-    return rows[0] || { collection_id: collectionId, item_id: itemId };
+    return rows[0] || { collection_id: collectionId, item_id: itemId, item_kind: kind };
   },
 
   async removeItem(collectionId, userId, itemId, isAdmin = false) {

@@ -1,14 +1,14 @@
 export const ARCHETYPES = {
   fighter: {
-    label: 'Боєць', healthDie: 'd10', magicMult: 2, meditationDie: 'd4',
+    label: 'Бійці', healthDie: 'd10', magicMult: 2, meditationDie: 'd4',
     description: 'Архетип прямого бою — атаки, ухилення та бойові маневри. Магія доступна, але не така потужна, як у чаклунів чи пройдисвітів.',
   },
   spellcaster: {
-    label: 'Чаклун', healthDie: 'd6', magicMult: 6, meditationDie: 'd8',
+    label: 'Чаклуни', healthDie: 'd6', magicMult: 6, meditationDie: 'd8',
     description: 'Архетип, найтісніше пов\'язаний із магією — найбільше магічної енергії та найрізноманітніший арсенал чаротворчих здібностей.',
   },
   rogue: {
-    label: 'Пройдисвіт', healthDie: 'd8', magicMult: 4, meditationDie: 'd6',
+    label: 'Пройдисвіти', healthDie: 'd8', magicMult: 4, meditationDie: 'd6',
     description: 'Універсал з доступом і до бойових, і до магічних гілок розвитку. Не домінує ніде, зате винагороджується за різноманітність дій.',
   },
 };
@@ -25,19 +25,19 @@ export const ARCHETYPE_COLORS = {
 
 export const RACES = {
   human: {
-    label: 'Людина', ability: 'Спритність від народження',
+    label: 'Люди', ability: 'Спритність від народження',
     description: 'Швидкоплинна й адаптивна натура — навички Спритності при створенні персонажа починаються з 2 замість 1.',
   },
   gnome: {
-    label: 'Гном', ability: 'Природна мудрість',
+    label: 'Гноми', ability: 'Природна мудрість',
     description: 'Розважливість, властива народу гномів, — навички Мудрості при створенні персонажа починаються з 2 замість 1.',
   },
   dwarf: {
-    label: 'Дворф', ability: 'Міцна статура',
+    label: 'Дворфи', ability: 'Міцна статура',
     description: 'Витривала й загартована природа — навички Тілобудови при створенні персонажа починаються з 2 замість 1.',
   },
   elf: {
-    label: 'Ельф', ability: 'Гострий розум',
+    label: 'Ельфи', ability: 'Гострий розум',
     description: 'Фейське походження живить кмітливість — навички Інтелекту при створенні персонажа починаються з 2 замість 1.',
   },
   sangvi: {
@@ -45,7 +45,7 @@ export const RACES = {
     description: 'Нащадок кількох народів одразу — замість бонусу до однієї характеристики отримує на 4 очки більше при розподілі навичок.',
   },
   nephilim: {
-    label: 'Нефілім', ability: 'Надприродна харизма',
+    label: 'Нефіліми', ability: 'Надприродна харизма',
     description: 'Надприродне походження вирізняє серед інших — навички Харизми при створенні персонажа починаються з 2 замість 1.',
   },
   other: {
@@ -209,7 +209,7 @@ export const CURRENCIES = [
     convertible: true,
   },
   {
-    region: 'Даварія',
+    region: 'Давларія',
     high: { key: 'velykyi_tong', name: 'Великий Тонг', metal: 'бронза' },
     low: { key: 'malyi_tong', name: 'Малий Тонг', metal: 'бронза' },
     convertible: true,

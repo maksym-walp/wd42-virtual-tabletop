@@ -5,6 +5,17 @@ export const EQUIPMENT_TYPES = {
   item:     { label: 'Предмет',   color: '#8a5a2b', bg: 'rgba(138,90,43,0.12)' },
 };
 
+// Кожен вид спорядження — окрема таблиця й окремий ендпоінт
+// (39-equipment-split-tables.sql). Запис завжди йде на ендпоінт виду; корінь
+// /api/equipment/ лишається спільним читальним зрізом по всіх трьох, бо там,
+// де вид наперед невідомий (перехід за голим id, пікери в листі персонажа й
+// у заклинаннях), питати треба одразу всі.
+export const EQUIPMENT_ENDPOINTS = {
+  weapon: '/api/equipment/weapons',
+  armor:  '/api/equipment/armor',
+  item:   '/api/equipment/items',
+};
+
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
 export const WEAPON_TYPES = {

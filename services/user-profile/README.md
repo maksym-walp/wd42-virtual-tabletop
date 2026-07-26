@@ -34,7 +34,7 @@ user_profile.profiles (
 
 - `auth.users` — резолв `username` → `{ id, username }`
 - `character_sheet.characters`
-- `equipment.items`, `equipment.collections`
+- `equipment.items`, `equipment.weapons`, `equipment.armor` (union-ом в один список), `equipment.collections`
 - `spellbook.spells`, `spellbook.collections`
 - `abilities.entries`, `abilities.collections`
 - `maneuvers.entries`, `maneuvers.collections`

@@ -1,27 +1,41 @@
 const pool = require('../config/db');
 
-// character_sheet.equipment holds one bare catalog UUID per row, but artifacts
-// live in their own schema since 24-artifacts-service.sql while weapons/armor/
-// items stayed in equipment.items. Resolving the id against the union of both
-// catalogs keeps a single sheet row type working for either, and keeps the
-// artifact rows that predate the split pointing at their (id-preserving) new
-// home. Columns absent from artifacts.entries are projected as NULL so both
-// arms share one shape.
-//
-// The type <> 'artifact' filter matters between the two migrations: phase 1
-// copies artifacts into artifacts.entries without removing them from
-// equipment.items, so for that window the same id is in both tables and an
-// unfiltered union would return a sheet's artifact twice. Phase 2 deletes
-// those rows and the filter becomes a no-op.
+// character_sheet.equipment holds one bare catalog UUID per row, but the
+// catalogs it can point at are four separate tables: artifacts moved to their
+// own schema in 24-artifacts-service.sql, and 39-equipment-split-tables.sql
+// split the rest into equipment.items/weapons/armor (the `type` column is gone
+// — the table now IS the type). Resolving the id against the union of all four
+// keeps a single sheet row type working for any of them, and since every split
+// preserved row ids, sheets that predate them keep pointing at the same rows.
+// Columns a given catalog doesn't have are projected as NULL so all arms share
+// one shape.
 const CATALOG = `(
-        SELECT id, name, type, damage_die, defense_value, description, is_public,
-               price, image_url, weapon_type, weapon_grip, armor_weight,
+        SELECT id, name, 'item'::varchar AS type,
+               NULL::varchar AS damage_die, NULL::smallint AS defense_value,
+               description, is_public, price, image_url,
+               NULL::varchar AS weapon_type, NULL::varchar AS weapon_grip,
+               NULL::varchar AS armor_weight,
                NULL::varchar AS creator, NULL::varchar AS rarity
         FROM equipment.items
-        WHERE type <> 'artifact'
         UNION ALL
-        SELECT id, name, 'artifact' AS type, NULL, NULL, description, is_public,
-               price, image_url, NULL, NULL, NULL,
+        SELECT id, name, 'weapon'::varchar,
+               damage_die, NULL::smallint,
+               description, is_public, price, image_url,
+               weapon_type, weapon_grip, NULL::varchar,
+               NULL::varchar, NULL::varchar
+        FROM equipment.weapons
+        UNION ALL
+        SELECT id, name, 'armor'::varchar,
+               NULL::varchar, defense_value,
+               description, is_public, price, image_url,
+               NULL::varchar, NULL::varchar, armor_weight,
+               NULL::varchar, NULL::varchar
+        FROM equipment.armor
+        UNION ALL
+        SELECT id, name, 'artifact'::varchar,
+               NULL::varchar, NULL::smallint,
+               description, is_public, price, image_url,
+               NULL::varchar, NULL::varchar, NULL::varchar,
                creator, rarity
         FROM artifacts.entries
       )`;

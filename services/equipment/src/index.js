@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const itemRoutes = require('./routes/item.routes');
+const { createCatalogRouter, unionRouter } = require('./routes/catalog.routes');
 const collectionRoutes = require('./routes/collection.routes');
 
 const app = express();
@@ -15,11 +15,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Must be mounted before itemRoutes: itemRoutes' GET /:id at root would
-// otherwise swallow GET /collections (matching id='collections') since it's
-// registered at the same '/' prefix.
+// Must all be mounted before unionRouter: its GET /:id at root would
+// otherwise swallow GET /collections, /items, /weapons and /armor (each
+// matching id='<prefix>') since it's registered at the same '/' prefix.
 app.use('/collections', collectionRoutes);
-app.use('/', itemRoutes);
+app.use('/items',   createCatalogRouter('item'));
+app.use('/weapons', createCatalogRouter('weapon'));
+app.use('/armor',   createCatalogRouter('armor'));
+app.use('/', unionRouter);
 
 app.use((err, req, res, next) => {
   const status = err.statusCode || 500;

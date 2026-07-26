@@ -53,7 +53,7 @@ describe('EquipmentController.add', () => {
     expect(isVisibleToUser).not.toHaveBeenCalled();
   });
 
-  it('404s when the item is not visible in either catalog', async () => {
+  it('404s when the item is visible in none of the four catalogs', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(false);
     const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: 'e1' }, user: { sub: 'u1' } });
@@ -61,8 +61,9 @@ describe('EquipmentController.add', () => {
 
     await EquipmentController.add(req, res);
 
-    expect(isVisibleToUser).toHaveBeenCalledWith('equipment.items', 'e1', 'u1');
-    expect(isVisibleToUser).toHaveBeenCalledWith('artifacts.entries', 'e1', 'u1');
+    for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'artifacts.entries']) {
+      expect(isVisibleToUser).toHaveBeenCalledWith(table, 'e1', 'u1');
+    }
     expect(res.status).toHaveBeenCalledWith(404);
     expect(EquipmentModel.add).not.toHaveBeenCalled();
   });
@@ -81,19 +82,36 @@ describe('EquipmentController.add', () => {
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'link-1', equipment_id: 'e1' } });
   });
 
-  it('201s when the item is only visible in artifacts.entries, not equipment.items', async () => {
+  // Weapons and armor each have their own table since the equipment catalog
+  // split, so a sheet row pointing at one of them must resolve past items.
+  it.each([
+    ['equipment.weapons', 'w1'],
+    ['equipment.armor', 'ar1'],
+    ['artifacts.entries', 'a1'],
+  ])('201s when the item is only visible in %s', async (visibleTable, itemId) => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    isVisibleToUser.mockImplementation((table) => Promise.resolve(table === 'artifacts.entries'));
-    EquipmentModel.add.mockResolvedValue({ id: 'link-1', equipment_id: 'a1' });
-    const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: 'a1' }, user: { sub: 'u1' } });
+    isVisibleToUser.mockImplementation((table) => Promise.resolve(table === visibleTable));
+    EquipmentModel.add.mockResolvedValue({ id: 'link-1', equipment_id: itemId });
+    const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: itemId }, user: { sub: 'u1' } });
     const res = mockRes();
 
     await EquipmentController.add(req, res);
 
-    expect(isVisibleToUser).toHaveBeenCalledWith('equipment.items', 'a1', 'u1');
-    expect(isVisibleToUser).toHaveBeenCalledWith('artifacts.entries', 'a1', 'u1');
-    expect(EquipmentModel.add).toHaveBeenCalledWith('c1', 'a1');
+    expect(isVisibleToUser).toHaveBeenCalledWith(visibleTable, itemId, 'u1');
+    expect(EquipmentModel.add).toHaveBeenCalledWith('c1', itemId);
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  // The loop must stop at the first hit rather than probing every table.
+  it('stops probing catalogs once one reports the item visible', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    isVisibleToUser.mockResolvedValue(true);
+    const req = mockReq({ params: { id: 'c1' }, body: { equipment_id: 'e1' }, user: { sub: 'u1' } });
+
+    await EquipmentController.add(req, mockRes());
+
+    expect(isVisibleToUser).toHaveBeenCalledTimes(1);
+    expect(isVisibleToUser).toHaveBeenCalledWith('equipment.items', 'e1', 'u1');
   });
 });
 

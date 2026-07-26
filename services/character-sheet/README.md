@@ -50,7 +50,7 @@
 
 ## Видимість каталогів і передумови дерева (`prerequisite.model.js`)
 
-Заклинання, маневри, вміння та спорядження — це не власні таблиці цього сервіса, а посилання (`spell_id`/`maneuver_id`/`ability_id`/`equipment_id`) на каталоги інших сервісів (`spellbook.spells`, `maneuvers.entries`, `abilities.entries`, `equipment.items`/`artifacts.entries`). Перш ніж додати запис до листа персонажа, `add`-контролери (`ability`, `maneuver`, `spell`, `equipment`) проганяють дві перевірки з `prerequisite.model.js`:
+Заклинання, маневри, вміння та спорядження — це не власні таблиці цього сервіса, а посилання (`spell_id`/`maneuver_id`/`ability_id`/`equipment_id`) на каталоги інших сервісів (`spellbook.spells`, `maneuvers.entries`, `abilities.entries`, `equipment.items`/`equipment.weapons`/`equipment.armor`/`artifacts.entries`). Перш ніж додати запис до листа персонажа, `add`-контролери (`ability`, `maneuver`, `spell`, `equipment`) проганяють дві перевірки з `prerequisite.model.js`:
 
 1. **`isVisibleToUser(sourceTable, itemId, userId)`** — запис каталогу видимий, якщо користувач є його власником (`user_id = $2`) АБО він публічний (`is_public = true`); інакше `404` (той самий код, що й "не існує" — приватний чужий запис навмисно не відрізняється від відсутнього).
 2. **`checkPrerequisites(characterId, sourceTable, itemId)`** — якщо в запису каталогу заповнено `prerequisite_node_ids`, перевіряється, які з цих вузлів дерева навичок уже відкриті персонажем (`character_sheet.tree_progress`). При `prerequisite_logic = 'and'` потрібні всі вузли; за будь-якого іншого значення (типово `'or'`) достатньо хоча б одного. Якщо вимога не виконана — `403` з `missing_node_ids` (переліком ще не відкритих вузлів, навіть за OR-логіки). Спорядження (`equipment.controller.js`) цю перевірку не проходить — лише видимість.
@@ -65,7 +65,7 @@
 | `skills` | 20 фіксованих навичок на персонажа (`value` 0–12, `progress_marks` 0–5), унікальні за `(character_id, skill_key)` |
 | `known_spells` | Прогрес по заклинанню (`spell_id` → `spellbook.spells`): `mastered`, `cast_count` |
 | `tree_progress` | Відкриті вузли дерева навичок (`node_id` → `skill_tree.nodes`), унікальні за `(character_id, node_id)` |
-| `equipment` | Прив'язане спорядження (`equipment_id` → `equipment.items`/`artifacts.entries`), `mastery_count`/`mastered` |
+| `equipment` | Прив'язане спорядження (`equipment_id` → `equipment.items`/`equipment.weapons`/`equipment.armor`/`artifacts.entries`), `mastery_count`/`mastered` |
 | `maneuvers` | Прив'язані маневри бійця (`maneuver_id` → `maneuvers.entries`) |
 | `abilities` | Прив'язані вміння (`ability_id` → `abilities.entries`) |
 | `ritual_trackers` | Трекери ритуалів заклинача: `name`, `rounds`, `participants` (JSONB `[{name, successes: [bool,...]}]`) |

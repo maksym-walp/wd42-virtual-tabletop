@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
@@ -93,7 +93,11 @@ export default function EquipmentForm() {
     setSaving(true);
     setError('');
     try {
-      const { collectionIds, ...rest } = form;
+      // Вид більше не поле запису, а вибір таблиці — тому він визначає
+      // ендпоінт і в тілі запиту не потрібен. Поля чужого виду сервіс просто
+      // не бере, тож надсилати їх усі безпечно.
+      const { collectionIds, type, ...rest } = form;
+      const base = EQUIPMENT_ENDPOINTS[type];
       const payload = {
         ...rest,
         damage_die: form.damage_die || null,
@@ -105,11 +109,13 @@ export default function EquipmentForm() {
         armor_weight: form.armor_weight || null,
       };
       if (isEdit) {
-        await api.put(`/api/equipment/${id}`, payload);
+        // Якщо вид змінили, PUT іде на ендпоінт НОВОГО виду — сервіс переносить
+        // рядок між таблицями, зберігаючи id, власника й місце в колекціях.
+        await api.put(`${base}/${id}`, payload);
         await reconcileCollections(id);
         navigate(`/equipment/${id}`);
       } else {
-        const { data } = await api.post('/api/equipment/', payload);
+        const { data } = await api.post(`${base}/`, payload);
         await reconcileCollections(data.item.id);
         navigate(`/equipment/${data.item.id}`);
       }

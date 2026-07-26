@@ -2,6 +2,13 @@ const EquipmentModel = require('../models/equipment.model');
 const { isVisibleToUser } = require('../models/prerequisite.model');
 const authorizeCharacterWrite = require('./authorize-character-write');
 
+const CATALOG_TABLES = [
+  'equipment.items',
+  'equipment.weapons',
+  'equipment.armor',
+  'artifacts.entries',
+];
+
 const EquipmentController = {
   async list(req, res) {
     const equipment = await EquipmentModel.findAll(req.params.id);
@@ -12,11 +19,14 @@ const EquipmentController = {
     if (!await authorizeCharacterWrite(req, res)) return;
     const { equipment_id } = req.body;
     if (!equipment_id) return res.status(400).json({ message: 'equipment_id є обовʼязковим' });
-    // equipment_id may reference either catalog — weapons/armor/items stayed in
-    // equipment.items while artifacts split out into artifacts.entries (see
-    // equipment.model.js's CATALOG union) — so visibility must check both.
-    const visible = await isVisibleToUser('equipment.items', equipment_id, req.user.sub)
-      || await isVisibleToUser('artifacts.entries', equipment_id, req.user.sub);
+    // equipment_id may reference any of the four catalog tables — items,
+    // weapons and armor each have their own since 39-equipment-split-tables.sql,
+    // artifacts since 24-artifacts-service.sql (see equipment.model.js's CATALOG
+    // union) — so visibility is checked against each until one matches.
+    let visible = false;
+    for (const table of CATALOG_TABLES) {
+      if (await isVisibleToUser(table, equipment_id, req.user.sub)) { visible = true; break; }
+    }
     if (!visible) {
       return res.status(404).json({ message: 'Предмет не знайдено' });
     }
