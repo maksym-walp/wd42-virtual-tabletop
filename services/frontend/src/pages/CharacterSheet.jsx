@@ -10,13 +10,14 @@ import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import { recordView } from '../utils/recentlyViewed';
-import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
+import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
-  DAMAGE_DICE, PHYSIQUE_HEALTH, LEVEL_MIN_VALUE, ARCHETYPE_COLORS,
+  DAMAGE_DICE, PHYSIQUE_HEALTH, LEVEL_MIN_VALUE, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
   valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES,
 } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
@@ -59,6 +60,8 @@ function missingPrereqLabel(item) {
 export default function CharacterSheet({ publicView = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
 
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -1257,7 +1260,9 @@ function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
 // ── SpellDetailModal ──────────────────────────────────────────────────────────
 
 function SpellDetailModal({ spell, spellId, onClose }) {
-  const type   = primaryNature(spell.nature);
+  const { theme } = useTheme();
+  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
+  const type   = primaryNature(spell.nature, NATURE_TYPES);
   const ritual = RITUAL_TYPES[spell.ritual];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
@@ -2034,7 +2039,7 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
         >
           <defs>
             <marker id="tree-tab-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L7,3 z" fill="#8a6a3e" />
+              <path d="M0,0 L0,6 L7,3 z" fill="var(--color-text-muted)" />
             </marker>
           </defs>
           <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
@@ -2045,9 +2050,9 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
               const dstUnlocked = unlockedIds.has(edge.target_id);
               const bothUnlocked = srcUnlocked && dstUnlocked;
               const isOptional = edge.edge_type === 'optional';
-              const stroke = bothUnlocked ? '#3f5b3a'
-                : isOptional ? '#a68a55'
-                : '#8a6a3e';
+              const stroke = bothUnlocked ? 'var(--color-sage)'
+                : isOptional ? 'var(--color-edge-optional)'
+                : 'var(--color-text-muted)';
               return (
                 <line key={edge.id}
                   x1={pts.x1} y1={pts.y1} x2={pts.x2} y2={pts.y2}
@@ -2064,13 +2069,13 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
               const unlocked   = unlockedIds.has(node.id);
               const selected   = selectedNode?.id === node.id;
               const avail      = checkCanUnlock(node);
-              const stroke = selected   ? '#5b440a'
-                : unlocked  ? '#3f5b3a'
-                : avail.points      ? '#8a5a2b'
-                : avail.narrative   ? '#5a3a6a'
-                : '#b5ab91';
-              const fill      = unlocked ? '#dce8d6' : '#f4efe4';
-              const textColor = unlocked ? '#3f5b3a' : '#5b440a';
+              const stroke = selected   ? 'var(--color-accent)'
+                : unlocked  ? 'var(--color-sage)'
+                : avail.points      ? 'var(--color-gold)'
+                : avail.narrative   ? 'var(--color-node-narrative)'
+                : 'var(--color-text-dim)';
+              const fill      = unlocked ? 'var(--color-node-unlocked-bg)' : 'var(--color-bg)';
+              const textColor = unlocked ? 'var(--color-sage)' : 'var(--color-text)';
 
               return (
                 <g key={node.id}
@@ -2081,11 +2086,11 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
                   <circle r={TREE_NODE_R} fill={fill}
                     stroke={stroke} strokeWidth={selected || unlocked ? 2.5 : 1.5} />
                   {unlocked && !node.is_root && (
-                    <circle r={TREE_NODE_R + 4} fill="none" stroke="#3f5b3a"
+                    <circle r={TREE_NODE_R + 4} fill="none" stroke="var(--color-sage)"
                       strokeWidth={1} opacity={0.25} style={{ pointerEvents: 'none' }} />
                   )}
                   {node.is_root && (
-                    <circle r={TREE_NODE_R + 4} fill="none" stroke="#8a5a2b"
+                    <circle r={TREE_NODE_R + 4} fill="none" stroke="var(--color-gold)"
                       strokeWidth={1} opacity={0.35} style={{ pointerEvents: 'none' }} />
                   )}
                   <text x={0} y={node.icon ? 9 : 6} textAnchor="middle"
@@ -2099,7 +2104,7 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
                     {node.title.length > 18 ? node.title.slice(0, 16) + '…' : node.title}
                   </text>
                   <text x={TREE_NODE_R + 8} y={18} textAnchor="start" fontSize={9}
-                    fill={unlocked ? '#3f5b3a' : '#8a6a3e'}
+                    fill={unlocked ? 'var(--color-sage)' : 'var(--color-text-muted)'}
                     style={{ pointerEvents: 'none', userSelect: 'none' }}>
                     {unlocked ? (node.is_root ? '★ корінь' : '✓ відкрито')
                       : node.cost > 0 && node.narrative_condition ? `${node.cost} оч. або наратив`

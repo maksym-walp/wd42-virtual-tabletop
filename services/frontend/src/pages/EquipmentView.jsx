@@ -2,17 +2,20 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function EquipmentView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);

@@ -3,8 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
+import { useTheme } from '../context/ThemeContext';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -27,6 +28,8 @@ export default function EquipmentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { theme } = useTheme();
+  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);

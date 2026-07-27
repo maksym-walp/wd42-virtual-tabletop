@@ -1,14 +1,17 @@
 import { Link } from 'react-router-dom';
-import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function AbilityCard({ ability }) {
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   return (
     <Link
       to={`/abilities/${ability.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
-      style={{ borderLeft: '4px solid #8a5a2b' }}
+      style={{ borderLeft: '4px solid var(--color-gold)' }}
     >
       {ability.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">

@@ -6,10 +6,11 @@ import equipmentApi from '../api/equipment';
 import artifactsApi from '../api/artifacts';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS,
+  ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
   RACE_BONUS_CHARACTERISTIC, SANGVI_BONUS_BUDGET,
   PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES,
 } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -272,6 +273,8 @@ function WizardSteps({ step }) {
 }
 
 function Step1Basics({ name, setName, archetype, setArchetype, race, setRace }) {
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   return (
     <Card>
       <h2 className="mb-5 font-display text-lg text-accent">1. Ім'я, архетип, народ</h2>

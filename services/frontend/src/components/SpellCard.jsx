@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
+import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
+import { useTheme } from '../context/ThemeContext';
 import DiceFormulaText from './DiceFormulaText';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function SpellCard({ spell }) {
-  const type = primaryNature(spell.nature);
+  const { theme } = useTheme();
+  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
+  const type = primaryNature(spell.nature, NATURE_TYPES);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 

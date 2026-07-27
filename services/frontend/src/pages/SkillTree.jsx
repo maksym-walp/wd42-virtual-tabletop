@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
-import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
@@ -111,6 +112,8 @@ function computeChildSlot(parent, nodes, edges) {
 export default function SkillTree() {
   const { user } = useAuth();
   const isGM = user?.role === 'game_master';
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
 
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -543,7 +546,7 @@ export default function SkillTree() {
         >
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#8a6a3e" />
+              <path d="M0,0 L0,6 L8,3 z" fill="var(--color-text-muted)" />
             </marker>
           </defs>
 
@@ -559,7 +562,7 @@ export default function SkillTree() {
                 <g key={edge.id}>
                   <line
                     x1={pts.x1} y1={pts.y1} x2={pts.x2} y2={pts.y2}
-                    stroke={isOptional ? '#a68a55' : '#8a6a3e'}
+                    stroke={isOptional ? 'var(--color-edge-optional)' : 'var(--color-text-muted)'}
                     strokeWidth={isOptional ? 1.5 : 2}
                     strokeDasharray={isOptional ? '6,4' : undefined}
                     markerEnd="url(#arrow)"
@@ -568,23 +571,23 @@ export default function SkillTree() {
                   {isGM && editMode && (
                     <g>
                       <circle cx={mx - 11} cy={my} r={9}
-                        fill={isOptional ? '#e3d6e8' : '#dce8d6'}
-                        stroke={isOptional ? '#5a3a6a' : '#3f5b3a'}
+                        fill={isOptional ? 'var(--color-node-narrative-bg)' : 'var(--color-node-unlocked-bg)'}
+                        stroke={isOptional ? 'var(--color-node-narrative)' : 'var(--color-sage)'}
                         strokeWidth={1} style={{ cursor: 'pointer' }}
                         onClick={(e) => { e.stopPropagation(); handleToggleEdgeType(edge.id, edge.edge_type); }}
                       />
                       <text x={mx - 11} y={my + 4} textAnchor="middle" fontSize={8}
-                        fill={isOptional ? '#5a3a6a' : '#3f5b3a'}
+                        fill={isOptional ? 'var(--color-node-narrative)' : 'var(--color-sage)'}
                         style={{ pointerEvents: 'none', userSelect: 'none' }}>
                         {isOptional ? 'АБО' : 'І'}
                       </text>
                       <circle cx={mx + 11} cy={my} r={9}
-                        fill="#f0dad4" stroke="#7a2e1d" strokeWidth={1}
+                        fill="var(--color-node-danger-bg)" stroke="var(--color-danger)" strokeWidth={1}
                         style={{ cursor: 'pointer' }}
                         onClick={(e) => { e.stopPropagation(); handleDeleteEdge(edge.id); }}
                       />
                       <text x={mx + 11} y={my + 4} textAnchor="middle" fontSize={11}
-                        fill="#7a2e1d" style={{ pointerEvents: 'none', userSelect: 'none' }}>×</text>
+                        fill="var(--color-danger)" style={{ pointerEvents: 'none', userSelect: 'none' }}>×</text>
                     </g>
                   )}
                 </g>
@@ -597,12 +600,12 @@ export default function SkillTree() {
               const isSrc = connectSource?.id === node.id;
               const ac = ARCHETYPE_COLORS[node.archetype];
 
-              const stroke = isSrc ? '#5b440a'
-                : selected ? '#8a5a2b'
-                : ac?.color || '#b5ab91';
+              const stroke = isSrc ? 'var(--color-accent)'
+                : selected ? 'var(--color-gold)'
+                : ac?.color || 'var(--color-text-dim)';
               // Stronger tint than the badge's 0.12 alpha — nodes sit on the tan canvas, not the page bg.
-              const fill = ac ? ac.bg.replace('0.12', '0.28') : '#f4efe4';
-              const textColor = ac?.color || '#5b440a';
+              const fill = ac ? ac.bg.replace('0.12', '0.28') : 'var(--color-bg)';
+              const textColor = ac?.color || 'var(--color-text)';
 
               return (
                 <g
@@ -648,7 +651,7 @@ export default function SkillTree() {
                   {/* Unlock type hint */}
                   <text
                     x={NODE_R + 10} y={21}
-                    textAnchor="start" fontSize={10} fill="#8a6a3e"
+                    textAnchor="start" fontSize={10} fill="var(--color-text-muted)"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
                     {node.cost > 0 && node.narrative_condition
@@ -671,8 +674,8 @@ export default function SkillTree() {
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => { e.stopPropagation(); openNewChildForm(node); }}
                 >
-                  <circle r={16} fill="#dce8d6" stroke="#3f5b3a" strokeWidth={1.5} strokeDasharray="4,3" />
-                  <text x={0} y={6} textAnchor="middle" fontSize={18} fill="#3f5b3a"
+                  <circle r={16} fill="var(--color-node-unlocked-bg)" stroke="var(--color-sage)" strokeWidth={1.5} strokeDasharray="4,3" />
+                  <text x={0} y={6} textAnchor="middle" fontSize={18} fill="var(--color-sage)"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
                 </g>
               );

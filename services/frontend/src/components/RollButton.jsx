@@ -31,7 +31,7 @@ export default function RollButton({ formula, onResult, title, size = 14, classN
       onClick={handleClick}
       disabled={disabled || rolling}
       title={title ?? `Кинути ${formula}`}
-      className={`inline-flex items-center justify-center gap-1 text-accent disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex items-center justify-center gap-1 text-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {icon && <Dices size={size} />}
       {children}

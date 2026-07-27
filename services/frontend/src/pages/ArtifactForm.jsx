@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
+import { ARTIFACT_TYPE as ARTIFACT_TYPE_LIGHT, ARTIFACT_TYPE_DARK, RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
+import { useTheme } from '../context/ThemeContext';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
@@ -22,6 +23,9 @@ export default function ArtifactForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { theme } = useTheme();
+  const ARTIFACT_TYPE = theme === 'dark' ? ARTIFACT_TYPE_DARK : ARTIFACT_TYPE_LIGHT;
+  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);

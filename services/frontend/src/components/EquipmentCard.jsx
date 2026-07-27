@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
-import { EQUIPMENT_TYPES } from '../constants/equipment';
+import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK } from '../constants/equipment';
+import { useTheme } from '../context/ThemeContext';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function EquipmentCard({ item }) {
+  const { theme } = useTheme();
+  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
 
   return (

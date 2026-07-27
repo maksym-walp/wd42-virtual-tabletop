@@ -5,6 +5,14 @@ export const EQUIPMENT_TYPES = {
   item:     { label: 'Предмет',   color: '#8a5a2b', bg: 'rgba(138,90,43,0.12)' },
 };
 
+// Lightened hues of EQUIPMENT_TYPES for legibility against the dark-theme
+// surface — same keys/labels, picked via useTheme() at the call site.
+export const EQUIPMENT_TYPES_DARK = {
+  weapon:   { label: 'Зброя',     color: '#e0836a', bg: 'rgba(224,131,106,0.12)' },
+  armor:    { label: 'Обладунок', color: '#7fcf9e', bg: 'rgba(127,207,158,0.12)' },
+  item:     { label: 'Предмет',   color: '#d9a066', bg: 'rgba(217,160,102,0.12)' },
+};
+
 // Кожен вид спорядження — окрема таблиця й окремий ендпоінт
 // (39-equipment-split-tables.sql). Запис завжди йде на ендпоінт виду; корінь
 // /api/equipment/ лишається спільним читальним зрізом по всіх трьох, бо там,

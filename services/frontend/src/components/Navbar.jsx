@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, ChevronDown, Settings, Palette, CircleUserRound } from 'lucide-react';
+import { LogOut, ChevronDown, Settings, Sun, Moon, CircleUserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { NAV_MAIN_ITEMS, NAV_MORE_ITEMS } from '../constants/navigation';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -101,11 +103,10 @@ export default function Navbar() {
                     </NavLink>
                     <button
                       type="button"
-                      disabled
-                      title="У розробці"
-                      className="flex w-full cursor-not-allowed items-center gap-2.5 border-b border-border px-4 py-2.5 text-left text-sm font-semibold text-text-dim opacity-50"
+                      onClick={toggleTheme}
+                      className="flex w-full items-center gap-2.5 border-b border-border px-4 py-2.5 text-left text-sm font-semibold text-text"
                     >
-                      <Palette size={16} strokeWidth={1.75} />
+                      {theme === 'dark' ? <Moon size={16} strokeWidth={1.75} /> : <Sun size={16} strokeWidth={1.75} />}
                       Змінити тему
                     </button>
                     <button

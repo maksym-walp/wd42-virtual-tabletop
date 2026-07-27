@@ -6,7 +6,8 @@ import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
+import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
+import { useTheme } from '../context/ThemeContext';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -40,6 +41,8 @@ const SORT_OPTIONS = [
 ];
 
 export default function Spellbook() {
+  const { theme } = useTheme();
+  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -225,7 +228,8 @@ export default function Spellbook() {
 function FilterPill({ active, color, onClick, children }) {
   // matches the CSS --color-accent token — kept as a literal hex (not the CSS
   // var) since it needs '+alpha' string concatenation for the active bg tint.
-  const activeColor = color || '#5b440a';
+  const { theme } = useTheme();
+  const activeColor = color || (theme === 'dark' ? '#8a5a2b' : '#5b440a');
   return (
     <button
       type="button"

@@ -19,8 +19,34 @@
   --color-rose: #7a4a3e;
   --color-gold: #8a5a2b;
   --color-danger: #7a2e1d;
+  --color-edge-optional: #a68a55;
+  --color-node-narrative: #5a3a6a;
+  --color-node-unlocked-bg: #dce8d6;
+  --color-node-narrative-bg: #e3d6e8;
+  --color-node-danger-bg: #f0dad4;
   --font-display: "Cinzel", serif;
   --font-body: "Lora", serif;
+}
+
+/* Dark theme — neutral gray surfaces, same accent/sage/rose/danger/gold hues
+   as light mode. --color-accent diverges from --color-text/--color-border
+   here (they're all the same ink-brown in light mode) because that dark
+   ink-brown has near-zero contrast on a dark gray background — accent takes
+   over the gold hue instead. */
+[data-theme="dark"] {
+  --color-bg: #1e1e1e;
+  --color-surface: #262626;
+  --color-surface-hover: #303030;
+  --color-border: #3a3a3a;
+  --color-text: #e6e6e6;
+  --color-text-muted: #a8a8a8;
+  --color-text-dim: #7a7a7a;
+  --color-accent: #8a5a2b;
+  --color-edge-optional: #c2a575;
+  --color-node-narrative: #a67ebd;
+  --color-node-unlocked-bg: #2b3a2a;
+  --color-node-narrative-bg: #3a2e40;
+  --color-node-danger-bg: #3a2420;
 }
 
 /* @layer base so utility classes (e.g. text-bg on a <Link>) can still

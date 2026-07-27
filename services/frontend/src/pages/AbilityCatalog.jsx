@@ -5,7 +5,8 @@ import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { ARCHETYPES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -30,6 +31,8 @@ const ABILITY_TABLE_COLUMNS = [
 ];
 
 export default function AbilityCatalog() {
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const [archetype, setArchetype] = useState('');
   const [scope, setScope] = useState('');
   const [abilities, setAbilities] = useState([]);

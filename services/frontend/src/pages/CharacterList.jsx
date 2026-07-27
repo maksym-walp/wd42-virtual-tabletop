@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import characterApi from '../api/characterSheet';
+import campaignApi from '../api/campaigns';
 import { removeView } from '../utils/recentlyViewed';
-import { ARCHETYPES, RACES, ARCHETYPE_COLORS } from '../constants/characterSheet';
+import { ARCHETYPES, RACES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -12,6 +14,7 @@ import PageHeader from '../components/ui/PageHeader';
 
 export default function CharacterList() {
   const [characters, setCharacters] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -21,6 +24,7 @@ export default function CharacterList() {
       .then(setCharacters)
       .catch(() => setError('Не вдалось завантажити персонажів'))
       .finally(() => setLoading(false));
+    campaignApi.list().then(setCampaigns).catch(() => {});
   }, []);
 
   const handleDelete = async (id, name) => {
@@ -45,6 +49,15 @@ export default function CharacterList() {
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
+      {campaigns.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Кампанії</h2>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {campaigns.map((c) => <CampaignRowCard key={c.id} campaign={c} />)}
+          </div>
+        </div>
+      )}
+
       {characters.length === 0 ? (
         <EmptyState title="У вас ще немає персонажів" action={<Button to="/characters/new">Створити першого</Button>} />
       ) : (
@@ -64,6 +77,8 @@ export default function CharacterList() {
 }
 
 function CharacterCard({ character: c, onDelete, onClick }) {
+  const { theme } = useTheme();
+  const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const archetype = ARCHETYPES[c.archetype];
   const race = RACES[c.race];
   const archetypeColor = ARCHETYPE_COLORS[c.archetype];
@@ -114,6 +129,24 @@ function CharacterCard({ character: c, onDelete, onClick }) {
         </button>
       </div>
     </Card>
+  );
+}
+
+function CampaignRowCard({ campaign: c }) {
+  return (
+    <Link
+      to={`/campaigns/${c.id}`}
+      className="block w-56 shrink-0 overflow-hidden rounded-lg border border-border bg-surface"
+      style={{ borderLeft: '4px solid var(--color-accent)' }}
+    >
+      <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+        <h3 className="font-display text-lg text-accent">{c.name}</h3>
+        <Badge color={c.is_gm ? '#1a1a1a' : undefined} bg={c.is_gm ? '#d4af37' : undefined}
+          className={`shrink-0 ${c.is_gm ? '' : 'border border-border text-text-dim'}`}>
+          {c.is_gm ? 'Майстер' : 'Гравець'}
+        </Badge>
+      </div>
+    </Link>
   );
 }
 

@@ -7,7 +7,7 @@ export default function ManeuverCard({ maneuver }) {
     <Link
       to={`/maneuvers/${maneuver.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
-      style={{ borderLeft: '4px solid #8a5a2b' }}
+      style={{ borderLeft: '4px solid var(--color-gold)' }}
     >
       {maneuver.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">

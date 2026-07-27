@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { DiceProvider } from './context/DiceContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -44,6 +45,7 @@ import MapView from './pages/MapView';
 
 export default function App() {
   return (
+    <ThemeProvider>
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
@@ -127,5 +129,6 @@ export default function App() {
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
+    </ThemeProvider>
   );
 }

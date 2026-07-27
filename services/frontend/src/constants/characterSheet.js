@@ -23,6 +23,14 @@ export const ARCHETYPE_COLORS = {
   rogue:       { color: '#223f27', bg: 'rgba(34,63,39,0.12)' },
 };
 
+// Lightened hues of ARCHETYPE_COLORS for legibility against the dark-theme
+// surface — same keys, picked via useTheme() at the call site.
+export const ARCHETYPE_COLORS_DARK = {
+  fighter:     { color: '#8886c9', bg: 'rgba(136,134,201,0.12)' },
+  spellcaster: { color: '#cf82ab', bg: 'rgba(207,130,171,0.12)' },
+  rogue:       { color: '#6fbf7a', bg: 'rgba(111,191,122,0.12)' },
+};
+
 export const RACES = {
   human: {
     label: 'Люди', ability: 'Спритність від народження',

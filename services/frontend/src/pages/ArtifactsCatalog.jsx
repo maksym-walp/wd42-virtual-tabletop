@@ -5,7 +5,8 @@ import api from '../api/client';
 import ArtifactCard from '../components/ArtifactCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { RARITIES } from '../constants/artifacts';
+import { RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
+import { useTheme } from '../context/ThemeContext';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -15,6 +16,8 @@ import ViewToggle from '../components/ui/ViewToggle';
 import useViewMode from '../hooks/useViewMode';
 
 export default function ArtifactsCatalog() {
+  const { theme } = useTheme();
+  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
   const [rarity, setRarity]   = useState('');
   const [scope, setScope]     = useState('');
   const [artifacts, setArtifacts] = useState([]);

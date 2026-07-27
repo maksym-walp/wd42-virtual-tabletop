@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom';
-import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
+import { ARTIFACT_TYPE as ARTIFACT_TYPE_LIGHT, ARTIFACT_TYPE_DARK, RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
+import { useTheme } from '../context/ThemeContext';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function ArtifactCard({ artifact }) {
+  const { theme } = useTheme();
+  const ARTIFACT_TYPE = theme === 'dark' ? ARTIFACT_TYPE_DARK : ARTIFACT_TYPE_LIGHT;
+  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
   const rarity = RARITIES[artifact.rarity];
 
   return (

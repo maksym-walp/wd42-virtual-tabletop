@@ -5,7 +5,8 @@ import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
 import CollectionsRow from '../components/CollectionsRow';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { useTheme } from '../context/ThemeContext';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -17,6 +18,8 @@ import useViewMode from '../hooks/useViewMode';
 const TYPE_TABS = ['weapon', 'armor', 'item'];
 
 export default function EquipmentCatalog() {
+  const { theme } = useTheme();
+  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
   const [type, setType]     = useState('weapon');
   const [scope, setScope]   = useState('');
   const [items, setItems]   = useState([]);

@@ -6,9 +6,10 @@ import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
 import {
-  NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
+  NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_KINDS, primaryNature,
 } from '../constants/spellbook';
+import { useTheme } from '../context/ThemeContext';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -36,6 +37,8 @@ export default function SpellForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { theme } = useTheme();
+  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -179,7 +182,7 @@ export default function SpellForm() {
     }
   };
 
-  const activeType = primaryNature(form.nature);
+  const activeType = primaryNature(form.nature, NATURE_TYPES);
   const toggleNature = (key) => setForm((f) => ({
     ...f,
     nature: f.nature.includes(key) ? f.nature.filter((n) => n !== key) : [...f.nature, key],

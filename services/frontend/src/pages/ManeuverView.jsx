@@ -62,7 +62,7 @@ export default function ManeuverView() {
         <ArrowLeft size={15} /> Маневри
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid #8a5a2b' }}>
+      <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-gold)' }}>
         {maneuver.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
             <img src={maneuver.image_url} alt={maneuver.name} className="h-full w-full object-cover" />

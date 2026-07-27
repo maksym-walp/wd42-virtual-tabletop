@@ -2,18 +2,21 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
+import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function SpellView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
   const [spell, setSpell] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -56,7 +59,7 @@ export default function SpellView() {
 
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
-  const type = primaryNature(spell.nature);
+  const type = primaryNature(spell.nature, NATURE_TYPES);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 
