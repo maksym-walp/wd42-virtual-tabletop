@@ -289,6 +289,92 @@ describe('CombatController.updateCombatant', () => {
     expect(CombatantModel.update).toHaveBeenCalledWith('cb1', 'c1', { health: 3 });
     expect(res.json).toHaveBeenCalledWith({ combatant: { id: 'cb1', health: 3 } });
   });
+
+  describe('player self-service (health/temp_hp/initiative/active_defense/passive_defense/notes on their own combatant)', () => {
+    it('403s without even checking ownership when the body touches a non-self-service field', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      const req = mockReq({
+        params: { id: 'c1', combatantId: 'cb1' },
+        body: { health: 3, description: 'sneaky' },
+        user: { sub: 'player-1' },
+      });
+      const res = mockRes();
+
+      await CombatController.updateCombatant(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(CombatantModel.isOwnedByUser).not.toHaveBeenCalled();
+      expect(CombatantModel.update).not.toHaveBeenCalled();
+    });
+
+    it('allows a player to patch passive_defense and notes on their own combatant', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatantModel.isOwnedByUser.mockResolvedValue(true);
+      CombatantModel.update.mockResolvedValue({ id: 'cb1', passive_defense: 14, notes: 'rolled physical dice' });
+      const req = mockReq({
+        params: { id: 'c1', combatantId: 'cb1' },
+        body: { passive_defense: 14, notes: 'rolled physical dice' },
+        user: { sub: 'player-1' },
+      });
+      const res = mockRes();
+
+      await CombatController.updateCombatant(req, res);
+
+      expect(CombatantModel.update).toHaveBeenCalledWith('cb1', 'c1', { passive_defense: 14, notes: 'rolled physical dice' });
+      expect(res.status).not.toHaveBeenCalledWith(403);
+    });
+
+    it('403s when the player does not own this combatant', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatantModel.isOwnedByUser.mockResolvedValue(false);
+      const req = mockReq({
+        params: { id: 'c1', combatantId: 'cb1' },
+        body: { health: 3 },
+        user: { sub: 'player-1' },
+      });
+      const res = mockRes();
+
+      await CombatController.updateCombatant(req, res);
+
+      expect(CombatantModel.isOwnedByUser).toHaveBeenCalledWith('cb1', 'c1', 'player-1');
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(CombatantModel.update).not.toHaveBeenCalled();
+    });
+
+    it('allows a player to patch health/temp_hp on their own combatant', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatantModel.isOwnedByUser.mockResolvedValue(true);
+      CombatantModel.update.mockResolvedValue({ id: 'cb1', health: 12, temp_hp: 0 });
+      const req = mockReq({
+        params: { id: 'c1', combatantId: 'cb1' },
+        body: { health: 12, temp_hp: 0 },
+        user: { sub: 'player-1' },
+      });
+      const res = mockRes();
+
+      await CombatController.updateCombatant(req, res);
+
+      expect(CombatantModel.update).toHaveBeenCalledWith('cb1', 'c1', { health: 12, temp_hp: 0 });
+      expect(res.json).toHaveBeenCalledWith({ combatant: { id: 'cb1', health: 12, temp_hp: 0 } });
+    });
+
+    it('allows a player to patch initiative/active_defense on their own combatant (dice roll result)', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatantModel.isOwnedByUser.mockResolvedValue(true);
+      CombatantModel.update.mockResolvedValue({ id: 'cb1', initiative: 4 });
+      const req = mockReq({
+        params: { id: 'c1', combatantId: 'cb1' },
+        body: { initiative: 4 },
+        user: { sub: 'player-1' },
+      });
+      const res = mockRes();
+
+      await CombatController.updateCombatant(req, res);
+
+      expect(CombatantModel.update).toHaveBeenCalledWith('cb1', 'c1', { initiative: 4 });
+      expect(res.status).not.toHaveBeenCalledWith(403);
+    });
+  });
 });
 
 describe('CombatController.removeCombatant', () => {
@@ -396,5 +482,41 @@ describe('CombatController.nextRound', () => {
 
     expect(CombatSceneModel.advanceRound).toHaveBeenCalledWith('s1', 'c1');
     expect(res.json).toHaveBeenCalledWith({ scene: { id: 's1', round_number: 2 } });
+  });
+});
+
+describe('CombatController.syncHpFromCharacterSheet', () => {
+  it('404s when the character does not exist', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue(null);
+    const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 10 }, user: { sub: 'player-1' } });
+    const res = mockRes();
+
+    await CombatController.syncHpFromCharacterSheet(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(CombatantModel.updateHpByCharacterId).not.toHaveBeenCalled();
+  });
+
+  it('403s when the requester does not own this character', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'someone-else' });
+    const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 10 }, user: { sub: 'player-1' } });
+    const res = mockRes();
+
+    await CombatController.syncHpFromCharacterSheet(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CombatantModel.updateHpByCharacterId).not.toHaveBeenCalled();
+  });
+
+  it('updates every combatant linked to this character and returns them', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'player-1' });
+    CombatantModel.updateHpByCharacterId.mockResolvedValue([{ id: 'cb1', health: 10, temp_hp: 2 }]);
+    const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 10, temp_hp: 2 }, user: { sub: 'player-1' } });
+    const res = mockRes();
+
+    await CombatController.syncHpFromCharacterSheet(req, res);
+
+    expect(CombatantModel.updateHpByCharacterId).toHaveBeenCalledWith('ch1', { health: 10, temp_hp: 2 });
+    expect(res.json).toHaveBeenCalledWith({ combatants: [{ id: 'cb1', health: 10, temp_hp: 2 }] });
   });
 });

@@ -36,8 +36,8 @@ const EquipmentController = {
 
   async patch(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const { mastery_count, mastered } = req.body;
-    const updated = await EquipmentModel.patch(req.params.id, req.params.equipmentId, { mastery_count, mastered });
+    const { mastery_count, mastered, is_equipped } = req.body;
+    const updated = await EquipmentModel.patch(req.params.id, req.params.equipmentId, { mastery_count, mastered, is_equipped });
     if (!updated) return res.status(404).json({ message: 'Предмет не знайдено в листі' });
     res.json({ item: updated });
   },

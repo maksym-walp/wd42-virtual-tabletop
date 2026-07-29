@@ -59,3 +59,34 @@ describe('EquipmentModel.patch auto-mastery rule', () => {
     expect(params[3]).toBe(false);
   });
 });
+
+describe('EquipmentModel.patch is_equipped mutual exclusivity', () => {
+  it('skips the unequip-others query entirely when is_equipped is not provided', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 1 });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][1][4]).toBeNull();
+  });
+
+  it('runs an unequip-others query before the main update when is_equipped is true', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { is_equipped: true });
+
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    const [unequipSql, unequipParams] = pool.query.mock.calls[0];
+    expect(unequipSql).toMatch(/UPDATE character_sheet\.equipment ce/);
+    expect(unequipSql).toMatch(/SET is_equipped = false/);
+    expect(unequipSql).toMatch(/ce\.character_id = \$1/);
+    expect(unequipSql).toMatch(/ce\.equipment_id <> \$2/);
+    expect(unequipSql).toMatch(/ei\.type = 'armor'/);
+    expect(unequipSql).toMatch(/EXISTS \(/);
+    expect(unequipParams).toEqual(['c1', 'eq1']);
+
+    const [, mainParams] = pool.query.mock.calls[1];
+    expect(mainParams[4]).toBe(true);
+  });
+
+  it('does not run the unequip-others query when explicitly un-equipping (is_equipped: false)', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { is_equipped: false });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][1][4]).toBe(false);
+  });
+});

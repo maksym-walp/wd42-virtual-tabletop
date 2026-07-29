@@ -76,15 +76,40 @@ const EquipmentModel = {
     return rows[0] || null;
   },
 
-  async patch(characterId, equipmentId, { mastery_count, mastered }) {
+  async patch(characterId, equipmentId, { mastery_count, mastered, is_equipped }) {
     // Auto-master when mastery_count reaches 3
     const effectiveMastered = mastered ?? (mastery_count >= 3 ? true : undefined);
+
+    // Одночасно вдягнений лише один обладунок: перш ніж виставити is_equipped
+    // на цьому рядку, знімаємо прапорець з усіх ІНШИХ armor-рядків персонажа —
+    // але лише якщо сам цей рядок і є обладунком (EXISTS-підзапит нижче).
+    // Тип рядка визначаємо через CATALOG-join, а не ce.slot: та колонка
+    // застаріла й завжди 'item', бо add() її не виставляє відколи
+    // 39-equipment-split-tables.sql прибрала type із самого каталогу.
+    if (is_equipped === true) {
+      await pool.query(
+        `UPDATE character_sheet.equipment ce
+         SET is_equipped = false
+         FROM ${CATALOG} ei
+         WHERE ce.character_id = $1
+           AND ce.equipment_id <> $2
+           AND ei.id = ce.equipment_id
+           AND ei.type = 'armor'
+           AND ce.is_equipped = true
+           AND EXISTS (
+             SELECT 1 FROM ${CATALOG} target
+             WHERE target.id = $2 AND target.type = 'armor'
+           )`,
+        [characterId, equipmentId]
+      );
+    }
 
     const { rows } = await pool.query(
       `WITH updated AS (
          UPDATE character_sheet.equipment
          SET mastery_count = COALESCE($3, mastery_count),
-             mastered      = COALESCE($4, mastered)
+             mastered      = COALESCE($4, mastered),
+             is_equipped   = COALESCE($5, is_equipped)
          WHERE character_id = $1 AND equipment_id = $2
          RETURNING *
        )
@@ -99,7 +124,7 @@ const EquipmentModel = {
               ) END AS item
        FROM updated ce
        LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id`,
-      [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null]
+      [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null, is_equipped ?? null]
     );
     return rows[0] || null;
   },

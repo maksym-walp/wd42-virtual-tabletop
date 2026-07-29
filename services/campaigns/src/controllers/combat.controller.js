@@ -6,6 +6,14 @@ const { loadCampaignOr404, isGm } = require('./load-campaign');
 
 const HIDDEN_COMBATANT_FIELDS = ['id', 'name', 'description', 'is_hidden'];
 
+// Поля, які гравець (не GM) сміє міняти на СВОЄМУ комбатанті: ХП (розумний
+// парсинг +N/-N/N на фронті вже звівся до цих двох чисел), захисти й
+// ініціативу (або з кидка кубика на сайті, або вручну — за столом гравці
+// часто кидають фізичні кубики) і власні примітки. Усе інше — лише GM.
+const PLAYER_EDITABLE_FIELDS = [
+  'health', 'temp_hp', 'initiative', 'active_defense', 'passive_defense', 'notes',
+];
+
 // Прихований від гравців комбатант (is_hidden) віддає лише картку-заглушку:
 // жодних чисел здоров'я/захисту/ініціативи чи нотаток GM, доки його не розкрито.
 function redactForPlayers(combatant) {
@@ -85,7 +93,14 @@ const CombatController = {
   async updateCombatant(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    if (!isGm(campaign, req.user.sub)) {
+      const onlySelfServiceFields = Object.keys(req.body).every((key) => PLAYER_EDITABLE_FIELDS.includes(key));
+      if (!onlySelfServiceFields) return res.status(403).json({ message: 'Доступ заборонено' });
+
+      const owns = await CombatantModel.isOwnedByUser(req.params.combatantId, campaign.id, req.user.sub);
+      if (!owns) return res.status(403).json({ message: 'Доступ заборонено' });
+    }
 
     const combatant = await CombatantModel.update(req.params.combatantId, campaign.id, req.body);
     if (!combatant) return res.status(404).json({ message: 'Комбатанта не знайдено' });
@@ -129,6 +144,19 @@ const CombatController = {
 
     const updated = await CombatSceneModel.advanceRound(scene.id, campaign.id);
     res.json({ scene: updated });
+  },
+
+  // Зворотний бік двосторонньої синхронізації: лист персонажа сповіщає сюди
+  // про зміну ХП, а ми знаходимо ВСІХ його комбатантів (у будь-якій
+  // кампанії/сцені) і оновлюємо їх — не знаючи наперед, у якому бою він зараз.
+  async syncHpFromCharacterSheet(req, res) {
+    const character = await CampaignModel.findCharacterOwner(req.params.characterId);
+    if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
+    if (character.user_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { health, temp_hp } = req.body;
+    const combatants = await CombatantModel.updateHpByCharacterId(req.params.characterId, { health, temp_hp });
+    res.json({ combatants });
   },
 };
 

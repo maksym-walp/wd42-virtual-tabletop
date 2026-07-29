@@ -16,18 +16,19 @@ const CombatantModel = {
 
   async add(sceneId, {
     character_id, name, passive_defense, active_defense, health,
-    initiative, notes, description, is_hidden,
+    initiative, notes, description, is_hidden, max_health, temp_hp,
   }) {
     const { rows } = await pool.query(
       `INSERT INTO campaigns.combatants (
          combat_scene_id, character_id, name, passive_defense, active_defense,
-         health, initiative, notes, description, is_hidden
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         health, initiative, notes, description, is_hidden, max_health, temp_hp
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         sceneId, character_id ?? null, name,
         passive_defense ?? null, active_defense ?? null, health ?? null,
         initiative ?? null, notes ?? null, description ?? null, is_hidden ?? false,
+        max_health ?? null, temp_hp ?? null,
       ]
     );
     return rows[0];
@@ -35,7 +36,7 @@ const CombatantModel = {
 
   async update(id, campaignId, {
     name, passive_defense, active_defense, health,
-    initiative, notes, description, is_hidden,
+    initiative, notes, description, is_hidden, max_health, temp_hp,
   } = {}) {
     const { rows } = await pool.query(
       `UPDATE campaigns.combatants c
@@ -47,6 +48,8 @@ const CombatantModel = {
            notes           = COALESCE($8, c.notes),
            description     = COALESCE($9, c.description),
            is_hidden       = COALESCE($10, c.is_hidden),
+           max_health      = COALESCE($11, c.max_health),
+           temp_hp         = COALESCE($12, c.temp_hp),
            updated_at      = NOW()
        FROM campaigns.combat_scenes s
        WHERE c.id = $1 AND c.combat_scene_id = s.id AND s.campaign_id = $2
@@ -54,10 +57,41 @@ const CombatantModel = {
       [
         id, campaignId, name ?? null, passive_defense ?? null, active_defense ?? null,
         health ?? null, initiative ?? null, notes ?? null, description ?? null,
-        is_hidden ?? null,
+        is_hidden ?? null, max_health ?? null, temp_hp ?? null,
       ]
     );
     return rows[0] || null;
+  },
+
+  // Чи належить цей комбатант персонажу, яким володіє userId — саме на
+  // цій перевірці тримається дозвіл гравцю правити ХП/ініціативу/захист
+  // лише свого рядка (combatants не має власної campaign_id, тож заодно
+  // скоупимо через combat_scenes, як і в інших методах цієї моделі).
+  async isOwnedByUser(combatantId, campaignId, userId) {
+    const { rows } = await pool.query(
+      `SELECT 1
+       FROM campaigns.combatants c
+       JOIN campaigns.combat_scenes s ON s.id = c.combat_scene_id
+       JOIN character_sheet.characters ch ON ch.id = c.character_id
+       WHERE c.id = $1 AND s.campaign_id = $2 AND ch.user_id = $3
+       LIMIT 1`,
+      [combatantId, campaignId, userId]
+    );
+    return rows.length > 0;
+  },
+
+  // Зворотний бік двосторонньої синхронізації ХП: лист персонажа не знає,
+  // у якій кампанії/сцені персонаж зараз б'ється, тож оновлюємо ВСІ його
+  // комбатантів одразу (character_id, без прив'язки до конкретної кампанії).
+  async updateHpByCharacterId(characterId, { health, temp_hp }) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.combatants
+       SET health = COALESCE($2, health), temp_hp = COALESCE($3, temp_hp), updated_at = NOW()
+       WHERE character_id = $1
+       RETURNING *`,
+      [characterId, health ?? null, temp_hp ?? null]
+    );
+    return rows;
   },
 
   async remove(id, campaignId) {

@@ -164,6 +164,14 @@ const campaignApi = {
   async removeCombatant(id, combatantId) {
     await api.delete(`${BASE}/${id}/combat/combatants/${combatantId}`);
   },
+
+  // Зворотний бік двосторонньої синхронізації ХП: лист персонажа сповіщає
+  // сюди, а бекенд сам знаходить усіх комбатантів цього персонажа (в будь-
+  // якій кампанії/сцені) й оновлює їхнє health/temp_hp.
+  async syncCombatantHp(characterId, { health, temp_hp }) {
+    const { data } = await api.patch(`${BASE}/characters/${characterId}/hp`, { health, temp_hp });
+    return data.combatants;
+  },
 };
 
 export default campaignApi;

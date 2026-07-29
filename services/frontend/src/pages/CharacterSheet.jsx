@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield } from 'lucide-react';
 import characterApi from '../api/characterSheet';
+import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
@@ -75,7 +76,7 @@ export default function CharacterSheet({ publicView = false }) {
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName]     = useState('');
   const [editingDefense, setEditingDefense]         = useState(false);
-  const [defenseDraft, setDefenseDraft]             = useState(0);
+  const [defenseBonusDraft, setDefenseBonusDraft]   = useState(0);
   const [editingInspiration, setEditingInspiration] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
 
@@ -123,14 +124,27 @@ export default function CharacterSheet({ publicView = false }) {
   // never lose earlier changes when the debounce timer resets.
   const pendingPatch = useRef({});
 
+  // Двостороння синхронізація ХП: якщо патч зачіпає current_hp/temp_hp,
+  // повідомляємо campaigns-сервіс — той сам знайде всіх комбатантів цього
+  // персонажа (у будь-якому бою) і оновить їх, без очікування наступного
+  // опитування трекера. Мовчки ігноруємо помилку — найчастіше персонаж
+  // просто зараз ні в якому бою, і оновлювати нічого.
+  const syncCombatHp = useCallback((patch) => {
+    if (!('current_hp' in patch) && !('temp_hp' in patch)) return;
+    campaignApi.syncCombatantHp(id, { health: patch.current_hp, temp_hp: patch.temp_hp }).catch(() => {});
+  }, [id]);
+
   const saveVitalsFn = useCallback(async () => {
     const patch = { ...pendingPatch.current };
     pendingPatch.current = {};
     if (!Object.keys(patch).length) return;
     setSaving(true);
-    try { await characterApi.update(id, patch); }
+    try {
+      await characterApi.update(id, patch);
+      syncCombatHp(patch);
+    }
     finally { setSaving(false); }
-  }, [id]);
+  }, [id, syncCombatHp]);
 
   const saveVitals = useDebounce(saveVitalsFn, 600);
 
@@ -140,9 +154,10 @@ export default function CharacterSheet({ publicView = false }) {
       const patch = pendingPatch.current;
       if (Object.keys(patch).length) {
         characterApi.update(id, patch).catch(() => {});
+        syncCombatHp(patch);
       }
     };
-  }, [id]);
+  }, [id, syncCombatHp]);
 
   const patchCharacter = (patch) => {
     setData(prev => ({ ...prev, character: { ...prev.character, ...patch } }));
@@ -162,8 +177,8 @@ export default function CharacterSheet({ publicView = false }) {
     setData(prev => ({ ...prev, character: { ...prev.character, name: trimmed } }));
   };
 
-  const openDefenseEditor = (currentTotal) => {
-    setDefenseDraft(currentTotal);
+  const openDefenseEditor = () => {
+    setDefenseBonusDraft(data.character.defense_bonus ?? 0);
     setEditingDefense(true);
   };
 
@@ -199,7 +214,18 @@ export default function CharacterSheet({ publicView = false }) {
   };
   const patchEquipment  = async (equipmentId, patch) => {
     const item = await characterApi.patchEquipment(id, equipmentId, patch);
-    setData(prev => ({ ...prev, equipment: prev.equipment.map(e => e.equipment_id === equipmentId ? item : e) }));
+    setData(prev => ({
+      ...prev,
+      equipment: prev.equipment.map(e => {
+        if (e.equipment_id === equipmentId) return item;
+        // Одягання нового обладунку знімає прапорець з усіх інших — бекенд це
+        // вже зробив у БД, тут лише дзеркалимо локально, не чекаючи рефетчу.
+        if (patch.is_equipped === true && e.item?.type === 'armor' && e.is_equipped) {
+          return { ...e, is_equipped: false };
+        }
+        return e;
+      }),
+    }));
   };
   const removeEquipment = async (equipmentId) => {
     await characterApi.removeEquipment(id, equipmentId);
@@ -267,11 +293,16 @@ export default function CharacterSheet({ publicView = false }) {
   const HEROIC_COUNT    = { 1:0,2:1,3:2,4:3,5:4,6:5 };
   const INSPIRATION_DIE = { 1:'—',2:'d4',3:'d6',4:'d8',5:'d10',6:'d12' };
 
-  const passiveDefense = equipment.reduce((s, e) => {
+  // Пасивний захист = захист ОДЯГНЕНОГО обладунку (лише один може бути
+  // is_equipped) + ручний модифікатор. Раніше тут сумувався захист усього
+  // обладунку в інвентарі — тепер має значення тільки одягнений предмет.
+  const equippedArmorEntry = equipment.find(e => {
     const catalogItem = e.item || allEquipment.find(a => a.id === e.equipment_id);
-    return catalogItem?.type === 'armor' ? s + (catalogItem.defense_value || 0) : s;
-  }, 0);
-  const totalDefense   = passiveDefense + (c.defense_bonus ?? 0);
+    return catalogItem?.type === 'armor' && e.is_equipped;
+  });
+  const equippedArmorItem = equippedArmorEntry && (equippedArmorEntry.item || allEquipment.find(a => a.id === equippedArmorEntry.equipment_id));
+  const equippedDefense = equippedArmorItem?.defense_value || 0;
+  const totalDefense    = equippedDefense + (c.defense_bonus ?? 0);
   const heroicTotal    = HEROIC_COUNT[charLevels.wisdom];
   const heroicLeft     = heroicTotal - c.heroic_actions_used;
   const gameInspirationDie = INSPIRATION_DIE[charLevels.charisma];
@@ -409,7 +440,7 @@ export default function CharacterSheet({ publicView = false }) {
         <BannerBox
           label="ЗАХИСТ"
           sub={`пасивний: ${totalDefense}`}
-          onClick={is_owner ? () => openDefenseEditor(totalDefense) : undefined}
+          onClick={is_owner ? openDefenseEditor : undefined}
         />
         <BannerBox
           label="ГЕРОЇЧНІ ДІЇ"
@@ -539,25 +570,30 @@ export default function CharacterSheet({ publicView = false }) {
         <Sheet open onClose={() => setEditingDefense(false)} title="Пасивний захист">
           <div className="flex flex-col gap-4">
             <p className="text-sm text-text-dim">
-              Від спорядження: {passiveDefense}. Тут можна вказати інше загальне число.
+              {equippedArmorItem
+                ? `Одягнено: ${equippedArmorItem.name} (захист ${equippedDefense})`
+                : 'Обладунок не одягнено — захист від спорядження: 0.'}
+              {' '}Разом із модифікатором нижче дає пасивний захист.
             </p>
-            <Field label="Пасивний захист">
+            <Field label="Модифікатор">
               <input
                 autoFocus
                 type="number"
-                min={0}
                 className={inputClass}
-                value={defenseDraft}
-                onChange={e => setDefenseDraft(e.target.value)}
+                value={defenseBonusDraft}
+                onChange={e => setDefenseBonusDraft(e.target.value)}
                 onKeyDown={e => {
                   if (e.key !== 'Enter') return;
-                  patchCharacter({ defense_bonus: Math.max(0, parseInt(defenseDraft, 10) || 0) - passiveDefense });
+                  patchCharacter({ defense_bonus: parseInt(defenseBonusDraft, 10) || 0 });
                   setEditingDefense(false);
                 }}
               />
             </Field>
+            <p className="text-sm text-text-dim">
+              Разом: {equippedDefense + (parseInt(defenseBonusDraft, 10) || 0)}
+            </p>
             <Button onClick={() => {
-              patchCharacter({ defense_bonus: Math.max(0, parseInt(defenseDraft, 10) || 0) - passiveDefense });
+              patchCharacter({ defense_bonus: parseInt(defenseBonusDraft, 10) || 0 });
               setEditingDefense(false);
             }}>Зберегти</Button>
           </div>
@@ -1511,12 +1547,30 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
       <Link to={item ? `${item.type === 'artifact' ? '/artifacts' : '/equipment'}/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
         <span className="text-sm text-text">{item?.name ?? '(невідоме)'}</span>
         <span className="text-xs text-text-dim">
-          {[item?.damage_die && `Шкода: ${item.damage_die}`, item?.defense_value != null && `Захист: ${item.defense_value}`].filter(Boolean).join(' · ')}
+          {[
+            item?.damage_die && `Шкода: ${item.damage_die}`,
+            item?.defense_value != null && `Захист: ${item.defense_value}`,
+            item?.type === 'armor' && entry.is_equipped && 'Одягнено',
+          ].filter(Boolean).join(' · ')}
         </span>
       </Link>
 
       {item?.type === 'weapon' && item.damage_die && (
         <RollButton formula={`1${item.damage_die}`} title={`Кинути ${item.damage_die}`} />
+      )}
+
+      {item?.type === 'armor' && (
+        <button
+          type="button"
+          onClick={() => is_owner && onPatch({ is_equipped: !entry.is_equipped })}
+          disabled={!is_owner}
+          title={entry.is_equipped ? 'Зняти обладунок' : 'Одягнути обладунок'}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded ${
+            entry.is_equipped ? 'text-sage' : 'text-text-dim'
+          } ${is_owner ? 'hover:bg-surface-hover' : ''}`}
+        >
+          <Shield size={18} fill={entry.is_equipped ? 'currentColor' : 'none'} />
+        </button>
       )}
 
       {item?.type === 'weapon' && (

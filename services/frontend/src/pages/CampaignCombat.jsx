@@ -1,17 +1,40 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Eye, EyeOff, Trash2, Plus, Upload } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import characterApi from '../api/characterSheet';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
+import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
+import { modifierDie } from '../constants/characterSheet';
+import { useDice } from '../context/DiceContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
 import IntInput from '../components/ui/IntInput';
 import Sheet from '../components/ui/Sheet';
+import RollButton from '../components/RollButton';
+
+// Filenames matching a column key (e.g. assets/combat-icons/health.svg) are
+// picked up automatically — no code change needed once custom art is dropped
+// into that folder. Falls back to the built-in Lucide/hand-drawn icon below.
+function imagesByKey(globResult) {
+  const map = {};
+  for (const [path, url] of Object.entries(globResult)) {
+    const key = path.match(/([^/]+)\.[a-z]+$/i)?.[1];
+    if (key) map[key] = url;
+  }
+  return map;
+}
+
+const customColumnIcons = imagesByKey(
+  import.meta.glob('../assets/combat-icons/*.{png,svg}', { eager: true, import: 'default' })
+);
 
 const POLL_INTERVAL_MS = 3500;
-const EMPTY_NPC_FORM = { name: '', passive_defense: 0, active_defense: 0, health: 0, initiative: 0, notes: '', description: '' };
+const EMPTY_NPC_FORM = {
+  name: '', passive_defense: 0, active_defense: 0, health: 0, max_health: 0,
+  temp_hp: 0, initiative: 0, notes: '', description: '',
+};
 
 // Гравці для NPC, де is_hidden === false, все одно не бачать точних чисел —
 // рядок лишається (ім'я/опис для атмосфери), але цифри й нотатки затерті на
@@ -22,10 +45,106 @@ function filterForPlayers(combatants) {
     .filter((c) => c.character_id || !c.is_hidden)
     .map((c) => {
       if (c.character_id) return c;
-      const { passive_defense, active_defense, health, initiative, notes, ...rest } = c;
+      const { passive_defense, active_defense, health, initiative, notes, temp_hp, max_health, ...rest } = c;
       return rest;
     });
 }
+
+// "45+10/60" якщо є тимчасові ХП, інакше просто "55/60" (або "55", якщо
+// максимальне ХП невідоме — типово для NPC, яким GM його не вказав).
+function formatHp(health, tempHp, maxHealth) {
+  if (health == null) return '—';
+  const current = tempHp ? `${health}+${tempHp}` : `${health}`;
+  return maxHealth != null ? `${current}/${maxHealth}` : current;
+}
+
+// "Розумне" ХП: голе число ("40") — абсолютне встановлення поточного ХП;
+// "+5" — лікування (з обмеженням максимальним ХП, якщо воно відоме);
+// "-5" — шкода, що спершу знімається з тимчасових ХП, а залишок — з поточних.
+function applyHpInput(raw, { health, temp_hp, max_health }) {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const n = parseInt(trimmed, 10);
+  if (Number.isNaN(n)) return null;
+
+  const curHealth = health ?? 0;
+  const curTemp = temp_hp ?? 0;
+  const isDelta = trimmed[0] === '+' || trimmed[0] === '-';
+
+  if (!isDelta) {
+    const clamped = max_health != null ? Math.min(n, max_health) : n;
+    return { health: Math.max(0, clamped), temp_hp: curTemp };
+  }
+
+  if (n > 0) {
+    const healed = curHealth + n;
+    const clamped = max_health != null ? Math.min(healed, max_health) : healed;
+    return { health: Math.max(0, clamped), temp_hp: curTemp };
+  }
+
+  const damage = -n;
+  const fromTemp = Math.min(curTemp, damage);
+  const remaining = damage - fromTemp;
+  return { health: Math.max(0, curHealth - remaining), temp_hp: curTemp - fromTemp };
+}
+
+// ================================================================
+// Іконки заголовків таблиці. Lucide не має "нагрудника" чи "щита з
+// ухиленою стрілою" — тому це власні SVG у тому ж стилі (24x24,
+// stroke=currentColor), щоб виглядали як частина того самого набору іконок.
+// ================================================================
+
+function ChestplateIcon({ size = 16, className = '', ...props }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}
+    >
+      <path d="M12 2 8 4v3L4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-4-2V4l-4-2Z" />
+      <path d="M12 9v11" />
+      <path d="M9 13h6" />
+    </svg>
+  );
+}
+
+// Щит, повз який пролітає стріла (ухилення) — на відміну від нагрудника
+// (статичний захист броні), це про активне уникнення удару.
+function DodgeShieldIcon({ size = 16, className = '', ...props }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}
+    >
+      <path d="M9 2 3 4.5v6c0 5 2.6 8 6 9.5 1-.44 1.93-.98 2.76-1.62" />
+      <path d="M11 21 22 10" />
+      <path d="M22 16v-6h-6" />
+    </svg>
+  );
+}
+
+// Сліди від кроків (порядок ходу) із маленьким "№" у кутку.
+function InitiativeIcon({ size = 16, className = '', ...props }) {
+  return (
+    <span className={`relative inline-flex shrink-0 ${className}`} style={{ width: size, height: size }} {...props}>
+      <Footprints size={size} />
+      <span className="absolute -bottom-1 -right-1 rounded-full bg-surface-hover px-0.5 text-[8px] font-bold leading-none text-text-dim">
+        №
+      </span>
+    </span>
+  );
+}
+
+// Заголовки колонок таблиці комбатантів: іконка + title-тултип. "Опис"
+// бачить лише майстер (players.description column is dropped entirely).
+const COLUMN_HEADERS = [
+  { key: 'name', label: "Ім'я", Icon: User },
+  { key: 'passive_defense', label: 'Пасивний захист', Icon: ChestplateIcon },
+  { key: 'active_defense', label: 'Ухилення', Icon: DodgeShieldIcon },
+  { key: 'health', label: "Здоров'я", Icon: Heart },
+  { key: 'initiative', label: 'Ініціатива', Icon: InitiativeIcon },
+  { key: 'notes', label: 'Примітки', Icon: Tag },
+  { key: 'description', label: 'Опис', Icon: FileText, gmOnly: true },
+];
 
 export default function CombatTab({ campaignId, isGm, characters }) {
   const [scene, setScene] = useState(null);
@@ -69,6 +188,10 @@ export default function CombatTab({ campaignId, isGm, characters }) {
   const visible = isGm ? combatants : filterForPlayers(combatants);
   const notActed = visible.filter((c) => !c.has_acted_this_round);
   const acted = visible.filter((c) => c.has_acted_this_round);
+
+  // Чиї це персонажі — визначає, чи бачить гравець "розумне" поле ХП і
+  // кубики ініціативи/захисту для конкретного рядка (лише для своїх).
+  const myCharacterIds = new Set(characters.filter((c) => c.is_mine).map((c) => c.character_id));
 
   const handleNextTurn = async () => {
     setBusy(true);
@@ -125,7 +248,14 @@ export default function CombatTab({ campaignId, isGm, characters }) {
         />
       )}
 
-      <CombatantsTable notActed={notActed} acted={acted} isGm={isGm} campaignId={campaignId} onChanged={load} />
+      <CombatantsTable
+        notActed={notActed}
+        acted={acted}
+        isGm={isGm}
+        campaignId={campaignId}
+        onChanged={load}
+        myCharacterIds={myCharacterIds}
+      />
 
       <SceneImage campaignId={campaignId} scene={scene} isGm={isGm} onChanged={load} />
     </div>
@@ -165,7 +295,7 @@ function NoSceneYetGm({ campaignId, onCreated }) {
 // роздільник / "вже походили цього раунду".
 // ================================================================
 
-function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged }) {
+function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myCharacterIds }) {
   if (notActed.length === 0 && acted.length === 0) {
     return (
       <EmptyState title="У бою ще немає комбатантів">
@@ -174,26 +304,25 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged }) {
     );
   }
 
-  const colCount = isGm ? 8 : 7;
+  const colCount = isGm ? 8 : 6;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-surface-hover text-left text-xs uppercase tracking-wide text-text-dim">
-            <th className="px-3 py-2 font-semibold">Ім'я</th>
-            <th className="px-3 py-2 font-semibold">Пас. захист</th>
-            <th className="px-3 py-2 font-semibold">Акт. захист</th>
-            <th className="px-3 py-2 font-semibold">Здоров'я</th>
-            <th className="px-3 py-2 font-semibold">Ініціатива</th>
-            <th className="px-3 py-2 font-semibold">Примітки</th>
-            <th className="px-3 py-2 font-semibold">Опис</th>
+            {COLUMN_HEADERS.filter((col) => isGm || !col.gmOnly).map(({ key, label }) => (
+              <th key={key} className="px-3 py-2 font-semibold">{label}</th>
+            ))}
             {isGm && <th className="px-3 py-2 font-semibold">Дії</th>}
           </tr>
         </thead>
         <tbody>
           {notActed.map((c) => (
-            <CombatantRow key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged} />
+            <CombatantRow
+              key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged}
+              isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
+            />
           ))}
           {acted.length > 0 && (
             <tr>
@@ -203,7 +332,10 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged }) {
             </tr>
           )}
           {acted.map((c) => (
-            <CombatantRow key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged} dimmed />
+            <CombatantRow
+              key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged} dimmed
+              isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
+            />
           ))}
         </tbody>
       </table>
@@ -211,11 +343,13 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged }) {
   );
 }
 
-function CombatantRow({ combatant, isGm, campaignId, onChanged, dimmed }) {
+function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }) {
   const rowRef = useRef(null);
   const [local, setLocal] = useState(combatant);
+  const [hpDraft, setHpDraft] = useState('');
+  const { roll: rollDice, rolling: diceRolling } = useDice();
 
-  // Опитування оновлює `combatant` кожні ~3.5с; якщо майстер саме зараз
+  // Опитування оновлює `combatant` кожні ~3.5с; якщо хтось саме зараз
   // редагує поле в цьому рядку — не затираємо введене свіжими даними з сервера.
   useEffect(() => {
     if (rowRef.current && rowRef.current.contains(document.activeElement)) return;
@@ -224,22 +358,11 @@ function CombatantRow({ combatant, isGm, campaignId, onChanged, dimmed }) {
 
   const isPlayerLinked = !!combatant.character_id;
   const isNpc = !isPlayerLinked;
+  const canEditFully = isGm; // усі поля, крім ХП/кидків — лише майстер
+  const canEditHp = isGm || isMine; // гравець редагує ХП тільки свого персонажа
+  const canRoll = isGm || isMine; // кубики ініціативи/захисту — свій персонаж або GM
   const rowClass = `border-b border-border last:border-0 ${dimmed ? 'opacity-60' : ''}`;
   const cellClass = 'px-3 py-2 align-top';
-
-  if (!isGm) {
-    return (
-      <tr className={rowClass}>
-        <td className={cellClass}>{combatant.name}</td>
-        <td className={cellClass}>{combatant.passive_defense ?? '—'}</td>
-        <td className={cellClass}>{combatant.active_defense ?? '—'}</td>
-        <td className={cellClass}>{combatant.health ?? '—'}</td>
-        <td className={cellClass}>{combatant.initiative ?? '—'}</td>
-        <td className={cellClass}>{combatant.notes || '—'}</td>
-        <td className={cellClass}>{combatant.description || '—'}</td>
-      </tr>
-    );
-  }
 
   const commit = async (key) => {
     if (local[key] === combatant[key]) return;
@@ -248,6 +371,60 @@ function CombatantRow({ combatant, isGm, campaignId, onChanged, dimmed }) {
       onChanged();
     } catch {
       setLocal(combatant);
+    }
+  };
+
+  // Розумне ХП: рахуємо нове (health, temp_hp) із заданого вводу, зберігаємо
+  // в combatants кампанії, і якщо це персонаж гравця — тим самим запитом
+  // синхронізуємо і його оригінальний лист у character-sheet.
+  const applyAndSyncHp = async (rawInput) => {
+    const next = applyHpInput(rawInput, combatant);
+    if (!next) return;
+    try {
+      await campaignApi.updateCombatant(campaignId, combatant.id, next);
+      if (combatant.character_id) {
+        await characterApi.update(combatant.character_id, { current_hp: next.health, temp_hp: next.temp_hp }).catch(() => {});
+      }
+      onChanged();
+    } catch {
+      // мережева помилка — наступне опитування підтягне справжній стан
+    }
+  };
+
+  const commitHp = () => {
+    const raw = hpDraft;
+    setHpDraft('');
+    applyAndSyncHp(raw);
+  };
+
+  // Кнопки +/- біля ХП: змінюють по одному, не змушуючи перенабирати текст.
+  const stepHp = (delta) => applyAndSyncHp(delta > 0 ? '+1' : '-1');
+
+  // Ухилення кидається повною формулою навички: 1d20 + кубик-модифікатор
+  // (якщо значення навички це дає), а не заглушкою. NPC не мають навичок у
+  // цій системі — для них лишається голий 1d20.
+  const rollEvasion = async () => {
+    try {
+      let formula = '1d20';
+      if (combatant.character_id) {
+        const { skills } = await characterApi.getSheet(combatant.character_id);
+        const evasion = skills.find((s) => s.skill_key === 'evasion');
+        const die = modifierDie(evasion?.value ?? 1);
+        formula = die === '—' ? '1d20' : `1d20+1${die}`;
+      }
+      const result = await rollDice(formula);
+      await handleDiceResult('active_defense', result);
+    } catch {
+      // помилка кидка або завантаження навички — нічого не зберігаємо
+    }
+  };
+
+  const handleDiceResult = async (field, roll) => {
+    try {
+      await campaignApi.updateCombatant(campaignId, combatant.id, { [field]: roll.total });
+      onChanged();
+    } catch {
+      // наступне опитування підтягне справжній стан
     }
   };
 
@@ -270,93 +447,259 @@ function CombatantRow({ combatant, isGm, campaignId, onChanged, dimmed }) {
     }
   };
 
+  const hpDisplay = formatHp(combatant.health, combatant.temp_hp, combatant.max_health);
+
+  // Гравці ніколи не бачать колонку "Опис" — вона суто для GM. Для NPC
+  // (де решта чисел і так затерті на фронті) її текст замість цього
+  // показується в одній об'єднаній клітинці, щоб не малювати ряд "—".
+  if (!isGm) {
+    if (isNpc) {
+      return (
+        <tr ref={rowRef} className={rowClass}>
+          <td className={cellClass}>{combatant.name}</td>
+          <td className={cellClass} colSpan={5}>{combatant.description || '—'}</td>
+        </tr>
+      );
+    }
+
+    return (
+      <tr ref={rowRef} className={rowClass}>
+        <td className={cellClass}><span className="text-text">{combatant.name}</span></td>
+        <td className={cellClass}>
+          {isMine ? (
+            <IntInput
+              className={`${inputClass} min-h-8 w-16 py-1`}
+              value={local.passive_defense}
+              onChange={(v) => setLocal((p) => ({ ...p, passive_defense: v }))}
+              onBlur={() => commit('passive_defense')}
+            />
+          ) : (
+            <span className="text-text">{combatant.passive_defense ?? '—'}</span>
+          )}
+        </td>
+        <td className={cellClass}>
+          <div className="flex items-center gap-1">
+            {isMine ? (
+              <IntInput
+                className={`${inputClass} min-h-8 w-16 py-1`}
+                value={local.active_defense}
+                onChange={(v) => setLocal((p) => ({ ...p, active_defense: v }))}
+                onBlur={() => commit('active_defense')}
+              />
+            ) : (
+              <span className="text-text">{combatant.active_defense ?? '—'}</span>
+            )}
+            {canRoll && (
+              <button
+                type="button"
+                onClick={rollEvasion}
+                disabled={diceRolling}
+                title="Кинути ухилення (1d20 + модифікатор навички)"
+                className="inline-flex items-center justify-center gap-1 text-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Dices size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+        <td className={cellClass}>
+          {canEditHp ? (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
+                <Minus size={14} />
+              </button>
+              <input
+                className={`${inputClass} min-h-8 w-16 py-1`}
+                placeholder={hpDisplay}
+                value={hpDraft}
+                onChange={(e) => setHpDraft(e.target.value)}
+                onBlur={commitHp}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+              />
+              <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <span className="text-text">{hpDisplay}</span>
+          )}
+        </td>
+        <td className={cellClass}>
+          <div className="flex items-center gap-1">
+            {isMine ? (
+              <IntInput
+                className={`${inputClass} min-h-8 w-16 py-1`}
+                value={local.initiative}
+                onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
+                onBlur={() => commit('initiative')}
+              />
+            ) : (
+              <span className="text-text">{combatant.initiative ?? '—'}</span>
+            )}
+            {canRoll && (
+              <RollButton
+                formula="1d6"
+                showWidget={false}
+                title="Кинути кубик спритності (заглушка: 1d6 — навички ще не підключені)"
+                onResult={(roll) => handleDiceResult('initiative', roll)}
+              />
+            )}
+          </div>
+        </td>
+        <td className={cellClass}>
+          {isMine ? (
+            <input
+              className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+              value={local.notes ?? ''}
+              onChange={(e) => setLocal((p) => ({ ...p, notes: e.target.value }))}
+              onBlur={() => commit('notes')}
+            />
+          ) : (
+            <span className="text-text">{combatant.notes || '—'}</span>
+          )}
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr ref={rowRef} className={rowClass}>
       <td className={cellClass}>
-        {isPlayerLinked ? (
-          <span className="text-text">{combatant.name}</span>
-        ) : (
+        {canEditFully && isNpc ? (
           <input
             className={`${inputClass} min-h-8 min-w-[110px] py-1`}
             value={local.name}
             onChange={(e) => setLocal((p) => ({ ...p, name: e.target.value }))}
             onBlur={() => commit('name')}
           />
+        ) : (
+          <span className="text-text">{combatant.name}</span>
         )}
       </td>
       <td className={cellClass}>
-        {isPlayerLinked ? (
-          <span className="text-text">{combatant.passive_defense ?? '—'}</span>
-        ) : (
+        {canEditFully && isNpc ? (
           <IntInput
             className={`${inputClass} min-h-8 w-16 py-1`}
             value={local.passive_defense}
             onChange={(v) => setLocal((p) => ({ ...p, passive_defense: v }))}
             onBlur={() => commit('passive_defense')}
           />
-        )}
-      </td>
-      <td className={cellClass}>
-        <IntInput
-          className={`${inputClass} min-h-8 w-16 py-1`}
-          value={local.active_defense}
-          onChange={(v) => setLocal((p) => ({ ...p, active_defense: v }))}
-          onBlur={() => commit('active_defense')}
-        />
-      </td>
-      <td className={cellClass}>
-        {isPlayerLinked ? (
-          <span className="text-text">{combatant.health ?? '—'}</span>
         ) : (
-          <IntInput
-            className={`${inputClass} min-h-8 w-16 py-1`}
-            value={local.health}
-            onChange={(v) => setLocal((p) => ({ ...p, health: v }))}
-            onBlur={() => commit('health')}
-          />
+          <span className="text-text">{combatant.passive_defense ?? '—'}</span>
         )}
       </td>
       <td className={cellClass}>
-        <IntInput
-          className={`${inputClass} min-h-8 w-16 py-1`}
-          value={local.initiative}
-          onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
-          onBlur={() => commit('initiative')}
-        />
-      </td>
-      <td className={cellClass}>
-        <input
-          className={`${inputClass} min-h-8 min-w-[130px] py-1`}
-          value={local.notes ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, notes: e.target.value }))}
-          onBlur={() => commit('notes')}
-        />
-      </td>
-      <td className={cellClass}>
-        <input
-          className={`${inputClass} min-h-8 min-w-[130px] py-1`}
-          value={local.description ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, description: e.target.value }))}
-          onBlur={() => commit('description')}
-        />
-      </td>
-      <td className={`${cellClass} whitespace-nowrap`}>
         <div className="flex items-center gap-1">
-          {isNpc && (
+          {canEditFully ? (
+            <IntInput
+              className={`${inputClass} min-h-8 w-16 py-1`}
+              value={local.active_defense}
+              onChange={(v) => setLocal((p) => ({ ...p, active_defense: v }))}
+              onBlur={() => commit('active_defense')}
+            />
+          ) : (
+            <span className="text-text">{combatant.active_defense ?? '—'}</span>
+          )}
+          {canRoll && (
             <button
               type="button"
-              onClick={toggleHidden}
-              aria-label={combatant.is_hidden ? 'Показати гравцям' : 'Приховати від гравців'}
-              className="p-1 text-text-dim hover:text-accent"
+              onClick={rollEvasion}
+              disabled={diceRolling}
+              title="Кинути ухилення (1d20 + модифікатор навички)"
+              className="inline-flex items-center justify-center gap-1 text-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {combatant.is_hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+              <Dices size={14} />
             </button>
           )}
-          <button type="button" onClick={handleRemove} aria-label="Прибрати з бою" className="p-1 text-text-dim hover:text-danger">
-            <Trash2 size={15} />
-          </button>
         </div>
       </td>
+      <td className={cellClass}>
+        {canEditHp ? (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
+              <Minus size={14} />
+            </button>
+            <input
+              className={`${inputClass} min-h-8 w-16 py-1`}
+              placeholder={hpDisplay}
+              value={hpDraft}
+              onChange={(e) => setHpDraft(e.target.value)}
+              onBlur={commitHp}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+            />
+            <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
+              <Plus size={14} />
+            </button>
+          </div>
+        ) : (
+          <span className="text-text">{hpDisplay}</span>
+        )}
+      </td>
+      <td className={cellClass}>
+        <div className="flex items-center gap-1">
+          {canEditFully ? (
+            <IntInput
+              className={`${inputClass} min-h-8 w-16 py-1`}
+              value={local.initiative}
+              onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
+              onBlur={() => commit('initiative')}
+            />
+          ) : (
+            <span className="text-text">{combatant.initiative ?? '—'}</span>
+          )}
+          {canRoll && (
+            <RollButton
+              formula="1d6"
+              showWidget={false}
+              title="Кинути кубик спритності (заглушка: 1d6 — навички ще не підключені)"
+              onResult={(roll) => handleDiceResult('initiative', roll)}
+            />
+          )}
+        </div>
+      </td>
+      <td className={cellClass}>
+        {canEditFully ? (
+          <input
+            className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+            value={local.notes ?? ''}
+            onChange={(e) => setLocal((p) => ({ ...p, notes: e.target.value }))}
+            onBlur={() => commit('notes')}
+          />
+        ) : (
+          <span className="text-text">{combatant.notes || '—'}</span>
+        )}
+      </td>
+      <td className={cellClass}>
+        {canEditFully ? (
+          <input
+            className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+            value={local.description ?? ''}
+            onChange={(e) => setLocal((p) => ({ ...p, description: e.target.value }))}
+            onBlur={() => commit('description')}
+          />
+        ) : (
+          <span className="text-text">{combatant.description || '—'}</span>
+        )}
+      </td>
+      {isGm && (
+        <td className={`${cellClass} whitespace-nowrap`}>
+          <div className="flex items-center gap-1">
+            {isNpc && (
+              <button
+                type="button"
+                onClick={toggleHidden}
+                aria-label={combatant.is_hidden ? 'Показати гравцям' : 'Приховати від гравців'}
+                className="p-1 text-text-dim hover:text-accent"
+              >
+                {combatant.is_hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            )}
+            <button type="button" onClick={handleRemove} aria-label="Прибрати з бою" className="p-1 text-text-dim hover:text-danger">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        </td>
+      )}
     </tr>
   );
 }
@@ -417,18 +760,15 @@ function AddPlayerSheet({ open, campaignId, sceneId, characters, onClose, onAdde
     setSaving(true);
     setError('');
     try {
-      const { character, equipment } = await characterApi.getSheet(characterId);
-      // Той самий "пасивний захист" (броня + ручний бонус), що на сторінці
-      // персонажа — тут лише читаємо, нічого не рахуємо для власника заново.
-      const armorDefense = (equipment ?? []).reduce((sum, e) => (
-        e.item?.type === 'armor' ? sum + (e.item.defense_value || 0) : sum
-      ), 0);
+      const { character, equipment, skills } = await characterApi.getSheet(characterId);
 
       await campaignApi.addCombatant(campaignId, sceneId, {
         character_id: characterId,
         name: character.name,
-        passive_defense: armorDefense + (character.defense_bonus ?? 0),
+        passive_defense: computePassiveDefense(equipment, character.defense_bonus),
         health: character.current_hp,
+        max_health: computeMaxHp(character, skills),
+        temp_hp: character.temp_hp ?? 0,
       });
       onAdded();
     } catch (err) {
@@ -502,11 +842,17 @@ function AddNpcSheet({ open, campaignId, sceneId, onClose, onAdded }) {
           <Field label="Пасивний захист">
             <IntInput className={inputClass} value={form.passive_defense} onChange={setInt('passive_defense')} />
           </Field>
-          <Field label="Активний захист">
+          <Field label="Ухилення">
             <IntInput className={inputClass} value={form.active_defense} onChange={setInt('active_defense')} />
           </Field>
           <Field label="Здоров'я">
             <IntInput className={inputClass} value={form.health} onChange={setInt('health')} />
+          </Field>
+          <Field label="Максимальне здоров'я">
+            <IntInput className={inputClass} value={form.max_health} onChange={setInt('max_health')} />
+          </Field>
+          <Field label="Тимчасові ХП">
+            <IntInput className={inputClass} value={form.temp_hp} onChange={setInt('temp_hp')} />
           </Field>
           <Field label="Ініціатива">
             <IntInput className={inputClass} value={form.initiative} onChange={setInt('initiative')} />

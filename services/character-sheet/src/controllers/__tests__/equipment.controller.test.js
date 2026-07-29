@@ -138,18 +138,18 @@ describe('EquipmentController.patch', () => {
   });
 
   // Exact-field forwarding matters: extra body fields must not leak into the model call.
-  it('forwards exactly mastery_count and mastered to the model, dropping other body fields', async () => {
+  it('forwards exactly mastery_count, mastered and is_equipped to the model, dropping other body fields', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     EquipmentModel.patch.mockResolvedValue({ id: 'link-1', mastery_count: 3, mastered: true });
     const req = mockReq({
       params: { id: 'c1', equipmentId: 'e1' },
-      body: { mastery_count: 3, mastered: true, name: 'sneaky extra field', notes: 'ignored' },
+      body: { mastery_count: 3, mastered: true, is_equipped: true, name: 'sneaky extra field', notes: 'ignored' },
     });
     const res = mockRes();
 
     await EquipmentController.patch(req, res);
 
-    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 3, mastered: true });
+    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 3, mastered: true, is_equipped: true });
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'link-1', mastery_count: 3, mastered: true } });
   });
 
@@ -161,7 +161,7 @@ describe('EquipmentController.patch', () => {
 
     await EquipmentController.patch(req, res);
 
-    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 1, mastered: undefined });
+    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 1, mastered: undefined, is_equipped: undefined });
   });
 });
 

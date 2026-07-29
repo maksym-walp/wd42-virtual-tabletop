@@ -51,4 +51,8 @@ router.post('/:id/combat/scenes/:sceneId/combatants', wrap(CombatController.addC
 router.patch('/:id/combat/combatants/:combatantId', wrap(CombatController.updateCombatant));
 router.delete('/:id/combat/combatants/:combatantId', wrap(CombatController.removeCombatant));
 
+// Не прив'язаний до конкретної кампанії: лист персонажа не знає, у якому бою
+// (якщо взагалі) цей персонаж зараз перебуває.
+router.patch('/characters/:characterId/hp', wrap(CombatController.syncHpFromCharacterSheet));
+
 module.exports = router;
