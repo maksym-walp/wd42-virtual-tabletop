@@ -49,8 +49,25 @@ const CampaignCharacterController = {
     if (!isMember) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const characters = await CampaignCharacterModel.listWithOwners(campaign.id);
-    const withOwnership = characters.map((ch) => ({ ...ch, is_mine: ch.owner_id === req.user.sub }));
-    res.json({ characters: withOwnership });
+    const visible = characters.map((ch) => {
+      const isMine = ch.owner_id === req.user.sub;
+      // Private characters belonging to someone else: card-only data, no
+      // owner_email/added_at, and no way for the frontend to link into the sheet.
+      if (!ch.is_public && !isMine) {
+        return {
+          character_id: ch.character_id,
+          character_name: ch.character_name,
+          image_url: ch.image_url,
+          archetype: ch.archetype,
+          race: ch.race,
+          owner_username: ch.owner_username,
+          is_mine: false,
+          is_private: true,
+        };
+      }
+      return { ...ch, is_mine: isMine, is_private: false };
+    });
+    res.json({ characters: visible });
   },
 
   // Майстер відв'язує персонажа від кампанії (сам лист персонажа не видаляється)
@@ -60,6 +77,20 @@ const CampaignCharacterController = {
     if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
 
     await CampaignCharacterModel.remove(campaign.id, req.params.characterId);
+    res.status(204).send();
+  },
+
+  // A player leaves the campaign: every character THEY own gets detached.
+  // The GM can't "leave" their own campaign — they'd have to delete it.
+  async leave(req, res) {
+    const campaign = await CampaignModel.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
+    if (campaign.gm_id === req.user.sub) {
+      return res.status(400).json({ message: 'Майстер не може покинути власну кампанію' });
+    }
+
+    const removed = await CampaignCharacterModel.removeAllForUser(campaign.id, req.user.sub);
+    if (!removed) return res.status(404).json({ message: 'Ви не берете участі в цій кампанії' });
     res.status(204).send();
   },
 };

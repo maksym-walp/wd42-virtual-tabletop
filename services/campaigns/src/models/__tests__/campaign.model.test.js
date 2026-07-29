@@ -45,6 +45,20 @@ describe('CampaignModel.create', () => {
 });
 
 describe('CampaignModel reads', () => {
+  it('findById joins auth.users for the GM username', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', gm_id: 'gm1', gm_username: 'bob' }] });
+    const campaign = await CampaignModel.findById('c1');
+    expect(campaign).toEqual({ id: 'c1', gm_id: 'gm1', gm_username: 'bob' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/JOIN auth\.users u ON u\.id = cp\.gm_id/);
+    expect(params).toEqual(['c1']);
+  });
+
+  it('findById returns null when not found', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await CampaignModel.findById('missing')).toBeNull();
+  });
+
   it('findByInviteCode queries by invite_code', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1' }] });
     const campaign = await CampaignModel.findByInviteCode('ABC123');
@@ -95,6 +109,15 @@ describe('CampaignModel notes updates', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/SET gm_notes = \$2/);
     expect(params).toEqual(['c1', 'secret']);
+  });
+
+  it('updateDescription updates description only', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', description: 'A tale of...' }] });
+    const updated = await CampaignModel.updateDescription('c1', 'A tale of...');
+    expect(updated).toEqual({ id: 'c1', description: 'A tale of...' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SET description = \$2/);
+    expect(params).toEqual(['c1', 'A tale of...']);
   });
 
   it('rename updates name only', async () => {

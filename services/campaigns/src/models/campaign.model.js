@@ -25,9 +25,15 @@ const CampaignModel = {
     throw lastErr;
   },
 
+  // Joined with the GM's username so every campaign-scoped controller (they
+  // all route through loadCampaignOr404 -> findById) gets it for free — the
+  // Home tab shows the GM's nickname alongside the campaign description.
   async findById(id) {
     const { rows } = await pool.query(
-      `SELECT * FROM campaigns.campaigns WHERE id = $1`,
+      `SELECT cp.*, u.username AS gm_username
+       FROM campaigns.campaigns cp
+       JOIN auth.users u ON u.id = cp.gm_id
+       WHERE cp.id = $1`,
       [id]
     );
     return rows[0] || null;
@@ -68,6 +74,14 @@ const CampaignModel = {
     const { rows } = await pool.query(
       `UPDATE campaigns.campaigns SET shared_notes = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id, sharedNotes]
+    );
+    return rows[0] || null;
+  },
+
+  async updateDescription(id, description) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.campaigns SET description = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, description]
     );
     return rows[0] || null;
   },

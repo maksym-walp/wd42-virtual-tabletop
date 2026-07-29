@@ -16,6 +16,13 @@ describe('valid targets', () => {
     });
   });
 
+  it('maps combat-scene under a combat-scenes/ directory keyed by scene id', () => {
+    expect(resolveTarget('combat-scene', UUID, DIR)).toEqual({
+      relDir: `campaigns/combat-scenes/${UUID}`,
+      absDir: `/uploads/campaigns/combat-scenes/${UUID}`,
+    });
+  });
+
   it('maps map-lenses under the map id in a lenses/ subdirectory', () => {
     expect(resolveTarget('map-lenses', UUID, DIR)).toEqual({
       relDir: `maps/${UUID}/lenses`,
@@ -62,7 +69,7 @@ describe('entity_type whitelist', () => {
 });
 
 describe('entity_id validation', () => {
-  it.each(['campaign-gallery', 'map-lenses', 'character'])('requires an id for %s', (type) => {
+  it.each(['campaign-gallery', 'combat-scene', 'map-lenses', 'character'])('requires an id for %s', (type) => {
     expectBadRequest(() => resolveTarget(type, undefined, DIR));
   });
 

@@ -24,9 +24,9 @@ describe('CampaignCharacterModel.add', () => {
 });
 
 describe('CampaignCharacterModel.listWithOwners', () => {
-  it('joins across campaign_characters, character_sheet.characters and auth.users', async () => {
+  it('joins across campaign_characters, character_sheet.characters and auth.users, including is_public/image_url', async () => {
     pool.query.mockResolvedValueOnce({
-      rows: [{ character_id: 'ch1', owner_username: 'bob', owner_email: 'bob@example.com' }],
+      rows: [{ character_id: 'ch1', owner_username: 'bob', owner_email: 'bob@example.com', is_public: true, image_url: null }],
     });
     const rows = await CampaignCharacterModel.listWithOwners('c1');
     expect(rows).toHaveLength(1);
@@ -34,6 +34,7 @@ describe('CampaignCharacterModel.listWithOwners', () => {
     expect(sql).toMatch(/FROM campaigns\.campaign_characters cc/);
     expect(sql).toMatch(/JOIN character_sheet\.characters c ON c\.id = cc\.character_id/);
     expect(sql).toMatch(/JOIN auth\.users u ON u\.id = c\.user_id/);
+    expect(sql).toMatch(/c\.is_public, c\.image_url/);
     expect(params).toEqual(['c1']);
   });
 });
@@ -50,6 +51,23 @@ describe('CampaignCharacterModel.remove', () => {
   it('returns false when no matching row existed', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 0 });
     expect(await CampaignCharacterModel.remove('c1', 'ch1')).toBe(false);
+  });
+});
+
+describe('CampaignCharacterModel.removeAllForUser', () => {
+  it('deletes every campaign_characters row owned by the user in this campaign', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 2 });
+    expect(await CampaignCharacterModel.removeAllForUser('c1', 'u1')).toBe(true);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/DELETE FROM campaigns\.campaign_characters cc/);
+    expect(sql).toMatch(/USING character_sheet\.characters c/);
+    expect(sql).toMatch(/cc\.campaign_id = \$1 AND c\.user_id = \$2/);
+    expect(params).toEqual(['c1', 'u1']);
+  });
+
+  it('returns false when the user had no characters in this campaign', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 0 });
+    expect(await CampaignCharacterModel.removeAllForUser('c1', 'u1')).toBe(false);
   });
 });
 

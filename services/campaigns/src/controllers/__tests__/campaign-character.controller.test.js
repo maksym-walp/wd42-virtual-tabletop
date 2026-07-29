@@ -166,12 +166,12 @@ describe('CampaignCharacterController.list', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  it('marks is_mine correctly per character for the requester', async () => {
+  it('marks is_mine correctly per character for the requester (public characters keep full data)', async () => {
     CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
     CampaignCharacterModel.isMember.mockResolvedValue(true);
     CampaignCharacterModel.listWithOwners.mockResolvedValue([
-      { character_id: 'ch-1', owner_id: 'user-1' },
-      { character_id: 'ch-2', owner_id: 'other-user' },
+      { character_id: 'ch-1', owner_id: 'user-1', is_public: true },
+      { character_id: 'ch-2', owner_id: 'other-user', is_public: true },
     ]);
     const req = mockReq({ params: { id: 'c1' }, user: { sub: 'user-1' } });
     const res = mockRes();
@@ -180,10 +180,48 @@ describe('CampaignCharacterController.list', () => {
 
     expect(res.json).toHaveBeenCalledWith({
       characters: [
-        { character_id: 'ch-1', owner_id: 'user-1', is_mine: true },
-        { character_id: 'ch-2', owner_id: 'other-user', is_mine: false },
+        { character_id: 'ch-1', owner_id: 'user-1', is_public: true, is_mine: true, is_private: false },
+        { character_id: 'ch-2', owner_id: 'other-user', is_public: true, is_mine: false, is_private: false },
       ],
     });
+  });
+
+  it('redacts a private character belonging to someone else', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignCharacterModel.isMember.mockResolvedValue(true);
+    CampaignCharacterModel.listWithOwners.mockResolvedValue([{
+      character_id: 'ch-1', character_name: 'Shadow', archetype: 'rogue', race: 'elf',
+      owner_id: 'other-user', owner_username: 'alice', owner_email: 'alice@example.com',
+      is_public: false, image_url: '/img.png', added_at: '2024-01-01',
+    }]);
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'user-1' } });
+    const res = mockRes();
+
+    await CampaignCharacterController.list(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      characters: [{
+        character_id: 'ch-1', character_name: 'Shadow', image_url: '/img.png',
+        archetype: 'rogue', race: 'elf', owner_username: 'alice',
+        is_mine: false, is_private: true,
+      }],
+    });
+  });
+
+  it('returns full data (including owner_email) for a private character owned by the requester', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignCharacterModel.isMember.mockResolvedValue(true);
+    CampaignCharacterModel.listWithOwners.mockResolvedValue([{
+      character_id: 'ch-1', character_name: 'Shadow', owner_id: 'user-1',
+      owner_email: 'me@example.com', is_public: false,
+    }]);
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'user-1' } });
+    const res = mockRes();
+
+    await CampaignCharacterController.list(req, res);
+
+    const { characters } = res.json.mock.calls[0][0];
+    expect(characters[0]).toMatchObject({ owner_email: 'me@example.com', is_mine: true, is_private: false });
   });
 
   it('does not call isMember for the GM', async () => {
@@ -225,6 +263,47 @@ describe('CampaignCharacterController.remove', () => {
     await CampaignCharacterController.remove(req, res);
 
     expect(CampaignCharacterModel.remove).toHaveBeenCalledWith('c1', 'ch-1');
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.send).toHaveBeenCalled();
+  });
+});
+
+describe('CampaignCharacterController.leave', () => {
+  it('returns 404 when campaign is missing', async () => {
+    CampaignModel.findById.mockResolvedValue(null);
+    const req = mockReq({ params: { id: 'missing' } });
+    const res = mockRes();
+    await CampaignCharacterController.leave(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 400 when the GM tries to leave their own campaign', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' } });
+    const res = mockRes();
+    await CampaignCharacterController.leave(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CampaignCharacterModel.removeAllForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the player has no characters in this campaign', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignCharacterModel.removeAllForUser.mockResolvedValue(false);
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'player-1' } });
+    const res = mockRes();
+    await CampaignCharacterController.leave(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('detaches the players characters and responds 204', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignCharacterModel.removeAllForUser.mockResolvedValue(true);
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'player-1' } });
+    const res = mockRes();
+
+    await CampaignCharacterController.leave(req, res);
+
+    expect(CampaignCharacterModel.removeAllForUser).toHaveBeenCalledWith('c1', 'player-1');
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
   });

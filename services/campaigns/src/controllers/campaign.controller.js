@@ -39,6 +39,15 @@ const CampaignController = {
     res.json({ campaign: updated });
   },
 
+  async updateDescription(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const updated = await CampaignModel.updateDescription(campaign.id, req.body.description ?? '');
+    res.json({ campaign: updated });
+  },
+
   async updateGmNotes(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;

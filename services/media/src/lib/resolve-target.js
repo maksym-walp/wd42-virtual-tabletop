@@ -5,6 +5,7 @@ const path = require('path');
 // як хоч щось торкнеться диска.
 const TARGETS = {
   'campaign-gallery': { requiresId: true,  dir: (id) => `campaigns/${id}/gallery` },
+  'combat-scene':     { requiresId: true,  dir: (id) => `campaigns/combat-scenes/${id}` },
   'map-lenses':       { requiresId: true,  dir: (id) => `maps/${id}/lenses` },
   'location':         { requiresId: false, dir: () => 'maps/locations' },
   'marker-icon':      { requiresId: false, dir: () => 'maps/marker-icons' },

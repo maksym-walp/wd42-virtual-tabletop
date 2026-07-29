@@ -1,28 +1,23 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Trash2, Check, X as XIcon, Upload, Map, Globe, Lock, Plus } from 'lucide-react';
+import { Trash2, Upload, Map, Globe, Lock, Plus, LogOut } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
+import useDebounce from '../hooks/useDebounce';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
 import Lightbox from '../components/ui/Lightbox';
-
-function useDebounce(fn, delay = 600) {
-  const timer = useRef(null);
-  return useCallback((...args) => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => fn(...args), delay);
-  }, [fn, delay]);
-}
+import Sheet from '../components/ui/Sheet';
+import CombatTab from './CampaignCombat';
 
 const TABS = [
-  { key: 'characters', label: 'Персонажі' },
-  { key: 'notes', label: 'Нотатки' },
-  { key: 'maps', label: 'Мапи' },
+  { key: 'home', label: 'Головна' },
+  { key: 'combat', label: 'Бойова сцена' },
+  { key: 'settings', label: 'Налаштування' },
 ];
 
 export default function CampaignDetail() {
@@ -33,12 +28,7 @@ export default function CampaignDetail() {
   const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState('characters');
-
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
-  const [renaming, setRenaming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [tab, setTab] = useState('home');
 
   useEffect(() => {
     Promise.all([campaignApi.getOne(id), campaignApi.listCharacters(id)])
@@ -59,43 +49,6 @@ export default function CampaignDetail() {
 
   const isGm = campaign.is_gm;
 
-  const startRename = () => {
-    setNameDraft(campaign.name);
-    setEditingName(true);
-  };
-
-  const cancelRename = () => {
-    setEditingName(false);
-    setNameDraft('');
-  };
-
-  const saveRename = async () => {
-    const trimmed = nameDraft.trim();
-    if (!trimmed || trimmed === campaign.name) { cancelRename(); return; }
-    setRenaming(true);
-    try {
-      const updated = await campaignApi.rename(campaign.id, trimmed);
-      setCampaign((prev) => ({ ...prev, name: updated.name }));
-      setEditingName(false);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Помилка при перейменуванні');
-    } finally {
-      setRenaming(false);
-    }
-  };
-
-  const handleDeleteCampaign = async () => {
-    if (!confirm(`Видалити кампанію "${campaign.name}"? Персонажі гравців не видаляться, лише відв'яжуться від кампанії. Це незворотно.`)) return;
-    setDeleting(true);
-    try {
-      await campaignApi.remove(campaign.id);
-      navigate('/campaigns');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Помилка при видаленні кампанії');
-      setDeleting(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-[900px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
       <div className="mb-4">
@@ -106,53 +59,17 @@ export default function CampaignDetail() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          {editingName ? (
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                className={`${inputClass} font-display text-lg`}
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveRename();
-                  if (e.key === 'Escape') cancelRename();
-                }}
-                maxLength={200}
-              />
-              <button onClick={saveRename} disabled={renaming} aria-label="Зберегти назву" className="p-1.5 text-sage">
-                <Check size={20} />
-              </button>
-              <button onClick={cancelRename} disabled={renaming} aria-label="Скасувати" className="p-1.5 text-text-dim">
-                <XIcon size={20} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h1 className="m-0 font-display text-3xl font-bold text-text">{campaign.name}</h1>
-              {isGm && (
-                <button onClick={startRename} aria-label="Перейменувати кампанію" className="p-1 text-text-dim hover:text-accent">
-                  <Pencil size={16} />
-                </button>
-              )}
-            </div>
-          )}
+          <h1 className="m-0 font-display text-3xl font-bold text-text">{campaign.name}</h1>
           {isGm && (
             <p className="mt-1 text-sm text-text-dim">
               Код запрошення: <span className="font-mono text-gold">{campaign.invite_code}</span>
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Badge bg={isGm ? '#d4af37' : undefined} color={isGm ? '#1a1a1a' : undefined}
-            className={isGm ? '' : 'border border-border text-text-dim'}>
-            {isGm ? 'Майстер' : 'Гравець'}
-          </Badge>
-          {isGm && (
-            <Button variant="danger" size="sm" onClick={handleDeleteCampaign} disabled={deleting}>
-              <Trash2 size={14} /> {deleting ? 'Видалення...' : 'Видалити кампанію'}
-            </Button>
-          )}
-        </div>
+        <Badge bg={isGm ? '#d4af37' : undefined} color={isGm ? '#1a1a1a' : undefined}
+          className={isGm ? '' : 'border border-border text-text-dim'}>
+          {isGm ? 'Майстер' : 'Гравець'}
+        </Badge>
       </div>
 
       <div className="mb-6 flex gap-2 border-b border-border">
@@ -167,28 +84,282 @@ export default function CampaignDetail() {
         ))}
       </div>
 
-      {tab === 'characters' && (
-        <CharactersTab
-          campaignId={campaign.id}
+      {tab === 'home' && (
+        <HomeTab campaign={campaign} characters={characters} isGm={isGm} navigate={navigate} onChange={setCampaign} />
+      )}
+      {tab === 'combat' && (
+        <CombatTab campaignId={campaign.id} isGm={isGm} characters={characters} />
+      )}
+      {tab === 'settings' && (
+        <SettingsTab
+          campaign={campaign}
+          isGm={isGm}
+          onChange={setCampaign}
           characters={characters}
           setCharacters={setCharacters}
-          isGm={isGm}
           navigate={navigate}
         />
-      )}
-      {tab === 'notes' && (
-        <NotesTab campaign={campaign} isGm={isGm} onChange={setCampaign} />
-      )}
-      {tab === 'maps' && (
-        <MapsTab campaignId={campaign.id} isGm={isGm} />
       )}
     </div>
   );
 }
 
+// ================================================================
+// Головна: опис + майстер, нотатки/сесії/приватні нотатки (карусель),
+// мапи, галерея, персонажі кампанії.
+// ================================================================
+
+function HomeTab({ campaign, characters, isGm, navigate, onChange }) {
+  return (
+    <div className="flex flex-col gap-8">
+      <CampaignAbout campaign={campaign} />
+      <NotesCarousel campaign={campaign} isGm={isGm} onChange={onChange} />
+      <MapsBlock campaignId={campaign.id} isGm={isGm} />
+      <CampaignGallery campaign={campaign} isGm={isGm} />
+      <CharactersBlock characters={characters} navigate={navigate} />
+    </div>
+  );
+}
+
+function CampaignAbout({ campaign }) {
+  return (
+    <Card>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Майстер</p>
+      <p className="mb-4 text-sm text-text">{campaign.gm_username}</p>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Опис кампанії</p>
+      {campaign.description ? (
+        <p className="whitespace-pre-wrap text-sm text-text">{campaign.description}</p>
+      ) : (
+        <p className="text-sm text-text-dim">Опису ще немає.</p>
+      )}
+    </Card>
+  );
+}
+
+// Три картки — Спільні нотатки, Попередні сесії, Нотатки майстра — що
+// гортаються горизонтальним скролом одна повз одну.
+function NotesCarousel({ campaign, isGm, onChange }) {
+  const [sharedNotes, setSharedNotes] = useState(campaign.shared_notes ?? '');
+  const [gmNotes, setGmNotes] = useState(campaign.gm_notes ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const saveShared = useDebounce(async (value) => {
+    setSaving(true);
+    try {
+      const updated = await campaignApi.updateSharedNotes(campaign.id, value);
+      onChange((prev) => ({ ...prev, shared_notes: updated.shared_notes }));
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  const saveGm = useDebounce(async (value) => {
+    setSaving(true);
+    try {
+      const updated = await campaignApi.updateGmNotes(campaign.id, value);
+      onChange((prev) => ({ ...prev, gm_notes: updated.gm_notes }));
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="m-0 font-display text-base text-text">Нотатки</h3>
+        {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
+      </div>
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        <Card className="w-[85vw] max-w-sm shrink-0">
+          <label className="mb-1 block text-xs text-text-dim">Спільні нотатки</label>
+          <textarea
+            className={`${inputClass} w-full resize-y`}
+            rows={10}
+            value={sharedNotes}
+            onChange={(e) => { setSharedNotes(e.target.value); if (isGm) saveShared(e.target.value); }}
+            placeholder="Нотатки, які бачать усі учасники кампанії..."
+            disabled={!isGm}
+          />
+        </Card>
+
+        <Card className="w-[85vw] max-w-sm shrink-0">
+          <SessionsPanel campaignId={campaign.id} isGm={isGm} />
+        </Card>
+
+        {isGm && (
+          <Card className="w-[85vw] max-w-sm shrink-0">
+            <label className="mb-1 block text-xs text-text-dim">Нотатки майстра (лише для вас)</label>
+            <textarea
+              className={`${inputClass} w-full resize-y`}
+              rows={10}
+              value={gmNotes}
+              onChange={(e) => { setGmNotes(e.target.value); saveGm(e.target.value); }}
+              placeholder="Секретні нотатки, плани, сюжетні твісти..."
+            />
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SessionsPanel({ campaignId, isGm }) {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [sheetSession, setSheetSession] = useState(null); // null=closed, {}=нова, {...}=перегляд/редагування
+
+  useEffect(() => {
+    let alive = true;
+    campaignApi.listSessions(campaignId)
+      .then((rows) => { if (alive) setSessions(rows); })
+      .catch(() => { if (alive) setError('Не вдалось завантажити сесії'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [campaignId]);
+
+  const refresh = () => campaignApi.listSessions(campaignId).then(setSessions);
+
+  const handleDeleted = (sessionId) => {
+    setSheetSession(null);
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <label className="text-xs text-text-dim">Попередні сесії</label>
+        {isGm && (
+          <button
+            type="button"
+            onClick={() => setSheetSession({})}
+            aria-label="Додати сесію"
+            className="p-1 text-text-dim hover:text-accent"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+
+      {error && <p className="mb-2 text-xs text-danger">{error}</p>}
+
+      {loading ? (
+        <p className="text-sm text-text-dim">Завантаження...</p>
+      ) : sessions.length === 0 ? (
+        <p className="text-sm text-text-dim">
+          {isGm ? 'Додайте запис про минулу сесію.' : 'Майстер ще не додав записів про сесії.'}
+        </p>
+      ) : (
+        <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+          {sessions.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => setSheetSession(s)}
+                className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-accent/50"
+              >
+                <p className="truncate text-sm text-text">{s.title}</p>
+                {s.session_date && <p className="text-xs text-text-dim">{s.session_date}</p>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <SessionSheet
+        session={sheetSession}
+        isGm={isGm}
+        campaignId={campaignId}
+        onClose={() => setSheetSession(null)}
+        onSaved={() => { setSheetSession(null); refresh(); }}
+        onDeleted={handleDeleted}
+      />
+    </div>
+  );
+}
+
+function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }) {
+  const isNew = !!session && !session.id;
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [date, setDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!session) return;
+    setTitle(session.title ?? '');
+    setContent(session.content ?? '');
+    setDate(session.session_date ? String(session.session_date).slice(0, 10) : '');
+    setError('');
+  }, [session]);
+
+  if (!session) return null;
+
+  const handleSave = async () => {
+    if (!title.trim()) { setError('Вкажіть назву сесії'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const payload = { title: title.trim(), content, session_date: date || null };
+      if (isNew) await campaignApi.addSession(campaignId, payload);
+      else await campaignApi.updateSession(campaignId, session.id, payload);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при збереженні сесії');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Видалити запис "${session.title}"?`)) return;
+    try {
+      await campaignApi.removeSession(campaignId, session.id);
+      onDeleted(session.id);
+    } catch {
+      setError('Не вдалось видалити сесію');
+    }
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={isNew ? 'Нова сесія' : (isGm ? 'Редагувати сесію' : session.title)}>
+      {isGm ? (
+        <div className="flex flex-col gap-4">
+          <Field label="Назва">
+            <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          </Field>
+          <Field label="Дата сесії (необовʼязково)">
+            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Опис / нотатки">
+            <textarea className={`${inputClass} resize-y`} rows={6} value={content} onChange={(e) => setContent(e.target.value)} />
+          </Field>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <div className="flex items-center justify-between gap-2">
+            {!isNew && (
+              <Button variant="danger" size="sm" onClick={handleDelete}>
+                <Trash2 size={14} /> Видалити
+              </Button>
+            )}
+            <Button onClick={handleSave} disabled={saving} className="ml-auto">
+              {saving ? 'Збереження...' : 'Зберегти'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          {session.session_date && <p className="mb-2 text-xs text-text-dim">{session.session_date}</p>}
+          <p className="whitespace-pre-wrap text-sm text-text">{session.content || 'Без опису.'}</p>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 // Map "cards": links from a campaign to standalone maps (which live in the
 // separate maps service). The GM links existing maps; players just follow them.
-function MapsTab({ campaignId, isGm }) {
+function MapsBlock({ campaignId, isGm }) {
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
   const [myMaps, setMyMaps] = useState([]);
@@ -239,10 +410,31 @@ function MapsTab({ campaignId, isGm }) {
     }
   };
 
+  const renderCard = (card) => (
+    <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}`)}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="flex items-center gap-2 font-display text-base text-text">
+          <Map size={16} className="text-text-dim" /> {card.map_name}
+        </h3>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-text-dim" title={card.is_public ? 'Публічна' : 'Приватна'}>
+            {card.is_public ? <Globe size={13} /> : <Lock size={13} />}
+          </span>
+          {isGm && (
+            <button onClick={(e) => { e.stopPropagation(); handleRemove(card.id); }} aria-label="Прибрати мапу" className="text-text-dim hover:text-danger">
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+
   return (
-    <div className="flex flex-col gap-4">
+    <div>
+      <h3 className="mb-2 font-display text-base text-text">Мапи</h3>
       {isGm && (
-        <Card>
+        <Card className="mb-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Додати посилання на мапу</p>
           {available.length === 0 ? (
             <p className="text-sm text-text-dim">
@@ -267,185 +459,13 @@ function MapsTab({ campaignId, isGm }) {
         <EmptyState icon="🗺" title="До кампанії не прив'язано жодної мапи">
           {isGm ? 'Додайте картку-посилання на створену мапу.' : 'Майстер ще не додав мап.'}
         </EmptyState>
+      ) : cards.length > 1 ? (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {cards.map((card) => <div key={card.id} className="w-64 shrink-0">{renderCard(card)}</div>)}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {cards.map((card) => (
-            <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}`)}>
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="flex items-center gap-2 font-display text-base text-text">
-                  <Map size={16} className="text-text-dim" /> {card.map_name}
-                </h3>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="text-text-dim" title={card.is_public ? 'Публічна' : 'Приватна'}>
-                    {card.is_public ? <Globe size={13} /> : <Lock size={13} />}
-                  </span>
-                  {isGm && (
-                    <button onClick={(e) => { e.stopPropagation(); handleRemove(card.id); }} aria-label="Прибрати мапу" className="text-text-dim hover:text-danger">
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        renderCard(cards[0])
       )}
-    </div>
-  );
-}
-
-function CharactersTab({ campaignId, characters, setCharacters, isGm, navigate }) {
-  const [newCharacterId, setNewCharacterId] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState('');
-
-  const refresh = () => campaignApi.listCharacters(campaignId).then(setCharacters);
-
-  const handleRemove = async (characterId, characterName) => {
-    if (!confirm(`Видалити персонажа "${characterName}" з кампанії? Сам лист персонажа не буде видалено.`)) return;
-    try {
-      await campaignApi.removeCharacter(campaignId, characterId);
-      setCharacters((prev) => prev.filter((c) => c.character_id !== characterId));
-    } catch (err) {
-      setError(err.response?.data?.message || 'Помилка при видаленні персонажа з кампанії');
-    }
-  };
-
-  const handleAdd = async () => {
-    if (!newCharacterId.trim()) return;
-    setAdding(true);
-    setError('');
-    try {
-      await campaignApi.addCharacter(campaignId, newCharacterId.trim());
-      setNewCharacterId('');
-      await refresh();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Помилка при додаванні персонажа');
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      {isGm && (
-        <Card>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">
-            Додати персонажа за ID
-          </p>
-          <div className="flex gap-2">
-            <input
-              className={`${inputClass} flex-1`}
-              value={newCharacterId}
-              onChange={(e) => setNewCharacterId(e.target.value)}
-              placeholder="ID персонажа, який надав гравець"
-            />
-            <Button onClick={handleAdd} disabled={adding} size="md">
-              {adding ? 'Додавання...' : 'Додати'}
-            </Button>
-          </div>
-          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-        </Card>
-      )}
-
-      {characters.length === 0 ? (
-        <EmptyState title="До кампанії ще не приєднано жодного персонажа" />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {characters.map((ch) => {
-            const isMine = ch.is_mine;
-            // GM can open (and edit) any character in the campaign, not just their own
-            const clickable = isMine || isGm;
-            return (
-              <Card
-                key={ch.character_id}
-                className={clickable ? 'cursor-pointer hover:border-accent/50' : ''}
-                onClick={clickable ? () => navigate(`/characters/${ch.character_id}`) : undefined}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-base text-text">{ch.character_name}</h3>
-                  {isGm && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRemove(ch.character_id, ch.character_name); }}
-                      aria-label="Видалити персонажа з кампанії"
-                      className="shrink-0 p-1 text-text-dim hover:text-danger"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                </div>
-                <p className="text-sm text-text-dim">{ch.archetype} · {ch.race}</p>
-                <p className="mt-2 text-xs text-text-dim">
-                  Власник: {ch.owner_username} {isMine && <span className="text-accent">(ви)</span>}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NotesTab({ campaign, isGm, onChange }) {
-  const [sharedNotes, setSharedNotes] = useState(campaign.shared_notes ?? '');
-  const [gmNotes, setGmNotes] = useState(campaign.gm_notes ?? '');
-  const [saving, setSaving] = useState(false);
-
-  const saveShared = useDebounce(async (value) => {
-    setSaving(true);
-    try {
-      const updated = await campaignApi.updateSharedNotes(campaign.id, value);
-      onChange((prev) => ({ ...prev, shared_notes: updated.shared_notes }));
-    } finally {
-      setSaving(false);
-    }
-  });
-
-  const saveGm = useDebounce(async (value) => {
-    setSaving(true);
-    try {
-      const updated = await campaignApi.updateGmNotes(campaign.id, value);
-      onChange((prev) => ({ ...prev, gm_notes: updated.gm_notes }));
-    } finally {
-      setSaving(false);
-    }
-  });
-
-  // Зовнішній flex-стовпчик, щоб галерея лягла на всю ширину під обома
-  // колонками нотаток, не ламаючи їхній двоколонковий грід.
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_1fr]">
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="block text-xs text-text-dim">Спільні нотатки</label>
-            {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
-          </div>
-          <textarea
-            className={`${inputClass} w-full resize-y`}
-            rows={12}
-            value={sharedNotes}
-            onChange={(e) => { setSharedNotes(e.target.value); if (isGm) saveShared(e.target.value); }}
-            placeholder="Нотатки, які бачать усі учасники кампанії..."
-            disabled={!isGm}
-          />
-        </div>
-        {isGm && (
-          <div>
-            <label className="mb-1 block text-xs text-text-dim">Нотатки майстра (лише для вас)</label>
-            <textarea
-              className={`${inputClass} w-full resize-y`}
-              rows={12}
-              value={gmNotes}
-              onChange={(e) => { setGmNotes(e.target.value); saveGm(e.target.value); }}
-              placeholder="Секретні нотатки, плани, сюжетні твісти..."
-            />
-          </div>
-        )}
-      </div>
-
-      <CampaignGallery campaign={campaign} isGm={isGm} />
     </div>
   );
 }
@@ -476,7 +496,7 @@ function CampaignGallery({ campaign, isGm }) {
     setUploading(true);
     try {
       // Послідовно, а не Promise.all: так помилка на одному файлі не губить
-      // уже завантажені, і порядок у стрічці лишається передбачуваним.
+      // уже завантажених, і порядок у стрічці лишається передбачуваним.
       for (const file of files) {
         if (file.size > MAX_UPLOAD_BYTES) {
           setError(`«${file.name}» завеликий — максимум 10 МБ`);
@@ -586,5 +606,247 @@ function CampaignGallery({ campaign, isGm }) {
         onChange={handleFiles}
       />
     </div>
+  );
+}
+
+function CharactersBlock({ characters, navigate }) {
+  return (
+    <div>
+      <h3 className="mb-2 font-display text-base text-text">Персонажі кампанії</h3>
+      {characters.length === 0 ? (
+        <EmptyState title="До кампанії ще не приєднано жодного персонажа" />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {characters.map((ch) => {
+            const clickable = !ch.is_private;
+            return (
+              <Card
+                key={ch.character_id}
+                className={clickable ? 'cursor-pointer hover:border-accent/50' : 'opacity-80'}
+                onClick={clickable ? () => navigate(`/characters/${ch.character_id}`) : undefined}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-display text-base text-text">{ch.character_name}</h3>
+                  {ch.is_private && <Lock size={14} className="mt-1 shrink-0 text-text-dim" aria-label="Приватний персонаж" />}
+                </div>
+                <p className="text-sm text-text-dim">{ch.archetype} · {ch.race}</p>
+                <p className="mt-2 text-xs text-text-dim">
+                  Гравець: {ch.owner_username} {ch.is_mine && <span className="text-accent">(ви)</span>}
+                </p>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================================================================
+// Налаштування: для GM — керування персонажами/назвою/описом і
+// видалення кампанії; для гравця — вихід із кампанії.
+// ================================================================
+
+function SettingsTab({ campaign, isGm, onChange, characters, setCharacters, navigate }) {
+  if (!isGm) return <PlayerSettingsTab campaign={campaign} navigate={navigate} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <CampaignDetailsCard campaign={campaign} onChange={onChange} />
+      <CampaignCharactersAdmin campaignId={campaign.id} characters={characters} setCharacters={setCharacters} />
+      <DangerZone campaign={campaign} navigate={navigate} />
+    </div>
+  );
+}
+
+function PlayerSettingsTab({ campaign, navigate }) {
+  const [leaving, setLeaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLeave = async () => {
+    if (!confirm(`Покинути кампанію "${campaign.name}"? Ваші персонажі відв'яжуться від неї.`)) return;
+    setLeaving(true);
+    try {
+      await campaignApi.leave(campaign.id);
+      navigate('/campaigns');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при виході з кампанії');
+      setLeaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <p className="mb-3 text-sm text-text-dim">
+        Ви покинете кампанію «{campaign.name}» — ваші персонажі відв'яжуться від неї, але самі листи персонажів не видаляться.
+      </p>
+      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
+      <Button variant="danger" onClick={handleLeave} disabled={leaving}>
+        <LogOut size={14} /> {leaving ? 'Вихід...' : 'Покинути кампанію'}
+      </Button>
+    </Card>
+  );
+}
+
+function CampaignDetailsCard({ campaign, onChange }) {
+  const [name, setName] = useState(campaign.name);
+  const [description, setDescription] = useState(campaign.description ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const saveName = useDebounce(async (value) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await campaignApi.rename(campaign.id, trimmed);
+      onChange((prev) => ({ ...prev, name: updated.name }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при перейменуванні');
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  const saveDescription = useDebounce(async (value) => {
+    setSaving(true);
+    try {
+      const updated = await campaignApi.updateDescription(campaign.id, value);
+      onChange((prev) => ({ ...prev, description: updated.description }));
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Назва та опис кампанії</p>
+        {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
+      </div>
+      <div className="flex flex-col gap-4">
+        <Field label="Назва">
+          <input
+            className={inputClass}
+            value={name}
+            onChange={(e) => { setName(e.target.value); saveName(e.target.value); }}
+            maxLength={200}
+          />
+        </Field>
+        <Field label="Опис">
+          <textarea
+            className={`${inputClass} resize-y`}
+            rows={5}
+            value={description}
+            onChange={(e) => { setDescription(e.target.value); saveDescription(e.target.value); }}
+            placeholder="Коротко про що кампанія, сеттінг, тон гри..."
+          />
+        </Field>
+        {error && <p className="text-sm text-danger">{error}</p>}
+      </div>
+    </Card>
+  );
+}
+
+function CampaignCharactersAdmin({ campaignId, characters, setCharacters }) {
+  const [newCharacterId, setNewCharacterId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState('');
+
+  const refresh = () => campaignApi.listCharacters(campaignId).then(setCharacters);
+
+  const handleRemove = async (characterId, characterName) => {
+    if (!confirm(`Видалити персонажа "${characterName}" з кампанії? Сам лист персонажа не буде видалено.`)) return;
+    try {
+      await campaignApi.removeCharacter(campaignId, characterId);
+      setCharacters((prev) => prev.filter((c) => c.character_id !== characterId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видаленні персонажа з кампанії');
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!newCharacterId.trim()) return;
+    setAdding(true);
+    setError('');
+    try {
+      await campaignApi.addCharacter(campaignId, newCharacterId.trim());
+      setNewCharacterId('');
+      await refresh();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при додаванні персонажа');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <Card>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Персонажі кампанії</p>
+      <div className="mb-4 flex gap-2">
+        <input
+          className={`${inputClass} flex-1`}
+          value={newCharacterId}
+          onChange={(e) => setNewCharacterId(e.target.value)}
+          placeholder="ID персонажа, який надав гравець"
+        />
+        <Button onClick={handleAdd} disabled={adding} size="md">
+          {adding ? 'Додавання...' : 'Додати'}
+        </Button>
+      </div>
+      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
+
+      {characters.length === 0 ? (
+        <p className="text-sm text-text-dim">До кампанії ще не приєднано жодного персонажа.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {characters.map((ch) => (
+            <li key={ch.character_id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm text-text">
+                  {ch.character_name}
+                  {ch.is_private && <Lock size={12} className="text-text-dim" aria-label="Приватний персонаж" />}
+                </p>
+                <p className="text-xs text-text-dim">{ch.archetype} · {ch.race} · {ch.owner_username}</p>
+              </div>
+              <button
+                onClick={() => handleRemove(ch.character_id, ch.character_name)}
+                aria-label="Видалити персонажа з кампанії"
+                className="shrink-0 p-1 text-text-dim hover:text-danger"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function DangerZone({ campaign, navigate }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDeleteCampaign = async () => {
+    if (!confirm(`Видалити кампанію "${campaign.name}"? Персонажі гравців не видаляться, лише відв'яжуться від кампанії. Це незворотно.`)) return;
+    setDeleting(true);
+    try {
+      await campaignApi.remove(campaign.id);
+      navigate('/campaigns');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видаленні кампанії');
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Card className="border-danger/40">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-danger">Небезпечна зона</p>
+      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
+      <Button variant="danger" onClick={handleDeleteCampaign} disabled={deleting}>
+        <Trash2 size={14} /> {deleting ? 'Видалення...' : 'Видалити кампанію'}
+      </Button>
+    </Card>
   );
 }
