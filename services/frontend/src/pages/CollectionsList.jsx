@@ -37,7 +37,9 @@ export default function CollectionsList({ domainKey }) {
         <Button to={`${domain.basePath}/collections/new`} className="hidden md:inline-flex">+ Нова колекція</Button>
       </div>
 
-      <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
+      {domain.supportsCanonical !== false && (
+        <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
+      )}
 
       <div className="relative mb-5">
         <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />

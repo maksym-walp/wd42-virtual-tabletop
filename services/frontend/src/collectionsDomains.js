@@ -3,10 +3,12 @@ import artifactsApi from './api/artifacts';
 import abilitiesApi from './api/abilities';
 import maneuversApi from './api/maneuvers';
 import spellbookApi from './api/spellbook';
+import compendiumApi from './api/compendium';
 import { createCollectionsApi } from './api/collections';
 import { EQUIPMENT_TYPES } from './constants/equipment';
 import { RARITIES } from './constants/artifacts';
 import { natureLabels } from './constants/spellbook';
+import { ENTITY_TYPES } from './constants/compendium';
 
 // One config per catalog service that owns a `collections` module —
 // drives the generic CollectionsList/CollectionForm/CollectionView pages
@@ -78,5 +80,20 @@ export const COLLECTION_DOMAINS = {
     itemLink: (item) => `/spellbook/${item.id}`,
     itemMeta: (item) => natureLabels(item.nature),
     supportsPrerequisites: true,
+  },
+  compendium: {
+    title: 'НІПи та істоти',
+    basePath: '/compendium',
+    itemLabel: 'записів',
+    collectionsApi: createCollectionsApi('/api/compendium/collections/'),
+    catalogApi: { getAll: () => compendiumApi.listEntries() },
+    itemIdField: 'entry_id',
+    itemLink: (item) => `/compendium/entries/${item.id}`,
+    itemMeta: (item) => ENTITY_TYPES[item.entity_type]?.label ?? '',
+    supportsPrerequisites: false,
+    // Compendium has no "official vs community" concept anywhere in its
+    // schema (unlike equipment/spellbook/maneuvers/abilities) — no
+    // is_canonical column, no /canonical endpoint.
+    supportsCanonical: false,
   },
 };

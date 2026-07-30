@@ -92,6 +92,28 @@ describe('CampaignModel reads', () => {
   });
 });
 
+describe('CampaignModel.findCompendiumEntry', () => {
+  it('queries compendium.compendium_entries directly (cross-schema), joins health_die, selects entity_type/rolled_health, scoped by own-or-public unless admin', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'e1', name: 'Goblin', entity_type: 'npc', body: 3, dexterity: 4, health_die: 'd8', rolled_health: 12 }] });
+    const entry = await CampaignModel.findCompendiumEntry('e1', 'u1', false);
+    expect(entry).toEqual({ id: 'e1', name: 'Goblin', entity_type: 'npc', body: 3, dexterity: 4, health_die: 'd8', rolled_health: 12 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/FROM compendium\.compendium_entries e/);
+    expect(sql).toMatch(/e\.entity_type/);
+    expect(sql).toMatch(/e\.rolled_health/);
+    expect(sql).toMatch(/LEFT JOIN compendium\.species sp ON sp\.id = e\.species_id/);
+    expect(sql).toMatch(/LEFT JOIN compendium\.subspecies sub ON sub\.id = e\.subspecies_id/);
+    expect(sql).toMatch(/COALESCE\(sub\.health_die, sp\.health_die, 'd6'\) AS health_die/);
+    expect(sql).toMatch(/\$3::bool OR e\.created_by = \$2 OR e\.is_public = true/);
+    expect(params).toEqual(['e1', 'u1', false]);
+  });
+
+  it('returns null when the entry is missing or not visible to this user', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await CampaignModel.findCompendiumEntry('e1', 'u1', false)).toBeNull();
+  });
+});
+
 describe('CampaignModel notes updates', () => {
   it('updateSharedNotes updates shared_notes only', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', shared_notes: 'hi' }] });

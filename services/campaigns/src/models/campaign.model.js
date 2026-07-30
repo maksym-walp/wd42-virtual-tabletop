@@ -122,6 +122,31 @@ const CampaignModel = {
     );
     return rows[0] || null;
   },
+
+  // Cross-schema read (campaigns -> compendium) for cloning a compendium
+  // entry into the combat tracker. Visibility mirrors compendium's own rule
+  // (own or public, admin sees all) — a GM shouldn't be able to clone
+  // another GM's private homebrew monster into their combat.
+  // health_die is resolved the same way compendium's own entry.model.js
+  // does it (subspecies overrides species, 'd6' fallback for neither) —
+  // duplicated here since services share no code, only the database.
+  // entity_type/rolled_health are read too: an NPC's persisted rolled
+  // health (see compendium's EntryModel.updateRolledHealth) is what gets
+  // cloned into combat, not a recomputed average — creatures have no
+  // persistent health, so rolled_health is always null for them.
+  async findCompendiumEntry(entryId, userId, isAdmin) {
+    const { rows } = await pool.query(
+      `SELECT e.id, e.name, e.entity_type, e.dexterity, e.body, e.intelligence, e.wisdom, e.charisma,
+              e.rolled_health,
+              COALESCE(sub.health_die, sp.health_die, 'd6') AS health_die
+       FROM compendium.compendium_entries e
+       LEFT JOIN compendium.species sp ON sp.id = e.species_id
+       LEFT JOIN compendium.subspecies sub ON sub.id = e.subspecies_id
+       WHERE e.id = $1 AND ($3::bool OR e.created_by = $2 OR e.is_public = true)`,
+      [entryId, userId, isAdmin]
+    );
+    return rows[0] || null;
+  },
 };
 
 module.exports = CampaignModel;

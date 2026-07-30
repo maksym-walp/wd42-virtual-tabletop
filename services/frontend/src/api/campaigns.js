@@ -156,6 +156,17 @@ const campaignApi = {
     return data.combatant;
   },
 
+  // Clones `quantity` independent combatant rows from one compendium entry
+  // (e.g. 3 Goblins) — the backend computes each row's starting health/
+  // active_defense/initiative from the entry's attributes, so no stats are
+  // sent here, just which entry and how many.
+  async addCombatantsFromCompendium(id, sceneId, { compendium_entry_id, quantity }) {
+    const { data } = await api.post(`${BASE}/${id}/combat/scenes/${sceneId}/combatants`, {
+      compendium_entry_id, quantity,
+    });
+    return data.combatants;
+  },
+
   async updateCombatant(id, combatantId, payload) {
     const { data } = await api.patch(`${BASE}/${id}/combat/combatants/${combatantId}`, payload);
     return data.combatant;

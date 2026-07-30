@@ -41,6 +41,49 @@ describe('CombatantModel.add', () => {
   });
 });
 
+describe('CombatantModel.addMany', () => {
+  function mockClient() {
+    const client = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
+    pool.connect.mockResolvedValue(client);
+    return client;
+  }
+
+  it('inserts one row per entry inside a transaction and returns them all', async () => {
+    const client = mockClient();
+    client.query
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: 'cb1', name: 'Goblin 1' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'cb2', name: 'Goblin 2' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'cb3', name: 'Goblin 3' }] })
+      .mockResolvedValueOnce({ rows: [] }); // COMMIT
+
+    const combatants = await CombatantModel.addMany('s1', [
+      { compendium_entry_id: 'e1', name: 'Goblin 1', active_defense: 15, health: 9, max_health: 9, temp_hp: 0, initiative: 5 },
+      { compendium_entry_id: 'e1', name: 'Goblin 2', active_defense: 15, health: 9, max_health: 9, temp_hp: 0, initiative: 5 },
+      { compendium_entry_id: 'e1', name: 'Goblin 3', active_defense: 15, health: 9, max_health: 9, temp_hp: 0, initiative: 5 },
+    ]);
+
+    expect(combatants).toEqual([{ id: 'cb1', name: 'Goblin 1' }, { id: 'cb2', name: 'Goblin 2' }, { id: 'cb3', name: 'Goblin 3' }]);
+    expect(client.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    const [insertSql, insertParams] = client.query.mock.calls[1];
+    expect(insertSql).toMatch(/INSERT INTO campaigns\.combatants/);
+    expect(insertParams).toEqual(['s1', 'e1', 'Goblin 1', null, 15, 9, 5, null, null, false, 9, 0]);
+    expect(client.query).toHaveBeenNthCalledWith(5, 'COMMIT');
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('rolls back and rethrows if any insert fails, releasing the client either way', async () => {
+    const client = mockClient();
+    client.query
+      .mockResolvedValueOnce({ rows: [] }) // BEGIN
+      .mockRejectedValueOnce(new Error('boom'));
+
+    await expect(CombatantModel.addMany('s1', [{ name: 'Goblin 1' }])).rejects.toThrow('boom');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
+  });
+});
+
 describe('CombatantModel.update', () => {
   it('scopes the update through combat_scenes by campaign_id', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'cb1', health: 5 }] });

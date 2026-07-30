@@ -257,6 +257,151 @@ describe('CombatController.addCombatant', () => {
 
     expect(res.status).toHaveBeenCalledWith(201);
   });
+
+  describe('cloning from a compendium entry (compendium_entry_id + quantity)', () => {
+    it('404s when the compendium entry is missing or not visible to the GM', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue(null);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1', quantity: 3 },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(CombatantModel.addMany).not.toHaveBeenCalled();
+    });
+
+    it('clones 3 independent, numbered rows with the same computed stats', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({ id: 'e1', name: 'Goblin', body: 3, dexterity: 3, health_die: 'd8' });
+      CombatantModel.addMany.mockResolvedValue([
+        { id: 'cb1', name: 'Goblin 1' }, { id: 'cb2', name: 'Goblin 2' }, { id: 'cb3', name: 'Goblin 3' },
+      ]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1', quantity: 3 },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(CampaignModel.findCompendiumEntry).toHaveBeenCalledWith('e1', 'gm-1', false);
+      // body=3 -> 15 health dice (HEALTH_DICE_COUNT_BY_BODY), health_die=d8 -> avg 4.5 -> maxHealth=68
+      expect(CombatantModel.addMany).toHaveBeenCalledWith('s1', [
+        { compendium_entry_id: 'e1', name: 'Goblin 1', passive_defense: 0, active_defense: 15, health: 68, max_health: 68, temp_hp: 0, initiative: 5 },
+        { compendium_entry_id: 'e1', name: 'Goblin 2', passive_defense: 0, active_defense: 15, health: 68, max_health: 68, temp_hp: 0, initiative: 5 },
+        { compendium_entry_id: 'e1', name: 'Goblin 3', passive_defense: 0, active_defense: 15, health: 68, max_health: 68, temp_hp: 0, initiative: 5 },
+      ]);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({
+        combatants: [{ id: 'cb1', name: 'Goblin 1' }, { id: 'cb2', name: 'Goblin 2' }, { id: 'cb3', name: 'Goblin 3' }],
+      });
+    });
+
+    it('clones an npc using its persisted rolled_health instead of the average formula', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({
+        id: 'e1', name: 'Old Tom', entity_type: 'npc', body: 3, dexterity: 3, health_die: 'd8', rolled_health: 143,
+      });
+      CombatantModel.addMany.mockResolvedValue([{ id: 'cb1', name: 'Old Tom' }]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1' },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(CombatantModel.addMany).toHaveBeenCalledWith('s1', [
+        expect.objectContaining({ health: 143, max_health: 143 }),
+      ]);
+    });
+
+    it('falls back to the average formula for an npc that has never been rolled', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({
+        id: 'e1', name: 'Old Tom', entity_type: 'npc', body: 3, dexterity: 3, health_die: 'd8', rolled_health: null,
+      });
+      CombatantModel.addMany.mockResolvedValue([{ id: 'cb1', name: 'Old Tom' }]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1' },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      // same average as the "Goblin" (no entity_type) case above: body=3, d8 -> 68
+      expect(CombatantModel.addMany).toHaveBeenCalledWith('s1', [
+        expect.objectContaining({ health: 68, max_health: 68 }),
+      ]);
+    });
+
+    it('uses the entry name unsuffixed for a single instance (quantity 1 or omitted)', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({ id: 'e1', name: 'Goblin', body: 3, dexterity: 3, health_die: 'd8' });
+      CombatantModel.addMany.mockResolvedValue([{ id: 'cb1', name: 'Goblin' }]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1' },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(CombatantModel.addMany).toHaveBeenCalledWith('s1', [expect.objectContaining({ name: 'Goblin' })]);
+    });
+
+    it('clamps quantity to at least 1 and at most 20', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({ id: 'e1', name: 'Goblin', body: 3, dexterity: 3, health_die: 'd8' });
+      CombatantModel.addMany.mockResolvedValue([]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1', quantity: 999 },
+        user: { sub: 'gm-1', role: 'game_master' },
+      });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(CombatantModel.addMany.mock.calls[0][1]).toHaveLength(20);
+    });
+
+    it('passes isAdmin through to the visibility check', async () => {
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+      CombatSceneModel.findById.mockResolvedValue({ id: 's1' });
+      CampaignModel.findCompendiumEntry.mockResolvedValue({ id: 'e1', name: 'Goblin', body: 3, dexterity: 3, health_die: 'd8' });
+      CombatantModel.addMany.mockResolvedValue([{ id: 'cb1', name: 'Goblin' }]);
+      const req = mockReq({
+        params: { id: 'c1', sceneId: 's1' },
+        body: { compendium_entry_id: 'e1' },
+        user: { sub: 'admin-1', role: 'admin' },
+      });
+      // GM check is campaign.gm_id === userId; make admin the GM here since
+      // addCombatant is still GM-only regardless of the site-wide admin role.
+      CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'admin-1' });
+      const res = mockRes();
+
+      await CombatController.addCombatant(req, res);
+
+      expect(CampaignModel.findCompendiumEntry).toHaveBeenCalledWith('e1', 'admin-1', true);
+    });
+  });
 });
 
 describe('CombatController.updateCombatant', () => {

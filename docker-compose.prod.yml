@@ -237,6 +237,22 @@ services:
     networks:
       - walp-network
 
+  compendium:
+    build:
+      context: ./services/compendium
+      target: production
+    container_name: walp-compendium
+    restart: always
+    env_file: .env
+    environment:
+      PORT: 3014
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless. Так само єдиний
   # prod-сервіс із volumes: правило «без volumes у prod» стосується
   # bind-монтування вихідників, а не named volume зі сховищем файлів.
@@ -291,6 +307,7 @@ services:
       - campaigns
       - artifacts
       - maps
+      - compendium
       - media
       - frontend
     networks:

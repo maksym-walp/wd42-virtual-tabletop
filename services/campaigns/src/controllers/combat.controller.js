@@ -3,8 +3,13 @@ const CombatantModel = require('../models/combatant.model');
 const CampaignModel = require('../models/campaign.model');
 const CampaignCharacterModel = require('../models/campaign-character.model');
 const { loadCampaignOr404, isGm } = require('./load-campaign');
+const { deriveCombatStats } = require('../utils/compendium-combat-stats');
 
 const HIDDEN_COMBATANT_FIELDS = ['id', 'name', 'description', 'is_hidden'];
+
+// Upper bound on a single "add from compendium" batch — guards against a
+// mistyped quantity accidentally flooding the tracker with rows.
+const MAX_COMPENDIUM_QUANTITY = 20;
 
 // Поля, які гравець (не GM) сміє міняти на СВОЄМУ комбатанті: ХП (розумний
 // парсинг +N/-N/N на фронті вже звівся до цих двох чисел), захисти й
@@ -77,6 +82,28 @@ const CombatController = {
 
     const scene = await CombatSceneModel.findById(req.params.sceneId, campaign.id);
     if (!scene) return res.status(404).json({ message: 'Сцену не знайдено' });
+
+    const { compendium_entry_id: compendiumEntryId } = req.body;
+    if (compendiumEntryId) {
+      const entry = await CampaignModel.findCompendiumEntry(compendiumEntryId, req.user.sub, req.user.role === 'admin');
+      if (!entry) return res.status(404).json({ message: 'Запис компендіуму не знайдено' });
+
+      const quantity = Math.min(Math.max(parseInt(req.body.quantity, 10) || 1, 1), MAX_COMPENDIUM_QUANTITY);
+      const { maxHealth, activeDefense, initiative } = deriveCombatStats(entry);
+      const combatantsData = Array.from({ length: quantity }, (_, i) => ({
+        compendium_entry_id: entry.id,
+        name: quantity === 1 ? entry.name : `${entry.name} ${i + 1}`,
+        passive_defense: 0,
+        active_defense: activeDefense,
+        health: maxHealth,
+        max_health: maxHealth,
+        temp_hp: 0,
+        initiative,
+      }));
+
+      const combatants = await CombatantModel.addMany(scene.id, combatantsData);
+      return res.status(201).json({ combatants });
+    }
 
     const { character_id, name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ message: 'name є обовʼязковим' });

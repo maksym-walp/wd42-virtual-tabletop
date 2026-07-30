@@ -161,7 +161,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
           </div>
         </div>
 
-        {!publicView && canManageCanonical && !collection.is_canonical && (
+        {!publicView && domain.supportsCanonical !== false && canManageCanonical && !collection.is_canonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
             <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
               {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}

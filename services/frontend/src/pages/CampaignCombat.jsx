@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import characterApi from '../api/characterSheet';
+import compendiumApi from '../api/compendium';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
 import { modifierDie } from '../constants/characterSheet';
@@ -805,12 +806,13 @@ function AddPlayerSheet({ open, campaignId, sceneId, characters, onClose, onAdde
 }
 
 function AddNpcSheet({ open, campaignId, sceneId, onClose, onAdded }) {
+  const [subMode, setSubMode] = useState('manual'); // 'manual' | 'compendium'
   const [form, setForm] = useState(EMPTY_NPC_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (open) { setForm(EMPTY_NPC_FORM); setError(''); }
+    if (open) { setSubMode('manual'); setForm(EMPTY_NPC_FORM); setError(''); }
   }, [open]);
 
   if (!open) return null;
@@ -835,39 +837,139 @@ function AddNpcSheet({ open, campaignId, sceneId, onClose, onAdded }) {
   return (
     <Sheet open={open} onClose={onClose} title="Новий NPC">
       <div className="flex flex-col gap-4">
-        <Field label="Імʼя">
-          <input className={inputClass} value={form.name} onChange={setText('name')} maxLength={200} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Пасивний захист">
-            <IntInput className={inputClass} value={form.passive_defense} onChange={setInt('passive_defense')} />
-          </Field>
-          <Field label="Ухилення">
-            <IntInput className={inputClass} value={form.active_defense} onChange={setInt('active_defense')} />
-          </Field>
-          <Field label="Здоров'я">
-            <IntInput className={inputClass} value={form.health} onChange={setInt('health')} />
-          </Field>
-          <Field label="Максимальне здоров'я">
-            <IntInput className={inputClass} value={form.max_health} onChange={setInt('max_health')} />
-          </Field>
-          <Field label="Тимчасові ХП">
-            <IntInput className={inputClass} value={form.temp_hp} onChange={setInt('temp_hp')} />
-          </Field>
-          <Field label="Ініціатива">
-            <IntInput className={inputClass} value={form.initiative} onChange={setInt('initiative')} />
-          </Field>
+        <div className="inline-flex self-start overflow-hidden rounded-lg border border-border">
+          <button
+            type="button" onClick={() => setSubMode('manual')}
+            className={`min-h-9 px-4 text-sm font-semibold ${subMode === 'manual' ? 'bg-accent text-bg' : 'bg-surface text-text-dim'}`}
+          >
+            Вручну
+          </button>
+          <button
+            type="button" onClick={() => setSubMode('compendium')}
+            className={`min-h-9 border-l border-border px-4 text-sm font-semibold ${subMode === 'compendium' ? 'bg-accent text-bg' : 'bg-surface text-text-dim'}`}
+          >
+            З НІПів та істот
+          </button>
         </div>
-        <Field label="Примітки">
-          <input className={inputClass} value={form.notes} onChange={setText('notes')} />
-        </Field>
-        <Field label="Опис">
-          <textarea className={`${inputClass} resize-y`} rows={3} value={form.description} onChange={setText('description')} />
-        </Field>
-        {error && <p className="text-sm text-danger">{error}</p>}
-        <Button onClick={handleAdd} disabled={saving}>{saving ? 'Додавання...' : 'Додати в бій'}</Button>
+
+        {subMode === 'compendium' ? (
+          <CompendiumNpcFields campaignId={campaignId} sceneId={sceneId} onAdded={onAdded} />
+        ) : (
+          <>
+            <Field label="Імʼя">
+              <input className={inputClass} value={form.name} onChange={setText('name')} maxLength={200} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Пасивний захист">
+                <IntInput className={inputClass} value={form.passive_defense} onChange={setInt('passive_defense')} />
+              </Field>
+              <Field label="Ухилення">
+                <IntInput className={inputClass} value={form.active_defense} onChange={setInt('active_defense')} />
+              </Field>
+              <Field label="Здоров'я">
+                <IntInput className={inputClass} value={form.health} onChange={setInt('health')} />
+              </Field>
+              <Field label="Максимальне здоров'я">
+                <IntInput className={inputClass} value={form.max_health} onChange={setInt('max_health')} />
+              </Field>
+              <Field label="Тимчасові ХП">
+                <IntInput className={inputClass} value={form.temp_hp} onChange={setInt('temp_hp')} />
+              </Field>
+              <Field label="Ініціатива">
+                <IntInput className={inputClass} value={form.initiative} onChange={setInt('initiative')} />
+              </Field>
+            </div>
+            <Field label="Примітки">
+              <input className={inputClass} value={form.notes} onChange={setText('notes')} />
+            </Field>
+            <Field label="Опис">
+              <textarea className={`${inputClass} resize-y`} rows={3} value={form.description} onChange={setText('description')} />
+            </Field>
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <Button onClick={handleAdd} disabled={saving}>{saving ? 'Додавання...' : 'Додати в бій'}</Button>
+          </>
+        )}
       </div>
     </Sheet>
+  );
+}
+
+// Autocomplete over the compendium (NPCs + Bestiary together) + a quantity —
+// stats aren't entered here: the backend computes each clone's starting
+// health/active_defense/initiative from the entry's attributes.
+function CompendiumNpcFields({ campaignId, sceneId, onAdded }) {
+  const [entries, setEntries] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    compendiumApi.listEntries().then(setEntries).catch(() => {});
+  }, []);
+
+  const filtered = search.trim() && !selected
+    ? entries.filter((e) => e.name?.toLowerCase().includes(search.toLowerCase())).slice(0, 20)
+    : [];
+
+  const handleSelect = (entry) => {
+    setSelected(entry);
+    setSearch(entry.name);
+  };
+
+  const handleAdd = async () => {
+    if (!selected) { setError('Оберіть НІПа чи істоту'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await campaignApi.addCombatantsFromCompendium(campaignId, sceneId, {
+        compendium_entry_id: selected.id, quantity,
+      });
+      onAdded();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалось додати');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <Field label="Пошук НІПів та істот">
+        <input
+          className={inputClass}
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
+          placeholder="Імʼя НІПа чи істоти..."
+        />
+        {filtered.length > 0 && (
+          <div className="mt-1.5 max-h-[180px] overflow-y-auto rounded-lg border border-border bg-surface">
+            {filtered.map((entry) => (
+              <button
+                key={entry.id} type="button"
+                onClick={() => handleSelect(entry)}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-hover"
+              >
+                <span className="text-text">{entry.name}</span>
+                <span className="text-xs text-text-dim">{entry.entity_type === 'npc' ? 'НІП' : 'Істота'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Field>
+
+      {selected && (
+        <Field label="Кількість" hint="Кожен клон отримає власне здоровʼя/захист/ініціативу, розраховані з атрибутів.">
+          <IntInput className={inputClass} value={quantity} min={1} onChange={setQuantity} />
+        </Field>
+      )}
+
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <Button onClick={handleAdd} disabled={!selected || saving}>
+        {saving ? 'Додавання...' : quantity > 1 ? `Додати ${quantity} у бій` : 'Додати в бій'}
+      </Button>
+    </>
   );
 }
 
