@@ -616,21 +616,32 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       </td>
       <td className={cellClass}>
         {canEditHp ? (
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
-              <Minus size={14} />
-            </button>
-            <input
-              className={`${inputClass} min-h-8 w-16 py-1`}
-              placeholder={hpDisplay}
-              value={hpDraft}
-              onChange={(e) => setHpDraft(e.target.value)}
-              onBlur={commitHp}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-            />
-            <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
-              <Plus size={14} />
-            </button>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
+                <Minus size={14} />
+              </button>
+              <input
+                className={`${inputClass} min-h-8 w-16 py-1`}
+                placeholder={hpDisplay}
+                value={hpDraft}
+                onChange={(e) => setHpDraft(e.target.value)}
+                onBlur={commitHp}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+              />
+              <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
+                <Plus size={14} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-text-dim">
+              <span>макс.</span>
+              <IntInput
+                className={`${inputClass} min-h-7 w-14 py-0.5 text-xs`}
+                value={local.max_health}
+                onChange={(v) => setLocal((p) => ({ ...p, max_health: v }))}
+                onBlur={() => commit('max_health')}
+              />
+            </div>
           </div>
         ) : (
           <span className="text-text">{hpDisplay}</span>
@@ -806,13 +817,13 @@ function AddPlayerSheet({ open, campaignId, sceneId, characters, onClose, onAdde
 }
 
 function AddNpcSheet({ open, campaignId, sceneId, onClose, onAdded }) {
-  const [subMode, setSubMode] = useState('manual'); // 'manual' | 'compendium'
+  const [subMode, setSubMode] = useState('compendium'); // 'manual' | 'compendium'
   const [form, setForm] = useState(EMPTY_NPC_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (open) { setSubMode('manual'); setForm(EMPTY_NPC_FORM); setError(''); }
+    if (open) { setSubMode('compendium'); setForm(EMPTY_NPC_FORM); setError(''); }
   }, [open]);
 
   if (!open) return null;
