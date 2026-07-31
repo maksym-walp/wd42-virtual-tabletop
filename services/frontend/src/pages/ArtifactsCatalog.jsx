@@ -7,6 +7,7 @@ import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { RARITIES } from '../constants/artifacts';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -51,9 +52,14 @@ export default function ArtifactsCatalog() {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('artifacts')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{artifacts.length} артефактів</p>
-        <Button to="/artifacts/new" className="hidden md:inline-flex">+ Новий артефакт</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={view} onChange={setView} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {artifacts.length} {pluralizeUk(artifacts.length, ['артефакт', 'артефакти', 'артефактів'])}
+        </p>
+        <Button to="/artifacts/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий артефакт</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -67,7 +73,6 @@ export default function ArtifactsCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

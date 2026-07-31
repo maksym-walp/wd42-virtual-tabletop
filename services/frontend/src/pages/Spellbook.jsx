@@ -8,6 +8,7 @@ import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -88,12 +89,14 @@ export default function Spellbook() {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('spellbook')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{spells.length} заклинань</p>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/spellbook/traditions">Традиції</Button>
-          <Button to="/spellbook/new" className="hidden md:inline-flex">+ Нове заклинання</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
         </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {spells.length} {pluralizeUk(spells.length, ['заклинання', 'заклинання', 'заклинань'])}
+        </p>
+        <Button to="/spellbook/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Нове заклинання</Button>
       </div>
 
       {/* Search — always visible, prominent */}
@@ -108,7 +111,6 @@ export default function Spellbook() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

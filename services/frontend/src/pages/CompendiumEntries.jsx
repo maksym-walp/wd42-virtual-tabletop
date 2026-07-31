@@ -5,6 +5,7 @@ import compendiumApi from '../api/compendium';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import CompendiumEntryCard from '../components/compendium/CompendiumEntryCard';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -64,9 +65,14 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('compendium')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{filtered.length} записів</p>
-        <Button to={`/compendium/entries/new?type=${entityType}`} className="hidden md:inline-flex">+ {newLabel}</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={view} onChange={setView} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {filtered.length} {pluralizeUk(filtered.length, ['запис', 'записи', 'записів'])}
+        </p>
+        <Button to={`/compendium/entries/new?type=${entityType}`} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ {newLabel}</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -80,7 +86,6 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

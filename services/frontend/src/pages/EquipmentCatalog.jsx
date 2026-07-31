@@ -7,6 +7,7 @@ import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -62,9 +63,14 @@ export default function EquipmentCatalog({ type }) {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('equipment')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{items.length} предметів</p>
-        <Button to={newHref} className="hidden md:inline-flex">+ Новий предмет</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={view} onChange={setView} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {items.length} {pluralizeUk(items.length, ['запис', 'записи', 'записів'])}
+        </p>
+        <Button to={newHref} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий предмет</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -78,7 +84,6 @@ export default function EquipmentCatalog({ type }) {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

@@ -4,6 +4,7 @@ import { Search, Plus } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -31,9 +32,14 @@ export default function CompendiumSpeciesList() {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('compendium')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{filtered.length} видів</p>
-        <Button to="/compendium/species/new" className="hidden md:inline-flex">+ Новий вид</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={view} onChange={setView} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {filtered.length} {pluralizeUk(filtered.length, ['вид', 'види', 'видів'])}
+        </p>
+        <Button to="/compendium/species/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий вид</Button>
       </div>
 
       <div className="mb-5 flex gap-2.5">
@@ -46,7 +52,6 @@ export default function CompendiumSpeciesList() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       {loading ? (

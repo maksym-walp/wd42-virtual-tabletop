@@ -6,6 +6,7 @@ import ManeuverCard from '../components/ManeuverCard';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -53,9 +54,14 @@ export default function ManeuverCatalog() {
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs('maneuvers')} />
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{maneuvers.length} маневрів</p>
-        <Button to="/maneuvers/new" className="hidden md:inline-flex">+ Новий маневр</Button>
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={view} onChange={setView} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {maneuvers.length} {pluralizeUk(maneuvers.length, ['маневр', 'маневри', 'маневрів'])}
+        </p>
+        <Button to="/maneuvers/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий маневр</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -69,7 +75,6 @@ export default function ManeuverCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

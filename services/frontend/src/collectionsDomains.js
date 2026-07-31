@@ -88,6 +88,14 @@ export const COLLECTION_DOMAINS = {
     itemLink: (item) => `/spellbook/${item.id}`,
     itemMeta: (item) => natureLabels(item.nature),
     supportsPrerequisites: true,
+    // Traditions used to be a plain button off to the side, linking out to
+    // what felt like a separate page — now it's a tab alongside Колекції,
+    // same reasoning as equipment/compendium's multi-tab override below.
+    tabs: [
+      { to: '/spellbook', label: 'Заклинання', end: true },
+      { to: '/spellbook/traditions', label: 'Традиції' },
+      { to: '/spellbook/collections', label: 'Колекції' },
+    ],
   },
   compendium: {
     title: 'НІПи та істоти',

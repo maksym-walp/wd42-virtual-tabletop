@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, ArrowLeft } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import traditionsApi from '../api/traditions';
+import { getDomainTabs } from '../collectionsDomains';
+import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
+import CatalogTabs from '../components/CatalogTabs';
 
 export default function TraditionsList() {
   const { user } = useAuth();
@@ -37,17 +40,14 @@ export default function TraditionsList() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/spellbook" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Книга Заклинань
-      </Link>
+      <CatalogTabs tabs={getDomainTabs('spellbook')} />
 
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Магічні традиції</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{traditions.length} традицій</p>
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">
+          {traditions.length} {pluralizeUk(traditions.length, ['традиція', 'традиції', 'традицій'])}
+        </p>
         {canManageTraditions && (
-          <Button to="/spellbook/traditions/new" className="hidden md:inline-flex">+ Нова традиція</Button>
+          <Button to="/spellbook/traditions/new" className="hidden whitespace-nowrap md:inline-flex">+ Нова традиція</Button>
         )}
       </div>
 
