@@ -86,7 +86,7 @@ export default function Spellbook() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('spellbook')} right={<ViewToggle mode={viewMode} onChange={setViewMode} />} />
+      <CatalogTabs tabs={getDomainTabs('spellbook')} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-sm text-text-dim">{spells.length} заклинань</p>
@@ -108,6 +108,7 @@ export default function Spellbook() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

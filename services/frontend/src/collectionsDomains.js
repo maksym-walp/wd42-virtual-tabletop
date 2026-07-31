@@ -35,8 +35,8 @@ export const COLLECTION_DOMAINS = {
     // Колекції, same reason compendium overrides this — see getDomainTabs().
     tabs: [
       { to: '/equipment/weapon', label: 'Зброя' },
-      { to: '/equipment/armor', label: 'Обладунок' },
-      { to: '/equipment/items', label: 'Предмет' },
+      { to: '/equipment/armor', label: 'Обладунки' },
+      { to: '/equipment/items', label: 'Предмети' },
       { to: '/equipment/collections', label: 'Колекції' },
     ],
   },

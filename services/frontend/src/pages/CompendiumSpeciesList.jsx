@@ -29,21 +29,24 @@ export default function CompendiumSpeciesList() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('compendium')} right={<ViewToggle mode={view} onChange={setView} />} />
+      <CatalogTabs tabs={getDomainTabs('compendium')} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-sm text-text-dim">{filtered.length} видів</p>
         <Button to="/compendium/species/new" className="hidden md:inline-flex">+ Новий вид</Button>
       </div>
 
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-5 flex gap-2.5">
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            className={`${inputClass} pl-10`}
+            placeholder="Пошук за назвою..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       {loading ? (

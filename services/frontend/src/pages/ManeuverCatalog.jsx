@@ -51,7 +51,7 @@ export default function ManeuverCatalog() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('maneuvers')} right={<ViewToggle mode={view} onChange={setView} />} />
+      <CatalogTabs tabs={getDomainTabs('maneuvers')} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-sm text-text-dim">{maneuvers.length} маневрів</p>
@@ -69,6 +69,7 @@ export default function ManeuverCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

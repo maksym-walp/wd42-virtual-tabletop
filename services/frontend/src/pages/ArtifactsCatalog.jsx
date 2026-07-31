@@ -49,7 +49,7 @@ export default function ArtifactsCatalog() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('artifacts')} right={<ViewToggle mode={view} onChange={setView} />} />
+      <CatalogTabs tabs={getDomainTabs('artifacts')} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-sm text-text-dim">{artifacts.length} артефактів</p>
@@ -67,6 +67,7 @@ export default function ArtifactsCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>

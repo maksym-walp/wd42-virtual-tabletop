@@ -60,7 +60,7 @@ export default function EquipmentCatalog({ type }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('equipment')} right={<ViewToggle mode={view} onChange={setView} />} />
+      <CatalogTabs tabs={getDomainTabs('equipment')} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <p className="text-sm text-text-dim">{items.length} предметів</p>
@@ -78,6 +78,7 @@ export default function EquipmentCatalog({ type }) {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
