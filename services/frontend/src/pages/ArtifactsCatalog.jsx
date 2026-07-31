@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ArtifactCard from '../components/ArtifactCard';
-import CollectionsRow from '../components/CollectionsRow';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
-import { useTheme } from '../context/ThemeContext';
+import { RARITIES } from '../constants/artifacts';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -16,8 +16,6 @@ import ViewToggle from '../components/ui/ViewToggle';
 import useViewMode from '../hooks/useViewMode';
 
 export default function ArtifactsCatalog() {
-  const { theme } = useTheme();
-  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
   const [rarity, setRarity]   = useState('');
   const [scope, setScope]     = useState('');
   const [artifacts, setArtifacts] = useState([]);
@@ -47,27 +45,15 @@ export default function ArtifactsCatalog() {
   };
 
   const showCards = view === 'cards';
-  // Collections stay visible under the scope filter (which splits them) but are
-  // hidden once search or a rarity filter narrows the list — same rule as the
-  // equipment catalog.
-  const filtersActive = search.trim() !== '' || rarity !== '';
   const activeFilterCount = (scope ? 1 : 0) + (rarity ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Артефакти</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{artifacts.length} артефактів</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/artifacts/collections">Колекції</Button>
-          <Button to="/artifacts/new" className="hidden md:inline-flex">+ Новий артефакт</Button>
-        </div>
-      </div>
+      <CatalogTabs tabs={getDomainTabs('artifacts')} right={<ViewToggle mode={view} onChange={setView} />} />
 
-      <div className="mb-5 flex justify-end">
-        <ViewToggle mode={view} onChange={setView} />
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{artifacts.length} артефактів</p>
+        <Button to="/artifacts/new" className="hidden md:inline-flex">+ Новий артефакт</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -94,21 +80,19 @@ export default function ArtifactsCatalog() {
           <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() => setRarity('')}
-              className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-              style={rarity === ''
-                ? { borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }
-                : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+              className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                rarity === '' ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+              }`}
             >
               Усі
             </button>
-            {Object.entries(RARITIES).map(([key, { label, color }]) => (
+            {Object.entries(RARITIES).map(([key, { label }]) => (
               <button
                 key={key}
                 onClick={() => setRarity(key)}
-                className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-                style={rarity === key
-                  ? { borderColor: color, color, background: color + '18' }
-                  : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  rarity === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+                }`}
               >
                 {label}
               </button>
@@ -116,8 +100,6 @@ export default function ArtifactsCatalog() {
           </div>
         </div>
       </FilterAccordion>
-
-      {!filtersActive && <CollectionsRow domainKey="artifacts" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
@@ -177,10 +159,8 @@ function ArtifactsTable({ artifacts, sort, dir, onSort }) {
                 {a.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}
               </td>
               <td className="border-b border-bg px-3 py-2 text-text-muted">{a.creator ?? '—'}</td>
-              <td className="border-b border-bg px-3 py-2">
-                {a.rarity
-                  ? <span style={{ color: RARITIES[a.rarity]?.color }}>{RARITIES[a.rarity]?.label}</span>
-                  : <span className="text-text-muted">—</span>}
+              <td className="border-b border-bg px-3 py-2 text-text-muted">
+                {a.rarity ? RARITIES[a.rarity]?.label : '—'}
               </td>
               <td className="border-b border-bg px-3 py-2 text-text-muted">{a.price ?? '—'}</td>
             </tr>

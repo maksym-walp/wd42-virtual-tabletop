@@ -104,7 +104,6 @@ export default function CompendiumEntryForm() {
   };
 
   const isNpc = form.entity_type === 'npc';
-  const type = ENTITY_TYPES[form.entity_type];
   const backTo = isEdit ? `/compendium/entries/${id}` : (isNpc ? '/compendium' : '/compendium/bestiary');
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -120,18 +119,17 @@ export default function CompendiumEntryForm() {
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <FormSection title="Загальне" accentColor={type.color}>
+        <FormSection title="Загальне">
           <Field label="Тип" className="mb-4">
             <div className="inline-flex overflow-hidden rounded-lg border border-border">
-              {Object.entries(ENTITY_TYPES).map(([key, { label, color }]) => (
+              {Object.entries(ENTITY_TYPES).map(([key, { label }]) => (
                 <button
                   key={key} type="button"
                   disabled={isEdit}
                   onClick={() => setForm((f) => ({ ...f, entity_type: key }))}
-                  className="min-h-11 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed"
-                  style={form.entity_type === key
-                    ? { background: color, color: 'var(--color-bg)' }
-                    : { background: 'var(--color-surface)', color: 'var(--color-text-dim)' }}
+                  className={`min-h-11 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
+                    form.entity_type === key ? 'bg-accent text-bg' : 'bg-surface text-text-dim'
+                  }`}
                 >
                   {label}
                 </button>
@@ -172,7 +170,7 @@ export default function CompendiumEntryForm() {
           />
         </FormSection>
 
-        <FormSection title="Атрибути (1-6)" accentColor={type.color}>
+        <FormSection title="Атрибути (1-6)">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {ATTRIBUTE_KEYS.map((key) => (
               <Field key={key} label={ATTRIBUTE_LABELS[key]}>
@@ -186,7 +184,7 @@ export default function CompendiumEntryForm() {
         </FormSection>
 
         {isNpc ? (
-          <FormSection title="Опис" accentColor={type.color}>
+          <FormSection title="Опис">
             <SmartTextarea
               label="Опис" value={form.description} onChange={set('description')} rows={4}
               placeholder="Зовнішність, манера поведінки..." className="mb-4"
@@ -207,7 +205,7 @@ export default function CompendiumEntryForm() {
             </Field>
           </FormSection>
         ) : (
-          <FormSection title="Опис" accentColor={type.color}>
+          <FormSection title="Опис">
             <SmartTextarea
               label="Опис" value={form.description} onChange={set('description')} rows={4}
               placeholder="Зовнішність, поведінка..." className="mb-4"
@@ -220,7 +218,7 @@ export default function CompendiumEntryForm() {
         )}
 
         {isEdit && (
-          <FormSection title="Спорядження, заклинання, маневри" accentColor={type.color}>
+          <FormSection title="Спорядження, заклинання, маневри">
             <div className="flex flex-col gap-5">
               <CatalogAttachPicker
                 label="Спорядження" addLabel="Додати предмет"
@@ -254,7 +252,7 @@ export default function CompendiumEntryForm() {
           <p className="text-sm text-text-dim">Збережи запис, щоб додати спорядження, заклинання й маневри.</p>
         )}
 
-        <FormSection title="Налаштування" accentColor={type.color}>
+        <FormSection title="Налаштування">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
             <input
               type="checkbox" checked={form.is_public}
@@ -276,10 +274,10 @@ export default function CompendiumEntryForm() {
   );
 }
 
-function FormSection({ title, accentColor, children }) {
+function FormSection({ title, children }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
+      <div className="border-b border-border bg-bg px-4 py-2">
         <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
       </div>
       <div className="p-4">{children}</div>

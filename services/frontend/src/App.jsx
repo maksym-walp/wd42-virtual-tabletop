@@ -77,7 +77,10 @@ export default function App() {
                   <Route path="/spellbook/traditions/:id/edit" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
                   <Route path="/spellbook/:id" element={<PrivateRoute><SpellView /></PrivateRoute>} />
                   <Route path="/spellbook/:id/edit" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
-                  <Route path="/equipment" element={<PrivateRoute><EquipmentCatalog /></PrivateRoute>} />
+                  <Route path="/equipment" element={<Navigate to="/equipment/weapon" replace />} />
+                  <Route path="/equipment/weapon" element={<PrivateRoute><EquipmentCatalog type="weapon" /></PrivateRoute>} />
+                  <Route path="/equipment/armor" element={<PrivateRoute><EquipmentCatalog type="armor" /></PrivateRoute>} />
+                  <Route path="/equipment/items" element={<PrivateRoute><EquipmentCatalog type="item" /></PrivateRoute>} />
                   <Route path="/equipment/new" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
                   <Route path="/equipment/collections" element={<PrivateRoute><CollectionsList domainKey="equipment" /></PrivateRoute>} />
                   <Route path="/equipment/collections/new" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />

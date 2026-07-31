@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import skillTreeApi from '../api/skillTree';
-import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import { COLLECTION_DOMAINS, getDomainTabs } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
+import CatalogTabs from '../components/CatalogTabs';
 
 const EMPTY = {
-  name: '', description: '', is_public: false,
+  name: '', description: '', is_public: false, image_url: '',
   prerequisite_node_ids: [], prerequisite_logic: 'or',
 };
 
@@ -34,6 +36,7 @@ export default function CollectionForm({ domainKey }) {
     domain.collectionsApi.getOne(id)
       .then((c) => setForm({
         name: c.name, description: c.description || '', is_public: c.is_public,
+        image_url: c.image_url || '',
         prerequisite_node_ids: c.prerequisite_node_ids || [],
         prerequisite_logic: c.prerequisite_logic || 'or',
       }))
@@ -65,9 +68,7 @@ export default function CollectionForm({ domainKey }) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <Link to={`${domain.basePath}/collections`} className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Колекції — {domain.title}
-      </Link>
+      <CatalogTabs tabs={getDomainTabs(domainKey)} />
 
       <h1 className="mb-6 font-display text-2xl text-accent">
         {isEdit ? 'Редагування колекції' : 'Нова колекція'}
@@ -82,13 +83,22 @@ export default function CollectionForm({ domainKey }) {
               required maxLength={200}
             />
           </Field>
-          <Field label="Опис">
-            <textarea
-              className={`${inputClass} resize-y`} rows={4} value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Що це за набір, для чого призначений..."
+
+          <div className="mb-4">
+            <ImageUploadField
+              value={form.image_url}
+              onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+              entityType="collection"
             />
-          </Field>
+          </div>
+
+          <SmartTextarea
+            label="Опис"
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            rows={4}
+            placeholder="Що це за набір, для чого призначений..."
+          />
         </FormSection>
 
         {domain.supportsPrerequisites && (

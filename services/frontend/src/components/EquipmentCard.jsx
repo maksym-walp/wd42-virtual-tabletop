@@ -1,19 +1,16 @@
 import { Link } from 'react-router-dom';
-import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK } from '../constants/equipment';
-import { useTheme } from '../context/ThemeContext';
+import { EQUIPMENT_TYPES } from '../constants/equipment';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function EquipmentCard({ item }) {
-  const { theme } = useTheme();
-  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
 
   return (
     <Link
       to={`/equipment/${item.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
-      style={{ borderLeft: `4px solid ${type.color}` }}
+      style={{ borderLeft: '4px solid var(--color-accent)' }}
     >
       {item.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
@@ -21,14 +18,8 @@ export default function EquipmentCard({ item }) {
         </div>
       )}
 
-      <div
-        className="flex items-center gap-2 border-b px-3.5 py-2"
-        style={{ background: type.bg, borderBottomColor: type.color + '44' }}
-      >
-        <span
-          className="rounded border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide"
-          style={{ color: type.color, borderColor: type.color + '66' }}
-        >
+      <div className="flex items-center gap-2 border-b border-border bg-surface-hover px-3.5 py-2">
+        <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
           {type.label}
         </span>
         {item.is_canonical && <CanonBadge className="ml-auto" />}

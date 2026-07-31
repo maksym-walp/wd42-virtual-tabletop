@@ -1,20 +1,16 @@
 import { Link } from 'react-router-dom';
-import { ARTIFACT_TYPE as ARTIFACT_TYPE_LIGHT, ARTIFACT_TYPE_DARK, RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
-import { useTheme } from '../context/ThemeContext';
+import { RARITIES } from '../constants/artifacts';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function ArtifactCard({ artifact }) {
-  const { theme } = useTheme();
-  const ARTIFACT_TYPE = theme === 'dark' ? ARTIFACT_TYPE_DARK : ARTIFACT_TYPE_LIGHT;
-  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
   const rarity = RARITIES[artifact.rarity];
 
   return (
     <Link
       to={`/artifacts/${artifact.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
-      style={{ borderLeft: `4px solid ${ARTIFACT_TYPE.color}` }}
+      style={{ borderLeft: '4px solid var(--color-accent)' }}
     >
       {artifact.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
@@ -22,12 +18,9 @@ export default function ArtifactCard({ artifact }) {
         </div>
       )}
 
-      <div
-        className="flex items-center gap-2 border-b px-3.5 py-2"
-        style={{ background: ARTIFACT_TYPE.bg, borderBottomColor: ARTIFACT_TYPE.color + '44' }}
-      >
+      <div className="flex items-center gap-2 border-b border-border bg-surface-hover px-3.5 py-2">
         {rarity && (
-          <span className="rounded border px-1.5 py-0.5 text-[0.68rem] font-semibold" style={{ color: rarity.color, borderColor: rarity.color + '66' }}>
+          <span className="rounded border border-border px-1.5 py-0.5 text-[0.68rem] font-semibold text-text-dim">
             {rarity.label}
           </span>
         )}

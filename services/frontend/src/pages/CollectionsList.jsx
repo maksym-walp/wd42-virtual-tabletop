@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, ArrowLeft } from 'lucide-react';
-import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import { Search, Plus } from 'lucide-react';
+import { COLLECTION_DOMAINS, getDomainTabs } from '../collectionsDomains';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ScopeFilter from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
+import CatalogTabs from '../components/CatalogTabs';
+import EquipmentCollectionsByType from '../components/EquipmentCollectionsByType';
+import DiceFormulaText from '../components/DiceFormulaText';
 
 export default function CollectionsList({ domainKey }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -25,15 +28,10 @@ export default function CollectionsList({ domainKey }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to={domain.basePath} className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> {domain.title}
-      </Link>
+      <CatalogTabs tabs={getDomainTabs(domainKey)} />
 
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Колекції — {domain.title}</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{collections.length} колекцій</p>
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{collections.length} колекцій</p>
         <Button to={`${domain.basePath}/collections/new`} className="hidden md:inline-flex">+ Нова колекція</Button>
       </div>
 
@@ -55,6 +53,8 @@ export default function CollectionsList({ domainKey }) {
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : collections.length === 0 ? (
         <EmptyState title="Колекцій не знайдено" action={<Button to={`${domain.basePath}/collections/new`}>Створити першу</Button>} />
+      ) : domainKey === 'equipment' ? (
+        <EquipmentCollectionsByType collections={collections} basePath={domain.basePath} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {collections.map((c) => (
@@ -64,6 +64,11 @@ export default function CollectionsList({ domainKey }) {
               className="block overflow-hidden rounded-lg border border-border bg-surface"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
+              {c.image_url && (
+                <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" loading="lazy" />
+                </div>
+              )}
               <div className="flex items-center gap-1.5 border-b border-border px-3.5 py-2">
                 <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-dim">
                   {(c.items || []).length} {domain.itemLabel}
@@ -74,7 +79,9 @@ export default function CollectionsList({ domainKey }) {
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
               {c.description && (
-                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{c.description}</p>
+                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
+                  <DiceFormulaText text={c.description} />
+                </p>
               )}
             </Link>
           ))}

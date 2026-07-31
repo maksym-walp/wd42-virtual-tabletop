@@ -6,10 +6,9 @@ import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
 import {
-  NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_KINDS, primaryNature,
+  NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
+  ACTION_OPTIONS, SPELL_KINDS,
 } from '../constants/spellbook';
-import { useTheme } from '../context/ThemeContext';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -37,8 +36,6 @@ export default function SpellForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const { theme } = useTheme();
-  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -182,7 +179,6 @@ export default function SpellForm() {
     }
   };
 
-  const activeType = primaryNature(form.nature, NATURE_TYPES);
   const toggleNature = (key) => setForm((f) => ({
     ...f,
     nature: f.nature.includes(key) ? f.nature.filter((n) => n !== key) : [...f.nature, key],
@@ -207,21 +203,20 @@ export default function SpellForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
         {/* — Загальне — */}
-        <FormSection title="Загальне" accentColor={activeType.color}>
+        <FormSection title="Загальне">
           <Field label="Назва заклинання" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
           <Field label="Природа заклинання" hint="Можна обрати декілька" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(NATURE_TYPES).map(([key, { label, color }]) => (
+              {Object.entries(NATURE_TYPES).map(([key, { label }]) => (
                 <button
                   key={key} type="button"
                   onClick={() => toggleNature(key)}
-                  className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-                  style={form.nature.includes(key)
-                    ? { borderColor: color, color, background: color + '1a' }
-                    : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    form.nature.includes(key) ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+                  }`}
                 >
                   {label}
                 </button>
@@ -277,7 +272,7 @@ export default function SpellForm() {
         </FormSection>
 
         {/* — Механіка — */}
-        <FormSection title="Механіка" accentColor={activeType.color}>
+        <FormSection title="Механіка">
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Магічна енергія">
               <input type="number" min={0} className={inputClass} value={form.energy_cost} onChange={setNum('energy_cost')} />
@@ -330,7 +325,7 @@ export default function SpellForm() {
         </FormSection>
 
         {/* — Описи — */}
-        <FormSection title="Описи" accentColor={activeType.color}>
+        <FormSection title="Описи">
           <SmartTextarea
             label="Механічний опис" className="mb-4"
             value={form.mechanical_desc} onChange={set('mechanical_desc')}
@@ -352,7 +347,7 @@ export default function SpellForm() {
         </FormSection>
 
         {/* — Вимоги дерева розвитку — */}
-        <FormSection title="Вимоги дерева розвитку" accentColor={activeType.color} collapsible defaultOpen={false}>
+        <FormSection title="Вимоги дерева розвитку" collapsible defaultOpen={false}>
           <NodePrerequisitePicker
             nodes={nodes}
             value={form}
@@ -361,7 +356,7 @@ export default function SpellForm() {
         </FormSection>
 
         {/* — Колекції — */}
-        <FormSection title="Колекції" accentColor={activeType.color}>
+        <FormSection title="Колекції">
           <CollectionMembershipPicker
             collections={collections}
             basePath={domain.basePath}
@@ -371,7 +366,7 @@ export default function SpellForm() {
         </FormSection>
 
         {/* — Налаштування — */}
-        <FormSection title="Налаштування" accentColor={activeType.color}>
+        <FormSection title="Налаштування">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
             <input
               type="checkbox" checked={form.is_public}
@@ -398,7 +393,7 @@ export default function SpellForm() {
   );
 }
 
-function FormSection({ title, accentColor, collapsible = false, defaultOpen = true, children }) {
+function FormSection({ title, collapsible = false, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const showContent = !collapsible || open;
 
@@ -408,14 +403,13 @@ function FormSection({ title, accentColor, collapsible = false, defaultOpen = tr
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center justify-between border-b bg-bg px-4 py-2"
-          style={{ borderBottomColor: accentColor + '55' }}
+          className="flex w-full items-center justify-between border-b border-border bg-bg px-4 py-2"
         >
           <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
           <ChevronDown size={16} className={`text-text-dim transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
       ) : (
-        <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
+        <div className="border-b border-border bg-bg px-4 py-2">
           <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
         </div>
       )}

@@ -4,10 +4,10 @@ import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
-import CollectionsRow from '../components/CollectionsRow';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
-import { useTheme } from '../context/ThemeContext';
+import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -41,8 +41,6 @@ const SORT_OPTIONS = [
 ];
 
 export default function Spellbook() {
-  const { theme } = useTheme();
-  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -85,19 +83,14 @@ export default function Spellbook() {
   const activeFilterCount = ['spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length
     + (filter.nature.length > 0 ? 1 : 0)
     + (filter.tradition.length > 0 ? 1 : 0);
-  // Hide collections once a narrowing filter is active (search or a category
-  // filter). Scope is excluded — it keeps collections split, not hidden.
-  const filtersActive = !!(filter.search || filter.nature.length || filter.spell_kind || filter.ritual || filter.tradition.length);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Книга Заклинань</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{spells.length} заклинань</p>
-        </div>
+      <CatalogTabs tabs={getDomainTabs('spellbook')} right={<ViewToggle mode={viewMode} onChange={setViewMode} />} />
+
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{spells.length} заклинань</p>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/spellbook/collections">Колекції</Button>
           <Button variant="ghost" size="sm" to="/spellbook/traditions">Традиції</Button>
           <Button to="/spellbook/new" className="hidden md:inline-flex">+ Нове заклинання</Button>
         </div>
@@ -115,7 +108,6 @@ export default function Spellbook() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -130,8 +122,8 @@ export default function Spellbook() {
             <FilterPill active={filter.nature.length === 0} onClick={() => setFilter((f) => ({ ...f, nature: [] }))}>
               Усі
             </FilterPill>
-            {Object.entries(NATURE_TYPES).map(([key, { label, color }]) => (
-              <FilterPill key={key} active={filter.nature.includes(key)} color={color} onClick={() => toggleMulti('nature', key)}>
+            {Object.entries(NATURE_TYPES).map(([key, { label }]) => (
+              <FilterPill key={key} active={filter.nature.includes(key)} onClick={() => toggleMulti('nature', key)}>
                 {label}
               </FilterPill>
             ))}
@@ -194,8 +186,6 @@ export default function Spellbook() {
         </label>
       </FilterAccordion>
 
-      {!filtersActive && <CollectionsRow domainKey="spellbook" scope={filter.scope} />}
-
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : spells.length === 0 ? (
@@ -225,19 +215,14 @@ export default function Spellbook() {
   );
 }
 
-function FilterPill({ active, color, onClick, children }) {
-  // matches the CSS --color-accent token — kept as a literal hex (not the CSS
-  // var) since it needs '+alpha' string concatenation for the active bg tint.
-  const { theme } = useTheme();
-  const activeColor = color || (theme === 'dark' ? '#8a5a2b' : '#5b440a');
+function FilterPill({ active, onClick, children }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-      style={active
-        ? { borderColor: activeColor, color: activeColor, background: activeColor + '18' }
-        : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+      className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+        active ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+      }`}
     >
       {children}
     </button>

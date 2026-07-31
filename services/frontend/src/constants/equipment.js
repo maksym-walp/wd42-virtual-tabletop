@@ -1,16 +1,11 @@
 // Artifacts are their own catalog/service — see constants/artifacts.js.
+// No per-type accent color — a type is just a label here, not a hue to
+// differentiate by (that's reserved for archetype badges, which do map to
+// one specific archetype).
 export const EQUIPMENT_TYPES = {
-  weapon:   { label: 'Зброя',     color: '#7a3320', bg: 'rgba(122,51,32,0.12)' },
-  armor:    { label: 'Обладунок', color: '#2e5240', bg: 'rgba(46,82,64,0.12)' },
-  item:     { label: 'Предмет',   color: '#8a5a2b', bg: 'rgba(138,90,43,0.12)' },
-};
-
-// Lightened hues of EQUIPMENT_TYPES for legibility against the dark-theme
-// surface — same keys/labels, picked via useTheme() at the call site.
-export const EQUIPMENT_TYPES_DARK = {
-  weapon:   { label: 'Зброя',     color: '#e0836a', bg: 'rgba(224,131,106,0.12)' },
-  armor:    { label: 'Обладунок', color: '#7fcf9e', bg: 'rgba(127,207,158,0.12)' },
-  item:     { label: 'Предмет',   color: '#d9a066', bg: 'rgba(217,160,102,0.12)' },
+  weapon:   { label: 'Зброя' },
+  armor:    { label: 'Обладунок' },
+  item:     { label: 'Предмет' },
 };
 
 // Кожен вид спорядження — окрема таблиця й окремий ендпоінт
@@ -22,6 +17,16 @@ export const EQUIPMENT_ENDPOINTS = {
   weapon: '/api/equipment/weapons',
   armor:  '/api/equipment/armor',
   item:   '/api/equipment/items',
+};
+
+// Frontend route segment per type — weapon/armor keep their type key as the
+// URL segment; "item" is pluralized to "items" for the route only (reads
+// better as a listing page), same split as EQUIPMENT_ENDPOINTS above but
+// purely a routing concern, not a backend one.
+export const EQUIPMENT_TYPE_PATHS = {
+  weapon: 'weapon',
+  armor:  'armor',
+  item:   'items',
 };
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];

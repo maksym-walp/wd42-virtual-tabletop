@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
-import { useTheme } from '../context/ThemeContext';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -27,11 +26,16 @@ const EMPTY = {
 export default function EquipmentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
-  const { theme } = useTheme();
-  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
 
-  const [form, setForm] = useState(EMPTY);
+  // Coming from a specific type tab (?type=armor from /equipment/armor's
+  // "+ Новий предмет") preselects that type instead of always defaulting to
+  // weapon — irrelevant once isEdit's own load overwrites it below.
+  const [form, setForm] = useState(() => {
+    const typeParam = searchParams.get('type');
+    return EQUIPMENT_TYPES[typeParam] ? { ...EMPTY, type: typeParam } : EMPTY;
+  });
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -130,13 +134,14 @@ export default function EquipmentForm() {
   };
 
   const activeType = EQUIPMENT_TYPES[form.type] || EQUIPMENT_TYPES.item;
+  const typeCatalogHref = `/equipment/${EQUIPMENT_TYPE_PATHS[form.type]}`;
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <Link to="/equipment" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Спорядження
+      <Link to={typeCatalogHref} className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> {activeType.label}
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
@@ -144,21 +149,20 @@ export default function EquipmentForm() {
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <FormSection title="Загальне" accentColor={activeType.color}>
+        <FormSection title="Загальне">
           <Field label="Назва" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
           <Field label="Тип" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(EQUIPMENT_TYPES).map(([key, { label, color }]) => (
+              {Object.entries(EQUIPMENT_TYPES).map(([key, { label }]) => (
                 <button
                   key={key} type="button"
                   onClick={() => setForm((f) => ({ ...f, type: key }))}
-                  className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-                  style={form.type === key
-                    ? { borderColor: color, color, background: color + '1a' }
-                    : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
+                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    form.type === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+                  }`}
                 >
                   {label}
                 </button>
@@ -173,7 +177,7 @@ export default function EquipmentForm() {
           />
         </FormSection>
 
-        <FormSection title="Механіка" accentColor={activeType.color}>
+        <FormSection title="Механіка">
           {form.type === 'weapon' && (
             <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Кубик шкоди">
@@ -218,7 +222,7 @@ export default function EquipmentForm() {
           </Field>
         </FormSection>
 
-        <FormSection title="Опис" accentColor={activeType.color}>
+        <FormSection title="Опис">
           <SmartTextarea
             value={form.description} onChange={set('description')}
             rows={4}
@@ -226,7 +230,7 @@ export default function EquipmentForm() {
           />
         </FormSection>
 
-        <FormSection title="Колекції" accentColor={activeType.color}>
+        <FormSection title="Колекції">
           <CollectionMembershipPicker
             collections={collections}
             basePath={domain.basePath}
@@ -235,7 +239,7 @@ export default function EquipmentForm() {
           />
         </FormSection>
 
-        <FormSection title="Налаштування" accentColor={activeType.color}>
+        <FormSection title="Налаштування">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
             <input
               type="checkbox" checked={form.is_public}
@@ -249,7 +253,7 @@ export default function EquipmentForm() {
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
-          <Button type="button" variant="ghost" to={isEdit ? `/equipment/${id}` : '/equipment'}>
+          <Button type="button" variant="ghost" to={isEdit ? `/equipment/${id}` : typeCatalogHref}>
             Скасувати
           </Button>
           <Button type="submit" disabled={saving}>
@@ -261,10 +265,10 @@ export default function EquipmentForm() {
   );
 }
 
-function FormSection({ title, accentColor, children }) {
+function FormSection({ title, children }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
+      <div className="border-b border-border bg-bg px-4 py-2">
         <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
       </div>
       <div className="p-4">{children}</div>

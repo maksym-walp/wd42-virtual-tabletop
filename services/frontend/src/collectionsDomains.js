@@ -31,6 +31,14 @@ export const COLLECTION_DOMAINS = {
     // (unlike abilities/maneuvers/spells), so equipment collections don't
     // carry a skill-tree node dependency either — nothing for it to inherit into.
     supportsPrerequisites: false,
+    // Equipment has three browsable lists (one per type-table) alongside
+    // Колекції, same reason compendium overrides this — see getDomainTabs().
+    tabs: [
+      { to: '/equipment/weapon', label: 'Зброя' },
+      { to: '/equipment/armor', label: 'Обладунок' },
+      { to: '/equipment/items', label: 'Предмет' },
+      { to: '/equipment/collections', label: 'Колекції' },
+    ],
   },
   artifacts: {
     title: 'Артефакти',
@@ -95,5 +103,26 @@ export const COLLECTION_DOMAINS = {
     // schema (unlike equipment/spellbook/maneuvers/abilities) — no
     // is_canonical column, no /canonical endpoint.
     supportsCanonical: false,
+    // Compendium has more than one browsable list (NPCs vs Bestiary vs
+    // Species) alongside Колекції, so it needs an explicit tab set instead
+    // of the [catalog, Колекції] pair getDomainTabs() derives by default.
+    tabs: [
+      { to: '/compendium', label: 'НІПи', end: true },
+      { to: '/compendium/bestiary', label: 'Бестіарій' },
+      { to: '/compendium/species', label: 'Види' },
+      { to: '/compendium/collections', label: 'Колекції' },
+    ],
   },
 };
+
+// The tab bar every catalog service shows (CatalogTabs) — a domain with a
+// single browsable list (equipment, artifacts, abilities, maneuvers,
+// spellbook) just gets [catalog, Колекції]; compendium overrides this via
+// its own `tabs` above since it has more than one list to switch between.
+export function getDomainTabs(domainKey) {
+  const domain = COLLECTION_DOMAINS[domainKey];
+  return domain.tabs || [
+    { to: domain.basePath, label: domain.title, end: true },
+    { to: `${domain.basePath}/collections`, label: 'Колекції' },
+  ];
+}

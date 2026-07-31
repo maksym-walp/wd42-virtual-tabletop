@@ -52,23 +52,23 @@ const CollectionModel = {
     return rows[0] || null;
   },
 
-  async create(userId, { name, description, is_public }) {
+  async create(userId, { name, description, is_public, image_url }) {
     const { rows } = await pool.query(
-      `INSERT INTO compendium.collections (created_by, name, description, is_public)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO compendium.collections (created_by, name, description, is_public, image_url)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false]
+      [userId, name, description ?? null, is_public ?? false, image_url ?? null]
     );
     return rows[0];
   },
 
-  async update(id, userId, { name, description, is_public }, isAdmin = false) {
+  async update(id, userId, { name, description, is_public, image_url }, isAdmin = false) {
     const { rows } = await pool.query(
       `UPDATE compendium.collections
-       SET name = $3, description = $4, is_public = $5, updated_at = NOW()
-       WHERE id = $1 AND (created_by = $2 OR $6 = true)
+       SET name = $3, description = $4, is_public = $5, image_url = $6, updated_at = NOW()
+       WHERE id = $1 AND (created_by = $2 OR $7 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, image_url ?? null, isAdmin]
     );
     return rows[0] || null;
   },

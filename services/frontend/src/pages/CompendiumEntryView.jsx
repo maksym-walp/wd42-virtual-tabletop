@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
-import { ENTITY_TYPES as ENTITY_TYPES_LIGHT, ENTITY_TYPES_DARK, ATTRIBUTE_LABELS } from '../constants/compendium';
+import { ENTITY_TYPES, ATTRIBUTE_LABELS } from '../constants/compendium';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import RollButton from '../components/RollButton';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
@@ -16,8 +15,6 @@ export default function CompendiumEntryView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const ENTITY_TYPES = theme === 'dark' ? ENTITY_TYPES_DARK : ENTITY_TYPES_LIGHT;
 
   const [entry, setEntry] = useState(null);
   const [species, setSpecies] = useState(null);
@@ -88,15 +85,15 @@ export default function CompendiumEntryView() {
         <ArrowLeft size={15} /> {isNpc ? 'НІПи' : 'Бестіарій'}
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: `3px solid ${type.color}` }}>
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {entry.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
             <img src={entry.image_url} alt={entry.name} className="h-full w-full object-cover" />
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: type.bg }}>
-          <span className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide" style={{ color: type.color, borderColor: type.color }}>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
             {type.label}
           </span>
           {species && <Link to={`/compendium/species/${species.id}`} className="text-xs text-text-dim hover:text-accent">{species.name}</Link>}
@@ -108,7 +105,7 @@ export default function CompendiumEntryView() {
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-5">
           {ATTRIBUTE_KEYS.map((key) => (
-            <SheetStat key={key} label={ATTRIBUTE_LABELS[key]} value={entry[key]} accent={type.color} />
+            <SheetStat key={key} label={ATTRIBUTE_LABELS[key]} value={entry[key]} />
           ))}
         </div>
 
@@ -242,10 +239,10 @@ export default function CompendiumEntryView() {
   );
 }
 
-function SheetStat({ label, value, accent }) {
+function SheetStat({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5 bg-surface px-3 py-2">
-      <span className="text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: accent + 'aa' }}>{label}</span>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">{label}</span>
       <span className="text-sm font-semibold text-text">{value ?? '—'}</span>
     </div>
   );

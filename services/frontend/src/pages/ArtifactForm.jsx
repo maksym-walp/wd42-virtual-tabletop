@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { ARTIFACT_TYPE as ARTIFACT_TYPE_LIGHT, ARTIFACT_TYPE_DARK, RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
-import { useTheme } from '../context/ThemeContext';
+import { RARITIES } from '../constants/artifacts';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
@@ -23,9 +22,6 @@ export default function ArtifactForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const { theme } = useTheme();
-  const ARTIFACT_TYPE = theme === 'dark' ? ARTIFACT_TYPE_DARK : ARTIFACT_TYPE_LIGHT;
-  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -127,7 +123,7 @@ export default function ArtifactForm() {
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <FormSection title="Загальне" accentColor={ARTIFACT_TYPE.color}>
+        <FormSection title="Загальне">
           <Field label="Назва" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
@@ -139,7 +135,7 @@ export default function ArtifactForm() {
           />
         </FormSection>
 
-        <FormSection title="Походження" accentColor={ARTIFACT_TYPE.color}>
+        <FormSection title="Походження">
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Творець">
               <input type="text" className={inputClass} value={form.creator} onChange={set('creator')} maxLength={200} />
@@ -157,7 +153,7 @@ export default function ArtifactForm() {
           </Field>
         </FormSection>
 
-        <FormSection title="Опис" accentColor={ARTIFACT_TYPE.color}>
+        <FormSection title="Опис">
           <textarea
             className={`${inputClass} resize-y`}
             value={form.description} onChange={set('description')}
@@ -166,7 +162,7 @@ export default function ArtifactForm() {
           />
         </FormSection>
 
-        <FormSection title="Колекції" accentColor={ARTIFACT_TYPE.color}>
+        <FormSection title="Колекції">
           <CollectionMembershipPicker
             collections={collections}
             basePath={domain.basePath}
@@ -175,7 +171,7 @@ export default function ArtifactForm() {
           />
         </FormSection>
 
-        <FormSection title="Налаштування" accentColor={ARTIFACT_TYPE.color}>
+        <FormSection title="Налаштування">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
             <input
               type="checkbox" checked={form.is_public}
@@ -201,10 +197,10 @@ export default function ArtifactForm() {
   );
 }
 
-function FormSection({ title, accentColor, children }) {
+function FormSection({ title, children }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="border-b bg-bg px-4 py-2" style={{ borderBottomColor: accentColor + '55' }}>
+      <div className="border-b border-border bg-bg px-4 py-2">
         <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
       </div>
       <div className="p-4">{children}</div>

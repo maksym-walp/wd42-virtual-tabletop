@@ -1,14 +1,10 @@
 import { Link } from 'react-router-dom';
-import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
-import { useTheme } from '../context/ThemeContext';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
 import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function SpellCard({ spell }) {
-  const { theme } = useTheme();
-  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
-  const type = primaryNature(spell.nature, NATURE_TYPES);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 
@@ -16,7 +12,7 @@ export default function SpellCard({ spell }) {
     <Link
       to={`/spellbook/${spell.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
-      style={{ borderLeft: `4px solid ${type.color}` }}
+      style={{ borderLeft: '4px solid var(--color-accent)' }}
     >
       {spell.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
@@ -25,18 +21,14 @@ export default function SpellCard({ spell }) {
       )}
 
       {/* Header */}
-      <div
-        className="flex items-center gap-2 border-b px-3.5 py-2"
-        style={{ background: type.bg, borderBottomColor: type.color + '44' }}
-      >
+      <div className="flex items-center gap-2 border-b border-border bg-surface-hover px-3.5 py-2">
         {(spell.nature || []).map((key) => {
           const n = NATURE_TYPES[key];
           if (!n) return null;
           return (
             <span
               key={key}
-              className="rounded border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide"
-              style={{ color: n.color, borderColor: n.color + '66' }}
+              className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim"
             >
               {n.label}
             </span>

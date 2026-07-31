@@ -11,7 +11,7 @@ import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import { recordView } from '../utils/recentlyViewed';
-import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
+import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
@@ -1296,9 +1296,7 @@ function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
 // ── SpellDetailModal ──────────────────────────────────────────────────────────
 
 function SpellDetailModal({ spell, spellId, onClose }) {
-  const { theme } = useTheme();
-  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
-  const type   = primaryNature(spell.nature, NATURE_TYPES);
+  const type   = primaryNature(spell.nature);
   const ritual = RITUAL_TYPES[spell.ritual];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
@@ -1307,9 +1305,9 @@ function SpellDetailModal({ spell, spellId, onClose }) {
         className="relative z-10 flex max-h-[85vh] w-full max-w-[540px] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface sm:rounded-2xl sm:border"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b px-4 py-3" style={{ background: type.bg, borderBottomColor: type.color + '44' }}>
+        <div className="flex items-center justify-between border-b border-border bg-surface-hover px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="rounded border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide" style={{ color: type.color, borderColor: type.color + '66' }}>{type.label}</span>
+            <span className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-text-dim">{type.label}</span>
             <span className="font-display text-base font-bold text-gold">{spell.name}</span>
           </div>
           <div className="flex items-center gap-2">

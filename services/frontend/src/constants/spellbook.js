@@ -1,28 +1,18 @@
+// No per-nature accent color — nature is conveyed by its label, not a hue
+// (colors are reserved for archetype badges, which map to one specific archetype).
 export const NATURE_TYPES = {
-  arcana:    { label: 'Аркана',       color: '#4a3d66', bg: 'rgba(74,61,102,0.12)' },
-  elemental: { label: 'Стихійна',     color: '#2e5240', bg: 'rgba(46,82,64,0.12)' },
-  integral:  { label: 'Інтегральна',  color: '#8a5a2b', bg: 'rgba(138,90,43,0.12)' },
-  infernal:  { label: 'Інфернальна',  color: '#7a3320', bg: 'rgba(122,51,32,0.12)' },
-  blight:    { label: 'Скверна',      color: '#5a3358', bg: 'rgba(90,51,88,0.12)' },
+  arcana:    { label: 'Аркана' },
+  elemental: { label: 'Стихійна' },
+  integral:  { label: 'Інтегральна' },
+  infernal:  { label: 'Інфернальна' },
+  blight:    { label: 'Скверна' },
 };
 
-// Lightened hues of NATURE_TYPES for legibility against the dark-theme
-// surface — same keys/labels, picked via useTheme() at the call site.
-export const NATURE_TYPES_DARK = {
-  arcana:    { label: 'Аркана',       color: '#a78bda', bg: 'rgba(167,139,218,0.12)' },
-  elemental: { label: 'Стихійна',     color: '#7fcf9e', bg: 'rgba(127,207,158,0.12)' },
-  integral:  { label: 'Інтегральна',  color: '#d9a066', bg: 'rgba(217,160,102,0.12)' },
-  infernal:  { label: 'Інфернальна',  color: '#e0836a', bg: 'rgba(224,131,106,0.12)' },
-  blight:    { label: 'Скверна',      color: '#b97eb0', bg: 'rgba(185,126,176,0.12)' },
-};
-
-// A spell can now have multiple natures at once — these read the first
-// entry as the "primary" one wherever the UI only has room for a single
-// color/label (card borders, accent colors), and join all of them for
-// full-text display. Pass the theme-picked map so the picked color/bg
-// matches the active theme (defaults to light for back-compat).
-export function primaryNature(nature, natureTypes = NATURE_TYPES) {
-  return natureTypes[nature?.[0]] || natureTypes.arcana;
+// A spell can have multiple natures at once — this reads the first entry as
+// the "primary" one wherever the UI only has room for a single label (card
+// headers), and natureLabels() below joins all of them for full-text display.
+export function primaryNature(nature) {
+  return NATURE_TYPES[nature?.[0]] || NATURE_TYPES.arcana;
 }
 
 export function natureLabels(nature) {

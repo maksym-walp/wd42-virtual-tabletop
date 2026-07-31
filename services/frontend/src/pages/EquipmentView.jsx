@@ -2,20 +2,17 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 
 export default function EquipmentView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -40,7 +37,7 @@ export default function EquipmentView() {
     try {
       await api.delete(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}`);
       removeView('equipment', id);
-      navigate('/equipment');
+      navigate(`/equipment/${EQUIPMENT_TYPE_PATHS[item.type]}`);
     } catch {
       setDeleting(false);
     }
@@ -65,25 +62,19 @@ export default function EquipmentView() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/equipment" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Спорядження
+      <Link to={`/equipment/${EQUIPMENT_TYPE_PATHS[item.type]}`} className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> {type.label}
       </Link>
 
-      <div
-        className="overflow-hidden rounded-lg border border-border bg-surface"
-        style={{ borderTop: `3px solid ${type.color}` }}
-      >
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {item.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
             <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: type.bg }}>
-          <span
-            className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
-            style={{ color: type.color, borderColor: type.color }}
-          >
+        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
             {type.label}
           </span>
           {item.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
@@ -93,12 +84,12 @@ export default function EquipmentView() {
         <AuthorBadge username={item.owner_username} size="sm" className="px-5 pb-2" />
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-          {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} accent={type.color} />}
-          {item.weapon_type && <SheetStat label="Тип зброї" value={WEAPON_TYPES[item.weapon_type]?.label} accent={type.color} />}
-          {item.weapon_grip && <SheetStat label="Особливості" value={WEAPON_GRIPS[item.weapon_grip]?.label} accent={type.color} />}
-          {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} accent={type.color} />}
-          {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} accent={type.color} />}
-          {item.price != null && <SheetStat label="Середня ціна" value={item.price} accent={type.color} />}
+          {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} />}
+          {item.weapon_type && <SheetStat label="Тип зброї" value={WEAPON_TYPES[item.weapon_type]?.label} />}
+          {item.weapon_grip && <SheetStat label="Особливості" value={WEAPON_GRIPS[item.weapon_grip]?.label} />}
+          {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} />}
+          {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
+          {item.price != null && <SheetStat label="Середня ціна" value={item.price} />}
         </div>
 
         {item.description && (
@@ -140,10 +131,10 @@ export default function EquipmentView() {
   );
 }
 
-function SheetStat({ label, value, accent }) {
+function SheetStat({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5 bg-surface px-3 py-2">
-      <span className="text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: accent + 'aa' }}>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">
         {label}
       </span>
       <span className="text-sm font-semibold text-text">{value ?? '—'}</span>

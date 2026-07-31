@@ -2,21 +2,18 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { NATURE_TYPES as NATURE_TYPES_LIGHT, NATURE_TYPES_DARK, RITUAL_TYPES, SPELL_KINDS, formatDuration, primaryNature } from '../constants/spellbook';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 
 export default function SpellView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const NATURE_TYPES = theme === 'dark' ? NATURE_TYPES_DARK : NATURE_TYPES_LIGHT;
   const [spell, setSpell] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -59,7 +56,6 @@ export default function SpellView() {
 
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
-  const type = primaryNature(spell.nature, NATURE_TYPES);
   const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 
@@ -69,10 +65,7 @@ export default function SpellView() {
         <ArrowLeft size={15} /> Книга заклинань
       </Link>
 
-      <div
-        className="overflow-hidden rounded-lg border border-border bg-surface"
-        style={{ borderTop: `3px solid ${type.color}` }}
-      >
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {spell.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
             <img src={spell.image_url} alt={spell.name} className="h-full w-full object-cover" />
@@ -80,15 +73,14 @@ export default function SpellView() {
         )}
 
         {/* Type header */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: type.bg }}>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
           {(spell.nature || []).map((key) => {
             const n = NATURE_TYPES[key];
             if (!n) return null;
             return (
               <span
                 key={key}
-                className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
-                style={{ color: n.color, borderColor: n.color }}
+                className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim"
               >
                 {n.label}
               </span>
@@ -103,12 +95,12 @@ export default function SpellView() {
 
         {/* Stats grid */}
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-          <SheetStat label="Магічна енергія" value={spell.energy_cost} accent={type.color} />
-          <SheetStat label="Час виконання" value={`${spell.action_time} ${spell.action_time === 1 ? 'дія' : 'дії'}`} accent={type.color} />
-          <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} accent={type.color} />
-          <SheetStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} accent={type.color} />
-          {spell.range_desc && <SheetStat label="Дальність" value={spell.range_desc} accent={type.color} />}
-          {spell.lore_creator && <SheetStat label="Творець" value={spell.lore_creator} accent={type.color} />}
+          <SheetStat label="Магічна енергія" value={spell.energy_cost} />
+          <SheetStat label="Час виконання" value={`${spell.action_time} ${spell.action_time === 1 ? 'дія' : 'дії'}`} />
+          <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} />
+          <SheetStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
+          {spell.range_desc && <SheetStat label="Дальність" value={spell.range_desc} />}
+          {spell.lore_creator && <SheetStat label="Творець" value={spell.lore_creator} />}
         </div>
 
         {spell.components?.length > 0 && (
@@ -178,10 +170,10 @@ export default function SpellView() {
   );
 }
 
-function SheetStat({ label, value, accent }) {
+function SheetStat({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5 bg-surface px-3 py-2">
-      <span className="text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: accent + 'aa' }}>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">
         {label}
       </span>
       <span className="text-sm font-semibold text-text">{value || '—'}</span>

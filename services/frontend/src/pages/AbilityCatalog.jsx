@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
-import CollectionsRow from '../components/CollectionsRow';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
@@ -54,22 +55,15 @@ export default function AbilityCatalog() {
       .finally(() => setLoading(false));
   }, [archetype, search, scope]);
 
-  // Hide collections when a narrowing filter (search or archetype) is active.
-  // Scope is excluded — it keeps collections split, not hidden.
-  const filtersActive = !!(search || archetype);
   const activeFilterCount = (scope ? 1 : 0) + (archetype ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Вміння</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{abilities.length} вмінь</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/abilities/collections">Колекції</Button>
-          <Button to="/abilities/new" className="hidden md:inline-flex">+ Нове вміння</Button>
-        </div>
+      <CatalogTabs tabs={getDomainTabs('abilities')} right={<ViewToggle mode={view} onChange={setView} />} />
+
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{abilities.length} вмінь</p>
+        <Button to="/abilities/new" className="hidden md:inline-flex">+ Нове вміння</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -83,7 +77,6 @@ export default function AbilityCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -118,8 +111,6 @@ export default function AbilityCatalog() {
           </div>
         </div>
       </FilterAccordion>
-
-      {!filtersActive && <CollectionsRow domainKey="abilities" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

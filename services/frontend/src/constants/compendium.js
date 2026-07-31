@@ -1,13 +1,10 @@
 // NPC vs Creature — the two entity_type values compendium_entries can hold
 // (Single Table Inheritance, see database/migrations/44-compendium-service.sql).
+// No per-type accent color — a type is conveyed by its label, not a hue
+// (colors are reserved for archetype badges, which map to one specific archetype).
 export const ENTITY_TYPES = {
-  npc:      { label: 'НІП',    color: '#3d6b8a', bg: 'rgba(61,107,138,0.12)' },
-  creature: { label: 'Істота', color: '#7a3320', bg: 'rgba(122,51,32,0.12)' },
-};
-
-export const ENTITY_TYPES_DARK = {
-  npc:      { label: 'НІП',    color: '#7fb6db', bg: 'rgba(127,182,219,0.12)' },
-  creature: { label: 'Істота', color: '#e0836a', bg: 'rgba(224,131,106,0.12)' },
+  npc:      { label: 'НІП' },
+  creature: { label: 'Істота' },
 };
 
 // Column names on compendium_entries — the same 5 attributes the skill dice

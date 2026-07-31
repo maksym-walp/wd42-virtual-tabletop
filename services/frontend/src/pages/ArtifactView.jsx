@@ -2,20 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { ARTIFACT_TYPE as ARTIFACT_TYPE_LIGHT, ARTIFACT_TYPE_DARK, RARITIES as RARITIES_LIGHT, RARITIES_DARK } from '../constants/artifacts';
+import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 
 export default function ArtifactView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const ARTIFACT_TYPE = theme === 'dark' ? ARTIFACT_TYPE_DARK : ARTIFACT_TYPE_LIGHT;
-  const RARITIES = theme === 'dark' ? RARITIES_DARK : RARITIES_LIGHT;
   const [artifact, setArtifact] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -66,25 +62,19 @@ export default function ArtifactView() {
         <ArrowLeft size={15} /> Артефакти
       </Link>
 
-      <div
-        className="overflow-hidden rounded-lg border border-border bg-surface"
-        style={{ borderTop: `3px solid ${ARTIFACT_TYPE.color}` }}
-      >
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {artifact.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
             <img src={artifact.image_url} alt={artifact.name} className="h-full w-full object-cover" />
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5" style={{ background: ARTIFACT_TYPE.bg }}>
-          <span
-            className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
-            style={{ color: ARTIFACT_TYPE.color, borderColor: ARTIFACT_TYPE.color }}
-          >
+        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
             {ARTIFACT_TYPE.label}
           </span>
           {rarity && (
-            <span className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide" style={{ color: rarity.color, borderColor: rarity.color }}>
+            <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
               {rarity.label}
             </span>
           )}
@@ -97,7 +87,7 @@ export default function ArtifactView() {
 
         {artifact.price != null && (
           <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-            <SheetStat label="Середня ціна" value={artifact.price} accent={ARTIFACT_TYPE.color} />
+            <SheetStat label="Середня ціна" value={artifact.price} />
           </div>
         )}
 
@@ -128,10 +118,10 @@ export default function ArtifactView() {
   );
 }
 
-function SheetStat({ label, value, accent }) {
+function SheetStat({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5 bg-surface px-3 py-2">
-      <span className="text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: accent + 'aa' }}>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">
         {label}
       </span>
       <span className="text-sm font-semibold text-text">{value ?? '—'}</span>

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ManeuverCard from '../components/ManeuverCard';
-import CollectionsRow from '../components/CollectionsRow';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -46,22 +47,15 @@ export default function ManeuverCatalog() {
       .finally(() => setLoading(false));
   }, [search, scope]);
 
-  // Hide collections when the user narrows the list with a search. Scope is
-  // excluded — it keeps collections split, not hidden.
-  const filtersActive = search.trim() !== '';
   const activeFilterCount = scope ? 1 : 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Маневри</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{maneuvers.length} маневрів</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/maneuvers/collections">Колекції</Button>
-          <Button to="/maneuvers/new" className="hidden md:inline-flex">+ Новий маневр</Button>
-        </div>
+      <CatalogTabs tabs={getDomainTabs('maneuvers')} right={<ViewToggle mode={view} onChange={setView} />} />
+
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{maneuvers.length} маневрів</p>
+        <Button to="/maneuvers/new" className="hidden md:inline-flex">+ Новий маневр</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -75,7 +69,6 @@ export default function ManeuverCatalog() {
           />
         </div>
         <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <FilterAccordion open={filtersOpen}>
@@ -84,8 +77,6 @@ export default function ManeuverCatalog() {
           <ScopeFilter scope={scope} onChange={setScope} />
         </div>
       </FilterAccordion>
-
-      {!filtersActive && <CollectionsRow domainKey="maneuvers" scope={scope} />}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

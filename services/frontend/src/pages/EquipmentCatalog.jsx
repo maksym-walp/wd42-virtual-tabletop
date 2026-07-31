@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
-import CollectionsRow from '../components/CollectionsRow';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_TYPES as EQUIPMENT_TYPES_LIGHT, EQUIPMENT_TYPES_DARK, EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
-import { useTheme } from '../context/ThemeContext';
+import { EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -15,12 +15,12 @@ import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
 import useViewMode from '../hooks/useViewMode';
 
-const TYPE_TABS = ['weapon', 'armor', 'item'];
-
-export default function EquipmentCatalog() {
-  const { theme } = useTheme();
-  const EQUIPMENT_TYPES = theme === 'dark' ? EQUIPMENT_TYPES_DARK : EQUIPMENT_TYPES_LIGHT;
-  const [type, setType]     = useState('weapon');
+// Each equipment type (weapon/armor/item) is now its own catalog page/route
+// (/equipment/weapon, /equipment/armor, /equipment/items — see App.jsx and
+// collectionsDomains.js's equipment.tabs), switched via the shared
+// CatalogTabs bar instead of an in-page tab — same pattern compendium uses
+// for НІПи/Бестіарій/Види. `type` picks which type-table this instance reads.
+export default function EquipmentCatalog({ type }) {
   const [scope, setScope]   = useState('');
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,8 +30,13 @@ export default function EquipmentCatalog() {
   const [view, setView]     = useViewMode('equipment'); // table | cards
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Вкладка типу — це вже не фільтр, а окремий ендпоінт: кожен вид лежить у
-  // своїй таблиці й має власний набір полів (і власні ключі сортування).
+  // Скидаємо сортування щоразу, як заходимо на інший тип — ключі сортування
+  // (наприклад "defense_value") не всі спільні між таблицями.
+  useEffect(() => {
+    setSort('name');
+    setDir('asc');
+  }, [type]);
+
   useEffect(() => {
     const params = new URLSearchParams({ sort, dir });
     if (search) params.set('search', search);
@@ -44,54 +49,22 @@ export default function EquipmentCatalog() {
       .finally(() => setLoading(false));
   }, [type, search, sort, dir, scope]);
 
-  const changeType = (t) => {
-    setType(t);
-    setSort('name');
-    setDir('asc');
-  };
-
   const toggleSort = (key) => {
     if (sort === key) { setDir((d) => (d === 'asc' ? 'desc' : 'asc')); }
     else { setSort(key); setDir('asc'); }
   };
 
   const showCards = view === 'cards';
-  // Collections are hidden once the user narrows the list with a filter (search),
-  // so the filtered results stay clean. The type tab (always set) and the
-  // source/scope filter don't count — scope keeps collections split, not hidden.
-  const filtersActive = search.trim() !== '';
   const activeFilterCount = scope ? 1 : 0;
+  const newHref = `/equipment/new?type=${type}`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">Спорядження</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{items.length} предметів</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" to="/equipment/collections">Колекції</Button>
-          <Button to="/equipment/new" className="hidden md:inline-flex">+ Новий предмет</Button>
-        </div>
-      </div>
+      <CatalogTabs tabs={getDomainTabs('equipment')} right={<ViewToggle mode={view} onChange={setView} />} />
 
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {TYPE_TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => changeType(t)}
-              className="rounded border px-3 py-1.5 text-sm font-semibold transition-colors"
-              style={type === t
-                ? { borderColor: EQUIPMENT_TYPES[t].color, color: EQUIPMENT_TYPES[t].color, background: EQUIPMENT_TYPES[t].color + '18' }
-                : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
-            >
-              {EQUIPMENT_TYPES[t].label}
-            </button>
-          ))}
-        </div>
-
-        <ViewToggle mode={view} onChange={setView} />
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{items.length} предметів</p>
+        <Button to={newHref} className="hidden md:inline-flex">+ Новий предмет</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -114,12 +87,10 @@ export default function EquipmentCatalog() {
         </div>
       </FilterAccordion>
 
-      {!filtersActive && <CollectionsRow domainKey="equipment" scope={scope} />}
-
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : items.length === 0 ? (
-        <EmptyState title="Предметів не знайдено" action={<Button to="/equipment/new">Створити перший</Button>} />
+        <EmptyState title="Предметів не знайдено" action={<Button to={newHref}>Створити перший</Button>} />
       ) : showCards ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => <EquipmentCard key={item.id} item={item} />)}
@@ -129,7 +100,7 @@ export default function EquipmentCatalog() {
       )}
 
       <Link
-        to="/equipment/new"
+        to={newHref}
         className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
         aria-label="Новий предмет"
       >

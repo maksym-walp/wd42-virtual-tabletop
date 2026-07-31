@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import compendiumApi from '../api/compendium';
-import CompendiumTabs from '../components/compendium/CompendiumTabs';
+import CatalogTabs from '../components/CatalogTabs';
+import { getDomainTabs } from '../collectionsDomains';
 import CompendiumEntryCard from '../components/compendium/CompendiumEntryCard';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -61,18 +62,11 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CompendiumTabs />
+      <CatalogTabs tabs={getDomainTabs('compendium')} right={<ViewToggle mode={view} onChange={setView} />} />
 
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl text-accent sm:text-3xl">{title}</h1>
-          <p className="mt-0.5 text-sm text-text-dim">{filtered.length} записів</p>
-        </div>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{filtered.length} записів</p>
         <Button to={`/compendium/entries/new?type=${entityType}`} className="hidden md:inline-flex">+ {newLabel}</Button>
-      </div>
-
-      <div className="mb-5 flex justify-end">
-        <ViewToggle mode={view} onChange={setView} />
       </div>
 
       <div className="mb-3 flex gap-2.5">

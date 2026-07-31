@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Share2, Check } from 'lucide-react';
-import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import { Share2, Check } from 'lucide-react';
+import { COLLECTION_DOMAINS, getDomainTabs } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import { useAuth } from '../context/AuthContext';
+import CatalogTabs from '../components/CatalogTabs';
+import SmartTextReader from '../components/SmartTextReader';
 
 export default function CollectionView({ domainKey, publicView = false }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -102,13 +104,15 @@ export default function CollectionView({ domainKey, publicView = false }) {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      {!publicView && (
-        <Link to={`${domain.basePath}/collections`} className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
-          <ArrowLeft size={15} /> Колекції — {domain.title}
-        </Link>
-      )}
+      {!publicView && <CatalogTabs tabs={getDomainTabs(domainKey)} />}
 
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-accent)' }}>
+        {collection.image_url && (
+          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+            <img src={collection.image_url} alt={collection.name} className="h-full w-full object-cover" />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">
             {items.length} {domain.itemLabel}
@@ -117,7 +121,9 @@ export default function CollectionView({ domainKey, publicView = false }) {
         </div>
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{collection.name}</h1>
-        {collection.description && <p className="px-5 pb-3 text-sm text-text-muted">{collection.description}</p>}
+        {collection.description && (
+          <p className="px-5 pb-3 text-sm text-text-muted"><SmartTextReader text={collection.description} /></p>
+        )}
 
         {(collection.prerequisite_node_ids || []).length > 0 && (
           <div className="mx-5 mb-3 rounded-md border border-border bg-bg px-3 py-2 text-xs text-text-dim">

@@ -69,26 +69,26 @@ const CollectionModel = {
   },
 
   async create(userId, data) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
     const { rows } = await pool.query(
       `INSERT INTO maneuvers.collections
-         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic)
-       VALUES ($1,$2,$3,$4,$5,$6)
+         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or']
+      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
     );
     return rows[0];
   },
 
   async update(id, userId, data, isAdmin = false) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
     const { rows } = await pool.query(
       `UPDATE maneuvers.collections
        SET name=$3, description=$4, is_public=$5,
-           prerequisite_node_ids=$6, prerequisite_logic=$7, updated_at=NOW()
-       WHERE id=$1 AND (user_id=$2 OR $8 = true)
+           prerequisite_node_ids=$6, prerequisite_logic=$7, image_url=$8, updated_at=NOW()
+       WHERE id=$1 AND (user_id=$2 OR $9 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin]
     );
     return rows[0] || null;
   },
