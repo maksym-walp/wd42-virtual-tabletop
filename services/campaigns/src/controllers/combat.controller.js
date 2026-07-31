@@ -179,7 +179,10 @@ const CombatController = {
   async syncHpFromCharacterSheet(req, res) {
     const character = await CampaignModel.findCharacterOwner(req.params.characterId);
     if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
-    if (character.user_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (character.user_id !== req.user.sub
+      && !await CampaignModel.isCampaignGmForCharacter(req.params.characterId, req.user.sub)) {
+      return res.status(403).json({ message: 'Доступ заборонено' });
+    }
 
     const { health, temp_hp } = req.body;
     const combatants = await CombatantModel.updateHpByCharacterId(req.params.characterId, { health, temp_hp });

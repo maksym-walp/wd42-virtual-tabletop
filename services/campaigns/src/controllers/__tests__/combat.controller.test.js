@@ -642,8 +642,9 @@ describe('CombatController.syncHpFromCharacterSheet', () => {
     expect(CombatantModel.updateHpByCharacterId).not.toHaveBeenCalled();
   });
 
-  it('403s when the requester does not own this character', async () => {
+  it('403s when the requester neither owns this character nor GMs its campaign', async () => {
     CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'someone-else' });
+    CampaignModel.isCampaignGmForCharacter.mockResolvedValue(false);
     const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 10 }, user: { sub: 'player-1' } });
     const res = mockRes();
 
@@ -651,6 +652,20 @@ describe('CombatController.syncHpFromCharacterSheet', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(CombatantModel.updateHpByCharacterId).not.toHaveBeenCalled();
+  });
+
+  it('allows a campaign GM (not the owner) to sync HP for a member character', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'someone-else' });
+    CampaignModel.isCampaignGmForCharacter.mockResolvedValue(true);
+    CombatantModel.updateHpByCharacterId.mockResolvedValue([{ id: 'cb1', health: 5, temp_hp: 0 }]);
+    const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 5, temp_hp: 0 }, user: { sub: 'gm-1' } });
+    const res = mockRes();
+
+    await CombatController.syncHpFromCharacterSheet(req, res);
+
+    expect(CampaignModel.isCampaignGmForCharacter).toHaveBeenCalledWith('ch1', 'gm-1');
+    expect(CombatantModel.updateHpByCharacterId).toHaveBeenCalledWith('ch1', { health: 5, temp_hp: 0 });
+    expect(res.json).toHaveBeenCalledWith({ combatants: [{ id: 'cb1', health: 5, temp_hp: 0 }] });
   });
 
   it('updates every combatant linked to this character and returns them', async () => {

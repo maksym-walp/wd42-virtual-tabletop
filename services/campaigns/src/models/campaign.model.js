@@ -147,6 +147,23 @@ const CampaignModel = {
     );
     return rows[0] || null;
   },
+
+  // True if userId GMs any campaign this character is currently attached to
+  // — mirrors character-sheet's own isCampaignGmForCharacter (which grants
+  // the same GM the right to edit that sheet in the first place), so the
+  // reverse HP sync back into the combat tracker isn't limited to the
+  // character's owner alone.
+  async isCampaignGmForCharacter(characterId, userId) {
+    const { rows } = await pool.query(
+      `SELECT 1
+       FROM campaigns.campaign_characters cc
+       JOIN campaigns.campaigns cp ON cp.id = cc.campaign_id
+       WHERE cc.character_id = $1 AND cp.gm_id = $2
+       LIMIT 1`,
+      [characterId, userId]
+    );
+    return rows.length > 0;
+  },
 };
 
 module.exports = CampaignModel;

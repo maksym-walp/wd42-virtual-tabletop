@@ -32,6 +32,20 @@ const customColumnIcons = imagesByKey(
 );
 
 const POLL_INTERVAL_MS = 3500;
+
+// Компактні числові поля в рядках таблиці комбатантів. Не перевикористовує
+// inputClass (той зроблений під повнорозмірні форми, з py-2.5/min-h-11) —
+// раніше тут дописувались "py-1 w-16" ПІСЛЯ inputClass сподіваючись
+// перебити його, але Tailwind вирішує конфлікт порядком класів у
+// згенерованому CSS, а не порядком у className, тож py-2.5 з inputClass
+// мовчки перемагав: поле лишалось високим і майже без горизонтального
+// місця під цифри, а в тісному flex-ряду ще й стискалось (без shrink-0)
+// до кількох пікселів — значення реально зберігалось, просто його не було
+// видно. Тому власний, самодостатній набір класів без цього конфлікту.
+const compactInputClass =
+  'shrink-0 rounded-lg border border-border bg-bg px-1.5 py-1 text-sm text-text ' +
+  'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30';
+
 const EMPTY_NPC_FORM = {
   name: '', passive_defense: 0, active_defense: 0, health: 0, max_health: 0,
   temp_hp: 0, initiative: 0, notes: '', description: '',
@@ -347,7 +361,9 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
 function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }) {
   const rowRef = useRef(null);
   const [local, setLocal] = useState(combatant);
-  const [hpDraft, setHpDraft] = useState('');
+  // null — не в режимі редагування: поле показує реальне поточне ХП з `local`.
+  // Рядок (навіть порожній) — чернетка вводу: користувач саме зараз друкує.
+  const [hpDraft, setHpDraft] = useState(null);
   const { roll: rollDice, rolling: diceRolling } = useDice();
 
   // Опитування оновлює `combatant` кожні ~3.5с; якщо хтось саме зараз
@@ -375,12 +391,15 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
     }
   };
 
-  // Розумне ХП: рахуємо нове (health, temp_hp) із заданого вводу, зберігаємо
-  // в combatants кампанії, і якщо це персонаж гравця — тим самим запитом
-  // синхронізуємо і його оригінальний лист у character-sheet.
+  // Розумне ХП: рахуємо нове (health, temp_hp) із заданого вводу відносно
+  // `local` (щоб швидкі послідовні +1/-1 клацання рахувались одне від
+  // одного, а не від застарілого `combatant` до наступного опитування),
+  // одразу показуємо результат (оптимістично) і зберігаємо — якщо це
+  // персонаж гравця, тим самим запитом синхронізуємо і його лист.
   const applyAndSyncHp = async (rawInput) => {
-    const next = applyHpInput(rawInput, combatant);
+    const next = applyHpInput(rawInput, local);
     if (!next) return;
+    setLocal((p) => ({ ...p, ...next }));
     try {
       await campaignApi.updateCombatant(campaignId, combatant.id, next);
       if (combatant.character_id) {
@@ -388,13 +407,14 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       }
       onChanged();
     } catch {
-      // мережева помилка — наступне опитування підтягне справжній стан
+      setLocal(combatant);
     }
   };
 
   const commitHp = () => {
     const raw = hpDraft;
-    setHpDraft('');
+    setHpDraft(null);
+    if (raw == null) return;
     applyAndSyncHp(raw);
   };
 
@@ -448,7 +468,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
     }
   };
 
-  const hpDisplay = formatHp(combatant.health, combatant.temp_hp, combatant.max_health);
+  const hpDisplay = formatHp(local.health, local.temp_hp, local.max_health);
 
   // Гравці ніколи не бачать колонку "Опис" — вона суто для GM. Для NPC
   // (де решта чисел і так затерті на фронті) її текст замість цього
@@ -469,7 +489,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
         <td className={cellClass}>
           {isMine ? (
             <IntInput
-              className={`${inputClass} min-h-8 w-16 py-1`}
+              className={`${compactInputClass} w-14 text-center`}
               value={local.passive_defense}
               onChange={(v) => setLocal((p) => ({ ...p, passive_defense: v }))}
               onBlur={() => commit('passive_defense')}
@@ -482,7 +502,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
           <div className="flex items-center gap-1">
             {isMine ? (
               <IntInput
-                className={`${inputClass} min-h-8 w-16 py-1`}
+                className={`${compactInputClass} w-14 text-center`}
                 value={local.active_defense}
                 onChange={(v) => setLocal((p) => ({ ...p, active_defense: v }))}
                 onBlur={() => commit('active_defense')}
@@ -510,9 +530,9 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
                 <Minus size={14} />
               </button>
               <input
-                className={`${inputClass} min-h-8 w-16 py-1`}
-                placeholder={hpDisplay}
-                value={hpDraft}
+                className={`${compactInputClass} w-14 text-center`}
+                value={hpDraft ?? (local.health ?? '')}
+                onFocus={() => setHpDraft('')}
                 onChange={(e) => setHpDraft(e.target.value)}
                 onBlur={commitHp}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
@@ -529,7 +549,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
           <div className="flex items-center gap-1">
             {isMine ? (
               <IntInput
-                className={`${inputClass} min-h-8 w-16 py-1`}
+                className={`${compactInputClass} w-14 text-center`}
                 value={local.initiative}
                 onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
                 onBlur={() => commit('initiative')}
@@ -550,7 +570,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
         <td className={cellClass}>
           {isMine ? (
             <input
-              className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+              className={`${compactInputClass} min-w-[130px] flex-1`}
               value={local.notes ?? ''}
               onChange={(e) => setLocal((p) => ({ ...p, notes: e.target.value }))}
               onBlur={() => commit('notes')}
@@ -568,7 +588,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       <td className={cellClass}>
         {canEditFully && isNpc ? (
           <input
-            className={`${inputClass} min-h-8 min-w-[110px] py-1`}
+            className={`${compactInputClass} min-w-[110px]`}
             value={local.name}
             onChange={(e) => setLocal((p) => ({ ...p, name: e.target.value }))}
             onBlur={() => commit('name')}
@@ -580,7 +600,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       <td className={cellClass}>
         {canEditFully && isNpc ? (
           <IntInput
-            className={`${inputClass} min-h-8 w-16 py-1`}
+            className={`${compactInputClass} w-14 text-center`}
             value={local.passive_defense}
             onChange={(v) => setLocal((p) => ({ ...p, passive_defense: v }))}
             onBlur={() => commit('passive_defense')}
@@ -593,7 +613,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
         <div className="flex items-center gap-1">
           {canEditFully ? (
             <IntInput
-              className={`${inputClass} min-h-8 w-16 py-1`}
+              className={`${compactInputClass} w-14 text-center`}
               value={local.active_defense}
               onChange={(v) => setLocal((p) => ({ ...p, active_defense: v }))}
               onBlur={() => commit('active_defense')}
@@ -616,32 +636,28 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       </td>
       <td className={cellClass}>
         {canEditHp ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
-                <Minus size={14} />
-              </button>
-              <input
-                className={`${inputClass} min-h-8 w-16 py-1`}
-                placeholder={hpDisplay}
-                value={hpDraft}
-                onChange={(e) => setHpDraft(e.target.value)}
-                onBlur={commitHp}
-                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-              />
-              <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
-                <Plus size={14} />
-              </button>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-text-dim">
-              <span>макс.</span>
-              <IntInput
-                className={`${inputClass} min-h-7 w-14 py-0.5 text-xs`}
-                value={local.max_health}
-                onChange={(v) => setLocal((p) => ({ ...p, max_health: v }))}
-                onBlur={() => commit('max_health')}
-              />
-            </div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => stepHp(-1)} aria-label="-1 ХП" className="p-1 text-text-dim hover:text-danger">
+              <Minus size={14} />
+            </button>
+            <input
+              className={`${compactInputClass} w-14 text-center`}
+              value={hpDraft ?? (local.health ?? '')}
+              onFocus={() => setHpDraft('')}
+              onChange={(e) => setHpDraft(e.target.value)}
+              onBlur={commitHp}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+            />
+            <button type="button" onClick={() => stepHp(1)} aria-label="+1 ХП" className="p-1 text-text-dim hover:text-sage">
+              <Plus size={14} />
+            </button>
+            <span className="text-text-dim">/</span>
+            <IntInput
+              className={`${compactInputClass} w-12 text-center`}
+              value={local.max_health}
+              onChange={(v) => setLocal((p) => ({ ...p, max_health: v }))}
+              onBlur={() => commit('max_health')}
+            />
           </div>
         ) : (
           <span className="text-text">{hpDisplay}</span>
@@ -651,7 +667,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
         <div className="flex items-center gap-1">
           {canEditFully ? (
             <IntInput
-              className={`${inputClass} min-h-8 w-16 py-1`}
+              className={`${compactInputClass} w-14 text-center`}
               value={local.initiative}
               onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
               onBlur={() => commit('initiative')}
@@ -672,7 +688,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       <td className={cellClass}>
         {canEditFully ? (
           <input
-            className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+            className={`${compactInputClass} min-w-[130px] flex-1`}
             value={local.notes ?? ''}
             onChange={(e) => setLocal((p) => ({ ...p, notes: e.target.value }))}
             onBlur={() => commit('notes')}
@@ -684,7 +700,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
       <td className={cellClass}>
         {canEditFully ? (
           <input
-            className={`${inputClass} min-h-8 min-w-[130px] py-1`}
+            className={`${compactInputClass} min-w-[130px] flex-1`}
             value={local.description ?? ''}
             onChange={(e) => setLocal((p) => ({ ...p, description: e.target.value }))}
             onBlur={() => commit('description')}
