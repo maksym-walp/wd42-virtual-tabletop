@@ -1,11 +1,13 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
 
-// Каталог спорядження живе у трьох таблицях — по одній на вид
-// (39-equipment-split-tables.sql). Спільні колонки однакові всюди, решта є
-// лише в тієї таблиці, якій вони справді потрібні. Колонки `type` більше
-// немає: вид визначає таблиця, а в API він і далі віддається як `type`, бо
-// на нього дивляться і лист персонажа, і картки каталогу.
+// Каталог спорядження живе у чотирьох таблицях — по одній на вид
+// (39-equipment-split-tables.sql; артефакти приєднались як четвертий вид у
+// 51-merge-artifacts-into-equipment.sql, повернувшись з окремого сервісу).
+// Спільні колонки однакові всюди, решта є лише в тієї таблиці, якій вони
+// справді потрібні. Колонки `type` більше немає: вид визначає таблиця, а в
+// API він і далі віддається як `type`, бо на нього дивляться і лист
+// персонажа, і картки каталогу.
 const KINDS = {
   item: {
     table: 'equipment.items',
@@ -29,6 +31,13 @@ const KINDS = {
     columns: ['defense_value', 'armor_weight'],
     sortExpr: { defense_value: 'i.defense_value' },
     filters: { armor_weight: 'i.armor_weight' },
+  },
+  artifact: {
+    table: 'equipment.artifacts',
+    label: 'Артефакт',
+    columns: ['creator', 'rarity'],
+    sortExpr: { rarity: "array_position(ARRAY['common','uncommon','rare','legendary'], i.rarity)" },
+    filters: { rarity: 'i.rarity', creator: 'i.creator' },
   },
 };
 
@@ -64,12 +73,12 @@ const usedInSpellsSelect = `COALESCE(
     '[]'::jsonb
   ) AS used_in_spells`;
 
-// Спільні колонки трьох таблиць у фіксованому порядку — основа для UNION,
-// де відсутні для конкретного виду поля добиваються NULL-ами, щоб усі три
+// Спільні колонки чотирьох таблиць у фіксованому порядку — основа для UNION,
+// де відсутні для конкретного виду поля добиваються NULL-ами, щоб усі чотири
 // гілки мали однакову форму рядка.
 const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, price, image_url, created_at, updated_at';
 
-// Читальний зріз через усі три таблиці: ним живуть спільні списки (пікер
+// Читальний зріз через усі чотири таблиці: ним живуть спільні списки (пікер
 // предметів у листі персонажа, реагенти в заклинаннях) і перехід за голим
 // id (/equipment/:id у фронтенді, посилання з заклинань), де вид наперед
 // невідомий.
@@ -77,25 +86,34 @@ const CATALOG_UNION = `(
         SELECT ${UNION_COMMON}, 'item'::varchar AS type,
                NULL::varchar AS damage_die, NULL::varchar AS weapon_type,
                NULL::varchar AS weapon_grip,
-               NULL::smallint AS defense_value, NULL::varchar AS armor_weight
+               NULL::smallint AS defense_value, NULL::varchar AS armor_weight,
+               NULL::varchar AS creator, NULL::varchar AS rarity
         FROM equipment.items
         UNION ALL
         SELECT ${UNION_COMMON}, 'weapon'::varchar,
                damage_die, weapon_type, weapon_grip,
-               NULL::smallint, NULL::varchar
+               NULL::smallint, NULL::varchar,
+               NULL::varchar, NULL::varchar
         FROM equipment.weapons
         UNION ALL
         SELECT ${UNION_COMMON}, 'armor'::varchar,
                NULL::varchar, NULL::varchar, NULL::varchar,
-               defense_value, armor_weight
+               defense_value, armor_weight,
+               NULL::varchar, NULL::varchar
         FROM equipment.armor
+        UNION ALL
+        SELECT ${UNION_COMMON}, 'artifact'::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::smallint, NULL::varchar,
+               creator, rarity
+        FROM equipment.artifacts
       )`;
 
 // Вид не зберігається колонкою, тож дописуємо його до відповіді тут — по
 // таблиці, з якої прийшов рядок.
 const withType = (rows, kind) => rows.map((row) => ({ ...row, type: kind }));
 
-// У якій із трьох таблиць лежить цей id (і чи взагалі видно його користувачу).
+// У якій із чотирьох таблиць лежить цей id (і чи взагалі видно його користувачу).
 async function findKindById(id, userId, isAdmin = false) {
   const visibility = isAdmin ? 'TRUE' : '(user_id = $2 OR is_public = true)';
   const { rows } = await pool.query(
@@ -104,6 +122,8 @@ async function findKindById(id, userId, isAdmin = false) {
      SELECT 'weapon' FROM equipment.weapons WHERE id = $1 AND ${visibility}
      UNION ALL
      SELECT 'armor' FROM equipment.armor WHERE id = $1 AND ${visibility}
+     UNION ALL
+     SELECT 'artifact' FROM equipment.artifacts WHERE id = $1 AND ${visibility}
      LIMIT 1`,
     [id, userId]
   );
@@ -178,7 +198,12 @@ function createCatalogModel(kind) {
 
     async findAll(userId, query = {}, isAdmin = false) {
       const params = [userId];
-      const conditions = [isAdmin ? 'TRUE' : '(i.user_id = $1 OR i.is_public = true)'];
+      // scope=community = public entries authored by other, non-canonical
+      // users (used by the Dashboard's "Творіння спільноти" rail) — replaces
+      // the default ownership clause instead of appending to it.
+      const conditions = query.scope === 'community'
+        ? ['i.is_public = true', 'i.user_id <> $1', `NOT ${IS_CANONICAL_EXPR}`]
+        : [isAdmin ? 'TRUE' : '(i.user_id = $1 OR i.is_public = true)'];
 
       if (query.scope === 'canonical') conditions.push(IS_CANONICAL_EXPR);
       else if (query.scope === 'user') conditions.push(`NOT ${IS_CANONICAL_EXPR}`);
@@ -193,13 +218,19 @@ function createCatalogModel(kind) {
         conditions.push(`i.name ILIKE $${params.length}`);
       }
 
+      let limitClause = '';
+      if (query.limit) {
+        params.push(query.limit);
+        limitClause = ` LIMIT $${params.length}`;
+      }
+
       const { rows } = await pool.query(
         `SELECT i.*, (i.user_id = $1) AS is_owner,
                 ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
          FROM ${table} i
          LEFT JOIN auth.users cu ON cu.id = i.user_id
          WHERE ${conditions.join(' AND ')}
-         ORDER BY ${buildOrderBy(allSortExpr, query.sort, query.dir)}`,
+         ORDER BY ${buildOrderBy(allSortExpr, query.sort, query.dir)}${limitClause}`,
         params
       );
       return withType(rows, kind);
@@ -252,7 +283,7 @@ function createCatalogModel(kind) {
         schemaName: 'equipment',
         tableName: table.split('.')[1],
         // Звʼязки з колекціями більше не мають FK на каталог (item_id вказує
-        // на одну з трьох таблиць), тож каскаду немає — прибираємо їх самі.
+        // на одну з чотирьох таблиць), тож каскаду немає — прибираємо їх самі.
         // CTE виконується завжди, але вся операція в транзакції, яку
         // deleteWithTrash відкочує, якщо основний DELETE нічого не зачепив.
         deleteQuery: `WITH unlinked AS (
@@ -279,12 +310,14 @@ function createCatalogModel(kind) {
   };
 }
 
-// Спільний список/деталь через усі три таблиці — для тих, кому вид наперед
+// Спільний список/деталь через усі чотири таблиці — для тих, кому вид наперед
 // невідомий або неважливий.
 const UnionModel = {
-  async findAll(userId, { search, scope, sort, dir } = {}, isAdmin = false) {
+  async findAll(userId, { search, scope, sort, dir, limit } = {}, isAdmin = false) {
     const params = [userId];
-    const conditions = [isAdmin ? 'TRUE' : '(i.user_id = $1 OR i.is_public = true)'];
+    const conditions = scope === 'community'
+      ? ['i.is_public = true', 'i.user_id <> $1', `NOT ${IS_CANONICAL_EXPR}`]
+      : [isAdmin ? 'TRUE' : '(i.user_id = $1 OR i.is_public = true)'];
 
     if (scope === 'canonical') conditions.push(IS_CANONICAL_EXPR);
     else if (scope === 'user') conditions.push(`NOT ${IS_CANONICAL_EXPR}`);
@@ -293,13 +326,19 @@ const UnionModel = {
       conditions.push(`i.name ILIKE $${params.length}`);
     }
 
+    let limitClause = '';
+    if (limit) {
+      params.push(limit);
+      limitClause = ` LIMIT $${params.length}`;
+    }
+
     const { rows } = await pool.query(
       `SELECT i.*, (i.user_id = $1) AS is_owner,
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM ${CATALOG_UNION} i
        LEFT JOIN auth.users cu ON cu.id = i.user_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY ${buildOrderBy(COMMON_SORT_EXPR, sort, dir)}`,
+       ORDER BY ${buildOrderBy(COMMON_SORT_EXPR, sort, dir)}${limitClause}`,
       params
     );
     return rows;

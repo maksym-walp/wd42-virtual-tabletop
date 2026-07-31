@@ -11,6 +11,8 @@ export const RARITIES = {
 
 export const ARTIFACT_TYPE = { label: 'Артефакт' };
 
-// A character sheet lists entries from both catalogs under one set of type
-// headings, so it needs the equipment types plus artifacts in a single map.
+// Артефакти — четвертий вид спорядження (equipment.artifacts, тег `type` у
+// відповіді бекенду), просто з власною карткою/формою. CATALOG_TYPES ловить
+// усі чотири під один набір заголовків там, де вони перелічуються разом
+// (лист персонажа тощо).
 export const CATALOG_TYPES = { ...EQUIPMENT_TYPES, artifact: ARTIFACT_TYPE };

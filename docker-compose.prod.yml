@@ -205,22 +205,6 @@ services:
     networks:
       - walp-network
 
-  artifacts:
-    build:
-      context: ./services/artifacts
-      target: production
-    container_name: walp-artifacts
-    restart: always
-    env_file: .env
-    environment:
-      PORT: 3011
-      NODE_ENV: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - walp-network
-
   maps:
     build:
       context: ./services/maps
@@ -305,7 +289,6 @@ services:
       - maneuvers
       - abilities
       - campaigns
-      - artifacts
       - maps
       - compendium
       - media

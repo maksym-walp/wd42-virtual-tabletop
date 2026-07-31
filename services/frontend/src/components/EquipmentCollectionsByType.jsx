@@ -5,23 +5,24 @@ import CanonBadge from './CanonBadge';
 import DiceFormulaText from './DiceFormulaText';
 
 // Equipment's Колекції tab groups collections by which type-table their
-// items belong to (see EquipmentCatalog.jsx / /equipment/weapon|armor|items)
-// — but a collection isn't restricted to one type (a "starter kit" can hold
-// a sword AND armor AND a rope, see equipment/collection.model.js), so a
-// collection only lands in a pure type row when every item it holds is that
-// one type. Anything spanning more than one type (or with no items yet)
+// items belong to (see EquipmentCatalog.jsx / /equipment/weapon|armor|items|
+// artifacts) — but a collection isn't restricted to one type (a "starter kit"
+// can hold a sword AND armor AND a rope, see equipment/collection.model.js),
+// so a collection only lands in a pure type row when every item it holds is
+// that one type. Anything spanning more than one type (or with no items yet)
 // falls into "Комбіновані" instead of silently vanishing from every row —
 // pinned first since it's the most common case in practice (most collections
-// aren't type-pure) and shouldn't require scrolling past three rows to reach.
+// aren't type-pure) and shouldn't require scrolling past every row to reach.
 const SECTIONS = [
   { key: 'mixed', label: 'Комбіновані' },
   { key: 'weapon', label: 'Зброя' },
   { key: 'armor', label: 'Обладунок' },
   { key: 'item', label: 'Предмет' },
+  { key: 'artifact', label: 'Артефакти' },
 ];
 
 function classify(collections) {
-  const buckets = { weapon: [], armor: [], item: [], mixed: [] };
+  const buckets = { weapon: [], armor: [], item: [], artifact: [], mixed: [] };
   for (const c of collections) {
     const types = new Set((c.items || []).map((i) => i.type));
     const [only] = types;

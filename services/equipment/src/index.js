@@ -16,12 +16,13 @@ app.use(cors({
 app.use(express.json());
 
 // Must all be mounted before unionRouter: its GET /:id at root would
-// otherwise swallow GET /collections, /items, /weapons and /armor (each
-// matching id='<prefix>') since it's registered at the same '/' prefix.
+// otherwise swallow GET /collections, /items, /weapons, /armor and /artifacts
+// (each matching id='<prefix>') since it's registered at the same '/' prefix.
 app.use('/collections', collectionRoutes);
-app.use('/items',   createCatalogRouter('item'));
-app.use('/weapons', createCatalogRouter('weapon'));
-app.use('/armor',   createCatalogRouter('armor'));
+app.use('/items',     createCatalogRouter('item'));
+app.use('/weapons',   createCatalogRouter('weapon'));
+app.use('/armor',     createCatalogRouter('armor'));
+app.use('/artifacts', createCatalogRouter('artifact'));
 app.use('/', unionRouter);
 
 app.use((err, req, res, next) => {

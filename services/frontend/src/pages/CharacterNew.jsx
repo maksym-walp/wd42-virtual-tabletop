@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { TreePine } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import equipmentApi from '../api/equipment';
-import artifactsApi from '../api/artifacts';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
@@ -90,13 +89,10 @@ export default function CharacterNew() {
   const [equipment, setEquipment] = useState([]);
   const [allEquipment, setAllEquipment] = useState([]);
 
-  // Weapons/armor/items and artifacts are separate catalog services; the
-  // starting-gear picker offers both from one list.
+  // Weapons/armor/items and artifacts are one catalog (equipment.artifacts is
+  // a 4th kind alongside them) — the starting-gear picker offers the whole union.
   useEffect(() => {
-    Promise.all([
-      equipmentApi.getAll().catch(() => []),
-      artifactsApi.getAll().catch(() => []),
-    ]).then(([items, artifacts]) => setAllEquipment([...items, ...artifacts]));
+    equipmentApi.getAll().catch(() => []).then(setAllEquipment);
   }, []);
 
   const goBack = () => setStep((s) => Math.max(1, s - 1));
@@ -547,7 +543,7 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
           <h2 className="font-display text-lg text-accent">Бойове спорядження</h2>
           <span className="flex gap-3">
             <a href="/equipment" target="_blank" rel="noreferrer" className="text-sm text-accent">Спорядження →</a>
-            <a href="/artifacts" target="_blank" rel="noreferrer" className="text-sm text-accent">Артефакти →</a>
+            <a href="/equipment/artifacts" target="_blank" rel="noreferrer" className="text-sm text-accent">Артефакти →</a>
           </span>
         </div>
 

@@ -8,7 +8,7 @@ export default function ArtifactCard({ artifact }) {
 
   return (
     <Link
-      to={`/artifacts/${artifact.id}`}
+      to={`/equipment/artifacts/${artifact.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-accent)' }}
     >

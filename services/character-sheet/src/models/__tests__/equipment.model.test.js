@@ -17,7 +17,7 @@ describe('EquipmentModel catalog resolution', () => {
     ['equipment.items', "'item'::varchar AS type"],
     ['equipment.weapons', "'weapon'::varchar"],
     ['equipment.armor', "'armor'::varchar"],
-    ['artifacts.entries', "'artifact'::varchar"],
+    ['equipment.artifacts', "'artifact'::varchar"],
   ])('resolves sheet rows against %s', async (table, typeLiteral) => {
     await EquipmentModel.findAll('c1');
     const [sql] = pool.query.mock.calls[0];
@@ -34,7 +34,7 @@ describe('EquipmentModel catalog resolution', () => {
   it('resolves the same four catalogs after a mastery patch, not just on list', async () => {
     await EquipmentModel.patch('c1', 'eq1', { mastery_count: 1 });
     const [sql] = pool.query.mock.calls[0];
-    for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'artifacts.entries']) {
+    for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'equipment.artifacts']) {
       expect(sql).toContain(`FROM ${table}`);
     }
   });

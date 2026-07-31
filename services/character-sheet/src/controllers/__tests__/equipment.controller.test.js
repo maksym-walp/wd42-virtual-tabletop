@@ -61,7 +61,7 @@ describe('EquipmentController.add', () => {
 
     await EquipmentController.add(req, res);
 
-    for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'artifacts.entries']) {
+    for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'equipment.artifacts']) {
       expect(isVisibleToUser).toHaveBeenCalledWith(table, 'e1', 'u1');
     }
     expect(res.status).toHaveBeenCalledWith(404);
@@ -87,7 +87,7 @@ describe('EquipmentController.add', () => {
   it.each([
     ['equipment.weapons', 'w1'],
     ['equipment.armor', 'ar1'],
-    ['artifacts.entries', 'a1'],
+    ['equipment.artifacts', 'a1'],
   ])('201s when the item is only visible in %s', async (visibleTable, itemId) => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockImplementation((table) => Promise.resolve(table === visibleTable));

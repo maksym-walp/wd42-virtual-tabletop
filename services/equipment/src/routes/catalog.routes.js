@@ -4,7 +4,7 @@ const { requireAuth, requireCanonicalManager } = require('../middleware/auth.mid
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Повний CRUD одного виду спорядження: /items, /weapons, /armor.
+// Повний CRUD одного виду спорядження: /items, /weapons, /armor, /artifacts.
 function createCatalogRouter(kind) {
   const controller = createCatalogController(kind);
   const router = express.Router();
@@ -19,7 +19,7 @@ function createCatalogRouter(kind) {
   return router;
 }
 
-// Корінь сервіса — лише читання наскрізь по трьох таблицях. Запис іде на
+// Корінь сервіса — лише читання наскрізь по чотирьох таблицях. Запис іде на
 // ендпоінт конкретного виду, бо саме він визначає набір полів.
 const unionRouter = express.Router();
 unionRouter.get('/',    requireAuth, wrap(UnionController.list));

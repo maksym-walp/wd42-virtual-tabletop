@@ -18,12 +18,19 @@ export default function EquipmentView() {
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
 
-  // Читаємо зі спільного зрізу по всіх трьох таблицях: у посиланні лише голий
-  // id, вид наперед невідомий — він приходить у відповіді як `type`, і вже за
-  // ним ідуть подальші записи.
+  // Читаємо зі спільного зрізу по всіх чотирьох таблицях: у посиланні лише
+  // голий id, вид наперед невідомий — він приходить у відповіді як `type`, і
+  // вже за ним ідуть подальші записи.
   useEffect(() => {
     api.get(`/api/equipment/${id}`)
       .then(({ data }) => {
+        // Артефакти мають власну View/Form-пару (інші поля — creator/rarity
+        // замість зброї/обладунку), тож будь-яке пряме посилання на
+        // /equipment/:id артефакта (старе закладка тощо) переадресовуємо туди.
+        if (data.item.type === 'artifact') {
+          navigate(`/equipment/artifacts/${id}`, { replace: true });
+          return;
+        }
         setItem(data.item);
         recordView({ type: 'equipment', id, name: data.item.name, href: `/equipment/${id}`, image_url: data.item.image_url });
       })

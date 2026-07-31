@@ -6,7 +6,7 @@ const CATALOG_TABLES = [
   'equipment.items',
   'equipment.weapons',
   'equipment.armor',
-  'artifacts.entries',
+  'equipment.artifacts',
 ];
 
 const EquipmentController = {
@@ -21,8 +21,9 @@ const EquipmentController = {
     if (!equipment_id) return res.status(400).json({ message: 'equipment_id є обовʼязковим' });
     // equipment_id may reference any of the four catalog tables — items,
     // weapons and armor each have their own since 39-equipment-split-tables.sql,
-    // artifacts since 24-artifacts-service.sql (see equipment.model.js's CATALOG
-    // union) — so visibility is checked against each until one matches.
+    // artifacts since 51-merge-artifacts-into-equipment.sql (see
+    // equipment.model.js's CATALOG union) — so visibility is checked against
+    // each until one matches.
     let visible = false;
     for (const table of CATALOG_TABLES) {
       if (await isVisibleToUser(table, equipment_id, req.user.sub)) { visible = true; break; }

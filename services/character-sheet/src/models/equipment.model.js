@@ -1,11 +1,13 @@
 const pool = require('../config/db');
 
 // character_sheet.equipment holds one bare catalog UUID per row, but the
-// catalogs it can point at are four separate tables: artifacts moved to their
-// own schema in 24-artifacts-service.sql, and 39-equipment-split-tables.sql
-// split the rest into equipment.items/weapons/armor (the `type` column is gone
-// — the table now IS the type). Resolving the id against the union of all four
-// keeps a single sheet row type working for any of them, and since every split
+// catalog it can point at is four separate tables in the equipment schema:
+// items/weapons/armor split out by 39-equipment-split-tables.sql, plus
+// artifacts, which merged back in as a fourth sibling table by
+// 51-merge-artifacts-into-equipment.sql (previously its own schema/service,
+// see 24-artifacts-service.sql — now just equipment.artifacts, same schema
+// as the rest). Resolving the id against the union of all four keeps a
+// single sheet row type working for any of them, and since every split/merge
 // preserved row ids, sheets that predate them keep pointing at the same rows.
 // Columns a given catalog doesn't have are projected as NULL so all arms share
 // one shape.
@@ -37,7 +39,7 @@ const CATALOG = `(
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar, NULL::varchar,
                creator, rarity
-        FROM artifacts.entries
+        FROM equipment.artifacts
       )`;
 
 const EquipmentModel = {

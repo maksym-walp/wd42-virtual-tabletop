@@ -1,5 +1,4 @@
 import equipmentApi from './api/equipment';
-import artifactsApi from './api/artifacts';
 import abilitiesApi from './api/abilities';
 import maneuversApi from './api/maneuvers';
 import spellbookApi from './api/spellbook';
@@ -21,40 +20,31 @@ export const COLLECTION_DOMAINS = {
     collectionsApi: createCollectionsApi('/api/equipment/collections/'),
     catalogApi: equipmentApi,
     itemIdField: 'item_id',
-    itemLink: (item) => `/equipment/${item.id}`,
+    // Артефакти — теж вид спорядження (item.type === 'artifact'), але з
+    // власною View/Form-парою (/equipment/artifacts/:id), тож посилання на
+    // них іде окремо від решти трьох видів, які веде спільний EquipmentView.
+    itemLink: (item) => (item.type === 'artifact' ? `/equipment/artifacts/${item.id}` : `/equipment/${item.id}`),
     itemMeta: (item) => [
       EQUIPMENT_TYPES[item.type]?.label,
       item.damage_die,
       item.defense_value != null ? `захист ${item.defense_value}` : null,
+      RARITIES[item.rarity]?.label,
+      item.creator,
     ].filter(Boolean).join(' · '),
     // Equipment items have no prerequisite_node_ids concept of their own
     // (unlike abilities/maneuvers/spells), so equipment collections don't
     // carry a skill-tree node dependency either — nothing for it to inherit into.
     supportsPrerequisites: false,
-    // Equipment has three browsable lists (one per type-table) alongside
+    // Equipment has four browsable lists (one per type-table, artifacts
+    // included since 51-merge-artifacts-into-equipment.sql) alongside
     // Колекції, same reason compendium overrides this — see getDomainTabs().
     tabs: [
       { to: '/equipment/weapon', label: 'Зброя' },
       { to: '/equipment/armor', label: 'Обладунки' },
       { to: '/equipment/items', label: 'Предмети' },
+      { to: '/equipment/artifacts', label: 'Артефакти' },
       { to: '/equipment/collections', label: 'Колекції' },
     ],
-  },
-  artifacts: {
-    title: 'Артефакти',
-    basePath: '/artifacts',
-    itemLabel: 'артефактів',
-    collectionsApi: createCollectionsApi('/api/artifacts/collections/'),
-    catalogApi: artifactsApi,
-    itemIdField: 'artifact_id',
-    itemLink: (item) => `/artifacts/${item.id}`,
-    itemMeta: (item) => [
-      RARITIES[item.rarity]?.label,
-      item.creator,
-    ].filter(Boolean).join(' · '),
-    // Same reasoning as equipment: artifact entries carry no
-    // prerequisite_node_ids for a collection dependency to inherit into.
-    supportsPrerequisites: false,
   },
   abilities: {
     title: 'Вміння',
@@ -124,9 +114,9 @@ export const COLLECTION_DOMAINS = {
 };
 
 // The tab bar every catalog service shows (CatalogTabs) — a domain with a
-// single browsable list (equipment, artifacts, abilities, maneuvers,
-// spellbook) just gets [catalog, Колекції]; compendium overrides this via
-// its own `tabs` above since it has more than one list to switch between.
+// single browsable list (abilities, maneuvers) just gets [catalog, Колекції];
+// equipment/spellbook/compendium override this via their own `tabs` above
+// since each has more than one list to switch between.
 export function getDomainTabs(domainKey) {
   const domain = COLLECTION_DOMAINS[domainKey];
   return domain.tabs || [

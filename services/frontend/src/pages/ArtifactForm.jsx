@@ -9,7 +9,7 @@ import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 
-const domain = COLLECTION_DOMAINS.artifacts;
+const domain = COLLECTION_DOMAINS.equipment;
 
 const EMPTY = {
   name: '', description: '', is_public: true,
@@ -41,9 +41,9 @@ export default function ArtifactForm() {
 
   useEffect(() => {
     if (!isEdit) return;
-    api.get(`/api/artifacts/${id}`)
+    api.get(`/api/equipment/artifacts/${id}`)
       .then(({ data }) => {
-        const a = data.artifact;
+        const a = data.item;
         setForm((f) => ({
           ...f,
           name: a.name,
@@ -52,7 +52,7 @@ export default function ArtifactForm() {
           creator: a.creator || '', rarity: a.rarity || '',
         }));
       })
-      .catch(() => navigate('/artifacts'))
+      .catch(() => navigate('/equipment/artifacts'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -95,13 +95,13 @@ export default function ArtifactForm() {
         rarity: form.rarity || null,
       };
       if (isEdit) {
-        await api.put(`/api/artifacts/${id}`, payload);
+        await api.put(`/api/equipment/artifacts/${id}`, payload);
         await reconcileCollections(id);
-        navigate(`/artifacts/${id}`);
+        navigate(`/equipment/artifacts/${id}`);
       } else {
-        const { data } = await api.post('/api/artifacts/', payload);
-        await reconcileCollections(data.artifact.id);
-        navigate(`/artifacts/${data.artifact.id}`);
+        const { data } = await api.post('/api/equipment/artifacts/', payload);
+        await reconcileCollections(data.item.id);
+        navigate(`/equipment/artifacts/${data.item.id}`);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -114,7 +114,7 @@ export default function ArtifactForm() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <Link to="/artifacts" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
+      <Link to="/equipment/artifacts" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Артефакти
       </Link>
 
@@ -185,7 +185,7 @@ export default function ArtifactForm() {
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
-          <Button type="button" variant="ghost" to={isEdit ? `/artifacts/${id}` : '/artifacts'}>
+          <Button type="button" variant="ghost" to={isEdit ? `/equipment/artifacts/${id}` : '/equipment/artifacts'}>
             Скасувати
           </Button>
           <Button type="submit" disabled={saving}>

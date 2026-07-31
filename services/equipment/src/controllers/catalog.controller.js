@@ -50,13 +50,13 @@ function createCatalogController(kind) {
   };
 }
 
-// Читання наскрізь по всіх трьох таблицях: спільний список для пікерів
+// Читання наскрізь по всіх чотирьох таблицях: спільний список для пікерів
 // (лист персонажа, реагенти заклинань) і перехід за голим id, коли вид
 // наперед невідомий.
 const UnionController = {
   async list(req, res) {
-    const { search, scope, sort, dir } = req.query;
-    const items = await UnionModel.findAll(req.user.sub, { search, scope, sort, dir }, req.user.role === 'admin');
+    const { search, scope, sort, dir, limit } = req.query;
+    const items = await UnionModel.findAll(req.user.sub, { search, scope, sort, dir, limit }, req.user.role === 'admin');
     res.json({ items });
   },
 

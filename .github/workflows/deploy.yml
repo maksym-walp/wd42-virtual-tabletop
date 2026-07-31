@@ -22,7 +22,6 @@ jobs:
           - maneuvers
           - abilities
           - campaigns
-          - artifacts
           - media
     steps:
       - uses: actions/checkout@v4

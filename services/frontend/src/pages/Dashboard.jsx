@@ -42,8 +42,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     characterApi.listCommunity({ limit: COMMUNITY_LIMIT }).then(setCommunityCharacters).catch(() => {});
-    api.get(`/api/artifacts/?scope=community&limit=${COMMUNITY_LIMIT}`)
-      .then(({ data }) => setCommunityArtifacts(data.artifacts ?? [])).catch(() => {});
+    api.get(`/api/equipment/artifacts?scope=community&limit=${COMMUNITY_LIMIT}`)
+      .then(({ data }) => setCommunityArtifacts(data.items ?? [])).catch(() => {});
     api.get(`/api/spellbook/?scope=community&limit=${COMMUNITY_LIMIT}`)
       .then(({ data }) => setCommunitySpells(data.spells ?? [])).catch(() => {});
     api.get('/api/abilities/?scope=community&limit=8')

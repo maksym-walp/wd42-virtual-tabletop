@@ -6,6 +6,7 @@ const { createCatalogModel, findKindById, UnionModel } = require('../catalog.mod
 const ItemModel = createCatalogModel('item');
 const WeaponModel = createCatalogModel('weapon');
 const ArmorModel = createCatalogModel('armor');
+const ArtifactModel = createCatalogModel('artifact');
 
 function mockClient() {
   const client = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
@@ -285,7 +286,7 @@ describe('update across kinds', () => {
 });
 
 describe('findKindById', () => {
-  it('probes all three tables and reports where the id lives', async () => {
+  it('probes all four tables and reports where the id lives', async () => {
     pool.query.mockResolvedValue({ rows: [{ kind: 'armor' }] });
 
     await expect(findKindById('a1', 'u1')).resolves.toBe('armor');
@@ -293,6 +294,7 @@ describe('findKindById', () => {
     expect(sql).toMatch(/FROM equipment\.items/);
     expect(sql).toMatch(/FROM equipment\.weapons/);
     expect(sql).toMatch(/FROM equipment\.armor/);
+    expect(sql).toMatch(/FROM equipment\.artifacts/);
     expect(params).toEqual(['a1', 'u1']);
   });
 
@@ -310,12 +312,13 @@ describe('findKindById', () => {
 });
 
 describe('UnionModel', () => {
-  it('reads all three tables at once, tagging each arm with its kind', async () => {
+  it('reads all four tables at once, tagging each arm with its kind', async () => {
     await UnionModel.findAll('u1', {});
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/'item'::varchar AS type[\s\S]*FROM equipment\.items/);
     expect(sql).toMatch(/'weapon'::varchar[\s\S]*FROM equipment\.weapons/);
     expect(sql).toMatch(/'armor'::varchar[\s\S]*FROM equipment\.armor/);
+    expect(sql).toMatch(/'artifact'::varchar[\s\S]*FROM equipment\.artifacts/);
   });
 
   it('only offers the sort keys every kind shares', async () => {
@@ -330,5 +333,51 @@ describe('UnionModel', () => {
     await expect(UnionModel.findById('x1', 'u1')).resolves.toEqual({ id: 'x1', type: 'weapon' });
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/AS used_in_spells/);
+  });
+
+  it('applies a LIMIT when one is requested, appended after ORDER BY', async () => {
+    await UnionModel.findAll('u1', { limit: 200 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/ORDER BY i\.name ASC LIMIT \$2/);
+    expect(params).toEqual(['u1', 200]);
+  });
+});
+
+describe('artifact kind', () => {
+  it('queries equipment.artifacts and sorts rarity by its in-world scale', async () => {
+    await ArtifactModel.findAll('u1', { sort: 'rarity' });
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/FROM equipment\.artifacts i/);
+    expect(sql).toMatch(/array_position\(ARRAY\['common','uncommon','rare','legendary'\], i\.rarity\)/);
+  });
+
+  it('filters by rarity and creator', async () => {
+    await ArtifactModel.findAll('u1', { rarity: 'rare', creator: 'Хтось' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/i\.rarity = \$2/);
+    expect(sql).toMatch(/i\.creator = \$3/);
+    expect(params).toEqual(['u1', 'rare', 'Хтось']);
+  });
+
+  it('replaces the ownership clause with the community rail conditions when scope=community', async () => {
+    await ArtifactModel.findAll('u1', { scope: 'community' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/WHERE i\.is_public = true AND i\.user_id <> \$1 AND NOT/);
+    expect(params).toEqual(['u1']);
+  });
+
+  it('applies a LIMIT when one is requested', async () => {
+    await ArtifactModel.findAll('u1', { limit: 12 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/LIMIT \$2/);
+    expect(params).toEqual(['u1', 12]);
+  });
+
+  it('tags rows created in equipment.artifacts with kind artifact', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 'art1' }] });
+    await expect(ArtifactModel.create('u1', { name: 'Клинок долі', creator: 'Хтось', rarity: 'legendary' }))
+      .resolves.toEqual({ id: 'art1', type: 'artifact' });
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO equipment\.artifacts/);
   });
 });

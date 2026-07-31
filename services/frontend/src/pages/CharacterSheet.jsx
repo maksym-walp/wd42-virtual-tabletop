@@ -6,7 +6,6 @@ import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
-import artifactsApi from '../api/artifacts';
 import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
@@ -94,25 +93,21 @@ export default function CharacterSheet({ publicView = false }) {
     Promise.all([
       fetchSheet,
       publicView ? Promise.resolve([]) : (spellbookApi?.getAll?.() ?? Promise.resolve([])),
-      publicView ? Promise.resolve([]) : (artifactsApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (equipmentApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (maneuversApi?.getAll?.() ?? Promise.resolve([])),
       publicView ? Promise.resolve([]) : (abilitiesApi?.getAll?.() ?? Promise.resolve([])),
     ])
-      .then(([sheet, spells, artifactCatalog, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
+      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
         setData(sheet);
         recordView({
           type: 'character', id, name: sheet.character.name,
           href: `/characters/${id}`, image_url: sheet.character.image_url,
         });
         setAllSpells(Array.isArray(spells) ? spells : []);
-        // The sheet's equipment tab spans both catalogs (weapons/armor/items
-        // and artifacts), which are separate services — merge them into the
-        // single list the tab and its picker work off.
-        setAllEquipment([
-          ...(Array.isArray(equipmentCatalog) ? equipmentCatalog : []),
-          ...(Array.isArray(artifactCatalog) ? artifactCatalog : []),
-        ]);
+        // Спорядження й артефакти — вже один каталог (equipment.artifacts —
+        // четвертий вид поруч зі зброєю/обладунком/предметами), тож єдиний
+        // equipmentApi.getAll() накриває все, без окремого мержу.
+        setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
         setAllManeuvers(Array.isArray(maneuverCatalog) ? maneuverCatalog : []);
         setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
       })
@@ -1457,7 +1452,7 @@ function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, on
       {is_owner && (
         <div className="mb-5 flex justify-end gap-3">
           <Link to="/equipment" className="text-sm text-accent">Спорядження →</Link>
-          <Link to="/artifacts" className="text-sm text-accent">Артефакти →</Link>
+          <Link to="/equipment/artifacts" className="text-sm text-accent">Артефакти →</Link>
         </div>
       )}
 
@@ -1542,7 +1537,7 @@ function EquipmentTypeSection({ type, addLabel, equipment, allEquipment, is_owne
 function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
   return (
     <div className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
-      <Link to={item ? `${item.type === 'artifact' ? '/artifacts' : '/equipment'}/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
+      <Link to={item ? `${item.type === 'artifact' ? '/equipment/artifacts' : '/equipment'}/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
         <span className="text-sm text-text">{item?.name ?? '(невідоме)'}</span>
         <span className="text-xs text-text-dim">
           {[

@@ -14,9 +14,10 @@ export const EQUIPMENT_TYPES = {
 // де вид наперед невідомий (перехід за голим id, пікери в листі персонажа й
 // у заклинаннях), питати треба одразу всі.
 export const EQUIPMENT_ENDPOINTS = {
-  weapon: '/api/equipment/weapons',
-  armor:  '/api/equipment/armor',
-  item:   '/api/equipment/items',
+  weapon:   '/api/equipment/weapons',
+  armor:    '/api/equipment/armor',
+  item:     '/api/equipment/items',
+  artifact: '/api/equipment/artifacts',
 };
 
 // Frontend route segment per type — weapon/armor keep their type key as the
@@ -24,9 +25,10 @@ export const EQUIPMENT_ENDPOINTS = {
 // better as a listing page), same split as EQUIPMENT_ENDPOINTS above but
 // purely a routing concern, not a backend one.
 export const EQUIPMENT_TYPE_PATHS = {
-  weapon: 'weapon',
-  armor:  'armor',
-  item:   'items',
+  weapon:   'weapon',
+  armor:    'armor',
+  item:     'items',
+  artifact: 'artifacts',
 };
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];

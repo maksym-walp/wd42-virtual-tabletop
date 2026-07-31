@@ -18,12 +18,12 @@ export default function ArtifactView() {
   const [settingCanonical, setSettingCanonical] = useState(false);
 
   useEffect(() => {
-    api.get(`/api/artifacts/${id}`)
+    api.get(`/api/equipment/artifacts/${id}`)
       .then(({ data }) => {
-        setArtifact(data.artifact);
-        recordView({ type: 'artifact', id, name: data.artifact.name, href: `/artifacts/${id}`, image_url: data.artifact.image_url });
+        setArtifact(data.item);
+        recordView({ type: 'artifact', id, name: data.item.name, href: `/equipment/artifacts/${id}`, image_url: data.item.image_url });
       })
-      .catch(() => navigate('/artifacts', { replace: true }))
+      .catch(() => navigate('/equipment/artifacts', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -31,9 +31,9 @@ export default function ArtifactView() {
     if (!confirm('Видалити цей артефакт?')) return;
     setDeleting(true);
     try {
-      await api.delete(`/api/artifacts/${id}`);
+      await api.delete(`/api/equipment/artifacts/${id}`);
       removeView('artifact', id);
-      navigate('/artifacts');
+      navigate('/equipment/artifacts');
     } catch {
       setDeleting(false);
     }
@@ -42,8 +42,8 @@ export default function ArtifactView() {
   const handleMarkCanonical = async () => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`/api/artifacts/${id}/canonical`, { is_canonical: true });
-      setArtifact(data.artifact);
+      const { data } = await api.patch(`/api/equipment/artifacts/${id}/canonical`, { is_canonical: true });
+      setArtifact(data.item);
     } finally {
       setSettingCanonical(false);
     }
@@ -58,7 +58,7 @@ export default function ArtifactView() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/artifacts" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+      <Link to="/equipment/artifacts" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Артефакти
       </Link>
 
@@ -107,7 +107,7 @@ export default function ArtifactView() {
 
         {(artifact.is_owner || isAdmin) && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" to={`/artifacts/${id}/edit`}>Редагувати</Button>
+            <Button variant="ghost" to={`/equipment/artifacts/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>
               {deleting ? 'Видалення...' : 'Видалити'}
             </Button>

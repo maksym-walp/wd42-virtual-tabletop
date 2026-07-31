@@ -34,8 +34,8 @@ export default function ArtifactsCatalog() {
     if (rarity) params.set('rarity', rarity);
 
     setLoading(true);
-    api.get(`/api/artifacts/?${params}`)
-      .then(({ data }) => setArtifacts(data.artifacts))
+    api.get(`/api/equipment/artifacts/?${params}`)
+      .then(({ data }) => setArtifacts(data.items))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [rarity, search, sort, dir, scope]);
@@ -50,7 +50,7 @@ export default function ArtifactsCatalog() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('artifacts')} />
+      <CatalogTabs tabs={getDomainTabs('equipment')} />
 
       <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="col-start-1">
@@ -59,7 +59,7 @@ export default function ArtifactsCatalog() {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {artifacts.length} {pluralizeUk(artifacts.length, ['артефакт', 'артефакти', 'артефактів'])}
         </p>
-        <Button to="/artifacts/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий артефакт</Button>
+        <Button to="/equipment/artifacts/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий артефакт</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -110,7 +110,7 @@ export default function ArtifactsCatalog() {
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : artifacts.length === 0 ? (
-        <EmptyState title="Артефактів не знайдено" action={<Button to="/artifacts/new">Створити перший</Button>} />
+        <EmptyState title="Артефактів не знайдено" action={<Button to="/equipment/artifacts/new">Створити перший</Button>} />
       ) : showCards ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {artifacts.map((a) => <ArtifactCard key={a.id} artifact={a} />)}
@@ -120,7 +120,7 @@ export default function ArtifactsCatalog() {
       )}
 
       <Link
-        to="/artifacts/new"
+        to="/equipment/artifacts/new"
         className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
         aria-label="Новий артефакт"
       >
@@ -161,7 +161,7 @@ function ArtifactsTable({ artifacts, sort, dir, onSort }) {
           {artifacts.map((a) => (
             <tr key={a.id} className="hover:bg-surface-hover">
               <td className="border-b border-bg px-3 py-2">
-                <Link to={`/artifacts/${a.id}`} className="text-accent hover:underline">{a.name}</Link>
+                <Link to={`/equipment/artifacts/${a.id}`} className="text-accent hover:underline">{a.name}</Link>
                 {a.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}
               </td>
               <td className="border-b border-bg px-3 py-2 text-text-muted">{a.creator ?? '—'}</td>

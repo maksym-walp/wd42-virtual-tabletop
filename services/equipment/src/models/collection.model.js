@@ -4,14 +4,15 @@ const { CATALOG_UNION, findKindById } = require('./catalog.model');
 
 // Колекція збирає спорядження будь-якого виду (набір «стартове спорядження»
 // цілком може містити і меч, і кірасу, і мотузку), тож звʼязка вказує на одну
-// з трьох таблиць каталогу: item_id + item_kind, який каже, на яку саме.
+// з чотирьох таблиць каталогу: item_id + item_kind, який каже, на яку саме.
 const itemFields = `jsonb_build_object(
     'id', i.id, 'name', i.name, 'type', i.type,
     'damage_die', i.damage_die, 'defense_value', i.defense_value,
     'description', i.description, 'is_public', i.is_public,
     'price', i.price, 'image_url', i.image_url,
     'weapon_type', i.weapon_type, 'weapon_grip', i.weapon_grip,
-    'armor_weight', i.armor_weight
+    'armor_weight', i.armor_weight,
+    'creator', i.creator, 'rarity', i.rarity
   )`;
 
 const itemsSelect = `COALESCE(
