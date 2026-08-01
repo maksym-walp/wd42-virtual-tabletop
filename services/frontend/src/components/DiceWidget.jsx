@@ -101,16 +101,12 @@ export default function DiceWidget() {
                   onClick={() => setSpecialOpen((o) => !o)}
                   aria-haspopup="true"
                   aria-expanded={specialOpen}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 border-l border-border px-1 py-2.5 text-[11px] font-semibold transition-colors sm:px-2 sm:text-xs ${
+                  title={SPECIAL_KEYS.has(mode) ? SPECIAL_OPTIONS.find((o) => o.key === mode)?.label : undefined}
+                  className={`flex w-10 flex-none shrink-0 items-center justify-center border-l border-border py-2.5 transition-colors ${
                     SPECIAL_KEYS.has(mode) ? 'bg-accent text-bg' : 'bg-transparent text-text-dim hover:bg-surface-hover'
                   }`}
                 >
                   <Sparkles size={14} />
-                  {SPECIAL_KEYS.has(mode) && (
-                    <span className="hidden truncate sm:inline">
-                      {SPECIAL_OPTIONS.find((o) => o.key === mode)?.label}
-                    </span>
-                  )}
                 </button>
               </div>
 
@@ -136,26 +132,35 @@ export default function DiceWidget() {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => changeModifier(-1)}
-                className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text"
-              >−</button>
-              <span className="min-w-[28px] text-center text-sm font-semibold text-text">
+              <span className="min-w-[24px] text-center text-sm font-semibold text-text">
                 {modifier > 0 ? `+${modifier}` : modifier}
               </span>
-              <button
-                type="button"
-                onClick={() => changeModifier(1)}
-                className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text"
-              >+</button>
+              <div className="flex w-8 flex-col divide-y divide-border overflow-hidden rounded border border-border">
+                <button
+                  type="button"
+                  onClick={() => changeModifier(1)}
+                  className="flex h-[19px] items-center justify-center bg-surface-hover text-xs leading-none text-text hover:bg-border"
+                >+</button>
+                <button
+                  type="button"
+                  onClick={() => changeModifier(-1)}
+                  className="flex h-[19px] items-center justify-center bg-surface-hover text-xs leading-none text-text hover:bg-border"
+                >−</button>
+              </div>
             </div>
           </div>
 
-          {/* Row 2: die types */}
+          {/* Row 2: die types — d20 is the most-rolled die, so on the 4-col
+              mobile grid it takes the odd 8th cell left over by 7 dice. */}
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
             {DIE_TYPES.map((sides) => (
-              <Button key={sides} variant="ghost" size="sm" onClick={() => handleDieClick(sides)}>
+              <Button
+                key={sides}
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDieClick(sides)}
+                className={sides === 20 ? 'col-span-2 sm:col-span-1' : undefined}
+              >
                 d{sides}
               </Button>
             ))}

@@ -28,20 +28,23 @@
   --font-body: "Lora", serif;
 }
 
-/* Dark theme — neutral gray surfaces, same accent/sage/rose/danger/gold hues
-   as light mode. --color-accent diverges from --color-text/--color-border
-   here (they're all the same ink-brown in light mode) because that dark
-   ink-brown has near-zero contrast on a dark gray background — accent takes
-   over the gold hue instead. */
+/* Dark theme — neutral gray surfaces. Every ink/accent hue (text, accent,
+   gold, sage, rose, danger) gets its own dark-mode value here instead of
+   inheriting the light-mode ink-brown/forest/rust tones: those were tuned
+   for a cream background and drop to ~2:1 contrast against a dark gray one. */
 [data-theme="dark"] {
   --color-bg: #1e1e1e;
   --color-surface: #262626;
   --color-surface-hover: #303030;
   --color-border: #3a3a3a;
-  --color-text: #e6e6e6;
-  --color-text-muted: #a8a8a8;
-  --color-text-dim: #7a7a7a;
-  --color-accent: #8a5a2b;
+  --color-text: #f5f3ef;
+  --color-text-muted: #c7c2b8;
+  --color-text-dim: #96907f;
+  --color-accent: #c9975a;
+  --color-sage: #7fae72;
+  --color-rose: #c98977;
+  --color-gold: #c9975a;
+  --color-danger: #e06a52;
   --color-edge-optional: #c2a575;
   --color-node-narrative: #a67ebd;
   --color-node-unlocked-bg: #2b3a2a;
