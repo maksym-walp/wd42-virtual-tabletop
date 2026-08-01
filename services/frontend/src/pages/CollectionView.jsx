@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Share2, Check } from 'lucide-react';
-import { COLLECTION_DOMAINS, getDomainTabs } from '../collectionsDomains';
+import { Share2, Check, ArrowLeft } from 'lucide-react';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import { useAuth } from '../context/AuthContext';
-import CatalogTabs from '../components/CatalogTabs';
 import SmartTextReader from '../components/SmartTextReader';
 
 export default function CollectionView({ domainKey, publicView = false }) {
@@ -104,7 +103,11 @@ export default function CollectionView({ domainKey, publicView = false }) {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      {!publicView && <CatalogTabs tabs={getDomainTabs(domainKey)} />}
+      {!publicView && (
+        <Link to={`${domain.basePath}/collections`} className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+          <ArrowLeft size={15} /> Колекції
+        </Link>
+      )}
 
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-accent)' }}>
         {collection.image_url && (

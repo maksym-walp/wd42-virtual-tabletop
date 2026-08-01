@@ -12,6 +12,7 @@ import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
 
 // Shared by the "НІПи" (/compendium) and "Бестіарій" (/compendium/bestiary)
@@ -60,6 +61,14 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
 
   const activeFilterCount = (speciesId ? 1 : 0) + (subspeciesId ? 1 : 0);
   const showCards = view === 'cards';
+
+  const columns = [
+    { key: 'name', label: 'Назва', render: (entry) => (
+      <>{entry.name}{entry.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}</>
+    ) },
+    { key: 'species', label: 'Вид', render: (entry) => speciesNameById[entry.species_id] ?? '—' },
+    { key: 'health', label: "Здоров'я", render: (entry) => entry.health?.formula ?? '—' },
+  ];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -116,7 +125,7 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
           {filtered.map((entry) => <CompendiumEntryCard key={entry.id} entry={entry} />)}
         </div>
       ) : (
-        <EntriesTable entries={filtered} speciesNameById={speciesNameById} />
+        <DataTable items={filtered} columns={columns} getKey={(e) => e.id} getHref={(e) => `/compendium/entries/${e.id}`} />
       )}
 
       <Link
@@ -130,38 +139,3 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
   );
 }
 
-function EntriesTable({ entries, speciesNameById }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table className="w-full min-w-[420px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <Th>Назва</Th>
-            <Th>Вид</Th>
-            <Th>Здоров'я</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={entry.id} className="hover:bg-surface-hover">
-              <td className="border-b border-bg px-3 py-2">
-                <Link to={`/compendium/entries/${entry.id}`} className="text-accent hover:underline">{entry.name}</Link>
-                {entry.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}
-              </td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{speciesNameById[entry.species_id] ?? '—'}</td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{entry.health?.formula ?? '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Th({ children }) {
-  return (
-    <th className="whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">
-      {children}
-    </th>
-  );
-}

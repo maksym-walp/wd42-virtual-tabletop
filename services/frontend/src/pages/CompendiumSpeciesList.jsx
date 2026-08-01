@@ -9,7 +9,16 @@ import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+
+const SPECIES_TABLE_COLUMNS = [
+  { key: 'name', label: 'Назва', render: (s) => (
+    <>{s.name}{s.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}</>
+  ) },
+  { key: 'health_die', label: "Кубик здоров'я", render: (s) => s.health_die || 'd6' },
+  { key: 'description', label: 'Опис', render: (s) => <span className="line-clamp-1">{s.description || '—'}</span> },
+];
 
 export default function CompendiumSpeciesList() {
   const [species, setSpecies] = useState([]);
@@ -80,7 +89,7 @@ export default function CompendiumSpeciesList() {
           ))}
         </div>
       ) : (
-        <SpeciesTable species={filtered} />
+        <DataTable items={filtered} columns={SPECIES_TABLE_COLUMNS} getKey={(s) => s.id} getHref={(s) => `/compendium/species/${s.id}`} />
       )}
 
       <Link
@@ -94,30 +103,3 @@ export default function CompendiumSpeciesList() {
   );
 }
 
-function SpeciesTable({ species }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table className="w-full min-w-[420px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Назва</th>
-            <th className="whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Кубик здоров'я</th>
-            <th className="whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Опис</th>
-          </tr>
-        </thead>
-        <tbody>
-          {species.map((s) => (
-            <tr key={s.id} className="hover:bg-surface-hover">
-              <td className="border-b border-bg px-3 py-2">
-                <Link to={`/compendium/species/${s.id}`} className="text-accent hover:underline">{s.name}</Link>
-                {s.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}
-              </td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{s.health_die || 'd6'}</td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted line-clamp-1">{s.description || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

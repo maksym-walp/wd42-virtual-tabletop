@@ -45,6 +45,18 @@ export const COLLECTION_DOMAINS = {
       { to: '/equipment/artifacts', label: 'Артефакти' },
       { to: '/equipment/collections', label: 'Колекції' },
     ],
+    // The five kinds a creation form's "Тип" row (KindSwitch) can offer.
+    // weapon/armor/item share a table-switching form (EquipmentForm) and so
+    // can switch in place; artifact/collection each live on their own page
+    // with their own field set, so switching to them is always a navigation
+    // to a fresh "new" form rather than a local state change.
+    kindSwitch: [
+      { key: 'weapon',     label: 'Зброя',      newPath: '/equipment/new?type=weapon' },
+      { key: 'armor',      label: 'Обладунок',  newPath: '/equipment/new?type=armor' },
+      { key: 'item',       label: 'Предмет',    newPath: '/equipment/new?type=item' },
+      { key: 'artifact',   label: 'Артефакт',   newPath: '/equipment/artifacts/new' },
+      { key: 'collection', label: 'Колекція',   newPath: '/equipment/collections/new' },
+    ],
   },
   abilities: {
     title: 'Вміння та маневри',
@@ -71,6 +83,14 @@ export const COLLECTION_DOMAINS = {
       { to: '/abilities/maneuvers', label: 'Маневри' },
       { to: '/abilities/collections', label: 'Колекції' },
     ],
+    // Ability and maneuver are separate endpoints/tables with no shared
+    // form — unlike equipment's weapon/armor/item, there's no local-switch
+    // kind here, every button is a navigation to its own "new" page.
+    kindSwitch: [
+      { key: 'ability',    label: 'Вміння',    newPath: '/abilities/new' },
+      { key: 'maneuver',   label: 'Маневр',    newPath: '/abilities/maneuvers/new' },
+      { key: 'collection', label: 'Колекція',  newPath: '/abilities/collections/new' },
+    ],
   },
   spellbook: {
     title: 'Заклинання',
@@ -89,6 +109,14 @@ export const COLLECTION_DOMAINS = {
       { to: '/spellbook', label: 'Заклинання', end: true },
       { to: '/spellbook/traditions', label: 'Традиції' },
       { to: '/spellbook/collections', label: 'Колекції' },
+    ],
+    // Traditions are admin/game_master-only to create (TraditionForm itself
+    // enforces this) — callers filter the 'tradition' entry out for users
+    // without that role instead of hardcoding the check here.
+    kindSwitch: [
+      { key: 'spell',      label: 'Заклинання', newPath: '/spellbook/new' },
+      { key: 'tradition',  label: 'Традиція',   newPath: '/spellbook/traditions/new' },
+      { key: 'collection', label: 'Колекція',   newPath: '/spellbook/collections/new' },
     ],
   },
   compendium: {
@@ -113,6 +141,15 @@ export const COLLECTION_DOMAINS = {
       { to: '/compendium/bestiary', label: 'Бестіарій' },
       { to: '/compendium/species', label: 'Види' },
       { to: '/compendium/collections', label: 'Колекції' },
+    ],
+    // NPC and creature share one form/table (CompendiumEntryForm, entity_type
+    // column) and so can switch in place — species and collection each live
+    // on their own page, so switching to them is always a navigation.
+    kindSwitch: [
+      { key: 'npc',        label: 'НІП',       newPath: '/compendium/entries/new?type=npc' },
+      { key: 'creature',   label: 'Істота',    newPath: '/compendium/entries/new?type=creature' },
+      { key: 'species',    label: 'Вид',       newPath: '/compendium/species/new' },
+      { key: 'collection', label: 'Колекція',  newPath: '/compendium/collections/new' },
     ],
   },
 };

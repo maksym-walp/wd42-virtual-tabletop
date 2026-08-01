@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -255,8 +255,8 @@ export default function CharacterSheet({ publicView = false }) {
     setData(prev => ({ ...prev, rituals: prev.rituals.filter(r => r.id !== trackerId) }));
   };
 
-  if (loading) return <div className="mx-auto max-w-[1100px] px-4 py-16 text-center text-text-dim sm:px-6">Завантаження...</div>;
-  if (error)   return <div className="mx-auto max-w-[1100px] px-4 py-16 text-center text-danger sm:px-6">{error}</div>;
+  if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
+  if (error)   return <div className="px-4 py-16 text-center text-danger">{error}</div>;
   if (!data)   return null;
 
   const { character: c, skills, spells, equipment, maneuvers, abilities, rituals, is_owner } = data;
@@ -321,14 +321,16 @@ export default function CharacterSheet({ publicView = false }) {
   ];
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       {/* ─── Header ─── */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-4">
           <CharacterPortrait character={c} isOwner={is_owner} onChange={patchCharacter} />
           <div>
           <div className="mb-1 flex items-center gap-4">
-            <Link to="/characters" className="text-sm text-accent">← Персонажі</Link>
+            <Link to="/characters" className="inline-flex items-center gap-1.5 text-sm text-text-dim">
+              <ArrowLeft size={15} /> Персонажі
+            </Link>
             {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
           </div>
           {is_owner && editingName ? (
@@ -342,13 +344,15 @@ export default function CharacterSheet({ publicView = false }) {
               maxLength={200}
             />
           ) : (
-            <h1 className="m-0 flex items-center gap-2 font-display text-3xl font-bold text-text">
+            <h1 className="flex items-center gap-2 font-display text-3xl text-accent">
               {c.name}
               {is_owner && (
                 <button
-                  className="rounded-md p-1.5 text-sm leading-none text-text-dim hover:bg-surface-hover hover:text-text"
+                  className="rounded-md p-1.5 leading-none text-text-dim hover:bg-surface-hover hover:text-text"
                   onClick={startEditName} title="Змінити ім'я"
-                >✎</button>
+                >
+                  <Pencil size={14} />
+                </button>
               )}
             </h1>
           )}

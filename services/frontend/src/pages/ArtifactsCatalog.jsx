@@ -14,7 +14,17 @@ import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+
+const ARTIFACT_TABLE_COLUMNS = [
+  { key: 'name', label: 'Назва', sortKey: 'name', render: (a) => (
+    <>{a.name}{a.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}</>
+  ) },
+  { key: 'creator', label: 'Творець', render: (a) => a.creator ?? '—' },
+  { key: 'rarity', label: 'Рідкість', sortKey: 'rarity', render: (a) => (a.rarity ? RARITIES[a.rarity]?.label : '—') },
+  { key: 'price', label: 'Ціна', sortKey: 'price', render: (a) => a.price ?? '—' },
+];
 
 export default function ArtifactsCatalog() {
   const [rarity, setRarity]   = useState('');
@@ -116,7 +126,11 @@ export default function ArtifactsCatalog() {
           {artifacts.map((a) => <ArtifactCard key={a.id} artifact={a} />)}
         </div>
       ) : (
-        <ArtifactsTable artifacts={artifacts} sort={sort} dir={dir} onSort={toggleSort} />
+        <DataTable
+          items={artifacts} columns={ARTIFACT_TABLE_COLUMNS}
+          getKey={(a) => a.id} getHref={(a) => `/equipment/artifacts/${a.id}`}
+          sort={sort} dir={dir} onSort={toggleSort}
+        />
       )}
 
       <Link
@@ -130,49 +144,3 @@ export default function ArtifactsCatalog() {
   );
 }
 
-function Th({ label, sortKey, sort, dir, onSort, className = '' }) {
-  const active = sort === sortKey;
-  return (
-    <th
-      className={`cursor-pointer select-none whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim hover:text-text ${className}`}
-      onClick={() => onSort(sortKey)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active && <span className="text-accent">{dir === 'desc' ? '↓' : '↑'}</span>}
-      </span>
-    </th>
-  );
-}
-
-function ArtifactsTable({ artifacts, sort, dir, onSort }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <Th label="Назва" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
-            <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Творець</th>
-            <Th label="Рідкість" sortKey="rarity" sort={sort} dir={dir} onSort={onSort} />
-            <Th label="Ціна" sortKey="price" sort={sort} dir={dir} onSort={onSort} />
-          </tr>
-        </thead>
-        <tbody>
-          {artifacts.map((a) => (
-            <tr key={a.id} className="hover:bg-surface-hover">
-              <td className="border-b border-bg px-3 py-2">
-                <Link to={`/equipment/artifacts/${a.id}`} className="text-accent hover:underline">{a.name}</Link>
-                {a.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}
-              </td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{a.creator ?? '—'}</td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">
-                {a.rarity ? RARITIES[a.rarity]?.label : '—'}
-              </td>
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{a.price ?? '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

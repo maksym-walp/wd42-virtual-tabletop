@@ -141,8 +141,7 @@ function CampaignRowCard({ campaign: c }) {
     >
       <div className="flex items-center justify-between gap-2 px-3.5 py-2.5">
         <h3 className="font-display text-lg text-accent">{c.name}</h3>
-        <Badge color={c.is_gm ? '#1a1a1a' : undefined} bg={c.is_gm ? '#d4af37' : undefined}
-          className={`shrink-0 ${c.is_gm ? '' : 'border border-border text-text-dim'}`}>
+        <Badge className={`shrink-0 ${c.is_gm ? 'bg-gold text-bg' : 'border border-border text-text-dim'}`}>
           {c.is_gm ? 'Майстер' : 'Гравець'}
         </Badge>
       </div>

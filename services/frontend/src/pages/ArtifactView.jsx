@@ -87,7 +87,7 @@ export default function ArtifactView() {
 
         {artifact.price != null && (
           <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-            <SheetStat label="Середня ціна" value={artifact.price} />
+            <SheetStat label="Орієнтовна вартість" value={artifact.price} />
           </div>
         )}
 

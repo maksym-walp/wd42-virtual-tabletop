@@ -8,8 +8,11 @@ import EmptyState from '../components/ui/EmptyState';
 import ScopeFilter from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
 import CatalogTabs from '../components/CatalogTabs';
+import FilterAccordion from '../components/ui/FilterAccordion';
+import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EquipmentCollectionsByType from '../components/EquipmentCollectionsByType';
 import DiceFormulaText from '../components/DiceFormulaText';
+import { pluralizeUk } from '../utils/pluralize';
 
 export default function CollectionsList({ domainKey }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -17,6 +20,7 @@ export default function CollectionsList({ domainKey }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -26,28 +30,42 @@ export default function CollectionsList({ domainKey }) {
       .finally(() => setLoading(false));
   }, [search, scope, domainKey]);
 
+  const activeFilterCount = scope ? 1 : 0;
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <CatalogTabs tabs={getDomainTabs(domainKey)} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{collections.length} колекцій</p>
+        <p className="text-sm text-text-dim">
+          {collections.length} {pluralizeUk(collections.length, ['колекція', 'колекції', 'колекцій'])}
+        </p>
         <Button to={`${domain.basePath}/collections/new`} className="hidden md:inline-flex">+ Нова колекція</Button>
       </div>
 
-      {domain.supportsCanonical !== false && (
-        <ScopeFilter scope={scope} onChange={setScope} className="mb-4" />
-      )}
-
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-3 flex gap-2.5">
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
+          <input
+            className={`${inputClass} pl-10`}
+            placeholder="Пошук за назвою..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {domain.supportsCanonical !== false && (
+          <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
+        )}
       </div>
+
+      {domain.supportsCanonical !== false && (
+        <FilterAccordion open={filtersOpen}>
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+            <ScopeFilter scope={scope} onChange={setScope} />
+          </div>
+        </FilterAccordion>
+      )}
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>

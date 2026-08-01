@@ -173,8 +173,8 @@ describe('create / update column sets', () => {
       defense_value: 3, armor_weight: 'heavy',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip\)/);
-    expect(params).toEqual(['u1', 'Меч', null, false, 40, 'https://x/y.png', null, 'melee', 'one_handed']);
+    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(params).toEqual(['u1', 'Меч', null, false, 40, 'https://x/y.png', null, 'melee', 'one_handed', null]);
   });
 
   it('defaults is_public to false and every other unset column to NULL', async () => {
@@ -247,7 +247,7 @@ describe('update across kinds', () => {
     const moved = await WeaponModel.update('x1', 'owner', { name: 'Меч', damage_die: 'd8' });
 
     const insert = client.query.mock.calls.find(([sql]) => /INSERT INTO equipment\.weapons/.test(sql));
-    expect(insert[0]).toMatch(/\(id, user_id, created_at, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip\)/);
+    expect(insert[0]).toMatch(/\(id, user_id, created_at, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip, modifier\)/);
     expect(insert[1].slice(0, 3)).toEqual(['x1', 'owner', 'ts']);
     expect(moved).toEqual({ id: 'x1', name: 'Меч', type: 'weapon' });
   });

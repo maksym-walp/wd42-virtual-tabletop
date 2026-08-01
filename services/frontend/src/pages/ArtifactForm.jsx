@@ -8,6 +8,7 @@ import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.equipment;
 
@@ -124,6 +125,10 @@ export default function ArtifactForm() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
+          <Field label="Тип" className="mb-4">
+            <KindSwitch kinds={domain.kindSwitch} active="artifact" />
+          </Field>
+
           <Field label="Назва" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
@@ -148,8 +153,12 @@ export default function ArtifactForm() {
             </Field>
           </div>
 
-          <Field label="Середня ціна (умовні одиниці)">
-            <input type="number" min={0} className={inputClass} value={form.price} onChange={set('price')} placeholder="Необов'язково" />
+          <Field label="Орієнтовна вартість">
+            <input
+              type="number" min={0} step="0.01" className={inputClass}
+              value={form.price} onChange={set('price')}
+              placeholder="не обов'язково" title="Уточніть у майстра"
+            />
           </Field>
         </FormSection>
 

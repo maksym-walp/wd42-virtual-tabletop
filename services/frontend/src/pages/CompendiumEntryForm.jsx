@@ -5,13 +5,16 @@ import compendiumApi from '../api/compendium';
 import equipmentApi from '../api/equipment';
 import spellbookApi from '../api/spellbook';
 import maneuversApi from '../api/maneuvers';
-import { ENTITY_TYPES, ATTRIBUTE_LABELS } from '../constants/compendium';
+import { ATTRIBUTE_LABELS } from '../constants/compendium';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CatalogAttachPicker from '../components/compendium/CatalogAttachPicker';
+import KindSwitch from '../components/KindSwitch';
 
+const domain = COLLECTION_DOMAINS.compendium;
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
 const EMPTY = {
@@ -121,20 +124,13 @@ export default function CompendiumEntryForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
           <Field label="Тип" className="mb-4">
-            <div className="inline-flex overflow-hidden rounded-lg border border-border">
-              {Object.entries(ENTITY_TYPES).map(([key, { label }]) => (
-                <button
-                  key={key} type="button"
-                  disabled={isEdit}
-                  onClick={() => setForm((f) => ({ ...f, entity_type: key }))}
-                  className={`min-h-11 px-5 text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
-                    form.entity_type === key ? 'bg-accent text-bg' : 'bg-surface text-text-dim'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <KindSwitch
+              kinds={domain.kindSwitch}
+              active={form.entity_type}
+              localKeys={['npc', 'creature']}
+              onSelectLocal={(key) => setForm((f) => ({ ...f, entity_type: key }))}
+              localDisabled={isEdit}
+            />
             {isEdit && <p className="mt-1.5 text-xs text-text-dim">Тип не можна змінити після створення</p>}
           </Field>
 

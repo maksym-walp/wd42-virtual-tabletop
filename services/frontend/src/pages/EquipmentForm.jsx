@@ -3,14 +3,16 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
+import { CHARACTERISTICS } from '../constants/characterSheet';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.equipment;
 
@@ -18,7 +20,7 @@ const EMPTY = {
   name: '', type: 'weapon', damage_die: '', defense_value: '',
   description: '', is_public: true,
   price: '', image_url: '',
-  weapon_type: '', weapon_grip: '',
+  weapon_type: '', weapon_grip: '', modifier: '',
   armor_weight: '',
   collectionIds: [],
 };
@@ -62,7 +64,7 @@ export default function EquipmentForm() {
           damage_die: i.damage_die || '', defense_value: i.defense_value ?? '',
           description: i.description || '', is_public: i.is_public,
           price: i.price ?? '', image_url: i.image_url || '',
-          weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || '',
+          weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || '', modifier: i.modifier || '',
           armor_weight: i.armor_weight || '',
         }));
       })
@@ -82,6 +84,25 @@ export default function EquipmentForm() {
   }, [isEdit, loading, collectionsLoaded, collections, id]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  // "Інше" isn't a stored modifier value itself — it just reveals the
+  // full-skill picker below. Once a non-preset skill is already saved
+  // (edit mode), the picker should show without needing to pick it again.
+  const [modifierOtherOpen, setModifierOtherOpen] = useState(false);
+  const modifierIsOther = form.modifier !== '' && !WEAPON_MODIFIERS[form.modifier];
+  const showModifierPicker = modifierIsOther || modifierOtherOpen;
+  const modifierSelectValue = showModifierPicker ? 'other' : form.modifier;
+
+  const handleModifierSelect = (e) => {
+    const value = e.target.value;
+    if (value === 'other') {
+      setModifierOtherOpen(true);
+      setForm((f) => (WEAPON_MODIFIERS[f.modifier] ? { ...f, modifier: '' } : f));
+    } else {
+      setModifierOtherOpen(false);
+      setForm((f) => ({ ...f, modifier: value }));
+    }
+  };
 
   const reconcileCollections = async (itemId) => {
     const before = initialCollectionIds.current;
@@ -113,6 +134,7 @@ export default function EquipmentForm() {
         image_url: form.image_url || null,
         weapon_type: form.weapon_type || null,
         weapon_grip: form.weapon_grip || null,
+        modifier: form.modifier || null,
         armor_weight: form.armor_weight || null,
       };
       if (isEdit) {
@@ -150,24 +172,17 @@ export default function EquipmentForm() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
-          <Field label="Назва" className="mb-4">
-            <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
+          <Field label="Тип" className="mb-4">
+            <KindSwitch
+              kinds={domain.kindSwitch}
+              active={form.type}
+              localKeys={['weapon', 'armor', 'item']}
+              onSelectLocal={(key) => setForm((f) => ({ ...f, type: key }))}
+            />
           </Field>
 
-          <Field label="Тип" className="mb-4">
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(EQUIPMENT_TYPES).map(([key, { label }]) => (
-                <button
-                  key={key} type="button"
-                  onClick={() => setForm((f) => ({ ...f, type: key }))}
-                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    form.type === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <Field label="Назва" className="mb-4">
+            <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
           <ImageUploadField
@@ -179,26 +194,56 @@ export default function EquipmentForm() {
 
         <FormSection title="Механіка">
           {form.type === 'weapon' && (
-            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Кубик шкоди">
-                <select className={inputClass} value={form.damage_die} onChange={set('damage_die')}>
-                  <option value="">Не обрано</option>
-                  {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </Field>
-              <Field label="Тип зброї">
-                <select className={inputClass} value={form.weapon_type} onChange={set('weapon_type')}>
-                  <option value="">Не обрано</option>
-                  {Object.entries(WEAPON_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-              </Field>
-              <Field label="Особливості">
-                <select className={inputClass} value={form.weapon_grip} onChange={set('weapon_grip')}>
-                  <option value="">Не обрано</option>
-                  {Object.entries(WEAPON_GRIPS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-              </Field>
-            </div>
+            <>
+              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Кубик шкоди">
+                  <select className={inputClass} value={form.damage_die} onChange={set('damage_die')}>
+                    <option value="">Не обрано</option>
+                    {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </Field>
+                <Field label="Модифікатор">
+                  <select className={inputClass} value={modifierSelectValue} onChange={handleModifierSelect}>
+                    <option value="">Не обрано</option>
+                    {Object.entries(WEAPON_MODIFIERS).map(([key, { label }]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                    <option value="other">Інше</option>
+                  </select>
+                  {showModifierPicker && (
+                    <select className={`${inputClass} mt-2`} value={form.modifier} onChange={set('modifier')}>
+                      <option value="">Обери навичку</option>
+                      {CHARACTERISTICS.map((c) => (
+                        <optgroup key={c.key} label={c.label}>
+                          {c.skills.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+                <Field label="Орієнтовна вартість">
+                  <input
+                    type="number" min={0} step="0.01" className={inputClass}
+                    value={form.price} onChange={set('price')}
+                    placeholder="не обов'язково" title="Уточніть у майстра"
+                  />
+                </Field>
+              </div>
+              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Тип зброї">
+                  <select className={inputClass} value={form.weapon_type} onChange={set('weapon_type')}>
+                    <option value="">Не обрано</option>
+                    {Object.entries(WEAPON_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Особливості">
+                  <select className={inputClass} value={form.weapon_grip} onChange={set('weapon_grip')}>
+                    <option value="">Не обрано</option>
+                    {Object.entries(WEAPON_GRIPS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </>
           )}
           {form.type === 'armor' && (
             <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -217,9 +262,15 @@ export default function EquipmentForm() {
             <p className="mb-4 text-sm text-text-dim">Для звичайних предметів механічні поля не потрібні — опиши ефект нижче.</p>
           )}
 
-          <Field label="Середня ціна (умовні одиниці)">
-            <input type="number" min={0} className={inputClass} value={form.price} onChange={set('price')} placeholder="Необов'язково" />
-          </Field>
+          {form.type !== 'weapon' && (
+            <Field label="Орієнтовна вартість">
+              <input
+                type="number" min={0} step="0.01" className={inputClass}
+                value={form.price} onChange={set('price')}
+                placeholder="не обов'язково" title="Уточніть у майстра"
+              />
+            </Field>
+          )}
         </FormSection>
 
         <FormSection title="Опис">

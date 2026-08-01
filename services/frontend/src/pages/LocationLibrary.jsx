@@ -3,11 +3,13 @@ import { Plus, Trash2 } from 'lucide-react';
 import mapsApi from '../api/maps';
 import { useAuth } from '../context/AuthContext';
 import useViewMode from '../hooks/useViewMode';
+import { pluralizeUk } from '../utils/pluralize';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
 import Sheet from '../components/ui/Sheet';
 import LocationFields from '../components/map/LocationFields';
 import MarkerIcon from '../components/map/MarkerIcon';
@@ -19,6 +21,14 @@ function snippet(text, n = 90) {
   if (!text) return '—';
   return text.length > n ? `${text.slice(0, n)}…` : text;
 }
+
+const LOCATION_COLUMNS = [
+  { key: 'name', label: 'Назва', render: (loc) => (
+    <span className="inline-flex items-center gap-1.5"><MarkerIcon icon={loc.marker_icon} size={14} /> {loc.name}</span>
+  ) },
+  { key: 'type', label: 'Тип', render: (loc) => loc.type || '—' },
+  { key: 'description', label: 'Опис', render: (loc) => snippet(loc.description) },
+];
 
 // The user's own reusable location library — create/edit lore entities without
 // attaching them to a map yet. Cards or table view.
@@ -51,14 +61,18 @@ export default function LocationLibrary() {
   });
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
-      <h1 className="mb-4 font-display text-3xl font-bold text-text">Мапи</h1>
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <MapsTabs />
 
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <ViewToggle mode={mode} onChange={setMode} />
+      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="col-start-1">
+          <ViewToggle mode={mode} onChange={setMode} />
+        </div>
+        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
+          {locations.length} {pluralizeUk(locations.length, ['локація', 'локації', 'локацій'])}
+        </p>
         {canCreate && (
-          <Button size="sm" onClick={() => setEditing({ ...BLANK })}>
+          <Button size="sm" className="col-start-3 justify-self-end" onClick={() => setEditing({ ...BLANK })}>
             <Plus size={15} /> Створити локацію
           </Button>
         )}
@@ -67,7 +81,7 @@ export default function LocationLibrary() {
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
-        <p className="text-sm text-text-dim">Завантаження…</p>
+        <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : locations.length === 0 ? (
         <EmptyState icon="📍" title="Ще немає локацій">
           {canCreate ? 'Створіть локацію — потім її можна ставити мітками на будь-яку вашу мапу.' : 'Локацій поки немає.'}
@@ -92,28 +106,7 @@ export default function LocationLibrary() {
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-bg text-left text-xs uppercase tracking-wide text-text-dim">
-                <th className="px-3 py-2 font-semibold">Назва</th>
-                <th className="px-3 py-2 font-semibold">Тип</th>
-                <th className="px-3 py-2 font-semibold">Опис</th>
-              </tr>
-            </thead>
-            <tbody>
-              {locations.map((loc) => (
-                <tr key={loc.id} onClick={() => openEdit(loc)} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg">
-                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-accent">
-                    <span className="inline-flex items-center gap-1.5"><MarkerIcon icon={loc.marker_icon} size={14} /> {loc.name}</span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">{loc.type || '—'}</td>
-                  <td className="px-3 py-2 text-text-dim">{snippet(loc.description)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable items={locations} columns={LOCATION_COLUMNS} getKey={(loc) => loc.id} onRowClick={openEdit} />
       )}
 
       {editing && (
@@ -176,7 +169,7 @@ function LocationEditor({ value, onClose, onSaved }) {
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-2">
-            <Button onClick={save} disabled={saving}>{saving ? 'Збереження…' : 'Зберегти'}</Button>
+            <Button onClick={save} disabled={saving}>{saving ? 'Збереження...' : 'Зберегти'}</Button>
             <Button variant="ghost" onClick={onClose}>Скасувати</Button>
           </div>
           {isEdit && (

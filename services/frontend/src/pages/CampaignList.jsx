@@ -71,8 +71,7 @@ function CampaignCard({ campaign: c, onClick }) {
     <Card onClick={onClick} className="cursor-pointer hover:border-accent/50">
       <div className="mb-3 flex items-start justify-between gap-3">
         <h2 className="font-display text-lg text-text">{c.name}</h2>
-        <Badge color={c.is_gm ? '#1a1a1a' : undefined} bg={c.is_gm ? '#d4af37' : undefined}
-          className={c.is_gm ? '' : 'border border-border text-text-dim'}>
+        <Badge className={c.is_gm ? 'bg-gold text-bg' : 'border border-border text-text-dim'}>
           {c.is_gm ? 'Майстер' : 'Гравець'}
         </Badge>
       </div>

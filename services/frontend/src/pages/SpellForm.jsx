@@ -10,12 +10,14 @@ import {
   ACTION_OPTIONS, SPELL_KINDS,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import { useAuth } from '../context/AuthContext';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
 
 const domain = COLLECTION_DOMAINS.spellbook;
@@ -36,6 +38,9 @@ export default function SpellForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { user } = useAuth();
+  const canManageTraditions = user?.role === 'admin' || user?.role === 'game_master';
+  const kinds = domain.kindSwitch.filter((k) => k.key !== 'tradition' || canManageTraditions);
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -204,6 +209,10 @@ export default function SpellForm() {
 
         {/* — Загальне — */}
         <FormSection title="Загальне">
+          <Field label="Тип" className="mb-4">
+            <KindSwitch kinds={kinds} active="spell" />
+          </Field>
+
           <Field label="Назва заклинання" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>

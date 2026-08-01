@@ -27,7 +27,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+    <div className="flex min-h-full items-center justify-center px-4 py-12">
       <Card className="w-full max-w-sm">
         <h1 className="mb-6 font-display text-2xl text-accent">Вхід</h1>
 

@@ -3,8 +3,12 @@ import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import { HEALTH_DICE } from '../constants/compendium';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
+import KindSwitch from '../components/KindSwitch';
+
+const domain = COLLECTION_DOMAINS.compendium;
 
 const EMPTY = { name: '', description: '', is_public: false, health_die: 'd6' };
 
@@ -85,6 +89,11 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
+          {!isSubspecies && (
+            <Field label="Тип" className="mb-4">
+              <KindSwitch kinds={domain.kindSwitch} active="species" />
+            </Field>
+          )}
           {isSubspecies && (
             <Field label="Вид" className="mb-4">
               <select className={inputClass} value={speciesId} onChange={(e) => setSpeciesId(e.target.value)} required>

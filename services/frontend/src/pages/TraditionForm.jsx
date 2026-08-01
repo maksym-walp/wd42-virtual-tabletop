@@ -3,9 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import traditionsApi from '../api/traditions';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import Button from '../components/ui/Button';
+import KindSwitch from '../components/KindSwitch';
+
+const domain = COLLECTION_DOMAINS.spellbook;
 
 const EMPTY = { name: '', description: '', founders: '' };
 
@@ -73,6 +77,9 @@ export default function TraditionForm() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
+          <Field label="Тип" className="mb-4">
+            <KindSwitch kinds={domain.kindSwitch} active="tradition" />
+          </Field>
           <Field label="Назва" className="mb-4">
             <input
               type="text" className={inputClass} value={form.name}

@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import skillTreeApi from '../api/skillTree';
-import { COLLECTION_DOMAINS, getDomainTabs } from '../collectionsDomains';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import { useAuth } from '../context/AuthContext';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
-import CatalogTabs from '../components/CatalogTabs';
+import KindSwitch from '../components/KindSwitch';
 
 const EMPTY = {
   name: '', description: '', is_public: false, image_url: '',
@@ -19,6 +21,12 @@ export default function CollectionForm({ domainKey }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { user } = useAuth();
+  // Creating a tradition is admin/game_master-only (spellbook's kindSwitch
+  // carries a 'tradition' entry regardless of who's looking) — everywhere
+  // else this filter is a no-op, since no other domain's kindSwitch has that key.
+  const canManageTraditions = user?.role === 'admin' || user?.role === 'game_master';
+  const kinds = (domain.kindSwitch || []).filter((k) => k.key !== 'tradition' || canManageTraditions);
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -68,7 +76,9 @@ export default function CollectionForm({ domainKey }) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs(domainKey)} />
+      <Link to={`${domain.basePath}/collections`} className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> Колекції
+      </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
         {isEdit ? 'Редагування колекції' : 'Нова колекція'}
@@ -76,6 +86,12 @@ export default function CollectionForm({ domainKey }) {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
+          {kinds.length > 0 && (
+            <Field label="Тип" className="mb-4">
+              <KindSwitch kinds={kinds} active="collection" />
+            </Field>
+          )}
+
           <Field label="Назва" className="mb-4">
             <input
               type="text" className={inputClass} value={form.name}

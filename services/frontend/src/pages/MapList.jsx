@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Globe, Lock, Map as MapIcon } from 'lucide-react';
 import mapsApi from '../api/maps';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { inputClass } from '../components/ui/Field';
+import { pluralizeUk } from '../utils/pluralize';
 import MapsTabs from '../components/map/MapsTabs';
 
 export default function MapList() {
@@ -46,11 +47,11 @@ export default function MapList() {
   };
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
-      <h1 className="mb-4 font-display text-3xl font-bold text-text">Мапи</h1>
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <MapsTabs />
 
-      <div className="mb-4 flex items-center justify-end">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-text-dim">{maps.length} {pluralizeUk(maps.length, ['мапа', 'мапи', 'мап'])}</p>
         {canCreate && !creating && (
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus size={15} /> Створити мапу
@@ -74,11 +75,14 @@ export default function MapList() {
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
             />
             <label className="flex items-center gap-2 text-sm text-text">
-              <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+              <input
+                type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)}
+                className="h-5 w-5 accent-accent"
+              />
               Публічна (бачать усі користувачі)
             </label>
             <div className="flex gap-2">
-              <Button onClick={handleCreate} disabled={saving}>{saving ? 'Створення…' : 'Створити'}</Button>
+              <Button onClick={handleCreate} disabled={saving}>{saving ? 'Створення...' : 'Створити'}</Button>
               <Button variant="ghost" onClick={() => { setCreating(false); setName(''); setIsPublic(false); }}>Скасувати</Button>
             </div>
           </div>
@@ -86,7 +90,7 @@ export default function MapList() {
       )}
 
       {loading ? (
-        <p className="text-sm text-text-dim">Завантаження…</p>
+        <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : maps.length === 0 ? (
         <EmptyState icon="🗺" title="Ще немає жодної мапи">
           {canCreate ? 'Створіть першу мапу.' : 'Публічних мап поки немає.'}
@@ -94,17 +98,19 @@ export default function MapList() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {maps.map((m) => (
-            <Card key={m.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${m.id}`)}>
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="flex items-center gap-2 font-display text-base text-text">
-                  <MapIcon size={16} className="text-text-dim" /> {m.name}
-                </h3>
-                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-text-dim" title={m.is_public ? 'Публічна' : 'Приватна'}>
-                  {m.is_public ? <Globe size={13} /> : <Lock size={13} />}
-                </span>
-              </div>
-              {m.is_owner && <p className="mt-2 text-xs text-accent">ваша мапа</p>}
-            </Card>
+            <Link key={m.id} to={`/maps/${m.id}`} className="block">
+              <Card className="cursor-pointer hover:border-accent/50">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="flex items-center gap-2 font-display text-base text-text">
+                    <MapIcon size={16} className="text-text-dim" /> {m.name}
+                  </h3>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-text-dim" title={m.is_public ? 'Публічна' : 'Приватна'}>
+                    {m.is_public ? <Globe size={13} /> : <Lock size={13} />}
+                  </span>
+                </div>
+                {m.is_owner && <p className="mt-2 text-xs text-accent">ваша мапа</p>}
+              </Card>
+            </Link>
           ))}
         </div>
       )}

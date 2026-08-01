@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, WEAPON_TYPES, WEAPON_GRIPS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
@@ -92,11 +92,12 @@ export default function EquipmentView() {
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
           {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} />}
+          {item.modifier && <SheetStat label="Модифікатор" value={weaponModifierLabel(item.modifier)} />}
           {item.weapon_type && <SheetStat label="Тип зброї" value={WEAPON_TYPES[item.weapon_type]?.label} />}
           {item.weapon_grip && <SheetStat label="Особливості" value={WEAPON_GRIPS[item.weapon_grip]?.label} />}
           {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} />}
           {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
-          {item.price != null && <SheetStat label="Середня ціна" value={item.price} />}
+          {item.price != null && <SheetStat label="Орієнтовна вартість" value={item.price} />}
         </div>
 
         {item.description && (

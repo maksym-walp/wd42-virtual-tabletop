@@ -19,7 +19,7 @@ const KINDS = {
   weapon: {
     table: 'equipment.weapons',
     label: 'Зброю',
-    columns: ['damage_die', 'weapon_type', 'weapon_grip'],
+    columns: ['damage_die', 'weapon_type', 'weapon_grip', 'modifier'],
     sortExpr: {
       damage_die: "NULLIF(regexp_replace(i.damage_die, '[^0-9]', '', 'g'), '')::int",
     },
@@ -85,25 +85,25 @@ const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, p
 const CATALOG_UNION = `(
         SELECT ${UNION_COMMON}, 'item'::varchar AS type,
                NULL::varchar AS damage_die, NULL::varchar AS weapon_type,
-               NULL::varchar AS weapon_grip,
+               NULL::varchar AS weapon_grip, NULL::varchar AS modifier,
                NULL::smallint AS defense_value, NULL::varchar AS armor_weight,
                NULL::varchar AS creator, NULL::varchar AS rarity
         FROM equipment.items
         UNION ALL
         SELECT ${UNION_COMMON}, 'weapon'::varchar,
-               damage_die, weapon_type, weapon_grip,
+               damage_die, weapon_type, weapon_grip, modifier,
                NULL::smallint, NULL::varchar,
                NULL::varchar, NULL::varchar
         FROM equipment.weapons
         UNION ALL
         SELECT ${UNION_COMMON}, 'armor'::varchar,
-               NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::varchar,
                defense_value, armor_weight,
                NULL::varchar, NULL::varchar
         FROM equipment.armor
         UNION ALL
         SELECT ${UNION_COMMON}, 'artifact'::varchar,
-               NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::varchar,
                NULL::smallint, NULL::varchar,
                creator, rarity
         FROM equipment.artifacts

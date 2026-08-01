@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Trash2, Upload, Map, Globe, Lock, Plus, LogOut } from 'lucide-react';
+import { Trash2, Upload, Map, Globe, Lock, Plus, LogOut, ArrowLeft } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -50,24 +50,23 @@ export default function CampaignDetail() {
   const isGm = campaign.is_gm;
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 pt-6 pb-28 sm:px-6 md:pb-16">
-      <div className="mb-4">
-        <Link to="/campaigns" className="text-sm text-accent">← Кампанії</Link>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+      <Link to="/campaigns" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> Кампанії
+      </Link>
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 font-display text-3xl font-bold text-text">{campaign.name}</h1>
+          <h1 className="font-display text-3xl text-accent">{campaign.name}</h1>
           {isGm && (
             <p className="mt-1 text-sm text-text-dim">
               Код запрошення: <span className="font-mono text-gold">{campaign.invite_code}</span>
             </p>
           )}
         </div>
-        <Badge bg={isGm ? '#d4af37' : undefined} color={isGm ? '#1a1a1a' : undefined}
-          className={isGm ? '' : 'border border-border text-text-dim'}>
+        <Badge className={isGm ? 'bg-gold text-bg' : 'border border-border text-text-dim'}>
           {isGm ? 'Майстер' : 'Гравець'}
         </Badge>
       </div>
@@ -454,7 +453,7 @@ function MapsBlock({ campaignId, isGm }) {
       )}
 
       {loading ? (
-        <p className="text-sm text-text-dim">Завантаження…</p>
+        <p className="text-sm text-text-dim">Завантаження...</p>
       ) : cards.length === 0 ? (
         <EmptyState icon="🗺" title="До кампанії не прив'язано жодної мапи">
           {isGm ? 'Додайте картку-посилання на створену мапу.' : 'Майстер ще не додав мап.'}

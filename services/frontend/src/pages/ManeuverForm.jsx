@@ -11,6 +11,7 @@ import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.abilities;
 
@@ -132,6 +133,10 @@ export default function ManeuverForm() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
+          <Field label="Тип" className="mb-4">
+            <KindSwitch kinds={domain.kindSwitch} active="maneuver" />
+          </Field>
+
           <Field label="Назва" className="mb-4">
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>

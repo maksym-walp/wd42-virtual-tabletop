@@ -6,7 +6,7 @@ import EquipmentCard from '../components/EquipmentCard';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_ENDPOINTS, WEAPON_TYPES, WEAPON_GRIPS, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_TYPES, WEAPON_GRIPS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -14,6 +14,7 @@ import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
 
 // Each equipment type (weapon/armor/item) is now its own catalog page/route
@@ -58,6 +59,24 @@ export default function EquipmentCatalog({ type }) {
   const showCards = view === 'cards';
   const activeFilterCount = scope ? 1 : 0;
   const newHref = `/equipment/new?type=${type}`;
+  const newLabel = EQUIPMENT_NEW_LABELS[type] || 'Новий предмет';
+
+  const columns = [
+    { key: 'name', label: 'Назва', sortKey: 'name', render: (item) => (
+      <>{item.name}{item.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}</>
+    ) },
+    ...(type === 'weapon' ? [
+      { key: 'weapon_type', label: 'Тип', render: (item) => WEAPON_TYPES[item.weapon_type]?.label ?? '—' },
+      { key: 'weapon_grip', label: 'Особливості', render: (item) => WEAPON_GRIPS[item.weapon_grip]?.label ?? '—' },
+      { key: 'modifier', label: 'Модифікатор', render: (item) => weaponModifierLabel(item.modifier) ?? '—' },
+      { key: 'damage_die', label: 'Кубик шкоди', sortKey: 'damage_die', render: (item) => item.damage_die ?? '—' },
+    ] : []),
+    ...(type === 'armor' ? [
+      { key: 'armor_weight', label: 'Вага', render: (item) => ARMOR_WEIGHTS[item.armor_weight]?.label ?? '—' },
+      { key: 'defense_value', label: 'Захист', sortKey: 'defense_value', render: (item) => item.defense_value ?? '—' },
+    ] : []),
+    { key: 'price', label: 'Ціна', sortKey: 'price', render: (item) => item.price ?? '—' },
+  ];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -70,7 +89,7 @@ export default function EquipmentCatalog({ type }) {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {items.length} {pluralizeUk(items.length, ['запис', 'записи', 'записів'])}
         </p>
-        <Button to={newHref} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий предмет</Button>
+        <Button to={newHref} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ {newLabel}</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -102,13 +121,17 @@ export default function EquipmentCatalog({ type }) {
           {items.map((item) => <EquipmentCard key={item.id} item={item} />)}
         </div>
       ) : (
-        <EquipmentTable type={type} items={items} sort={sort} dir={dir} onSort={toggleSort} />
+        <DataTable
+          items={items} columns={columns}
+          getKey={(item) => item.id} getHref={(item) => `/equipment/${item.id}`}
+          sort={sort} dir={dir} onSort={toggleSort}
+        />
       )}
 
       <Link
         to={newHref}
         className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label="Новий предмет"
+        aria-label={newLabel}
       >
         <Plus size={26} />
       </Link>
@@ -116,69 +139,3 @@ export default function EquipmentCatalog({ type }) {
   );
 }
 
-function Th({ label, sortKey, sort, dir, onSort, className = '' }) {
-  const active = sort === sortKey;
-  return (
-    <th
-      className={`cursor-pointer select-none whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim hover:text-text ${className}`}
-      onClick={() => onSort(sortKey)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active && <span className="text-accent">{dir === 'desc' ? '↓' : '↑'}</span>}
-      </span>
-    </th>
-  );
-}
-
-function EquipmentTable({ type, items, sort, dir, onSort }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
-        <thead>
-          <tr>
-            <Th label="Назва" sortKey="name" sort={sort} dir={dir} onSort={onSort} />
-            {type === 'weapon' && (
-              <>
-                <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Тип</th>
-                <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Особливості</th>
-                <Th label="Кубик шкоди" sortKey="damage_die" sort={sort} dir={dir} onSort={onSort} />
-              </>
-            )}
-            {type === 'armor' && (
-              <>
-                <th className="border-b border-border px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-dim">Вага</th>
-                <Th label="Захист" sortKey="defense_value" sort={sort} dir={dir} onSort={onSort} />
-              </>
-            )}
-            <Th label="Ціна" sortKey="price" sort={sort} dir={dir} onSort={onSort} />
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} className="hover:bg-surface-hover">
-              <td className="border-b border-bg px-3 py-2">
-                <Link to={`/equipment/${item.id}`} className="text-accent hover:underline">{item.name}</Link>
-                {item.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}
-              </td>
-              {type === 'weapon' && (
-                <>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{WEAPON_TYPES[item.weapon_type]?.label ?? '—'}</td>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{WEAPON_GRIPS[item.weapon_grip]?.label ?? '—'}</td>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{item.damage_die ?? '—'}</td>
-                </>
-              )}
-              {type === 'armor' && (
-                <>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{ARMOR_WEIGHTS[item.armor_weight]?.label ?? '—'}</td>
-                  <td className="border-b border-bg px-3 py-2 text-text-muted">{item.defense_value ?? '—'}</td>
-                </>
-              )}
-              <td className="border-b border-bg px-3 py-2 text-text-muted">{item.price ?? '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
