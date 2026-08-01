@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, EQUIPMENT_NEW_LABELS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
 import { CHARACTERISTICS } from '../constants/characterSheet';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
@@ -167,7 +167,7 @@ export default function EquipmentForm() {
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
-        {isEdit ? 'Редагування предмета' : 'Новий предмет'}
+        {isEdit ? 'Редагування предмета' : (EQUIPMENT_NEW_LABELS[form.type] || 'Новий предмет')}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

@@ -16,16 +16,10 @@ import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
-import CanonBadge from '../components/CanonBadge';
 import useViewMode from '../hooks/useViewMode';
 
 const SPELL_TABLE_COLUMNS = [
-  { key: 'name', label: 'Назва', render: (s) => (
-    <span className="inline-flex items-center gap-1.5">
-      {s.name}
-      {s.is_canonical && <CanonBadge />}
-    </span>
-  ) },
+  { key: 'name', label: 'Назва', render: (s) => s.name },
   { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
   { key: 'spell_kind', label: 'Вид', render: (s) => SPELL_KINDS[s.spell_kind]?.label ?? s.spell_kind },
   { key: 'energy_cost', label: 'Енергія', render: (s) => s.energy_cost },

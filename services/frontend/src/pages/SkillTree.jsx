@@ -1,117 +1,31 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  X, Link2, Plus, Download, Upload, Pencil, Trash2, LayoutGrid,
+  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
+import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { isIconUrl } from '../constants/maps';
 import { useTheme } from '../context/ThemeContext';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
+import {
+  computeLayout, reorderCluster, elbowPath, computeFitTransform, ancestorClosure, computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y,
+} from '../utils/skillTreeLayout';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 
-const NODE_R = 32;
+const NODE_R = 24;
+const NODE_ICON_SIZE = NODE_R * 1.3; // uploaded-image icon size — stays inside the circle (half-diagonal < NODE_R)
+const ARROW_GAP = 6; // extra clearance beyond a node's radius before the arrowhead
+const EDGE_HIT_WIDTH = 16; // invisible click target width along an edge, wide enough to hit comfortably
 const DRAG_CLICK_THRESHOLD_PX = 5; // movement past this during a node drag suppresses the trailing click
-const LEVEL_SPACING_Y = 260; // vertical gap between prerequisite levels when auto-laying-out
-const SIBLING_SPACING_X = 280; // horizontal gap between sibling nodes — wide enough that a full-length title label never reaches the next node
-
-// A node's level is derived from the graph, not stored: root = 1, otherwise
-// 1 + the deepest prerequisite's level (handles require_both multi-parent nodes).
-function computeLevels(nodes, edges) {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const parentsOf = new Map();
-  edges.forEach((e) => {
-    if (!parentsOf.has(e.target_id)) parentsOf.set(e.target_id, []);
-    parentsOf.get(e.target_id).push(e.source_id);
-  });
-
-  const levels = {};
-  const levelOf = (id, visiting) => {
-    if (levels[id] != null) return levels[id];
-    const node = nodeMap.get(id);
-    if (!node) return 1;
-    if (node.is_root) { levels[id] = 1; return 1; }
-    const parents = (parentsOf.get(id) || []).filter((pid) => nodeMap.has(pid));
-    if (parents.length === 0) { levels[id] = 2; return 2; }
-    if (visiting.has(id)) return 1; // cycle guard fallback
-    visiting.add(id);
-    const level = 1 + Math.max(...parents.map((pid) => levelOf(pid, visiting)));
-    visiting.delete(id);
-    levels[id] = level;
-    return level;
-  };
-
-  nodes.forEach((n) => levelOf(n.id, new Set()));
-  return levels;
-}
-
-// Semi-automatic layout: places nodes on fixed level bands (y) with siblings
-// spread symmetrically (x), leaving the result freely draggable afterward.
-function computeAutoLayout(nodes, edges) {
-  const levels = computeLevels(nodes, edges);
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const childrenOf = new Map();
-  edges.forEach((e) => {
-    if (!childrenOf.has(e.source_id)) childrenOf.set(e.source_id, []);
-    childrenOf.get(e.source_id).push(e.target_id);
-  });
-
-  const sortedNodes = [...nodes].sort((a, b) => a.pos_x - b.pos_x);
-  const xMemo = new Map();
-  let nextSlot = 0;
-  const computeX = (id, visiting) => {
-    if (xMemo.has(id)) return xMemo.get(id);
-    if (visiting.has(id)) return 0; // cycle guard
-    const kids = (childrenOf.get(id) || [])
-      .filter((cid) => nodeMap.has(cid))
-      .sort((a, b) => nodeMap.get(a).pos_x - nodeMap.get(b).pos_x);
-    if (kids.length === 0) {
-      const x = nextSlot * SIBLING_SPACING_X;
-      nextSlot += 1;
-      xMemo.set(id, x);
-      return x;
-    }
-    visiting.add(id);
-    const childXs = kids.map((cid) => computeX(cid, visiting));
-    visiting.delete(id);
-    const x = childXs.reduce((a, b) => a + b, 0) / childXs.length;
-    xMemo.set(id, x);
-    return x;
-  };
-
-  sortedNodes.filter((n) => levels[n.id] === 1).forEach((n) => computeX(n.id, new Set()));
-  sortedNodes.forEach((n) => computeX(n.id, new Set())); // catches nodes unreachable from any root
-
-  const rootXs = nodes.filter((n) => levels[n.id] === 1).map((n) => xMemo.get(n.id) ?? 0);
-  const originX = rootXs.length ? rootXs.reduce((a, b) => a + b, 0) / rootXs.length : 0;
-
-  const positions = {};
-  nodes.forEach((n) => {
-    const level = levels[n.id] ?? 2;
-    positions[n.id] = {
-      pos_x: Math.round((xMemo.get(n.id) ?? 0) - originX),
-      pos_y: Math.round(-(level - 1) * LEVEL_SPACING_Y),
-    };
-  });
-  return positions;
-}
-
-// Where a new "+"-added child of `parent` should land: to the right of its
-// existing children (or directly below the parent if it has none yet).
-function computeChildSlot(parent, nodes, edges) {
-  const childIds = new Set(edges.filter((e) => e.source_id === parent.id).map((e) => e.target_id));
-  const children = nodes.filter((n) => childIds.has(n.id));
-  const pos_x = children.length
-    ? Math.max(...children.map((c) => c.pos_x)) + SIBLING_SPACING_X
-    : parent.pos_x;
-  return { pos_x, pos_y: parent.pos_y - LEVEL_SPACING_Y };
-}
 
 export default function SkillTree() {
   const { user } = useAuth();
-  const isGM = user?.role === 'game_master';
+  const isGM = user?.role === 'game_master' || user?.role === 'admin';
   const { theme } = useTheme();
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
 
@@ -131,10 +45,27 @@ export default function SkillTree() {
   const [editMode, setEditMode] = useState(false);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSource, setConnectSource] = useState(null);
-  const [dragState, setDragState] = useState(null);
+  const [dragState, setDragState] = useState(null); // { nodeId, startClientX, startClientY, offsetX }
   const [tooltip, setTooltip] = useState(null);
 
-  const levels = useMemo(() => computeLevels(nodes, edges), [nodes, edges]);
+  // Clicking a node in edit mode opens this action menu instead of jumping
+  // straight to a panel; clicking an edge opens the settings modal. Both
+  // store just the id and look the current object up live each render, so
+  // an in-place edit/toggle is reflected immediately without closing/reopening.
+  const [actionMenuNodeId, setActionMenuNodeId] = useState(null);
+  const [connectionsNodeId, setConnectionsNodeId] = useState(null);
+  const [edgeModalId, setEdgeModalId] = useState(null);
+
+  // Layout is always fully derived from the graph — no stored pixel
+  // coordinates. `pos_x` on a node is only a manual tie-break rank within its
+  // sibling cluster (see utils/skillTreeLayout.js); `pos_y` is unused.
+  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+  const { levels, positions, clusterKeyOf } = layout;
+
+  // Hovering or selecting a node highlights its chain of prerequisites and
+  // dims everything else — skipped mid-drag/connect so it doesn't fight those.
+  const highlightSourceId = !connectMode && !dragState ? (tooltip?.node?.id ?? selectedNode?.id) : null;
+  const highlightSet = highlightSourceId ? ancestorClosure(highlightSourceId, edges) : null;
 
   const [nodeForm, setNodeForm] = useState(null);
   const [formError, setFormError] = useState('');
@@ -166,19 +97,20 @@ export default function SkillTree() {
   useEffect(() => { loadTree('fighter'); }, []);
 
   // Centers the camera on the root node once a (re)load finishes, so opening
-  // the tab never leaves the player staring at empty canvas because the
-  // node graph sits away from the fixed default {x:120,y:120} origin.
+  // the tab never leaves the player staring at empty canvas because the node
+  // graph sits away from the fixed default {x:120,y:120} origin.
   useEffect(() => {
     if (!pendingCenterRef.current || loading || !svgRef.current || nodes.length === 0) return;
     const root = nodes.find((n) => n.is_root) || nodes[0];
+    const pos = positions.get(root.id) || { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
     setTransform((t) => ({
       ...t,
-      x: rect.width / 2 - root.pos_x * t.k,
-      y: rect.height / 2 - root.pos_y * t.k,
+      x: rect.width / 2 - pos.x * t.k,
+      y: rect.height / 2 - pos.y * t.k,
     }));
     pendingCenterRef.current = false;
-  }, [nodes, loading, setTransform]);
+  }, [nodes, loading, positions, setTransform]);
 
   const handleArchetypeChange = (archetype) => {
     setActiveArchetype(archetype);
@@ -187,23 +119,39 @@ export default function SkillTree() {
     loadTree(archetype);
   };
 
-  // Edge endpoint on circle surface
-  const edgePoints = (srcId, dstId) => {
-    const s = nodes.find((n) => n.id === srcId);
-    const d = nodes.find((n) => n.id === dstId);
+  const handleFitView = () => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const fit = computeFitTransform(positions, rect.width, rect.height);
+    if (fit) setTransform(fit);
+  };
+
+  // Different sources feeding the same pair of levels would otherwise all
+  // bend at the identical shared-bus height and become visually indistinct
+  // from each other — this gives each source its own lane within the gap.
+  const edgeLanes = useMemo(() => computeEdgeLanes(edges, levels, positions), [edges, levels, positions]);
+  // A target with 2+ incoming edges gets each one's arrival x spread apart
+  // slightly, so a bent edge's final approach never perfectly overlaps an
+  // unrelated straight-line edge that happens to share that column.
+  const entryOffsets = useMemo(() => computeEntryOffsets(edges, positions), [edges, positions]);
+
+  // Orthogonal edge path between two node circles (tree grows upward: source
+  // exits at its top, target is entered at its bottom). Edges that skip a
+  // level (possible with require_both parents at very different levels) bend
+  // near the source instead of at the true midpoint, so the jog doesn't cut
+  // through an unrelated intermediate level's node row.
+  const edgePathFor = (edge) => {
+    const s = positions.get(edge.source_id);
+    const d = positions.get(edge.target_id);
     if (!s || !d) return null;
-    const dx = d.pos_x - s.pos_x;
-    const dy = d.pos_y - s.pos_y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 1) return null;
-    const nx = dx / dist;
-    const ny = dy / dist;
-    return {
-      x1: s.pos_x + nx * NODE_R,
-      y1: s.pos_y + ny * NODE_R,
-      x2: d.pos_x - nx * (NODE_R + 6),
-      y2: d.pos_y - ny * (NODE_R + 6),
-    };
+    const sLevel = levels[edge.source_id] ?? 1;
+    const dLevel = levels[edge.target_id] ?? 1;
+    const x1 = s.x, y1 = s.y - NODE_R;
+    const x2 = d.x + (entryOffsets.get(edge.id) ?? 0), y2 = d.y + NODE_R + ARROW_GAP;
+    const midY = dLevel - sLevel > 1
+      ? y1 - LEVEL_SPACING_Y / 2
+      : y1 - (edgeLanes.get(edge.source_id) ?? 0.5) * (y1 - y2);
+    return { path: elbowPath(x1, y1, x2, y2, midY) };
   };
 
   // ── Pan/zoom (mouse-drag/wheel or touch-drag/pinch) ────────────────
@@ -214,7 +162,12 @@ export default function SkillTree() {
   const handleSvgPointerDown = (e) => {
     if (dragState || e.button !== 0) return;
     const tag = e.target.tagName;
-    if (tag === 'circle' || tag === 'text') return;
+    // 'path' is the edge click hit-area (only rendered with real pointer
+    // events in edit mode — the always-on visible edge path underneath is
+    // pointer-events:none, so it's never `e.target`) — without this, a
+    // pointerdown here started a canvas pan before the click ever reached
+    // the edge's own handler.
+    if (tag === 'circle' || tag === 'text' || tag === 'path') return;
     panZoom.bind.onPointerDown(e);
   };
 
@@ -222,32 +175,41 @@ export default function SkillTree() {
     if (dragState) {
       const screenDist = Math.hypot(e.clientX - dragState.startClientX, e.clientY - dragState.startClientY);
       if (screenDist > DRAG_CLICK_THRESHOLD_PX) dragMovedRef.current = true;
-
       const dx = (e.clientX - dragState.startClientX) / transform.k;
-      const dy = (e.clientY - dragState.startClientY) / transform.k;
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === dragState.nodeId
-            ? { ...n, pos_x: dragState.origX + dx, pos_y: dragState.origY + dy }
-            : n,
-        ),
-      );
+      setDragState((s) => (s ? { ...s, offsetX: dx } : s));
       return;
     }
     panZoom.bind.onPointerMove(e);
   };
 
+  // Dragging only ever reorders a node among its own sibling cluster (nodes
+  // sharing the exact same parent set) — its level/y never changes, and only
+  // the two-or-more members whose rank actually moved get PATCHed.
   const endNodeDrag = async () => {
     if (!dragState) return;
-    const saved = dragState;
+    const { nodeId, offsetX } = dragState;
     setDragState(null);
-    const node = nodes.find((n) => n.id === saved.nodeId);
-    if (node) {
-      try {
-        await skillTreeApi.updateNode(node.id, node);
-      } catch {
-        setActionError('Не вдалось зберегти позицію');
-      }
+    if (Math.abs(offsetX) < 1) return;
+
+    const key = clusterKeyOf(nodeId);
+    const clusterMembers = nodes
+      .filter((n) => n.id === nodeId || clusterKeyOf(n.id) === key)
+      .sort((a, b) => (positions.get(a.id)?.x ?? 0) - (positions.get(b.id)?.x ?? 0));
+    if (clusterMembers.length < 2) return;
+
+    const draggedPos = positions.get(nodeId);
+    const estimatedX = (draggedPos?.x ?? 0) + offsetX;
+    const others = clusterMembers.filter((n) => n.id !== nodeId);
+    const dropIndex = others.filter((n) => (positions.get(n.id)?.x ?? 0) < estimatedX).length;
+
+    const changed = reorderCluster(clusterMembers, nodeId, dropIndex);
+    if (changed.length === 0) return;
+
+    setNodes((prev) => prev.map((n) => changed.find((c) => c.id === n.id) || n));
+    try {
+      await Promise.all(changed.map((n) => skillTreeApi.updateNode(n.id, n)));
+    } catch {
+      setActionError('Не вдалось зберегти новий порядок вузлів');
     }
   };
 
@@ -259,13 +221,7 @@ export default function SkillTree() {
     if (!isGM || !editMode || connectMode) return;
     e.stopPropagation();
     dragMovedRef.current = false;
-    setDragState({
-      nodeId: node.id,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
-      origX: node.pos_x,
-      origY: node.pos_y,
-    });
+    setDragState({ nodeId: node.id, startClientX: e.clientX, startClientY: e.clientY, offsetX: 0 });
   };
 
   const handleNodeClick = (e, node) => {
@@ -287,6 +243,13 @@ export default function SkillTree() {
       }
       return;
     }
+    // Edit mode: clicking a node offers a choice of actions instead of
+    // jumping straight to a panel — creating a child, editing the node, or
+    // editing its connections all start from the same place.
+    if (isGM && editMode) {
+      setActionMenuNodeId(node.id);
+      return;
+    }
     setSelectedNode(node);
   };
 
@@ -299,6 +262,12 @@ export default function SkillTree() {
   };
 
   const handleNodeLeave = () => setTooltip(null);
+
+  const handleEdgeClick = (e, edge) => {
+    e.stopPropagation();
+    if (!isGM || !editMode || connectMode) return;
+    setEdgeModalId(edge.id);
+  };
 
   // ── CRUD ──────────────────────────────────────────────────────────
   const doCreateEdge = async (sourceId, targetId) => {
@@ -330,43 +299,44 @@ export default function SkillTree() {
   };
 
   const openNewNodeForm = () => {
-    const cx = (-transform.x + window.innerWidth / 2) / transform.k;
-    const cy = (-transform.y + window.innerHeight / 2) / transform.k;
+    // Unconnected nodes (no parent yet) share one cluster — rank them after
+    // whatever's already waiting to be wired up via "Зʼєднати".
+    const orphans = nodes.filter((n) => !n.is_root && !edges.some((e) => e.target_id === n.id));
+    const nextPosX = orphans.length ? Math.max(...orphans.map((n) => n.pos_x ?? 0)) + 1 : 0;
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
       effect: [],
       archetype: activeArchetype, require_both: false,
-      pos_x: Math.round(cx), pos_y: Math.round(cy),
+      pos_x: nextPosX, pos_y: 0,
     });
   };
 
-  // "+" affordance under a selected node: pre-fills the next level's slot and
-  // wires the new node up as a required child once it's saved.
+  // "Створити похідний вузол" action-menu entry: ranks the new child after
+  // `parent`'s existing children (its own sibling cluster once the edge is created).
   const openNewChildForm = (parent) => {
-    const slot = computeChildSlot(parent, nodes, edges);
+    const siblingIds = new Set(edges.filter((e) => e.source_id === parent.id).map((e) => e.target_id));
+    const siblings = nodes.filter((n) => siblingIds.has(n.id));
+    const nextPosX = siblings.length ? Math.max(...siblings.map((n) => n.pos_x ?? 0)) + 1 : 0;
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
       effect: [],
       archetype: activeArchetype, require_both: false,
-      pos_x: Math.round(slot.pos_x), pos_y: Math.round(slot.pos_y),
+      pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
     });
   };
 
-  const handleAutoLayout = async () => {
-    const archetypeLabel = ARCHETYPES[activeArchetype]?.label ?? activeArchetype;
-    if (!window.confirm(`Вирівняти всі ${nodes.length} вузлів дерева «${archetypeLabel}» по сітці рівнів?`)) return;
-    const positions = computeAutoLayout(nodes, edges);
-    const updatedNodes = nodes.map((n) => ({ ...n, ...positions[n.id] }));
-    setNodes(updatedNodes);
-    try {
-      await Promise.all(updatedNodes.map((n) => skillTreeApi.updateNode(n.id, n)));
-      showToast('success', 'Дерево вирівняно');
-    } catch {
-      setActionError('Не вдалось зберегти нове розташування для всіх вузлів');
-    }
+  const openEditNodeForm = (n) => {
+    setNodeForm({
+      ...n,
+      enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
+      narrative_condition: n.narrative_condition || [],
+      effect: n.effect || [],
+      archetype: n.archetype || activeArchetype,
+      require_both: n.require_both || false,
+    });
   };
 
   const handleSaveNode = async () => {
@@ -385,7 +355,6 @@ export default function SkillTree() {
         const updated = await skillTreeApi.updateNode(nodeForm.id, payload);
         setNodes((prev) => prev.map((n) => (n.id === nodeForm.id ? updated : n)));
         setSelectedNode(updated);
-        console.log('[skill-tree] node updated', updated);
         showToast('success', `Вузол «${updated.title}» оновлено`);
       } else {
         const created = await skillTreeApi.createNode(payload);
@@ -393,7 +362,6 @@ export default function SkillTree() {
         if (nodeForm._parentId) {
           await doCreateEdge(nodeForm._parentId, created.id);
         }
-        console.log('[skill-tree] node created', created);
         showToast('success', `Вузол «${created.title}» створено`);
       }
       setNodeForm(null);
@@ -412,7 +380,6 @@ export default function SkillTree() {
       setNodes((prev) => prev.filter((n) => n.id !== nodeId));
       setEdges((prev) => prev.filter((e) => e.source_id !== nodeId && e.target_id !== nodeId));
       setSelectedNode(null);
-      console.log('[skill-tree] node deleted', nodeId);
       showToast('success', 'Вузол видалено');
     } catch (err) {
       console.error('[skill-tree] failed to delete node', err);
@@ -458,6 +425,12 @@ export default function SkillTree() {
     }
   };
 
+  // ── Modal derived state (looked up live, so an in-place edit/toggle
+  // shows immediately instead of needing the modal reopened) ────────
+  const actionMenuNode = nodes.find((n) => n.id === actionMenuNodeId) || null;
+  const connectionsNode = nodes.find((n) => n.id === connectionsNodeId) || null;
+  const edgeModalEdge = edges.find((e) => e.id === edgeModalId) || null;
+
   // ── Render ────────────────────────────────────────────────────────
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -501,7 +474,6 @@ export default function SkillTree() {
                 onClick={() => { setConnectMode((c) => !c); setConnectSource(null); }}
               />
               <IconBtn icon={Plus} label="Вузол" onClick={openNewNodeForm} primary />
-              <IconBtn icon={LayoutGrid} label="Вирівняти" onClick={handleAutoLayout} title="Вирівняти вузли по рівнях" />
               <IconBtn icon={Download} label="Експорт" onClick={handleExport} title="Експорт у JSON" />
               <label
                 className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-dim"
@@ -512,6 +484,7 @@ export default function SkillTree() {
               </label>
             </>
           )}
+          <IconBtn icon={Maximize2} label="Вмістити" onClick={handleFitView} title="Показати все дерево" />
           {isGM && (
             <IconBtn
               active={editMode}
@@ -534,7 +507,7 @@ export default function SkillTree() {
       <div className="relative flex-1 overflow-hidden bg-surface">
         <svg
           ref={svgRef}
-          className="h-full w-full touch-none select-none"
+          className="h-full w-full touch-none select-none overscroll-contain"
           style={{ cursor: dragState ? 'grabbing' : 'grab' }}
           onPointerDown={handleSvgPointerDown}
           onPointerMove={handleSvgPointerMove}
@@ -553,42 +526,34 @@ export default function SkillTree() {
           <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
             {/* Edges */}
             {edges.map((edge) => {
-              const pts = edgePoints(edge.source_id, edge.target_id);
+              const pts = edgePathFor(edge);
               if (!pts) return null;
-              const mx = (pts.x1 + pts.x2) / 2;
-              const my = (pts.y1 + pts.y2) / 2;
               const isOptional = edge.edge_type === 'optional';
+              const dimmed = highlightSet && !(highlightSet.has(edge.source_id) && highlightSet.has(edge.target_id));
+              const clickable = isGM && editMode && !connectMode;
               return (
-                <g key={edge.id}>
-                  <line
-                    x1={pts.x1} y1={pts.y1} x2={pts.x2} y2={pts.y2}
+                <g key={edge.id} opacity={dimmed ? 0.15 : 1}>
+                  <path
+                    d={pts.path}
+                    fill="none"
                     stroke={isOptional ? 'var(--color-edge-optional)' : 'var(--color-text-muted)'}
                     strokeWidth={isOptional ? 1.5 : 2}
                     strokeDasharray={isOptional ? '6,4' : undefined}
                     markerEnd="url(#arrow)"
                     style={{ pointerEvents: 'none' }}
                   />
-                  {isGM && editMode && (
-                    <g>
-                      <circle cx={mx - 11} cy={my} r={9}
-                        fill={isOptional ? 'var(--color-node-narrative-bg)' : 'var(--color-node-unlocked-bg)'}
-                        stroke={isOptional ? 'var(--color-node-narrative)' : 'var(--color-sage)'}
-                        strokeWidth={1} style={{ cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); handleToggleEdgeType(edge.id, edge.edge_type); }}
-                      />
-                      <text x={mx - 11} y={my + 4} textAnchor="middle" fontSize={8}
-                        fill={isOptional ? 'var(--color-node-narrative)' : 'var(--color-sage)'}
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                        {isOptional ? 'АБО' : 'І'}
-                      </text>
-                      <circle cx={mx + 11} cy={my} r={9}
-                        fill="var(--color-node-danger-bg)" stroke="var(--color-danger)" strokeWidth={1}
-                        style={{ cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); handleDeleteEdge(edge.id); }}
-                      />
-                      <text x={mx + 11} y={my + 4} textAnchor="middle" fontSize={11}
-                        fill="var(--color-danger)" style={{ pointerEvents: 'none', userSelect: 'none' }}>×</text>
-                    </g>
+                  {/* Wide invisible hit area — clicking the thin line itself is
+                      fiddly, and this replaces the old inline I/× buttons that
+                      used to sit on top of (and get buried under) other edges. */}
+                  {clickable && (
+                    <path
+                      d={pts.path}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={EDGE_HIT_WIDTH}
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => handleEdgeClick(e, edge)}
+                    />
                   )}
                 </g>
               );
@@ -596,9 +561,14 @@ export default function SkillTree() {
 
             {/* Nodes */}
             {nodes.map((node) => {
+              const pos = positions.get(node.id) || { x: 0, y: 0 };
+              const isDragging = dragState?.nodeId === node.id;
+              const x = pos.x + (isDragging ? dragState.offsetX : 0);
+              const y = pos.y;
               const selected = selectedNode?.id === node.id;
               const isSrc = connectSource?.id === node.id;
               const ac = ARCHETYPE_COLORS[node.archetype];
+              const dimmed = highlightSet && !highlightSet.has(node.id);
 
               const stroke = isSrc ? 'var(--color-accent)'
                 : selected ? 'var(--color-gold)'
@@ -610,8 +580,9 @@ export default function SkillTree() {
               return (
                 <g
                   key={node.id}
-                  transform={`translate(${node.pos_x},${node.pos_y})`}
-                  style={{ cursor: editMode && !connectMode ? 'move' : 'pointer' }}
+                  transform={`translate(${x},${y})`}
+                  opacity={dimmed ? 0.25 : 1}
+                  style={{ cursor: editMode && !connectMode ? 'ew-resize' : 'pointer' }}
                   onClick={(e) => handleNodeClick(e, node)}
                   onMouseDown={(e) => handleNodeMouseDown(e, node)}
                   onMouseEnter={(e) => handleNodeEnter(e, node)}
@@ -625,65 +596,33 @@ export default function SkillTree() {
                     strokeWidth={selected || isSrc ? 2.5 : 1.5}
                   />
 
-                  {/* Icon or initials */}
-                  <text
-                    x={0} y={node.icon ? 9 : 6}
-                    textAnchor="middle"
-                    fontSize={node.icon ? 24 : 15}
-                    fill={textColor}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {node.icon || node.title.substring(0, 2)}
-                  </text>
-
-                  {/* Name label */}
-                  <text
-                    x={NODE_R + 10} y={5}
-                    textAnchor="start"
-                    fontSize={13}
-                    fill={textColor}
-                    fontWeight={selected ? 700 : 500}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {node.title.length > 20 ? node.title.slice(0, 18) + '…' : node.title}
-                  </text>
-
-                  {/* Unlock type hint */}
-                  <text
-                    x={NODE_R + 10} y={21}
-                    textAnchor="start" fontSize={10} fill="var(--color-text-muted)"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {node.cost > 0 && node.narrative_condition
-                      ? `${node.cost} оч. або наратив`
-                      : node.cost > 0
-                      ? `${node.cost} ${node.cost === 1 ? 'очко' : 'очків'}`
-                      : 'наратив'}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Add-child affordances — one "+" under every node as soon as edit mode is on */}
-            {isGM && editMode && !connectMode && nodes.map((node) => {
-              const slot = computeChildSlot(node, nodes, edges);
-              return (
-                <g
-                  key={`add-${node.id}`}
-                  transform={`translate(${slot.pos_x},${slot.pos_y})`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => { e.stopPropagation(); openNewChildForm(node); }}
-                >
-                  <circle r={16} fill="var(--color-node-unlocked-bg)" stroke="var(--color-sage)" strokeWidth={1.5} strokeDasharray="4,3" />
-                  <text x={0} y={6} textAnchor="middle" fontSize={18} fill="var(--color-sage)"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>+</text>
+                  {/* Icon (emoji or uploaded image) or initials — the name/cost only show on hover (Tooltip below) */}
+                  {isIconUrl(node.icon) ? (
+                    <image
+                      href={node.icon}
+                      x={-NODE_ICON_SIZE / 2} y={-NODE_ICON_SIZE / 2}
+                      width={NODE_ICON_SIZE} height={NODE_ICON_SIZE}
+                      preserveAspectRatio="xMidYMid slice"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  ) : (
+                    <text
+                      x={0} y={node.icon ? 7 : 5}
+                      textAnchor="middle"
+                      fontSize={node.icon ? 18 : 12}
+                      fill={textColor}
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    >
+                      {node.icon || node.title.substring(0, 2)}
+                    </text>
+                  )}
                 </g>
               );
             })}
           </g>
         </svg>
 
-        {/* Hover tooltip */}
+        {/* Hover tooltip — the only place a node's name/details show now */}
         {tooltip && (
           <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} />
         )}
@@ -694,7 +633,7 @@ export default function SkillTree() {
           </div>
         )}
 
-        {/* Detail panel */}
+        {/* Detail panel (view mode / non-GM) */}
         {selectedNode && !nodeForm && (
           <NodePanel
             node={selectedNode}
@@ -702,18 +641,59 @@ export default function SkillTree() {
             edges={edges}
             level={levels[selectedNode.id]}
             isGM={isGM}
-            onEdit={(n) => {
-              setNodeForm({
-                ...n,
-                enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
-                narrative_condition: n.narrative_condition || [],
-                effect: n.effect || [],
-                archetype: n.archetype || activeArchetype,
-                require_both: n.require_both || false,
-              });
-            }}
+            onEdit={openEditNodeForm}
             onDelete={handleDeleteNode}
             onClose={() => setSelectedNode(null)}
+          />
+        )}
+
+        {/* Action menu (edit mode node click) */}
+        {actionMenuNode && (
+          <Sheet open onClose={() => setActionMenuNodeId(null)} title={actionMenuNode.title}>
+            <div className="flex flex-col gap-2">
+              <MenuAction
+                icon={Plus} label="Створити похідний вузол"
+                onClick={() => { openNewChildForm(actionMenuNode); setActionMenuNodeId(null); }}
+              />
+              <MenuAction
+                icon={Pencil} label="Редагувати поточний вузол"
+                onClick={() => { openEditNodeForm(actionMenuNode); setActionMenuNodeId(null); }}
+              />
+              <MenuAction
+                icon={Link2} label="Редагувати звʼязки"
+                onClick={() => { setConnectionsNodeId(actionMenuNode.id); setActionMenuNodeId(null); }}
+              />
+              <div className="mt-2 border-t border-border pt-3">
+                <MenuAction
+                  icon={Trash2} label="Видалити вузол" danger
+                  onClick={() => { setActionMenuNodeId(null); handleDeleteNode(actionMenuNode.id); }}
+                />
+              </div>
+            </div>
+          </Sheet>
+        )}
+
+        {/* Node connections editor (incoming/outgoing, grouped) */}
+        {connectionsNode && (
+          <NodeConnectionsModal
+            node={connectionsNode}
+            nodes={nodes}
+            edges={edges}
+            onToggle={handleToggleEdgeType}
+            onDelete={handleDeleteEdge}
+            onClose={() => setConnectionsNodeId(null)}
+          />
+        )}
+
+        {/* Single-edge settings (canvas edge click) */}
+        {edgeModalEdge && (
+          <EdgeSettingsModal
+            edge={edgeModalEdge}
+            sourceTitle={nodes.find((n) => n.id === edgeModalEdge.source_id)?.title ?? '—'}
+            targetTitle={nodes.find((n) => n.id === edgeModalEdge.target_id)?.title ?? '—'}
+            onToggle={() => handleToggleEdgeType(edgeModalEdge.id, edgeModalEdge.edge_type)}
+            onDelete={() => { handleDeleteEdge(edgeModalEdge.id); setEdgeModalId(null); }}
+            onClose={() => setEdgeModalId(null)}
           />
         )}
       </div>
@@ -746,6 +726,21 @@ function IconBtn({ icon: Icon, label, onClick, active, primary, title }) {
     >
       <Icon size={15} />
       <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
+// ── Action-menu row (node click in edit mode) ──────────────────────
+function MenuAction({ icon: Icon, label, onClick, danger }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 rounded-md border px-3.5 py-2.5 text-left text-sm font-semibold transition-colors ${
+        danger ? 'border-danger/40 text-danger hover:bg-danger/10' : 'border-border text-text hover:bg-surface-hover'
+      }`}
+    >
+      <Icon size={16} /> {label}
     </button>
   );
 }
@@ -811,7 +806,7 @@ function TtLabel({ children }) {
 function TtBadge({ children }) {
   return <span className="inline-block rounded bg-bg px-2 py-0.5 text-xs text-text-dim">{children}</span>;
 }
-// ── Node detail panel ─────────────────────────────────────────────
+// ── Node detail panel (view mode / non-GM click) ────────────────────
 function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose }) {
   const prereqEdges = edges.filter((e) => e.target_id === node.id);
   const prereqs = prereqEdges
@@ -825,7 +820,11 @@ function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose 
   return (
     <Sheet open onClose={onClose} title={node.title}>
       <div className="mb-3 flex items-start gap-3">
-        {node.icon && <span className="text-3xl leading-none">{node.icon}</span>}
+        {node.icon && (
+          isIconUrl(node.icon)
+            ? <img src={node.icon} alt="" className="h-9 w-9 shrink-0 object-contain" />
+            : <span className="text-3xl leading-none">{node.icon}</span>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {level != null && <Badge>Рівень {level}</Badge>}
           {node.archetypes?.map((a) => <Badge key={a} tone="accent">{a}</Badge>)}
@@ -902,6 +901,92 @@ function Badge({ tone = 'muted', children }) {
   return <span className={`inline-block rounded px-2 py-0.5 text-xs ${tones[tone]}`}>{children}</span>;
 }
 
+// ── Edge row: shared by the per-node connections editor and the
+// single-edge settings modal — the other node's name, a required/optional
+// toggle, and delete. ───────────────────────────────────────────────
+function EdgeRow({ edge, otherTitle, onToggle, onDelete }) {
+  const isOptional = edge.edge_type === 'optional';
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-bg px-3 py-2">
+      <span className="text-sm text-text">{otherTitle}</span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onToggle}
+          title={isOptional ? "Опціональний — натисни, щоб зробити обовʼязковим" : "Обов'язковий — натисни, щоб зробити опціональним"}
+          className="rounded px-2 py-1 text-xs font-semibold"
+          style={{
+            background: isOptional ? 'var(--color-node-narrative-bg)' : 'var(--color-node-unlocked-bg)',
+            color: isOptional ? 'var(--color-node-narrative)' : 'var(--color-sage)',
+          }}
+        >
+          {isOptional ? 'АБО' : 'І'}
+        </button>
+        <button type="button" onClick={onDelete} title="Видалити звʼязок" className="rounded p-1.5 text-danger hover:bg-danger/10">
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Node connections editor: grouped incoming (requirements) / outgoing
+// (unlocks) edges for one node ───────────────────────────────────────
+function NodeConnectionsModal({ node, nodes, edges, onToggle, onDelete, onClose }) {
+  const incoming = edges
+    .filter((e) => e.target_id === node.id)
+    .map((e) => ({ edge: e, other: nodes.find((n) => n.id === e.source_id) }))
+    .filter((x) => x.other);
+  const outgoing = edges
+    .filter((e) => e.source_id === node.id)
+    .map((e) => ({ edge: e, other: nodes.find((n) => n.id === e.target_id) }))
+    .filter((x) => x.other);
+
+  return (
+    <Sheet open onClose={onClose} title={`Звʼязки: ${node.title}`}>
+      <div className="flex flex-col gap-4">
+        <ConnectionsSection label="Вхідні (вимоги)" items={incoming} onToggle={onToggle} onDelete={onDelete} />
+        <ConnectionsSection label="Вихідні (розблоковує)" items={outgoing} onToggle={onToggle} onDelete={onDelete} />
+      </div>
+    </Sheet>
+  );
+}
+
+function ConnectionsSection({ label, items, onToggle, onDelete }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">{label}</p>
+      {items.length === 0 ? (
+        <p className="text-sm text-text-dim">Немає</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {items.map(({ edge, other }) => (
+            <EdgeRow
+              key={edge.id}
+              edge={edge}
+              otherTitle={other.title}
+              onToggle={() => onToggle(edge.id, edge.edge_type)}
+              onDelete={() => onDelete(edge.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Single-edge settings modal (canvas edge click) ──────────────────
+function EdgeSettingsModal({ edge, sourceTitle, targetTitle, onToggle, onDelete, onClose }) {
+  return (
+    <Sheet open onClose={onClose} title="Звʼязок">
+      <p className="mb-4 text-sm">
+        <span className="text-text-dim">{sourceTitle}</span> <span className="text-text-dim">→</span> <span className="font-semibold text-text">{targetTitle}</span>
+      </p>
+      <EdgeRow edge={edge} otherTitle={targetTitle} onToggle={onToggle} onDelete={onDelete} />
+    </Sheet>
+  );
+}
+
 // ── Repeatable text-item list (mirrors SpellForm's components editor) ─────
 function ArrayListField({ label, items, placeholder, onAdd, onRemove, onChangeItem, className = '' }) {
   return (
@@ -943,6 +1028,27 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
   const set = (field) => (e) => onChange((f) => ({ ...f, [field]: e.target.value }));
   const hasPoints = form.cost > 0;
   const hasNarrative = !!form.enableNarrative;
+
+  const iconRef = useRef(null);
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconError, setIconError] = useState('');
+
+  const handleIconFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) { setIconError('Файл завеликий — максимум 25 МБ'); return; }
+    setIconError('');
+    setIconUploading(true);
+    try {
+      const url = await mediaApi.upload(file, { entityType: 'skill-node-icon' });
+      onChange((f) => ({ ...f, icon: url }));
+    } catch (err) {
+      setIconError(err.response?.data?.message || 'Не вдалось завантажити іконку');
+    } finally {
+      setIconUploading(false);
+    }
+  };
 
   return (
     <Sheet open onClose={onClose} title={form.id ? 'Редагувати вузол' : 'Новий вузол'}>
@@ -1033,10 +1139,32 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Іконка (емодзі)</span>
-            <input className={inputClass} value={form.icon || ''} onChange={set('icon')} />
-          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Іконка</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded border border-border bg-bg text-xl">
+                {isIconUrl(form.icon) ? <img src={form.icon} alt="" className="h-7 w-7 object-contain" /> : (form.icon || '—')}
+              </span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => iconRef.current?.click()} disabled={iconUploading}>
+                <Upload size={14} /> {iconUploading ? 'Завантаження…' : 'Своя іконка'}
+              </Button>
+              <input
+                className={`${inputClass} w-20 text-center`}
+                placeholder="😀"
+                value={isIconUrl(form.icon) ? '' : (form.icon || '')}
+                onChange={set('icon')}
+                maxLength={8}
+              />
+              {form.icon && (
+                <button type="button" onClick={() => onChange((f) => ({ ...f, icon: '' }))} className="text-xs text-text-dim hover:text-danger">
+                  Очистити
+                </button>
+              )}
+              <input ref={iconRef} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={handleIconFile} />
+            </div>
+            {iconError && <p className="text-xs text-danger">{iconError}</p>}
+            <p className="text-xs text-text-dim">Своє зображення (PNG, WebP, GIF) або emoji.</p>
+          </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Дерево</span>
             <span className="py-2 text-sm text-accent">{ARCHETYPES[form.archetype]?.label ?? form.archetype}</span>

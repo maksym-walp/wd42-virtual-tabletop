@@ -16,18 +16,12 @@ import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
-import CanonBadge from '../components/CanonBadge';
 import useViewMode from '../hooks/useViewMode';
 
 const ARCHETYPE_TABS = ['fighter', 'spellcaster', 'rogue'];
 
 const ABILITY_TABLE_COLUMNS = [
-  { key: 'name', label: 'Назва', render: (a) => (
-    <span className="inline-flex items-center gap-1.5">
-      {a.name}
-      {a.is_canonical && <CanonBadge />}
-    </span>
-  ) },
+  { key: 'name', label: 'Назва', render: (a) => a.name },
   { key: 'archetypes', label: 'Архетипи', render: (a) => (a.archetypes ?? []).map((k) => ARCHETYPES[k]?.label ?? k).join(', ') || '—' },
   { key: 'owner', label: 'Автор', render: (a) => a.owner_username ? `@${a.owner_username}` : '—' },
 ];

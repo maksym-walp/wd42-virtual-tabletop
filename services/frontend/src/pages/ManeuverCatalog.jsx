@@ -14,16 +14,10 @@ import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
-import CanonBadge from '../components/CanonBadge';
 import useViewMode from '../hooks/useViewMode';
 
 const MANEUVER_TABLE_COLUMNS = [
-  { key: 'name', label: 'Назва', render: (m) => (
-    <span className="inline-flex items-center gap-1.5">
-      {m.name}
-      {m.is_canonical && <CanonBadge />}
-    </span>
-  ) },
+  { key: 'name', label: 'Назва', render: (m) => m.name },
   { key: 'duration_actions', label: 'Дії', render: (m) => `${m.duration_actions}/3` },
   { key: 'owner', label: 'Автор', render: (m) => m.owner_username ? `@${m.owner_username}` : '—' },
 ];

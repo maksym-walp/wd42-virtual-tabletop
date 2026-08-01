@@ -23,7 +23,7 @@ const KINDS = {
     sortExpr: {
       damage_die: "NULLIF(regexp_replace(i.damage_die, '[^0-9]', '', 'g'), '')::int",
     },
-    filters: { weapon_type: 'i.weapon_type' },
+    filters: { weapon_type: 'i.weapon_type', modifier: 'i.modifier', damage_die: 'i.damage_die', weapon_grip: 'i.weapon_grip' },
   },
   armor: {
     table: 'equipment.armor',

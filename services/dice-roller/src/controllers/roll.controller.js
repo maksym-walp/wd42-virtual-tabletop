@@ -24,6 +24,11 @@ const RollController = {
     const stats = await RollModel.getStats(req.user.sub);
     res.json({ stats });
   },
+
+  async deleteAll(req, res) {
+    await RollModel.deleteAllForUser(req.user.sub);
+    res.status(204).send();
+  },
 };
 
 module.exports = RollController;

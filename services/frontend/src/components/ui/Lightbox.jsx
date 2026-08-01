@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { lockPageScroll } from '../../utils/scrollLock';
 
 /**
  * Повноекранний перегляд зображень. Окремий від Sheet: той обмежений
@@ -27,12 +28,11 @@ export default function Lightbox({ images = [], index = 0, onClose }) {
 
     document.addEventListener('keydown', onKeyDown);
     // Фон не має скролитися під оверлеєм.
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockPageScroll();
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      unlock();
     };
   }, [count, onClose]);
 

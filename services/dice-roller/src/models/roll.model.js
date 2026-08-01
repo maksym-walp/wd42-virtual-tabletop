@@ -22,6 +22,10 @@ const RollModel = {
     return rows;
   },
 
+  async deleteAllForUser(userId) {
+    await pool.query('DELETE FROM dice_roller.rolls WHERE user_id = $1', [userId]);
+  },
+
   async getStats(userId) {
     const [{ rows: summaryRows }, { rows: byDieRows }] = await Promise.all([
       pool.query(

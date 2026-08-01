@@ -15,8 +15,8 @@ function requireAuth(req, res, next) {
 
 function requireGameMaster(req, res, next) {
   requireAuth(req, res, () => {
-    if (req.user.role !== 'game_master') {
-      return res.status(403).json({ message: 'Forbidden: game master only' });
+    if (req.user.role !== 'game_master' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden: game master or admin only' });
     }
     next();
   });

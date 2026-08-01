@@ -58,7 +58,7 @@ export default function App() {
           <DiceProvider>
             <div className="flex h-dvh flex-col">
               <Navbar />
-              <div className="flex-1 overflow-y-auto">
+              <div id="app-scroll" className="flex-1 overflow-y-auto overscroll-contain">
                 <Routes>
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />

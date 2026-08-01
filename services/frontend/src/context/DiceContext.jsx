@@ -38,9 +38,14 @@ export function DiceProvider({ children }) {
     return roll(formula).catch(() => {});
   };
 
+  const clearRecent = () => {
+    setRecent([]);
+    setLastRoll(null);
+  };
+
   return (
     <DiceContext.Provider
-      value={{ isOpen, open, close, toggle, rolling, error, lastRoll, recent, roll, rollAndShow }}
+      value={{ isOpen, open, close, toggle, rolling, error, lastRoll, recent, roll, rollAndShow, clearRecent }}
     >
       {children}
     </DiceContext.Provider>

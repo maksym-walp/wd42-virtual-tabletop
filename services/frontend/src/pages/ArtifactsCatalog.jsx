@@ -18,9 +18,7 @@ import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
 
 const ARTIFACT_TABLE_COLUMNS = [
-  { key: 'name', label: 'Назва', sortKey: 'name', render: (a) => (
-    <>{a.name}{a.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}</>
-  ) },
+  { key: 'name', label: 'Назва', sortKey: 'name', render: (a) => a.name },
   { key: 'creator', label: 'Творець', render: (a) => a.creator ?? '—' },
   { key: 'rarity', label: 'Рідкість', sortKey: 'rarity', render: (a) => (a.rarity ? RARITIES[a.rarity]?.label : '—') },
   { key: 'price', label: 'Ціна', sortKey: 'price', render: (a) => a.price ?? '—' },

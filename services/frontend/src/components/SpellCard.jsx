@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
-import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function SpellCard({ spell }) {
@@ -35,9 +34,6 @@ export default function SpellCard({ spell }) {
           );
         })}
         {kind && <span className="rounded border border-border px-1.5 py-0.5 text-[0.68rem] font-semibold text-text-dim">{kind.label}</span>}
-        {spell.is_canonical && <CanonBadge className="ml-auto" />}
-        {spell.is_public && <span className={`text-[0.65rem] italic text-text-dim ${spell.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
-        {!spell.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${spell.is_canonical || spell.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       {/* Title */}
@@ -53,7 +49,7 @@ export default function SpellCard({ spell }) {
       </div>
 
       {/* Narrative preview */}
-      {spell.narrative_desc && (
+      {!spell.image_url && spell.narrative_desc && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
           <DiceFormulaText text={spell.narrative_desc} />
         </p>

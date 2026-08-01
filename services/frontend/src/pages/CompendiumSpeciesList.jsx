@@ -13,9 +13,7 @@ import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
 
 const SPECIES_TABLE_COLUMNS = [
-  { key: 'name', label: 'Назва', render: (s) => (
-    <>{s.name}{s.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}</>
-  ) },
+  { key: 'name', label: 'Назва', render: (s) => s.name },
   { key: 'health_die', label: "Кубик здоров'я", render: (s) => s.health_die || 'd6' },
   { key: 'description', label: 'Опис', render: (s) => <span className="line-clamp-1">{s.description || '—'}</span> },
 ];
@@ -78,8 +76,6 @@ export default function CompendiumSpeciesList() {
             >
               <div className="flex items-center gap-1.5 border-b border-border px-3.5 py-2">
                 <span className="text-[0.7rem] font-semibold text-text-dim">{s.health_die || 'd6'}</span>
-                {s.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічний</span>}
-                {!s.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${s.is_public ? '' : 'ml-auto'}`}>чужий</span>}
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{s.name}</h3>
               {s.description && (

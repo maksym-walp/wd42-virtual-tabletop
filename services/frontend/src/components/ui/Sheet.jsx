@@ -1,8 +1,17 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { lockPageScroll } from '../../utils/scrollLock';
 
 // Bottom sheet on mobile, centered dialog on wider screens. Shared by
 // Spellbook's mobile filter panel and SkillTree's node-detail panel.
 export default function Sheet({ open, onClose, title, children }) {
+  // Fixed overlay — without this, iOS Safari lets the background scroll
+  // (and can even snap the underlying page back to top) while the sheet is open.
+  useEffect(() => {
+    if (!open) return undefined;
+    return lockPageScroll();
+  }, [open]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

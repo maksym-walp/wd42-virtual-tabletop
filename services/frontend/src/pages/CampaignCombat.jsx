@@ -234,6 +234,20 @@ export default function CombatTab({ campaignId, isGm, characters }) {
     }
   };
 
+  const handleDeleteScene = async () => {
+    if (!window.confirm('Видалити цю бойову сцену разом з усіма комбатантами?')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await campaignApi.removeCombatScene(campaignId, scene.id);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видаленні сцени');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <Card>
@@ -246,6 +260,9 @@ export default function CombatTab({ campaignId, isGm, characters }) {
               </Button>
               <Button size="sm" onClick={handleNextRound} disabled={busy}>
                 Наступний раунд &gt;&gt;
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleDeleteScene} disabled={busy} aria-label="Видалити сцену">
+                <Trash2 size={15} />
               </Button>
             </div>
           )}

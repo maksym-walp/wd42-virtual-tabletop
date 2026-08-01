@@ -63,9 +63,7 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
   const showCards = view === 'cards';
 
   const columns = [
-    { key: 'name', label: 'Назва', render: (entry) => (
-      <>{entry.name}{entry.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічний</span>}</>
-    ) },
+    { key: 'name', label: 'Назва', render: (entry) => entry.name },
     { key: 'species', label: 'Вид', render: (entry) => speciesNameById[entry.species_id] ?? '—' },
     { key: 'health', label: "Здоров'я", render: (entry) => entry.health?.formula ?? '—' },
   ];

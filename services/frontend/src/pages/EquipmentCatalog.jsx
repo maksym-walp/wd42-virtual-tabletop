@@ -6,7 +6,7 @@ import EquipmentCard from '../components/EquipmentCard';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_TYPES, WEAPON_GRIPS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, DAMAGE_DICE, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -24,6 +24,10 @@ import useViewMode from '../hooks/useViewMode';
 // for НІПи/Бестіарій/Види. `type` picks which type-table this instance reads.
 export default function EquipmentCatalog({ type }) {
   const [scope, setScope]   = useState('');
+  const [weaponType, setWeaponType] = useState('');
+  const [modifier, setModifier] = useState('');
+  const [damageDie, setDamageDie] = useState('');
+  const [weaponGrip, setWeaponGrip] = useState('');
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,24 +36,35 @@ export default function EquipmentCatalog({ type }) {
   const [view, setView]     = useViewMode('equipment'); // table | cards
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Скидаємо сортування щоразу, як заходимо на інший тип — ключі сортування
-  // (наприклад "defense_value") не всі спільні між таблицями.
+  // Скидаємо сортування й специфічні для зброї фільтри щоразу, як заходимо на
+  // інший тип — ключі сортування (наприклад "defense_value") не всі спільні
+  // між таблицями, а модифікатор/тип/кубик шкоди/особливості існують лише в зброї.
   useEffect(() => {
     setSort('name');
     setDir('asc');
+    setWeaponType('');
+    setModifier('');
+    setDamageDie('');
+    setWeaponGrip('');
   }, [type]);
 
   useEffect(() => {
     const params = new URLSearchParams({ sort, dir });
     if (search) params.set('search', search);
     if (scope) params.set('scope', scope);
+    if (type === 'weapon') {
+      if (weaponType) params.set('weapon_type', weaponType);
+      if (modifier) params.set('modifier', modifier);
+      if (damageDie) params.set('damage_die', damageDie);
+      if (weaponGrip) params.set('weapon_grip', weaponGrip);
+    }
 
     setLoading(true);
     api.get(`${EQUIPMENT_ENDPOINTS[type]}/?${params}`)
       .then(({ data }) => setItems(data.items))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [type, search, sort, dir, scope]);
+  }, [type, search, sort, dir, scope, weaponType, modifier, damageDie, weaponGrip]);
 
   const toggleSort = (key) => {
     if (sort === key) { setDir((d) => (d === 'asc' ? 'desc' : 'asc')); }
@@ -57,14 +72,12 @@ export default function EquipmentCatalog({ type }) {
   };
 
   const showCards = view === 'cards';
-  const activeFilterCount = scope ? 1 : 0;
+  const activeFilterCount = (scope ? 1 : 0) + (type === 'weapon' ? [weaponType, modifier, damageDie, weaponGrip].filter(Boolean).length : 0);
   const newHref = `/equipment/new?type=${type}`;
   const newLabel = EQUIPMENT_NEW_LABELS[type] || 'Новий предмет';
 
   const columns = [
-    { key: 'name', label: 'Назва', sortKey: 'name', render: (item) => (
-      <>{item.name}{item.is_public && <span className="ml-1.5 text-[0.65rem] italic text-text-dim">публічне</span>}</>
-    ) },
+    { key: 'name', label: 'Назва', sortKey: 'name', render: (item) => item.name },
     ...(type === 'weapon' ? [
       { key: 'weapon_type', label: 'Тип', render: (item) => WEAPON_TYPES[item.weapon_type]?.label ?? '—' },
       { key: 'weapon_grip', label: 'Особливості', render: (item) => WEAPON_GRIPS[item.weapon_grip]?.label ?? '—' },
@@ -106,9 +119,43 @@ export default function EquipmentCatalog({ type }) {
       </div>
 
       <FilterAccordion open={filtersOpen}>
-        <div>
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
-          <ScopeFilter scope={scope} onChange={setScope} />
+        <div className="flex flex-col gap-4">
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
+            <ScopeFilter scope={scope} onChange={setScope} />
+          </div>
+          {type === 'weapon' && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Тип зброї</span>
+                <select className={inputClass} value={weaponType} onChange={(e) => setWeaponType(e.target.value)}>
+                  <option value="">Усі типи</option>
+                  {Object.entries(WEAPON_TYPES).map(([key, t]) => <option key={key} value={key}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Модифікатор</span>
+                <select className={inputClass} value={modifier} onChange={(e) => setModifier(e.target.value)}>
+                  <option value="">Усі модифікатори</option>
+                  {Object.entries(WEAPON_MODIFIERS).map(([key, m]) => <option key={key} value={key}>{m.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Кубик шкоди</span>
+                <select className={inputClass} value={damageDie} onChange={(e) => setDamageDie(e.target.value)}>
+                  <option value="">Усі кубики</option>
+                  {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Особливості</span>
+                <select className={inputClass} value={weaponGrip} onChange={(e) => setWeaponGrip(e.target.value)}>
+                  <option value="">Усі особливості</option>
+                  {Object.entries(WEAPON_GRIPS).map(([key, g]) => <option key={key} value={key}>{g.label}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
       </FilterAccordion>
 

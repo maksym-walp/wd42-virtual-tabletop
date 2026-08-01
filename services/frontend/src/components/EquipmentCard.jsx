@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { EQUIPMENT_TYPES } from '../constants/equipment';
-import CanonBadge from './CanonBadge';
+import { EQUIPMENT_TYPES, weaponModifierLabel } from '../constants/equipment';
 import AuthorBadge from './AuthorBadge';
 
 export default function EquipmentCard({ item }) {
@@ -22,23 +21,21 @@ export default function EquipmentCard({ item }) {
         <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
           {type.label}
         </span>
-        {item.is_canonical && <CanonBadge className="ml-auto" />}
-        {item.is_public && <span className={`text-[0.65rem] italic text-text-dim ${item.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
-        {!item.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${item.is_canonical || item.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{item.name}</h3>
       <AuthorBadge username={item.owner_username} variant="inline" className="px-3.5 pb-1" />
 
-      {(item.damage_die || item.defense_value != null || item.price != null) && (
+      {(item.damage_die || item.modifier || item.defense_value != null || item.price != null) && (
         <div className="my-2 grid grid-cols-3 gap-px border-y border-border bg-border">
           {item.damage_die && <StatBox label="Шкода" value={item.damage_die} />}
+          {item.modifier && <StatBox label="Модифікатор" value={weaponModifierLabel(item.modifier)} />}
           {item.defense_value != null && <StatBox label="Захист" value={item.defense_value} />}
           {item.price != null && <StatBox label="Ціна" value={item.price} />}
         </div>
       )}
 
-      {item.description && (
+      {!item.image_url && item.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{item.description}</p>
       )}
     </Link>

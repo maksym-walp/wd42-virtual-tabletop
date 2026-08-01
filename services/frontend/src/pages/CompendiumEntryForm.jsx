@@ -5,7 +5,7 @@ import compendiumApi from '../api/compendium';
 import equipmentApi from '../api/equipment';
 import spellbookApi from '../api/spellbook';
 import maneuversApi from '../api/maneuvers';
-import { ATTRIBUTE_LABELS } from '../constants/compendium';
+import { ATTRIBUTE_LABELS, ENTITY_TYPES } from '../constants/compendium';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -118,7 +118,7 @@ export default function CompendiumEntryForm() {
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
-        {isEdit ? `Редагування: ${form.name}` : 'Новий запис'}
+        {isEdit ? `Редагування: ${form.name}` : (ENTITY_TYPES[form.entity_type]?.newLabel || 'Новий запис')}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

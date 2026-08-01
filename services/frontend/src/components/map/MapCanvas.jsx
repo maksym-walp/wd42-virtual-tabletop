@@ -131,6 +131,8 @@ export default function MapCanvas({ imageUrl, pins, focusLocationId, onSelect, p
     <MapContainer
       crs={L.CRS.Simple}
       bounds={bounds}
+      maxBounds={bounds}
+      maxBoundsViscosity={1.0}
       minZoom={-8}
       maxZoom={8}
       zoomSnap={0}

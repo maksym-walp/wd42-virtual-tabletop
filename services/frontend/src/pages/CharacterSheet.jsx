@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft, Maximize2 } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -18,7 +18,9 @@ import {
   valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
+import { isIconUrl } from '../constants/maps';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
+import { computeLayout, elbowPath, computeFitTransform, ancestorClosure, computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y } from '../utils/skillTreeLayout';
 import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
 import Button from '../components/ui/Button';
@@ -465,7 +467,7 @@ export default function CharacterSheet({ publicView = false }) {
       </div>
 
       {/* ─── Tabs ─── */}
-      <div className="sticky top-0 z-20 mb-6 -mx-4 overflow-x-auto border-b border-border bg-bg px-4 py-2 sm:static sm:mx-0 sm:overflow-visible sm:px-0">
+      <div className="sticky top-0 z-20 mb-6 -mx-4 touch-pan-x overflow-x-auto overscroll-x-contain border-b border-border bg-bg px-4 py-2 sm:static sm:mx-0 sm:overflow-visible sm:px-0">
         <div className="flex w-max gap-2 sm:w-full sm:flex-wrap">
           {TABS.map(t => (
             <button key={t.key}
@@ -725,6 +727,11 @@ function CharacterPortrait({ character, isOwner, onChange }) {
 
       {uploading && <span className="text-[10px] text-text-dim">Завантаження...</span>}
       {error && <span className="max-w-24 text-center text-[10px] text-danger">{error}</span>}
+      {isOwner && !url && !uploading && !error && (
+        <span className="max-w-24 text-center text-[10px] text-text-dim">
+          Рекомендовано квадратне або альбомне фото — вертикальні світлини обріжуться
+        </span>
+      )}
 
       {isOwner && (
         <input
@@ -1922,13 +1929,16 @@ function LuckTab({ c, is_owner, patchCharacter }) {
 
 // ── TreeTab ───────────────────────────────────────────────────────────────────
 
-const TREE_NODE_R = 28;
+const TREE_NODE_R = 22;
+const TREE_ARROW_GAP = 5; // extra clearance beyond a node's radius before the arrowhead
+const TREE_NODE_ICON_SIZE = TREE_NODE_R * 1.3; // uploaded-image icon size — stays inside the circle
 
 function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, allSpells, allManeuvers }) {
   const [nodes, setNodes]               = useState([]);
   const [edges, setEdges]               = useState([]);
   const [treeLoading, setTreeLoading]   = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [hoverLabel, setHoverLabel] = useState(null); // { title, x, y } — names only show on hover now
   const panZoom = useSvgPanZoom({ initial: { x: 80, y: 80, k: 0.85 }, maxK: 3 });
   const { transform, setTransform } = panZoom;
   const [editingBudget, setEditingBudget] = useState(false);
@@ -1947,20 +1957,38 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
       .finally(() => setTreeLoading(false));
   }, []);
 
+  // Layout is always fully derived from the graph (level + parent
+  // references) — no stored pixel coordinates, shared with the GM editor
+  // (pages/SkillTree.jsx / utils/skillTreeLayout.js) so both stay visually
+  // consistent. This is a read-only viewer, so no "+" slots and no drag.
+  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+  const { levels, positions } = layout;
+  const edgeLanes = useMemo(() => computeEdgeLanes(edges, levels, positions), [edges, levels, positions]);
+  const entryOffsets = useMemo(() => computeEntryOffsets(edges, positions), [edges, positions]);
+  const highlightSet = selectedNode ? ancestorClosure(selectedNode.id, edges) : null;
+
   // Centers the camera on the root node once the tree loads, so opening this
   // tab never leaves the player staring at empty canvas because the node
   // graph sits away from the fixed default {x:80,y:80} origin.
   useEffect(() => {
     if (!pendingCenterRef.current || treeLoading || !svgRef.current || nodes.length === 0) return;
     const root = nodes.find((n) => n.is_root) || nodes[0];
+    const pos = positions.get(root.id) || { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
     setTransform((t) => ({
       ...t,
-      x: rect.width / 2 - root.pos_x * t.k,
-      y: rect.height / 2 - root.pos_y * t.k,
+      x: rect.width / 2 - pos.x * t.k,
+      y: rect.height / 2 - pos.y * t.k,
     }));
     pendingCenterRef.current = false;
-  }, [nodes, treeLoading, setTransform]);
+  }, [nodes, treeLoading, positions, setTransform]);
+
+  const handleFitView = () => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const fit = computeFitTransform(positions, rect.width, rect.height);
+    if (fit) setTransform(fit);
+  };
 
   const visibleIdSet = new Set(nodes.map(n => n.id));
 
@@ -2019,18 +2047,28 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
     panZoom.bind.onPointerDown(e);
   };
 
-  const edgePoints = (srcId, dstId) => {
-    const s = nodes.find(n => n.id === srcId);
-    const d = nodes.find(n => n.id === dstId);
+  const handleNodeEnter = (e, node) => {
+    const rect = svgRef.current.getBoundingClientRect();
+    setHoverLabel({ title: node.title, x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+  const handleNodeLeave = () => setHoverLabel(null);
+
+  // Orthogonal edge path — mirrors pages/SkillTree.jsx's edgePathFor (tree
+  // grows upward: source exits at its top, target is entered at its bottom).
+  // Different sources sharing the same pair of levels get their own lane
+  // (see computeEdgeLanes) so their bus heights never visually merge.
+  const edgePathFor = (edge) => {
+    const s = positions.get(edge.source_id);
+    const d = positions.get(edge.target_id);
     if (!s || !d) return null;
-    const dx = d.pos_x - s.pos_x, dy = d.pos_y - s.pos_y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 1) return null;
-    const nx = dx / dist, ny = dy / dist;
-    return {
-      x1: s.pos_x + nx * TREE_NODE_R, y1: s.pos_y + ny * TREE_NODE_R,
-      x2: d.pos_x - nx * (TREE_NODE_R + 5), y2: d.pos_y - ny * (TREE_NODE_R + 5),
-    };
+    const sLevel = levels[edge.source_id] ?? 1;
+    const dLevel = levels[edge.target_id] ?? 1;
+    const x1 = s.x, y1 = s.y - TREE_NODE_R;
+    const x2 = d.x + (entryOffsets.get(edge.id) ?? 0), y2 = d.y + TREE_NODE_R + TREE_ARROW_GAP;
+    const midY = dLevel - sLevel > 1
+      ? y1 - LEVEL_SPACING_Y / 2
+      : y1 - (edgeLanes.get(edge.source_id) ?? 0.5) * (y1 - y2);
+    return { path: elbowPath(x1, y1, x2, y2, midY) };
   };
 
   const commitBudget = () => {
@@ -2077,9 +2115,17 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
 
       {/* Canvas */}
       <div className="relative h-[520px] overflow-hidden rounded-lg border border-border bg-surface">
+        <button
+          type="button"
+          onClick={handleFitView}
+          title="Показати все дерево"
+          className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-text-dim hover:text-text"
+        >
+          <Maximize2 size={15} />
+        </button>
         <svg
           ref={svgRef}
-          className="block h-full w-full select-none touch-none"
+          className="block h-full w-full select-none touch-none overscroll-contain"
           style={{ cursor: 'grab' }}
           onPointerDown={handleSvgPointerDown}
           onPointerMove={panZoom.bind.onPointerMove}
@@ -2095,7 +2141,7 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
           </defs>
           <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
             {visibleEdges.map(edge => {
-              const pts = edgePoints(edge.source_id, edge.target_id);
+              const pts = edgePathFor(edge);
               if (!pts) return null;
               const srcUnlocked = unlockedIds.has(edge.source_id);
               const dstUnlocked = unlockedIds.has(edge.target_id);
@@ -2104,22 +2150,27 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
               const stroke = bothUnlocked ? 'var(--color-sage)'
                 : isOptional ? 'var(--color-edge-optional)'
                 : 'var(--color-text-muted)';
+              const dimmed = highlightSet && !(highlightSet.has(edge.source_id) && highlightSet.has(edge.target_id));
               return (
-                <line key={edge.id}
-                  x1={pts.x1} y1={pts.y1} x2={pts.x2} y2={pts.y2}
+                <path key={edge.id}
+                  d={pts.path}
+                  fill="none"
                   stroke={stroke}
                   strokeWidth={isOptional ? 1.5 : 2}
                   strokeDasharray={isOptional ? '5,4' : undefined}
                   markerEnd="url(#tree-tab-arrow)"
+                  opacity={dimmed ? 0.15 : 1}
                   style={{ pointerEvents: 'none' }}
                 />
               );
             })}
 
             {nodes.map(node => {
+              const pos        = positions.get(node.id) || { x: 0, y: 0 };
               const unlocked   = unlockedIds.has(node.id);
               const selected   = selectedNode?.id === node.id;
               const avail      = checkCanUnlock(node);
+              const dimmed     = highlightSet && !highlightSet.has(node.id);
               const stroke = selected   ? 'var(--color-accent)'
                 : unlocked  ? 'var(--color-sage)'
                 : avail.points      ? 'var(--color-gold)'
@@ -2130,9 +2181,12 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
 
               return (
                 <g key={node.id}
-                  transform={`translate(${node.pos_x},${node.pos_y})`}
+                  transform={`translate(${pos.x},${pos.y})`}
+                  opacity={dimmed ? 0.25 : 1}
                   style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); setSelectedNode(prev => prev?.id === node.id ? null : node); }}
+                  onMouseEnter={e => handleNodeEnter(e, node)}
+                  onMouseLeave={handleNodeLeave}
                 >
                   <circle r={TREE_NODE_R} fill={fill}
                     stroke={stroke} strokeWidth={selected || unlocked ? 2.5 : 1.5} />
@@ -2144,29 +2198,36 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
                     <circle r={TREE_NODE_R + 4} fill="none" stroke="var(--color-gold)"
                       strokeWidth={1} opacity={0.35} style={{ pointerEvents: 'none' }} />
                   )}
-                  <text x={0} y={node.icon ? 9 : 6} textAnchor="middle"
-                    fontSize={node.icon ? 20 : 13} fill={textColor}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {node.icon || node.title.substring(0, 2)}
-                  </text>
-                  <text x={TREE_NODE_R + 8} y={4} textAnchor="start" fontSize={12}
-                    fill={textColor} fontWeight={selected || unlocked ? 700 : 400}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {node.title.length > 18 ? node.title.slice(0, 16) + '…' : node.title}
-                  </text>
-                  <text x={TREE_NODE_R + 8} y={18} textAnchor="start" fontSize={9}
-                    fill={unlocked ? 'var(--color-sage)' : 'var(--color-text-muted)'}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {unlocked ? (node.is_root ? '★ корінь' : '✓ відкрито')
-                      : node.cost > 0 && node.narrative_condition ? `${node.cost} оч. або наратив`
-                      : node.cost > 0 ? `${node.cost} ${node.cost === 1 ? 'очко' : 'очків'}`
-                      : 'наратив'}
-                  </text>
+                  {isIconUrl(node.icon) ? (
+                    <image
+                      href={node.icon}
+                      x={-TREE_NODE_ICON_SIZE / 2} y={-TREE_NODE_ICON_SIZE / 2}
+                      width={TREE_NODE_ICON_SIZE} height={TREE_NODE_ICON_SIZE}
+                      preserveAspectRatio="xMidYMid slice"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  ) : (
+                    <text x={0} y={node.icon ? 7 : 5} textAnchor="middle"
+                      fontSize={node.icon ? 16 : 11} fill={textColor}
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      {node.icon || node.title.substring(0, 2)}
+                    </text>
+                  )}
                 </g>
               );
             })}
           </g>
         </svg>
+
+        {/* Names only show on hover now — this is the only place a node's title appears outside the click-to-open panel */}
+        {hoverLabel && (
+          <div
+            className="pointer-events-none absolute z-20 max-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text shadow-lg"
+            style={{ left: hoverLabel.x + 14, top: Math.max(4, hoverLabel.y - 12) }}
+          >
+            {hoverLabel.title}
+          </div>
+        )}
 
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
@@ -2205,7 +2266,18 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
   const unlockedManeuvers = (allManeuvers || []).filter(m => (m.prerequisite_node_ids || []).includes(node.id));
 
   return (
-    <Sheet open onClose={onClose} title={node.icon ? `${node.icon} ${node.title}` : node.title}>
+    <Sheet
+      open
+      onClose={onClose}
+      title={node.icon ? (
+        <span className="inline-flex items-center gap-2">
+          {isIconUrl(node.icon)
+            ? <img src={node.icon} alt="" className="h-6 w-6 object-contain" />
+            : <span>{node.icon}</span>}
+          {node.title}
+        </span>
+      ) : node.title}
+    >
       {node.is_root && <span className="mb-2 block text-xs text-gold">★ Кореневий вузол</span>}
 
       {node.description && <p className="mb-1 text-sm leading-relaxed text-text-muted">{node.description}</p>}

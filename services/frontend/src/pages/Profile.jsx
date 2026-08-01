@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useDice } from '../context/DiceContext';
 import diceApi from '../api/dice';
 import DiceStatsGrid from '../components/DiceStatsGrid';
 import Card from '../components/ui/Card';
@@ -11,6 +12,7 @@ import PageHeader from '../components/ui/PageHeader';
 
 export default function Profile() {
   const { user, logout, updateAccount, changePassword } = useAuth();
+  const { clearRecent } = useDice();
   const navigate = useNavigate();
   const [accountForm, setAccountForm] = useState({ username: user.username, email: user.email });
   const [accountStatus, setAccountStatus] = useState('');
@@ -59,6 +61,13 @@ export default function Profile() {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleResetDiceStats = async () => {
+    if (!window.confirm('Остаточно видалити всю історію кидків кубиків і скинути статистику до 0? Це незворотньо.')) return;
+    await diceApi.resetHistory();
+    setDiceStats(await diceApi.stats());
+    clearRecent();
   };
 
   return (
@@ -159,12 +168,15 @@ export default function Profile() {
 
       {diceStats && diceStats.total_rolls > 0 && (
         <Card className="mt-4">
-          <h2 className="mb-4 font-display text-lg text-text">Статистика кидків</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-display text-lg text-text">Статистика кидків</h2>
+            <Button variant="ghost" size="sm" onClick={handleResetDiceStats}>Скинути статистику</Button>
+          </div>
           <DiceStatsGrid diceStats={diceStats} />
         </Card>
       )}
 
-      <Button variant="ghost" onClick={handleLogout} className="mt-4 w-full md:hidden">
+      <Button variant="ghost" onClick={handleLogout} className="mt-4 w-full">
         <LogOut size={16} /> Вийти
       </Button>
     </div>

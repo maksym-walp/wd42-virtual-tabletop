@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
-import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function AbilityCard({ ability }) {
@@ -29,15 +28,12 @@ export default function AbilityCard({ ability }) {
             {ARCHETYPES[a]?.label ?? a}
           </span>
         ))}
-        {ability.is_canonical && <CanonBadge className="ml-auto" />}
-        {ability.is_public && <span className={`text-[0.65rem] italic text-text-dim ${ability.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
-        {!ability.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${ability.is_canonical || ability.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{ability.name}</h3>
       <AuthorBadge username={ability.owner_username} variant="inline" className="px-3.5 pb-1" />
 
-      {ability.description && (
+      {!ability.image_url && ability.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{ability.description}</p>
       )}
     </Link>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
-import CanonBadge from './CanonBadge';
 import DiceFormulaText from './DiceFormulaText';
 
 // Equipment's Колекції tab groups collections by which type-table their
@@ -77,12 +76,9 @@ function CollectionsScrollRow({ label, collections, basePath }) {
                 <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-dim">
                   {(c.items || []).length} предметів
                 </span>
-                {c.is_canonical && <CanonBadge className="ml-auto" />}
-                {c.is_public && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical ? '' : 'ml-auto'}`}>публічна</span>}
-                {!c.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical || c.is_public ? '' : 'ml-auto'}`}>чужа</span>}
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
-              {c.description && (
+              {!c.image_url && c.description && (
                 <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
                   <DiceFormulaText text={c.description} />
                 </p>

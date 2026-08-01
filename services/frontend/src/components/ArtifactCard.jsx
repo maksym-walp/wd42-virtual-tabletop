@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { RARITIES } from '../constants/artifacts';
-import CanonBadge from './CanonBadge';
 import AuthorBadge from './AuthorBadge';
 
 export default function ArtifactCard({ artifact }) {
@@ -24,9 +23,6 @@ export default function ArtifactCard({ artifact }) {
             {rarity.label}
           </span>
         )}
-        {artifact.is_canonical && <CanonBadge className="ml-auto" />}
-        {artifact.is_public && <span className={`text-[0.65rem] italic text-text-dim ${artifact.is_canonical ? '' : 'ml-auto'}`}>публічне</span>}
-        {!artifact.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${artifact.is_canonical || artifact.is_public ? '' : 'ml-auto'}`}>чуже</span>}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{artifact.name}</h3>
@@ -42,7 +38,7 @@ export default function ArtifactCard({ artifact }) {
         </div>
       )}
 
-      {artifact.description && (
+      {!artifact.image_url && artifact.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{artifact.description}</p>
       )}
     </Link>

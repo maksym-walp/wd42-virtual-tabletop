@@ -17,6 +17,10 @@ const diceApi = {
     const { data } = await api.get(`${BASE}/stats`);
     return data.stats;
   },
+
+  async resetHistory() {
+    await api.delete(`${BASE}/rolls`);
+  },
 };
 
 export default diceApi;

@@ -10,5 +10,6 @@ router.use(requireAuth);
 router.post('/rolls', wrap(RollController.create));
 router.get('/rolls', wrap(RollController.list));
 router.get('/stats', wrap(RollController.stats));
+router.delete('/rolls', wrap(RollController.deleteAll));
 
 module.exports = router;

@@ -6,7 +6,6 @@ import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ScopeFilter from '../components/ScopeFilter';
-import CanonBadge from '../components/CanonBadge';
 import CatalogTabs from '../components/CatalogTabs';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
@@ -91,12 +90,9 @@ export default function CollectionsList({ domainKey }) {
                 <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-text-dim">
                   {(c.items || []).length} {domain.itemLabel}
                 </span>
-                {c.is_canonical && <CanonBadge className="ml-auto" />}
-                {c.is_public && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical ? '' : 'ml-auto'}`}>публічна</span>}
-                {!c.is_owner && <span className={`text-[0.65rem] italic text-text-dim ${c.is_canonical || c.is_public ? '' : 'ml-auto'}`}>чужа</span>}
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
-              {c.description && (
+              {!c.image_url && c.description && (
                 <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
                   <DiceFormulaText text={c.description} />
                 </p>

@@ -3,8 +3,8 @@
 // No per-type accent color — a type is conveyed by its label, not a hue
 // (colors are reserved for archetype badges, which map to one specific archetype).
 export const ENTITY_TYPES = {
-  npc:      { label: 'НІП' },
-  creature: { label: 'Істота' },
+  npc:      { label: 'НІП', newLabel: 'Новий НІП' },
+  creature: { label: 'Істота', newLabel: 'Нова істота' },
 };
 
 // Column names on compendium_entries — the same 5 attributes the skill dice

@@ -20,15 +20,11 @@ export default function CompendiumEntryCard({ entry }) {
         <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
           {type.label}
         </span>
-        {entry.is_public && <span className="ml-auto text-[0.65rem] italic text-text-dim">публічний</span>}
-        {!entry.is_owner && (
-          <span className={`text-[0.65rem] italic text-text-dim ${entry.is_public ? '' : 'ml-auto'}`}>чужий</span>
-        )}
       </div>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{entry.name}</h3>
 
-      {entry.description && (
+      {!entry.image_url && entry.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{entry.description}</p>
       )}
     </Link>
