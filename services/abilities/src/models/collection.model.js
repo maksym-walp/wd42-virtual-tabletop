@@ -1,21 +1,54 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
 
+// Колекція збирає вміння й маневри разом (вміння вже й так змішує архетипи в
+// одній колекції, тож змішування видів — той самий крок), тож звʼязка
+// вказує на одну з двох таблиць: item_id + item_kind, який каже, на яку саме
+// (той самий патерн, що й у equipment/collection.model.js).
 const itemFields = `jsonb_build_object(
-    'id', a.id, 'name', a.name, 'description', a.description,
-    'archetypes', a.archetypes, 'is_public', a.is_public,
-    'prerequisite_node_ids', a.prerequisite_node_ids,
-    'prerequisite_logic', a.prerequisite_logic,
-    'image_url', a.image_url
+    'id', i.id, 'name', i.name, 'description', i.description,
+    'type', i.type,
+    'archetypes', i.archetypes, 'duration_actions', i.duration_actions,
+    'is_public', i.is_public,
+    'prerequisite_node_ids', i.prerequisite_node_ids,
+    'prerequisite_logic', i.prerequisite_logic,
+    'image_url', i.image_url
   )`;
 
+// Спільний читальний зріз через обидві таблиці — для itemsSelect нижче і для
+// findKindById. Відсутні для конкретного виду поля добиваються NULL-ами.
+const ENTRY_UNION = `(
+        SELECT id, user_id, name, description, is_public, is_canonical,
+               prerequisite_node_ids, prerequisite_logic, image_url, created_at, updated_at,
+               'ability'::varchar AS type, archetypes, NULL::smallint AS duration_actions
+        FROM abilities.entries
+        UNION ALL
+        SELECT id, user_id, name, description, is_public, is_canonical,
+               prerequisite_node_ids, prerequisite_logic, image_url, created_at, updated_at,
+               'maneuver'::varchar, NULL::text[], duration_actions
+        FROM abilities.maneuvers
+      )`;
+
 const itemsSelect = `COALESCE(
-    (SELECT jsonb_agg(${itemFields} ORDER BY a.name)
+    (SELECT jsonb_agg(${itemFields} ORDER BY i.name)
      FROM abilities.collection_items ci
-     JOIN abilities.entries a ON a.id = ci.ability_id
+     JOIN ${ENTRY_UNION} i ON i.id = ci.item_id AND i.type = ci.item_kind
      WHERE ci.collection_id = c.id),
     '[]'::jsonb
   ) AS items`;
+
+// У якій із двох таблиць лежить цей id (і чи взагалі видно його користувачу).
+async function findKindById(id, userId, isAdmin = false) {
+  const visibility = isAdmin ? 'TRUE' : '(user_id = $2 OR is_public = true)';
+  const { rows } = await pool.query(
+    `SELECT 'ability' AS kind FROM abilities.entries WHERE id = $1 AND ${visibility}
+     UNION ALL
+     SELECT 'maneuver' FROM abilities.maneuvers WHERE id = $1 AND ${visibility}
+     LIMIT 1`,
+    [id, userId]
+  );
+  return rows[0]?.kind || null;
+}
 
 // Canonical = authored by an admin/game_master, or explicitly flagged via the
 // "Зробити канонічним" action (c.is_canonical) regardless of owner.
@@ -117,36 +150,34 @@ const CollectionModel = {
   },
 
   // Only the collection owner (or admin) can add items, and only items they
-  // can see (own or public, or anything if admin).
-  async addItem(collectionId, userId, abilityId, isAdmin = false) {
+  // can see (own or public, or anything if admin). Вид визначається тут, з
+  // тієї таблиці, у якій знайшовся id, — клієнту не треба його передавати.
+  async addItem(collectionId, userId, itemId, isAdmin = false) {
     const owns = await pool.query(
       `SELECT 1 FROM abilities.collections WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
       [collectionId, userId, isAdmin]
     );
     if (!owns.rows.length) return null;
 
-    const visible = await pool.query(
-      `SELECT 1 FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR is_public = true OR $3 = true)`,
-      [abilityId, userId, isAdmin]
-    );
-    if (!visible.rows.length) return null;
+    const kind = await findKindById(itemId, userId, isAdmin);
+    if (!kind) return null;
 
     const { rows } = await pool.query(
-      `INSERT INTO abilities.collection_items (collection_id, ability_id)
-       VALUES ($1, $2)
-       ON CONFLICT (collection_id, ability_id) DO NOTHING
+      `INSERT INTO abilities.collection_items (collection_id, item_id, item_kind)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (collection_id, item_id) DO NOTHING
        RETURNING *`,
-      [collectionId, abilityId]
+      [collectionId, itemId, kind]
     );
-    return rows[0] || { collection_id: collectionId, ability_id: abilityId };
+    return rows[0] || { collection_id: collectionId, item_id: itemId, item_kind: kind };
   },
 
-  async removeItem(collectionId, userId, abilityId, isAdmin = false) {
+  async removeItem(collectionId, userId, itemId, isAdmin = false) {
     const { rowCount } = await pool.query(
       `DELETE FROM abilities.collection_items ci
        USING abilities.collections c
-       WHERE ci.collection_id = c.id AND c.id = $1 AND (c.user_id = $2 OR $4 = true) AND ci.ability_id = $3`,
-      [collectionId, userId, abilityId, isAdmin]
+       WHERE ci.collection_id = c.id AND c.id = $1 AND (c.user_id = $2 OR $4 = true) AND ci.item_id = $3`,
+      [collectionId, userId, itemId, isAdmin]
     );
     return rowCount > 0;
   },

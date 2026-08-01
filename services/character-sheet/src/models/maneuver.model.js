@@ -7,7 +7,7 @@ const prereqNodesSelect = `COALESCE(
   )`;
 
 const ManeuverModel = {
-  // LEFT JOIN cross-schema into maneuvers.entries — see equipment.model.js for rationale.
+  // LEFT JOIN cross-schema into abilities.maneuvers — see equipment.model.js for rationale.
   async findAll(characterId) {
     const { rows } = await pool.query(
       `SELECT cm.*,
@@ -19,7 +19,7 @@ const ManeuverModel = {
                 'prerequisite_nodes', ${prereqNodesSelect}
               ) END AS maneuver
        FROM character_sheet.maneuvers cm
-       LEFT JOIN maneuvers.entries me ON me.id = cm.maneuver_id
+       LEFT JOIN abilities.maneuvers me ON me.id = cm.maneuver_id
        WHERE cm.character_id = $1`,
       [characterId]
     );

@@ -46,10 +46,10 @@ const CollectionController = {
   },
 
   async addItem(req, res) {
-    const { ability_id } = req.body;
-    if (!ability_id) return res.status(400).json({ message: 'ability_id є обовʼязковим' });
-    const added = await CollectionModel.addItem(req.params.id, req.user.sub, ability_id, req.user.role === 'admin');
-    if (!added) return res.status(404).json({ message: 'Колекцію або вміння не знайдено' });
+    const { item_id } = req.body;
+    if (!item_id) return res.status(400).json({ message: 'item_id є обовʼязковим' });
+    const added = await CollectionModel.addItem(req.params.id, req.user.sub, item_id, req.user.role === 'admin');
+    if (!added) return res.status(404).json({ message: 'Колекцію, вміння або маневр не знайдено' });
     res.status(201).json({ item: added });
   },
 

@@ -48,7 +48,7 @@ router.post('/:id/equipment',                wrap(EquipmentController.add));
 router.patch('/:id/equipment/:equipmentId',  wrap(EquipmentController.patch));
 router.delete('/:id/equipment/:equipmentId', wrap(EquipmentController.remove));
 
-// Maneuvers (fighter) — references maneuvers.entries catalog
+// Maneuvers (fighter) — references abilities.maneuvers catalog
 router.get('/:id/maneuvers',                wrap(ManeuverController.list));
 router.post('/:id/maneuvers',               wrap(ManeuverController.add));
 router.delete('/:id/maneuvers/:maneuverId', wrap(ManeuverController.remove));

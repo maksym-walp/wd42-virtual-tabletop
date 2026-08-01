@@ -70,13 +70,17 @@ const PublicProfileModel = {
       ),
       pool.query(
         `SELECT *, true AS is_owner
-           FROM maneuvers.entries
+           FROM abilities.maneuvers
           WHERE user_id = $1 AND is_public = true
           ORDER BY name ASC`,
         [userId]
       ),
-      // Public collections across all four domains, tagged with their domain so
-      // the frontend can link each to the right collections view.
+      // Public collections across domains, tagged with their domain so the
+      // frontend can link each to the right collections view. Maneuver
+      // collections have no arm of their own — since
+      // 52-merge-maneuvers-into-abilities.sql they're just rows in
+      // abilities.collections, same as ability collections, so the
+      // 'abilities' arm already covers both.
       pool.query(
         `SELECT id, name, description, is_public, created_at, 'equipment' AS domain
            FROM equipment.collections WHERE user_id = $1 AND is_public = true
@@ -86,9 +90,6 @@ const PublicProfileModel = {
          UNION ALL
          SELECT id, name, description, is_public, created_at, 'abilities' AS domain
            FROM abilities.collections WHERE user_id = $1 AND is_public = true
-         UNION ALL
-         SELECT id, name, description, is_public, created_at, 'maneuvers' AS domain
-           FROM maneuvers.collections WHERE user_id = $1 AND is_public = true
          ORDER BY name ASC`,
         [userId]
       ),

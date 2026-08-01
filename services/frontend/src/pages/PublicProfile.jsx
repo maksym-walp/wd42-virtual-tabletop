@@ -13,11 +13,13 @@ import EquipmentCard from '../components/EquipmentCard';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK, RACES } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 
+// Маневри-колекції не мають власного домену з 52-merge-maneuvers-into-abilities.sql
+// — вони просто рядки в abilities.collections, тож приходять з domain='abilities'
+// разом зі вміннями.
 const COLLECTION_LABELS = {
   equipment: 'Спорядження',
   spellbook: 'Заклинання',
-  abilities: 'Вміння',
-  maneuvers: 'Маневри',
+  abilities: 'Вміння та маневри',
 };
 
 export default function PublicProfile() {

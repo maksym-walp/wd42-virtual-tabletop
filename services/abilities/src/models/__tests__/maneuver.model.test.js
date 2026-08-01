@@ -70,3 +70,20 @@ describe('ManeuverModel.findAll limit', () => {
     expect(sql).not.toMatch(/LIMIT/);
   });
 });
+
+describe('ManeuverModel.delete', () => {
+  it('unlinks the entry from collections in the same statement, since the FK no longer cascades', async () => {
+    const client = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
+    pool.connect.mockResolvedValue(client);
+    client.query
+      .mockResolvedValueOnce({ rows: [] })                 // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                 // childQueries snapshot
+      .mockResolvedValueOnce({ rows: [{ id: 'm1' }] })     // the delete itself
+      .mockResolvedValue({ rows: [] });                    // trash insert + COMMIT
+
+    await expect(ManeuverModel.delete('m1', 'u1')).resolves.toBe(true);
+
+    const deleteCall = client.query.mock.calls.map(([sql]) => sql).find((sql) => sql && /DELETE FROM abilities\.maneuvers/.test(sql));
+    expect(deleteCall).toMatch(/DELETE FROM abilities\.collection_items WHERE item_id = \$1/);
+  });
+});

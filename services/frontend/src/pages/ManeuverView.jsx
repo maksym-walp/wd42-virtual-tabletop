@@ -19,12 +19,12 @@ export default function ManeuverView() {
   const [settingCanonical, setSettingCanonical] = useState(false);
 
   useEffect(() => {
-    api.get(`/api/maneuvers/${id}`)
+    api.get(`/api/abilities/maneuvers/${id}`)
       .then(({ data }) => {
         setManeuver(data.maneuver);
-        recordView({ type: 'maneuver', id, name: data.maneuver.name, href: `/maneuvers/${id}`, image_url: data.maneuver.image_url });
+        recordView({ type: 'maneuver', id, name: data.maneuver.name, href: `/abilities/maneuvers/${id}`, image_url: data.maneuver.image_url });
       })
-      .catch(() => navigate('/maneuvers', { replace: true }))
+      .catch(() => navigate('/abilities/maneuvers', { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -32,9 +32,9 @@ export default function ManeuverView() {
     if (!confirm('Видалити цей маневр?')) return;
     setDeleting(true);
     try {
-      await api.delete(`/api/maneuvers/${id}`);
+      await api.delete(`/api/abilities/maneuvers/${id}`);
       removeView('maneuver', id);
-      navigate('/maneuvers');
+      navigate('/abilities/maneuvers');
     } catch {
       setDeleting(false);
     }
@@ -43,7 +43,7 @@ export default function ManeuverView() {
   const handleMarkCanonical = async () => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`/api/maneuvers/${id}/canonical`, { is_canonical: true });
+      const { data } = await api.patch(`/api/abilities/maneuvers/${id}/canonical`, { is_canonical: true });
       setManeuver(data.maneuver);
     } finally {
       setSettingCanonical(false);
@@ -58,7 +58,7 @@ export default function ManeuverView() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/maneuvers" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+      <Link to="/abilities/maneuvers" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Маневри
       </Link>
 
@@ -108,7 +108,7 @@ export default function ManeuverView() {
 
         {(maneuver.is_owner || isAdmin) && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" to={`/maneuvers/${id}/edit`}>Редагувати</Button>
+            <Button variant="ghost" to={`/abilities/maneuvers/${id}/edit`}>Редагувати</Button>
             <Button variant="danger" onClick={handleDelete} disabled={deleting}>
               {deleting ? 'Видалення...' : 'Видалити'}
             </Button>

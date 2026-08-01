@@ -48,7 +48,7 @@ export default function Dashboard() {
       .then(({ data }) => setCommunitySpells(data.spells ?? [])).catch(() => {});
     api.get('/api/abilities/?scope=community&limit=8')
       .then(({ data }) => setCommunityAbilities(data.abilities ?? [])).catch(() => {});
-    api.get('/api/maneuvers/?scope=community&limit=8')
+    api.get('/api/abilities/maneuvers?scope=community&limit=8')
       .then(({ data }) => setCommunityManeuvers(data.maneuvers ?? [])).catch(() => {});
     diceApi.stats().then(setDiceStats).catch(() => {});
   }, []);

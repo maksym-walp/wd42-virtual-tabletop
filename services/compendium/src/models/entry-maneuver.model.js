@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-// LEFT JOIN cross-schema into maneuvers.entries — single table, no union needed.
+// LEFT JOIN cross-schema into abilities.maneuvers — single table, no union needed.
 const EntryManeuverModel = {
   async findAllByEntry(entryId) {
     const { rows } = await pool.query(
@@ -10,7 +10,7 @@ const EntryManeuverModel = {
                 'description', me.description, 'is_public', me.is_public
               ) END AS maneuver
        FROM compendium.compendium_maneuvers cm
-       LEFT JOIN maneuvers.entries me ON me.id = cm.maneuver_id
+       LEFT JOIN abilities.maneuvers me ON me.id = cm.maneuver_id
        WHERE cm.entry_id = $1
        ORDER BY cm.created_at ASC`,
       [entryId]

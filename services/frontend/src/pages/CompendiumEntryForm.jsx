@@ -242,7 +242,7 @@ export default function CompendiumEntryForm() {
                 catalogApi={maneuversApi} attached={maneuvers} attachedIdField="maneuver_id"
                 onAdd={(itemId) => compendiumApi.addEntryManeuver(id, itemId).then(reloadRelations)}
                 onRemove={(itemId) => compendiumApi.removeEntryManeuver(id, itemId).then(reloadRelations)}
-                itemLink={(item) => `/maneuvers/${item.id}`}
+                itemLink={(item) => `/abilities/maneuvers/${item.id}`}
                 itemMeta={(item) => (item.duration_actions ? `${item.duration_actions} дії` : '')}
               />
             </div>

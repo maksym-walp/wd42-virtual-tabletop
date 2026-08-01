@@ -6,12 +6,12 @@ const EntryManeuverModel = require('../entry-maneuver.model');
 beforeEach(() => jest.clearAllMocks());
 
 describe('EntryManeuverModel.findAllByEntry', () => {
-  it('joins maneuvers.entries by entry_id', async () => {
+  it('joins abilities.maneuvers by entry_id', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
     await EntryManeuverModel.findAllByEntry('e1');
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/FROM compendium\.compendium_maneuvers cm/);
-    expect(sql).toMatch(/LEFT JOIN maneuvers\.entries me/);
+    expect(sql).toMatch(/LEFT JOIN abilities\.maneuvers me/);
     expect(sql).toMatch(/WHERE cm\.entry_id = \$1/);
     expect(params).toEqual(['e1']);
   });

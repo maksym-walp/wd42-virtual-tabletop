@@ -42,7 +42,7 @@ export default function ManeuverCatalog() {
     if (scope) params.set('scope', scope);
 
     setLoading(true);
-    api.get(`/api/maneuvers/?${params}`)
+    api.get(`/api/abilities/maneuvers/?${params}`)
       .then(({ data }) => setManeuvers(data.maneuvers))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -52,7 +52,7 @@ export default function ManeuverCatalog() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('maneuvers')} />
+      <CatalogTabs tabs={getDomainTabs('abilities')} />
 
       <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="col-start-1">
@@ -61,7 +61,7 @@ export default function ManeuverCatalog() {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {maneuvers.length} {pluralizeUk(maneuvers.length, ['маневр', 'маневри', 'маневрів'])}
         </p>
-        <Button to="/maneuvers/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий маневр</Button>
+        <Button to="/abilities/maneuvers/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий маневр</Button>
       </div>
 
       <div className="mb-3 flex gap-2.5">
@@ -87,13 +87,13 @@ export default function ManeuverCatalog() {
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : maneuvers.length === 0 ? (
-        <EmptyState title="Маневрів не знайдено" action={<Button to="/maneuvers/new">Створити перший</Button>} />
+        <EmptyState title="Маневрів не знайдено" action={<Button to="/abilities/maneuvers/new">Створити перший</Button>} />
       ) : view === 'table' ? (
         <DataTable
           items={maneuvers}
           columns={MANEUVER_TABLE_COLUMNS}
           getKey={(m) => m.id}
-          getHref={(m) => `/maneuvers/${m.id}`}
+          getHref={(m) => `/abilities/maneuvers/${m.id}`}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -102,7 +102,7 @@ export default function ManeuverCatalog() {
       )}
 
       <Link
-        to="/maneuvers/new"
+        to="/abilities/maneuvers/new"
         className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
         aria-label="Новий маневр"
       >

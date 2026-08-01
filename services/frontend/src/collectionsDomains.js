@@ -47,26 +47,30 @@ export const COLLECTION_DOMAINS = {
     ],
   },
   abilities: {
-    title: 'Вміння',
+    title: 'Вміння та маневри',
     basePath: '/abilities',
-    itemLabel: 'вмінь',
+    itemLabel: 'записів',
     collectionsApi: createCollectionsApi('/api/abilities/collections/'),
-    catalogApi: abilitiesApi,
-    itemIdField: 'ability_id',
-    itemLink: (item) => `/abilities/${item.id}`,
-    itemMeta: (item) => (item.archetypes || []).join(', '),
+    // Пікер "Додати елемент" у CollectionView мусить пропонувати і вміння, і
+    // маневри — жоден з двох окремих API-врапперів цього сам не дає, тож
+    // об'єднуємо клієнтською стороною (як catalogApi компендіуму нижче).
+    catalogApi: { getAll: () => Promise.all([abilitiesApi.getAll(), maneuversApi.getAll()]).then(([a, m]) => [...a, ...m]) },
+    itemIdField: 'item_id',
+    // Маневри мають власну View/Form-пару (/abilities/maneuvers/:id) — інші
+    // поля (duration_actions замість archetypes), тож посилання на них іде
+    // окремо від AbilityView.
+    itemLink: (item) => (item.type === 'maneuver' ? `/abilities/maneuvers/${item.id}` : `/abilities/${item.id}`),
+    itemMeta: (item) => (item.type === 'maneuver'
+      ? (item.duration_actions ? `${item.duration_actions} ${item.duration_actions === 1 ? 'дія' : 'дії'}` : '')
+      : (item.archetypes || []).join(', ')),
     supportsPrerequisites: true,
-  },
-  maneuvers: {
-    title: 'Маневри',
-    basePath: '/maneuvers',
-    itemLabel: 'маневрів',
-    collectionsApi: createCollectionsApi('/api/maneuvers/collections/'),
-    catalogApi: maneuversApi,
-    itemIdField: 'maneuver_id',
-    itemLink: (item) => `/maneuvers/${item.id}`,
-    itemMeta: (item) => (item.duration_actions ? `${item.duration_actions} ${item.duration_actions === 1 ? 'дія' : 'дії'}` : ''),
-    supportsPrerequisites: true,
+    // Два самостійні списки (вміння/маневри) поруч із Колекціями, той самий
+    // патерн, що й equipment/spellbook/compendium — див. getDomainTabs().
+    tabs: [
+      { to: '/abilities', label: 'Вміння', end: true },
+      { to: '/abilities/maneuvers', label: 'Маневри' },
+      { to: '/abilities/collections', label: 'Колекції' },
+    ],
   },
   spellbook: {
     title: 'Заклинання',
@@ -114,9 +118,9 @@ export const COLLECTION_DOMAINS = {
 };
 
 // The tab bar every catalog service shows (CatalogTabs) — a domain with a
-// single browsable list (abilities, maneuvers) just gets [catalog, Колекції];
-// equipment/spellbook/compendium override this via their own `tabs` above
-// since each has more than one list to switch between.
+// single browsable list just gets [catalog, Колекції]; equipment/abilities/
+// spellbook/compendium override this via their own `tabs` above since each
+// has more than one list to switch between.
 export function getDomainTabs(domainKey) {
   const domain = COLLECTION_DOMAINS[domainKey];
   return domain.tabs || [

@@ -45,7 +45,7 @@ const ManeuverModel = {
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $1) AS is_owner, ${prereqNodesSelect('m')},
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
-       FROM maneuvers.entries m
+       FROM abilities.maneuvers m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY ${orderBy}${limitClause}`,
@@ -59,7 +59,7 @@ const ManeuverModel = {
     const { rows } = await pool.query(
       `SELECT m.*, (m.user_id = $2) AS is_owner, ${prereqNodesSelect('m')},
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
-       FROM maneuvers.entries m
+       FROM abilities.maneuvers m
        LEFT JOIN auth.users cu ON cu.id = m.user_id
        WHERE m.id = $1 AND ${visibility}`,
       [id, userId]
@@ -71,7 +71,7 @@ const ManeuverModel = {
     const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
-      `INSERT INTO maneuvers.entries
+      `INSERT INTO abilities.maneuvers
          (user_id, name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
@@ -84,7 +84,7 @@ const ManeuverModel = {
     const { name, duration_actions, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
 
     const { rows } = await pool.query(
-      `UPDATE maneuvers.entries
+      `UPDATE abilities.maneuvers
        SET name=$3, duration_actions=$4, description=$5, is_public=$6,
            prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $10 = true)
@@ -96,12 +96,19 @@ const ManeuverModel = {
 
   async delete(id, userId, isAdmin = false) {
     const record = await deleteWithTrash(pool, {
-      schemaName: 'maneuvers',
-      tableName: 'entries',
-      deleteQuery: `DELETE FROM maneuvers.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      schemaName: 'abilities',
+      tableName: 'maneuvers',
+      // Звʼязки з колекціями більше не мають FK на каталог (item_id вказує
+      // на одну з двох таблиць — abilities.entries або abilities.maneuvers),
+      // тож каскаду немає — прибираємо їх самі, в тій самій транзакції, яку
+      // deleteWithTrash відкочує, якщо основний DELETE нічого не зачепив.
+      deleteQuery: `WITH unlinked AS (
+                      DELETE FROM abilities.collection_items WHERE item_id = $1
+                    )
+                    DELETE FROM abilities.maneuvers WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
       deleteParams: [id, userId, isAdmin],
       childQueries: [
-        { key: 'collection_items', sql: `SELECT * FROM maneuvers.collection_items WHERE maneuver_id = $1`, params: [id] },
+        { key: 'collection_items', sql: `SELECT * FROM abilities.collection_items WHERE item_id = $1`, params: [id] },
       ],
       deletedBy: userId,
     });
@@ -111,7 +118,7 @@ const ManeuverModel = {
   // GM/admin only — flags a maneuver canonical regardless of who owns it.
   async setCanonical(id, isCanonical) {
     const { rows } = await pool.query(
-      `UPDATE maneuvers.entries SET is_canonical=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
+      `UPDATE abilities.maneuvers SET is_canonical=$2, updated_at=NOW() WHERE id=$1 RETURNING *`,
       [id, isCanonical]
     );
     return rows[0] || null;

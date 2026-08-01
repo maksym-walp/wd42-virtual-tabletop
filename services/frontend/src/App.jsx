@@ -98,15 +98,6 @@ export default function App() {
                   <Route path="/equipment/artifacts/new" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
                   <Route path="/equipment/artifacts/:id" element={<PrivateRoute><ArtifactView /></PrivateRoute>} />
                   <Route path="/equipment/artifacts/:id/edit" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
-                  <Route path="/maneuvers" element={<PrivateRoute><ManeuverCatalog /></PrivateRoute>} />
-                  <Route path="/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
-                  <Route path="/maneuvers/collections" element={<PrivateRoute><CollectionsList domainKey="maneuvers" /></PrivateRoute>} />
-                  <Route path="/maneuvers/collections/new" element={<PrivateRoute><CollectionForm domainKey="maneuvers" /></PrivateRoute>} />
-                  <Route path="/maneuvers/collections/public/:id" element={<CollectionView domainKey="maneuvers" publicView />} />
-                  <Route path="/maneuvers/collections/:id" element={<PrivateRoute><CollectionView domainKey="maneuvers" /></PrivateRoute>} />
-                  <Route path="/maneuvers/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="maneuvers" /></PrivateRoute>} />
-                  <Route path="/maneuvers/:id" element={<PrivateRoute><ManeuverView /></PrivateRoute>} />
-                  <Route path="/maneuvers/:id/edit" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/abilities" element={<PrivateRoute><AbilityCatalog /></PrivateRoute>} />
                   <Route path="/abilities/new" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
                   <Route path="/abilities/collections" element={<PrivateRoute><CollectionsList domainKey="abilities" /></PrivateRoute>} />
@@ -114,6 +105,16 @@ export default function App() {
                   <Route path="/abilities/collections/public/:id" element={<CollectionView domainKey="abilities" publicView />} />
                   <Route path="/abilities/collections/:id" element={<PrivateRoute><CollectionView domainKey="abilities" /></PrivateRoute>} />
                   <Route path="/abilities/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
+                  {/* Маневри — другий вид усередині сервіса "Вміння та маневри" (вкладка в
+                      CatalogTabs), а не окремий сервіс/домен — див.
+                      52-merge-maneuvers-into-abilities.sql. Власні View/Form лишаються
+                      окремо від AbilityView/AbilityForm — інші поля (duration_actions
+                      замість archetypes) і жорстко fighter-архетипний список вузлів дерева
+                      розвитку. */}
+                  <Route path="/abilities/maneuvers" element={<PrivateRoute><ManeuverCatalog /></PrivateRoute>} />
+                  <Route path="/abilities/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
+                  <Route path="/abilities/maneuvers/:id" element={<PrivateRoute><ManeuverView /></PrivateRoute>} />
+                  <Route path="/abilities/maneuvers/:id/edit" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
                   <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
                   <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />

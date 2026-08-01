@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 // sourceTable is always a fixed literal from our own code
-// ('abilities.entries' | 'maneuvers.entries' | 'spellbook.spells'), never user input.
+// ('abilities.entries' | 'abilities.maneuvers' | 'spellbook.spells'), never user input.
 async function checkPrerequisites(characterId, sourceTable, itemId) {
   const { rows } = await pool.query(
     `SELECT prerequisite_node_ids, prerequisite_logic FROM ${sourceTable} WHERE id = $1`,

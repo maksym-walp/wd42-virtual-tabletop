@@ -129,10 +129,10 @@ describe('isVisibleToUser', () => {
   it('interpolates the fixed sourceTable literal and passes itemId/userId as params', async () => {
     pool.query.mockResolvedValue({ rows: [] });
 
-    await isVisibleToUser('maneuvers.entries', 'maneuver1', 'user-9');
+    await isVisibleToUser('abilities.maneuvers', 'maneuver1', 'user-9');
 
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/FROM maneuvers\.entries/);
+    expect(sql).toMatch(/FROM abilities\.maneuvers/);
     expect(sql).toMatch(/user_id = \$2/);
     expect(sql).toMatch(/is_public = true/);
     expect(params).toEqual(['maneuver1', 'user-9']);

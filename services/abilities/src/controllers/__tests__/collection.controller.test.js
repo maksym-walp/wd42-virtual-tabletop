@@ -205,57 +205,57 @@ describe('CollectionController.remove', () => {
 });
 
 describe('CollectionController.addItem', () => {
-  it('returns 400 when ability_id is missing', async () => {
+  it('returns 400 when item_id is missing', async () => {
     const req = mockReq({ params: { id: 'c1' }, body: {} });
     const res = mockRes();
 
     await CollectionController.addItem(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ message: 'ability_id є обовʼязковим' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'item_id є обовʼязковим' });
     expect(CollectionModel.addItem).not.toHaveBeenCalled();
   });
 
-  it('returns 404 when the collection or ability is not found', async () => {
+  it('returns 404 when the collection or item is not found (works for both an ability id and a maneuver id)', async () => {
     CollectionModel.addItem.mockResolvedValue(null);
-    const req = mockReq({ params: { id: 'c1' }, body: { ability_id: 'a1' } });
+    const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'a1' } });
     const res = mockRes();
 
     await CollectionController.addItem(req, res);
 
     expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'a1', false);
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію або вміння не знайдено' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію, вміння або маневр не знайдено' });
   });
 
-  it('returns 404 when the collection was found but the ability was not (add returns null)', async () => {
-    // Mirrors CollectionModel.addItem: owns the collection, but the ability
+  it('returns 404 when the collection was found but the item was not (add returns null)', async () => {
+    // Mirrors CollectionModel.addItem: owns the collection, but the item
     // isn't visible to the user, so the model resolves null rather than throwing.
     CollectionModel.addItem.mockResolvedValue(null);
-    const req = mockReq({ params: { id: 'owned-collection' }, body: { ability_id: 'invisible-ability' } });
+    const req = mockReq({ params: { id: 'owned-collection' }, body: { item_id: 'invisible-item' } });
     const res = mockRes();
 
     await CollectionController.addItem(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію або вміння не знайдено' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію, вміння або маневр не знайдено' });
   });
 
-  it('returns 201 with the added item on success', async () => {
-    CollectionModel.addItem.mockResolvedValue({ collection_id: 'c1', ability_id: 'a1' });
-    const req = mockReq({ params: { id: 'c1' }, body: { ability_id: 'a1' } });
+  it('returns 201 with the added item on success, regardless of which kind it resolved to', async () => {
+    CollectionModel.addItem.mockResolvedValue({ collection_id: 'c1', item_id: 'm1', item_kind: 'maneuver' });
+    const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'm1' } });
     const res = mockRes();
 
     await CollectionController.addItem(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', ability_id: 'a1' } });
+    expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', item_id: 'm1', item_kind: 'maneuver' } });
   });
 
   it('rethrows unexpected model errors instead of swallowing them', async () => {
     const err = new Error('boom');
     CollectionModel.addItem.mockRejectedValue(err);
-    const req = mockReq({ params: { id: 'c1' }, body: { ability_id: 'a1' } });
+    const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'a1' } });
     const res = mockRes();
 
     await expect(CollectionController.addItem(req, res)).rejects.toBe(err);

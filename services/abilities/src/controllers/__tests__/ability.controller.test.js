@@ -72,7 +72,18 @@ describe('AbilityController.getOne', () => {
 });
 
 describe('AbilityController.create', () => {
-  it('creates an ability from the request body without extra validation', async () => {
+  it('returns 400 when name is missing', async () => {
+    const req = mockReq({ body: {} });
+    const res = mockRes();
+
+    await AbilityController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: 'name є обовʼязковим' });
+    expect(AbilityModel.create).not.toHaveBeenCalled();
+  });
+
+  it('creates an ability from the request body when name is present', async () => {
     AbilityModel.create.mockResolvedValue({ id: 'a2', name: 'Ривок' });
     const req = mockReq({ body: { name: 'Ривок' } });
     const res = mockRes();
@@ -82,17 +93,6 @@ describe('AbilityController.create', () => {
     expect(AbilityModel.create).toHaveBeenCalledWith('user-1', { name: 'Ривок' });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ ability: { id: 'a2', name: 'Ривок' } });
-  });
-
-  it('does not 400 on an empty body — passes it straight through to the model', async () => {
-    AbilityModel.create.mockResolvedValue({ id: 'a3' });
-    const req = mockReq({ body: {} });
-    const res = mockRes();
-
-    await AbilityController.create(req, res);
-
-    expect(AbilityModel.create).toHaveBeenCalledWith('user-1', {});
-    expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it('rethrows unexpected model errors instead of swallowing them', async () => {

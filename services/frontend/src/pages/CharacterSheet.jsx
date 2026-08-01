@@ -1607,7 +1607,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
           <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
             {showPicker ? '✕ Закрити' : '+ Додати маневр'}
           </button>
-          <Link to="/maneuvers" className="text-sm text-accent">Увесь каталог →</Link>
+          <Link to="/abilities/maneuvers" className="text-sm text-accent">Увесь каталог →</Link>
         </div>
       )}
 
@@ -1645,7 +1645,7 @@ function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlo
         const met = !m || prereqMet(m, unlockedNodeIds);
         return (
           <div key={entry.maneuver_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
-            <Link to={m ? `/maneuvers/${m.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
+            <Link to={m ? `/abilities/maneuvers/${m.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
               <span className="text-sm text-text">
                 {m?.name ?? '(невідоме)'}
                 {m && <span className="text-xs text-text-dim"> — {m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</span>}

@@ -22,8 +22,7 @@
     ├── character-sheet/         # порт 3005 — лист персонажа
     ├── dice-roller/              # порт 3006 — кидки кубиків
     ├── equipment/                # порт 3007 — зброя/обладунки/предмети/артефакти
-    ├── maneuvers/                # порт 3008 — маневри бійців
-    ├── abilities/                 # порт 3009 — вміння (за архетипами)
+    ├── abilities/                 # порт 3009 — вміння та маневри
     ├── campaigns/                 # порт 3010 — кампанії ГМ/гравців
     ├── media/                     # порт 3012 — завантаження зображень
     ├── maps/                      # порт 3013 — інтерактивні мапи та локації
@@ -44,8 +43,7 @@
 - [character-sheet](services/character-sheet/README.md) — лист персонажа
 - [dice-roller](services/dice-roller/README.md) — кидки кубиків
 - [equipment](services/equipment/README.md) — зброя/обладунки/предмети/артефакти
-- [maneuvers](services/maneuvers/README.md) — маневри бійців
-- [abilities](services/abilities/README.md) — вміння за архетипами
+- [abilities](services/abilities/README.md) — вміння та маневри
 - [campaigns](services/campaigns/README.md) — кампанії ГМ/гравців
 - [media](services/media/README.md) — завантаження зображень
 - [compendium](services/compendium/README.md) — НІП та бестіарій
@@ -58,8 +56,7 @@ Nginx проксує запити з порту 80:
 - `/api/characters/` → character-sheet
 - `/api/dice/` → dice-roller
 - `/api/equipment/` → equipment
-- `/api/maneuvers/` → maneuvers
-- `/api/abilities/` → abilities
+- `/api/abilities/` → abilities (вміння та маневри)
 - `/api/campaigns/` → campaigns
 - `/api/maps/` → maps
 - `/api/compendium/` → compendium
@@ -99,7 +96,7 @@ docker compose down                         # зупинити все (дода�
 
 Потрібен Node.js 20+ і локальний/віддалений PostgreSQL, змінні оточення — з `.env`.
 
-Для кожного бекенд-сервіса (`auth`, `user-profile`, `spellbook`, `skill-tree`, `character-sheet`, `dice-roller`, `equipment`, `maneuvers`, `abilities`, `campaigns`, `media`, `maps`, `compendium`):
+Для кожного бекенд-сервіса (`auth`, `user-profile`, `spellbook`, `skill-tree`, `character-sheet`, `dice-roller`, `equipment`, `abilities`, `campaigns`, `media`, `maps`, `compendium`):
 ```bash
 cd services/<service>
 npm install
@@ -123,13 +120,13 @@ npm run preview    # перегляд прод-збірки локально
 
 Запуск тестів одного сервіса:
 ```bash
-cd services/<service>   # auth | user-profile | spellbook | skill-tree | character-sheet | dice-roller | equipment | maneuvers | abilities | campaigns | media | maps | compendium
+cd services/<service>   # auth | user-profile | spellbook | skill-tree | character-sheet | dice-roller | equipment | abilities | campaigns | media | maps | compendium
 npm test
 ```
 
 Прогнати тести всіх бекенд-сервісів послідовно:
 ```bash
-for s in auth user-profile spellbook skill-tree character-sheet dice-roller equipment maneuvers abilities campaigns media maps compendium; do
+for s in auth user-profile spellbook skill-tree character-sheet dice-roller equipment abilities campaigns media maps compendium; do
   (cd services/$s && npm test) || break
 done
 ```

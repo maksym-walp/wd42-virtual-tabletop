@@ -101,10 +101,17 @@ const AbilityModel = {
     const record = await deleteWithTrash(pool, {
       schemaName: 'abilities',
       tableName: 'entries',
-      deleteQuery: `DELETE FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
+      // Звʼязки з колекціями більше не мають FK на каталог (item_id вказує
+      // на одну з двох таблиць — abilities.entries або abilities.maneuvers),
+      // тож каскаду немає — прибираємо їх самі, в тій самій транзакції, яку
+      // deleteWithTrash відкочує, якщо основний DELETE нічого не зачепив.
+      deleteQuery: `WITH unlinked AS (
+                      DELETE FROM abilities.collection_items WHERE item_id = $1
+                    )
+                    DELETE FROM abilities.entries WHERE id = $1 AND (user_id = $2 OR $3 = true) RETURNING *`,
       deleteParams: [id, userId, isAdmin],
       childQueries: [
-        { key: 'collection_items', sql: `SELECT * FROM abilities.collection_items WHERE ability_id = $1`, params: [id] },
+        { key: 'collection_items', sql: `SELECT * FROM abilities.collection_items WHERE item_id = $1`, params: [id] },
       ],
       deletedBy: userId,
     });

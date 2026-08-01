@@ -61,7 +61,7 @@ describe('ManeuverController.add', () => {
 
     await ManeuverController.add(req, res);
 
-    expect(isVisibleToUser).toHaveBeenCalledWith('maneuvers.entries', 'm1', 'u1');
+    expect(isVisibleToUser).toHaveBeenCalledWith('abilities.maneuvers', 'm1', 'u1');
     expect(res.status).toHaveBeenCalledWith(404);
     expect(checkPrerequisites).not.toHaveBeenCalled();
   });

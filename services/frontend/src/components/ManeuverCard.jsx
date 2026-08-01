@@ -5,7 +5,7 @@ import AuthorBadge from './AuthorBadge';
 export default function ManeuverCard({ maneuver }) {
   return (
     <Link
-      to={`/maneuvers/${maneuver.id}`}
+      to={`/abilities/maneuvers/${maneuver.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-gold)' }}
     >

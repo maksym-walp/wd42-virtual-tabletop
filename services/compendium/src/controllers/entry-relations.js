@@ -26,7 +26,7 @@ const SpellRelationController = createRelationController({
 
 const ManeuverRelationController = createRelationController({
   RelationModel: EntryManeuverModel,
-  checkVisible: (id, userId) => isVisibleToUser('maneuvers.entries', id, userId),
+  checkVisible: (id, userId) => isVisibleToUser('abilities.maneuvers', id, userId),
   bodyField: 'maneuver_id',
   paramField: 'maneuverId',
   listKey: 'maneuvers',

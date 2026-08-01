@@ -163,23 +163,6 @@ services:
     networks:
       - walp-network
 
-  maneuvers:
-    build:
-      context: ./services/maneuvers
-      target: development
-    container_name: walp-maneuvers
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      PORT: 3008
-    volumes:
-      - ./services/maneuvers/src:/app/src:delegated
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - walp-network
-
   abilities:
     build:
       context: ./services/abilities
@@ -298,7 +281,6 @@ services:
       - character-sheet
       - dice-roller
       - equipment
-      - maneuvers
       - abilities
       - campaigns
       - maps

@@ -19,7 +19,6 @@ jobs:
           - character-sheet
           - dice-roller
           - equipment
-          - maneuvers
           - abilities
           - campaigns
           - media

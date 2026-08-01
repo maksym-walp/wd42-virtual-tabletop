@@ -12,6 +12,10 @@ export default function Navbar() {
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // /logo.png doesn't exist until someone drops branding/logo.png and runs
+  // `npm run icons` (see branding/README.md) — hide the broken-image icon
+  // instead of showing it in the meantime.
+  const [logoBroken, setLogoBroken] = useState(false);
 
   // Close both dropdowns whenever navigation happens so they don't stay open
   // on the newly loaded page.
@@ -27,8 +31,16 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 hidden border-b border-border bg-surface md:block">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-        <NavLink to="/" className="font-display text-lg font-semibold text-accent">
-          ⚔ Walp Tabletop
+        <NavLink to="/" className="flex items-center gap-2 font-display text-lg font-semibold text-accent">
+          {!logoBroken && (
+            <img
+              src="/logo.png"
+              alt=""
+              className="h-7 w-auto"
+              onError={() => setLogoBroken(true)}
+            />
+          )}
+          Walp
         </NavLink>
 
         {user ? (
@@ -57,13 +69,13 @@ export default function Navbar() {
               {moreOpen && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setMoreOpen(false)} />
-                  <div className="absolute right-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+                  <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
                     {NAV_MORE_ITEMS.map(({ to, label, icon: Icon }) => (
                       <NavLink
                         key={to}
                         to={to}
                         className={({ isActive }) =>
-                          `flex items-center gap-2.5 border-b border-border px-4 py-2.5 text-sm font-semibold last:border-b-0 ${
+                          `flex items-center gap-2.5 whitespace-nowrap border-b border-border px-4 py-2.5 text-sm font-semibold last:border-b-0 ${
                             isActive ? 'text-accent' : 'text-text'
                           }`
                         }

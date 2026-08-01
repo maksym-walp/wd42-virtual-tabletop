@@ -1,20 +1,19 @@
-import { Users, BookOpen, Swords, Zap, Star, TreePine, Castle, Map, Skull } from 'lucide-react';
+import { Users, BookOpen, Swords, Star, TreePine, Castle, Map, Skull } from 'lucide-react';
 
 // Desktop Navbar: main inline links (logo already covers Home).
 export const NAV_MAIN_ITEMS = [
-  { to: '/skill-tree', label: 'Дерево',    icon: TreePine },
-  { to: '/campaigns',  label: 'Кампанії',  icon: Castle },
   { to: '/characters', label: 'Персонажі', icon: Users },
+  { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
+  { to: '/abilities',  label: 'Вміння і маневри', icon: Star },
+  { to: '/equipment',  label: 'Спорядження', icon: Swords },
 ];
 
 // Desktop Navbar: "Ще" dropdown.
 export const NAV_MORE_ITEMS = [
+  { to: '/skill-tree', label: 'Дерево',    icon: TreePine },
   { to: '/maps',       label: 'Мапи',        icon: Map },
   { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
-  { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
-  { to: '/abilities',  label: 'Вміння',      icon: Star },
-  { to: '/equipment',  label: 'Спорядження', icon: Swords },
-  { to: '/maneuvers',  label: 'Маневри',     icon: Zap },
+  { to: '/campaigns',  label: 'Кампанії',  icon: Castle },
 ];
 
 // Mobile BottomNav: a settings icon (not sourced from this array — opens a
@@ -33,7 +32,6 @@ export const MOBILE_MORE_NAV_ITEMS = [
   { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
-  { to: '/abilities',  label: 'Вміння',      icon: Star },
-  { to: '/maneuvers',  label: 'Маневри',     icon: Zap },
+  { to: '/abilities',  label: 'Вміння і маневри', icon: Star },
   { to: '/equipment',  label: 'Спорядження', icon: Swords },
 ];

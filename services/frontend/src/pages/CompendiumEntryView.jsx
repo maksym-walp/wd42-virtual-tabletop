@@ -219,7 +219,7 @@ export default function CompendiumEntryView() {
             <ul className="flex flex-col gap-1.5">
               {maneuvers.map((m) => (
                 <li key={m.maneuver_id} className="text-sm text-text">
-                  {m.maneuver ? <Link to={`/maneuvers/${m.maneuver.id}`} className="text-accent hover:underline">{m.maneuver.name}</Link> : '(невідомо)'}
+                  {m.maneuver ? <Link to={`/abilities/maneuvers/${m.maneuver.id}`} className="text-accent hover:underline">{m.maneuver.name}</Link> : '(невідомо)'}
                 </li>
               ))}
             </ul>

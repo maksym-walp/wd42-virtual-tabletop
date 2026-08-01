@@ -1,19 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import { DURATION_OPTIONS } from '../constants/maneuvers';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
+import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
+
+const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
   name: '', duration_actions: 1, description: '', is_public: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '',
+  collectionIds: [],
 };
 
 export default function ManeuverForm() {
@@ -26,30 +31,64 @@ export default function ManeuverForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [nodes, setNodes] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
+  const initialCollectionIds = useRef([]);
+  const membershipInitialized = useRef(false);
 
   useEffect(() => {
     skillTreeApi.getNodes({ archetype: 'fighter' }).then(setNodes).catch(() => {});
   }, []);
 
   useEffect(() => {
+    domain.collectionsApi.getAll()
+      .then((all) => setCollections(all.filter((c) => c.is_owner)))
+      .catch(() => {})
+      .finally(() => setCollectionsLoaded(true));
+  }, []);
+
+  useEffect(() => {
     if (!isEdit) return;
-    api.get(`/api/maneuvers/${id}`)
+    api.get(`/api/abilities/maneuvers/${id}`)
       .then(({ data }) => {
         const m = data.maneuver;
-        setForm({
+        setForm((f) => ({
+          ...f,
           name: m.name, duration_actions: m.duration_actions,
           description: m.description || '', is_public: m.is_public,
           prerequisite_node_ids: m.prerequisite_node_ids || [],
           prerequisite_logic: m.prerequisite_logic || 'or',
           image_url: m.image_url || '',
-        });
+        }));
       })
-      .catch(() => navigate('/maneuvers'))
+      .catch(() => navigate('/abilities/maneuvers'))
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Membership can only be resolved once both the maneuver (to know its id,
+  // in edit mode) and the user's own collections (to check which contain it)
+  // have loaded — runs once, then form.collectionIds is the source of truth.
+  useEffect(() => {
+    if (!isEdit || membershipInitialized.current || loading || !collectionsLoaded) return;
+    const memberIds = collections.filter((c) => (c.items || []).some((it) => it.id === id)).map((c) => c.id);
+    initialCollectionIds.current = memberIds;
+    setForm((f) => ({ ...f, collectionIds: memberIds }));
+    membershipInitialized.current = true;
+  }, [isEdit, loading, collectionsLoaded, collections, id]);
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const setNum = (field) => (e) => setForm((f) => ({ ...f, [field]: Number(e.target.value) }));
+
+  const reconcileCollections = async (itemId) => {
+    const before = initialCollectionIds.current;
+    const after = form.collectionIds;
+    const toAdd = after.filter((cid) => !before.includes(cid));
+    const toRemove = before.filter((cid) => !after.includes(cid));
+    await Promise.all([
+      ...toAdd.map((cid) => domain.collectionsApi.addItem(cid, domain.itemIdField, itemId)),
+      ...toRemove.map((cid) => domain.collectionsApi.removeItem(cid, itemId)),
+    ]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,17 +96,20 @@ export default function ManeuverForm() {
     setSaving(true);
     setError('');
     try {
+      const { collectionIds, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
         duration_actions: Number(form.duration_actions),
         image_url: form.image_url || null,
       };
       if (isEdit) {
-        await api.put(`/api/maneuvers/${id}`, payload);
-        navigate(`/maneuvers/${id}`);
+        await api.put(`/api/abilities/maneuvers/${id}`, payload);
+        await reconcileCollections(id);
+        navigate(`/abilities/maneuvers/${id}`);
       } else {
-        const { data } = await api.post('/api/maneuvers/', payload);
-        navigate(`/maneuvers/${data.maneuver.id}`);
+        const { data } = await api.post('/api/abilities/maneuvers/', payload);
+        await reconcileCollections(data.maneuver.id);
+        navigate(`/abilities/maneuvers/${data.maneuver.id}`);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -80,7 +122,7 @@ export default function ManeuverForm() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
-      <Link to="/maneuvers" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
+      <Link to="/abilities/maneuvers" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Маневри
       </Link>
 
@@ -123,6 +165,15 @@ export default function ManeuverForm() {
           />
         </FormSection>
 
+        <FormSection title="Колекції">
+          <CollectionMembershipPicker
+            collections={collections}
+            basePath={domain.basePath}
+            value={form.collectionIds}
+            onChange={(ids) => setForm((f) => ({ ...f, collectionIds: ids }))}
+          />
+        </FormSection>
+
         <FormSection title="Налаштування">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
             <input
@@ -137,7 +188,7 @@ export default function ManeuverForm() {
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
-          <Button type="button" variant="ghost" to={isEdit ? `/maneuvers/${id}` : '/maneuvers'}>
+          <Button type="button" variant="ghost" to={isEdit ? `/abilities/maneuvers/${id}` : '/abilities/maneuvers'}>
             Скасувати
           </Button>
           <Button type="submit" disabled={saving}>
