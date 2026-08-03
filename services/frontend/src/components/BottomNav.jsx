@@ -39,7 +39,11 @@ export default function BottomNav() {
         <div className="fixed inset-0 z-30 md:hidden" onClick={() => { setMoreOpen(false); setSettingsOpen(false); }} />
       )}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+        // Not `fixed`: mobile browsers disagree on the viewport while the address
+        // bar animates, which clips content under a fixed bar (Chrome) or leaves a
+        // gap under it (Firefox). As a normal flex item of App.jsx's h-dvh column,
+        // it's sized by the same reflow as #app-scroll's flex-1 on every engine.
+        className="relative z-40 shrink-0 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
         aria-label="Основна навігація"
       >
         {settingsOpen && (

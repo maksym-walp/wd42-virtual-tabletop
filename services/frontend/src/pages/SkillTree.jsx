@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2,
 } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function SkillTree() {
   const [connectSource, setConnectSource] = useState(null);
   const [dragState, setDragState] = useState(null); // { nodeId, startClientX, startClientY, offsetX }
   const [tooltip, setTooltip] = useState(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState(null); // thickens/accents the hovered edge so its clickability reads as obvious
 
   // Clicking a node in edit mode opens this action menu instead of jumping
   // straight to a panel; clicking an edge opens the settings modal. Both
@@ -253,12 +254,15 @@ export default function SkillTree() {
     setSelectedNode(node);
   };
 
-  const handleNodeEnter = (e, node) => {
+  const handleNodeEnter = (node) => {
     if (dragState || connectMode) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setTooltip({ node, x, y });
+    // Anchored to the node's own screen position (not the cursor) so the
+    // tooltip can reliably sit flush against its top edge — see Tooltip.
+    const pos = positions.get(node.id) || { x: 0, y: 0 };
+    const r = NODE_R * transform.k;
+    const cx = transform.x + pos.x * transform.k;
+    const cy = transform.y + pos.y * transform.k;
+    setTooltip({ node, left: cx + r + 10, nodeTop: cy - r, nodeBottom: cy + r });
   };
 
   const handleNodeLeave = () => setTooltip(null);
@@ -513,7 +517,7 @@ export default function SkillTree() {
           onPointerMove={handleSvgPointerMove}
           onPointerUp={handleSvgPointerUp}
           onPointerCancel={handleSvgPointerCancel}
-          onPointerLeave={() => { endNodeDrag(); setTooltip(null); }}
+          onPointerLeave={() => { endNodeDrag(); setTooltip(null); setHoveredEdgeId(null); }}
           onWheel={panZoom.bind.onWheel}
           onClick={() => setSelectedNode(null)}
         >
@@ -531,20 +535,23 @@ export default function SkillTree() {
               const isOptional = edge.edge_type === 'optional';
               const dimmed = highlightSet && !(highlightSet.has(edge.source_id) && highlightSet.has(edge.target_id));
               const clickable = isGM && editMode && !connectMode;
+              const isHovered = clickable && hoveredEdgeId === edge.id;
               return (
                 <g key={edge.id} opacity={dimmed ? 0.15 : 1}>
                   <path
                     d={pts.path}
                     fill="none"
-                    stroke={isOptional ? 'var(--color-edge-optional)' : 'var(--color-text-muted)'}
-                    strokeWidth={isOptional ? 1.5 : 2}
+                    stroke={isHovered ? 'var(--color-accent)' : isOptional ? 'var(--color-edge-optional)' : 'var(--color-text-muted)'}
+                    strokeWidth={isHovered ? (isOptional ? 2.5 : 3.5) : isOptional ? 1.5 : 2}
                     strokeDasharray={isOptional ? '6,4' : undefined}
                     markerEnd="url(#arrow)"
                     style={{ pointerEvents: 'none' }}
                   />
                   {/* Wide invisible hit area — clicking the thin line itself is
                       fiddly, and this replaces the old inline I/× buttons that
-                      used to sit on top of (and get buried under) other edges. */}
+                      used to sit on top of (and get buried under) other edges.
+                      Also drives the hover highlight above, so a bolder/accented
+                      line signals "this is clickable" before the click happens. */}
                   {clickable && (
                     <path
                       d={pts.path}
@@ -553,6 +560,8 @@ export default function SkillTree() {
                       strokeWidth={EDGE_HIT_WIDTH}
                       style={{ cursor: 'pointer' }}
                       onClick={(e) => handleEdgeClick(e, edge)}
+                      onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                      onMouseLeave={() => setHoveredEdgeId((id) => (id === edge.id ? null : id))}
                     />
                   )}
                 </g>
@@ -585,7 +594,7 @@ export default function SkillTree() {
                   style={{ cursor: editMode && !connectMode ? 'ew-resize' : 'pointer' }}
                   onClick={(e) => handleNodeClick(e, node)}
                   onMouseDown={(e) => handleNodeMouseDown(e, node)}
-                  onMouseEnter={(e) => handleNodeEnter(e, node)}
+                  onMouseEnter={() => handleNodeEnter(node)}
                   onMouseLeave={handleNodeLeave}
                 >
                   {/* Main circle */}
@@ -746,20 +755,36 @@ function MenuAction({ icon: Icon, label, onClick, danger }) {
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────
+// Prereqs live below a hovered node (the tree grows upward), so the tooltip
+// sits above it by default — its bottom edge flush with the node's top edge —
+// keeping that path visible. It only drops to below the node when sitting
+// above would clip past the canvas's top edge (overflow-hidden on the
+// container), which needs the tooltip's real rendered height, hence the
+// measure-then-place effect.
 function Tooltip({ tooltip, nodes, edges }) {
-  const { node, x, y } = tooltip;
+  const { node, left, nodeTop, nodeBottom } = tooltip;
+  const elRef = useRef(null);
+  const [placement, setPlacement] = useState('above');
+
+  useLayoutEffect(() => {
+    const height = elRef.current?.offsetHeight ?? 0;
+    setPlacement(nodeTop - height < 8 ? 'below' : 'above');
+  }, [node.id, nodeTop]);
+
   const prereqs = edges
     .filter((e) => e.target_id === node.id)
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
     .filter((x) => x.node);
 
-  const left = x + 18;
-  const top = Math.max(8, y - 20);
+  const style = placement === 'above'
+    ? { left, top: nodeTop, transform: 'translateY(-100%)' }
+    : { left, top: nodeBottom };
 
   return (
     <div
+      ref={elRef}
       className="absolute z-30 max-w-[260px] rounded-lg border border-border bg-surface p-3 shadow-xl"
-      style={{ left, top, pointerEvents: 'none' }}
+      style={{ ...style, pointerEvents: 'none' }}
     >
       <p className="mb-1 font-display text-sm text-accent">{node.title}</p>
       {node.description && <p className="text-xs leading-relaxed text-text-dim">{node.description}</p>}

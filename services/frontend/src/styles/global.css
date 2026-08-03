@@ -65,7 +65,10 @@
     background: var(--color-bg);
     color: var(--color-text);
     font-family: var(--font-body);
-    min-height: 100vh;
+    /* dvh, not vh: `vh` assumes the toolbar-retracted viewport, taller than
+       what's visible while the address bar is shown — that let body grow past
+       the app root's h-dvh wrapper into a phantom scrollable strip. */
+    min-height: 100dvh;
     line-height: 1.6;
   }
 

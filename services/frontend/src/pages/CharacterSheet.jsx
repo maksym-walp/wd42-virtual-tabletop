@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft, Maximize2 } from 'lucide-react';
 import characterApi from '../api/characterSheet';
@@ -2047,9 +2047,15 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
     panZoom.bind.onPointerDown(e);
   };
 
-  const handleNodeEnter = (e, node) => {
-    const rect = svgRef.current.getBoundingClientRect();
-    setHoverLabel({ title: node.title, x: e.clientX - rect.left, y: e.clientY - rect.top });
+  const handleNodeEnter = (node) => {
+    // Anchored to the node's own screen position (not the cursor) so the
+    // label can reliably sit flush against its top edge — see the render
+    // below, where it flips below the node only if that would clip it.
+    const pos = positions.get(node.id) || { x: 0, y: 0 };
+    const r = TREE_NODE_R * transform.k;
+    const cx = transform.x + pos.x * transform.k;
+    const cy = transform.y + pos.y * transform.k;
+    setHoverLabel({ title: node.title, left: cx + r + 10, nodeTop: cy - r, nodeBottom: cy + r });
   };
   const handleNodeLeave = () => setHoverLabel(null);
 
@@ -2185,7 +2191,7 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
                   opacity={dimmed ? 0.25 : 1}
                   style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); setSelectedNode(prev => prev?.id === node.id ? null : node); }}
-                  onMouseEnter={e => handleNodeEnter(e, node)}
+                  onMouseEnter={() => handleNodeEnter(node)}
                   onMouseLeave={handleNodeLeave}
                 >
                   <circle r={TREE_NODE_R} fill={fill}
@@ -2220,14 +2226,7 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
         </svg>
 
         {/* Names only show on hover now — this is the only place a node's title appears outside the click-to-open panel */}
-        {hoverLabel && (
-          <div
-            className="pointer-events-none absolute z-20 max-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text shadow-lg"
-            style={{ left: hoverLabel.x + 14, top: Math.max(4, hoverLabel.y - 12) }}
-          >
-            {hoverLabel.title}
-          </div>
-        )}
+        {hoverLabel && <HoverLabel hoverLabel={hoverLabel} />}
 
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
@@ -2251,6 +2250,35 @@ function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, al
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// Prereqs live below a hovered node (the tree grows upward), so the label
+// sits above it by default — its bottom edge flush with the node's top edge —
+// keeping that path visible, and only drops below the node if sitting above
+// would clip past the canvas's top edge. Mirrors pages/SkillTree.jsx's Tooltip.
+function HoverLabel({ hoverLabel }) {
+  const { title, left, nodeTop, nodeBottom } = hoverLabel;
+  const elRef = useRef(null);
+  const [placement, setPlacement] = useState('above');
+
+  useLayoutEffect(() => {
+    const height = elRef.current?.offsetHeight ?? 0;
+    setPlacement(nodeTop - height < 8 ? 'below' : 'above');
+  }, [nodeTop]);
+
+  const style = placement === 'above'
+    ? { left, top: nodeTop, transform: 'translateY(-100%)' }
+    : { left, top: nodeBottom };
+
+  return (
+    <div
+      ref={elRef}
+      className="pointer-events-none absolute z-20 max-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text shadow-lg"
+      style={style}
+    >
+      {title}
     </div>
   );
 }
