@@ -82,6 +82,9 @@ export default function AbilityView() {
               {ARCHETYPES[a]?.label ?? a}
             </span>
           ))}
+          <span className={`text-xs italic ${ability.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+            {ability.is_canonical ? 'канонічне' : 'спільнота'}
+          </span>
           {ability.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 

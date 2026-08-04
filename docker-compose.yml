@@ -231,6 +231,23 @@ services:
     networks:
       - walp-network
 
+  admin:
+    build:
+      context: ./services/admin
+      target: development
+    container_name: walp-admin
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3011
+    volumes:
+      - ./services/admin/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless, уся метаінформація
   # про файли живе в БД інших сервісів (campaign_gallery, characters.image_url).
   media:
@@ -285,6 +302,7 @@ services:
       - campaigns
       - maps
       - compendium
+      - admin
       - media
       - frontend
     networks:

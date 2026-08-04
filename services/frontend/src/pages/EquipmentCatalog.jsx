@@ -6,7 +6,8 @@ import EquipmentCard from '../components/EquipmentCard';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, DAMAGE_DICE, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
+import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_MODIFIERS, DAMAGE_DICE, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
+import useWeaponOptions from '../hooks/useWeaponOptions';
 import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -23,6 +24,7 @@ import useViewMode from '../hooks/useViewMode';
 // CatalogTabs bar instead of an in-page tab — same pattern compendium uses
 // for НІПи/Бестіарій/Види. `type` picks which type-table this instance reads.
 export default function EquipmentCatalog({ type }) {
+  const { weaponTypes, weaponGrips, weaponTypesMap, weaponGripsMap } = useWeaponOptions();
   const [scope, setScope]   = useState('');
   const [weaponType, setWeaponType] = useState('');
   const [modifier, setModifier] = useState('');
@@ -79,8 +81,13 @@ export default function EquipmentCatalog({ type }) {
   const columns = [
     { key: 'name', label: 'Назва', sortKey: 'name', render: (item) => item.name },
     ...(type === 'weapon' ? [
-      { key: 'weapon_type', label: 'Тип', render: (item) => WEAPON_TYPES[item.weapon_type]?.label ?? '—' },
-      { key: 'weapon_grip', label: 'Особливості', render: (item) => WEAPON_GRIPS[item.weapon_grip]?.label ?? '—' },
+      { key: 'weapon_type', label: 'Тип', render: (item) => weaponTypesMap[item.weapon_type]?.label ?? item.weapon_type ?? '—' },
+      {
+        key: 'weapon_grip', label: 'Особливості',
+        render: (item) => (item.weapon_grip?.length
+          ? item.weapon_grip.map((g) => weaponGripsMap[g]?.label ?? g).join(', ')
+          : '—'),
+      },
       { key: 'modifier', label: 'Модифікатор', render: (item) => weaponModifierLabel(item.modifier) ?? '—' },
       { key: 'damage_die', label: 'Кубик шкоди', sortKey: 'damage_die', render: (item) => item.damage_die ?? '—' },
     ] : []),
@@ -130,7 +137,7 @@ export default function EquipmentCatalog({ type }) {
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Тип зброї</span>
                 <select className={inputClass} value={weaponType} onChange={(e) => setWeaponType(e.target.value)}>
                   <option value="">Усі типи</option>
-                  {Object.entries(WEAPON_TYPES).map(([key, t]) => <option key={key} value={key}>{t.label}</option>)}
+                  {weaponTypes.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                 </select>
               </div>
               <div>
@@ -151,7 +158,7 @@ export default function EquipmentCatalog({ type }) {
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Особливості</span>
                 <select className={inputClass} value={weaponGrip} onChange={(e) => setWeaponGrip(e.target.value)}>
                   <option value="">Усі особливості</option>
-                  {Object.entries(WEAPON_GRIPS).map(([key, g]) => <option key={key} value={key}>{g.label}</option>)}
+                  {weaponGrips.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
                 </select>
               </div>
             </div>
@@ -177,7 +184,7 @@ export default function EquipmentCatalog({ type }) {
 
       <Link
         to={newHref}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
         aria-label={newLabel}
       >
         <Plus size={26} />

@@ -9,7 +9,7 @@ const EQUIPMENT_CATALOG_TABLES = ['equipment.items', 'equipment.weapons', 'equip
 const EQUIPMENT_CATALOG = `(
         SELECT id, name, 'item'::varchar AS type,
                description, is_public, price, image_url,
-               NULL::varchar AS damage_die, NULL::varchar AS weapon_type, NULL::varchar AS weapon_grip,
+               NULL::varchar AS damage_die, NULL::varchar AS weapon_type, NULL::varchar[] AS weapon_grip,
                NULL::smallint AS defense_value, NULL::varchar AS armor_weight
         FROM equipment.items
         UNION ALL
@@ -21,7 +21,7 @@ const EQUIPMENT_CATALOG = `(
         UNION ALL
         SELECT id, name, 'armor'::varchar,
                description, is_public, price, image_url,
-               NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar[],
                defense_value, armor_weight
         FROM equipment.armor
       )`;

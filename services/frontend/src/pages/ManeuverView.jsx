@@ -73,6 +73,9 @@ export default function ManeuverView() {
           <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
             {maneuver.duration_actions} {maneuver.duration_actions === 1 ? 'дія' : 'дії'}
           </span>
+          <span className={`text-xs italic ${maneuver.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+            {maneuver.is_canonical ? 'канонічне' : 'спільнота'}
+          </span>
           {maneuver.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 

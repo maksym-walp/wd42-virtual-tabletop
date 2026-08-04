@@ -1,4 +1,4 @@
-const { createCatalogModel, UnionModel } = require('../models/catalog.model');
+const { createCatalogModel, UnionModel, getWeaponOptions } = require('../models/catalog.model');
 
 // Один набір хендлерів на кожен вид спорядження — таблиці різні, поведінка
 // однакова, тож контролер параметризований видом, а не скопійований тричі.
@@ -67,4 +67,10 @@ const UnionController = {
   },
 };
 
-module.exports = { createCatalogController, UnionController };
+// Допустимі weapon_type/weapon_grip — тепер редагуються з адмін-панелі, тож
+// форма й фільтри зброї підтягують їх звідси, а не з захардкоджених констант.
+async function getWeaponOptionsHandler(req, res) {
+  res.json(await getWeaponOptions());
+}
+
+module.exports = { createCatalogController, UnionController, getWeaponOptionsHandler };

@@ -78,6 +78,9 @@ export default function ArtifactView() {
               {rarity.label}
             </span>
           )}
+          <span className={`text-xs italic ${artifact.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+            {artifact.is_canonical ? 'канонічне' : 'спільнота'}
+          </span>
           {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 

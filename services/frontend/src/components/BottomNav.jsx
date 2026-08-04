@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { MoreHorizontal, Dices, Home, Sun, Moon, Settings, CircleUserRound, LogOut } from 'lucide-react';
+import { MoreHorizontal, Dices, Home, Sun, Moon, Settings, CircleUserRound, LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDice } from '../context/DiceContext';
 import { useTheme } from '../context/ThemeContext';
@@ -52,6 +52,12 @@ export default function BottomNav() {
               <CircleUserRound size={20} strokeWidth={1.75} />
               Особистий профіль
             </NavLink>
+            {user.role === 'admin' && (
+              <NavLink to="/admin" className={({ isActive }) => `${POPUP_ITEM_CLASS} ${isActive ? 'text-accent' : 'text-text'}`}>
+                <Shield size={20} strokeWidth={1.75} />
+                Адмін панель
+              </NavLink>
+            )}
             <button type="button" onClick={toggleTheme} className={`${POPUP_ITEM_CLASS} text-text`}>
               {theme === 'dark' ? <Moon size={20} strokeWidth={1.75} /> : <Sun size={20} strokeWidth={1.75} />}
               Змінити тему

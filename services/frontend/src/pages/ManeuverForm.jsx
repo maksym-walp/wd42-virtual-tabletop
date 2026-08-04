@@ -192,7 +192,7 @@ export default function ManeuverForm() {
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
-        <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
+        <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
           <Button type="button" variant="ghost" to={isEdit ? `/abilities/maneuvers/${id}` : '/abilities/maneuvers'}>
             Скасувати
           </Button>

@@ -128,7 +128,7 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
 
       <Link
         to={`/compendium/entries/new?type=${entityType}`}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
         aria-label={newLabel}
       >
         <Plus size={26} />

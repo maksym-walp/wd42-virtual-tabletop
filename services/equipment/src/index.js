@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { createCatalogRouter, unionRouter } = require('./routes/catalog.routes');
+const { createCatalogRouter, unionRouter, weaponOptionsRouter } = require('./routes/catalog.routes');
 const collectionRoutes = require('./routes/collection.routes');
 
 const app = express();
@@ -20,6 +20,7 @@ app.use(express.json());
 // (each matching id='<prefix>') since it's registered at the same '/' prefix.
 app.use('/collections', collectionRoutes);
 app.use('/items',     createCatalogRouter('item'));
+app.use('/weapons/options', weaponOptionsRouter);
 app.use('/weapons',   createCatalogRouter('weapon'));
 app.use('/armor',     createCatalogRouter('armor'));
 app.use('/artifacts', createCatalogRouter('artifact'));

@@ -3,13 +3,15 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import {
-  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, EQUIPMENT_NEW_LABELS, DAMAGE_DICE, WEAPON_TYPES, WEAPON_GRIPS, WEAPON_MODIFIERS, ARMOR_WEIGHTS,
+  EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, EQUIPMENT_NEW_LABELS, DAMAGE_DICE, WEAPON_MODIFIERS, ARMOR_WEIGHTS,
 } from '../constants/equipment';
 import { CHARACTERISTICS } from '../constants/characterSheet';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
+import useWeaponOptions from '../hooks/useWeaponOptions';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
+import MultiSelectDropdown from '../components/ui/MultiSelectDropdown';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
@@ -20,7 +22,7 @@ const EMPTY = {
   name: '', type: 'weapon', damage_die: '', defense_value: '',
   description: '', is_public: true,
   price: '', image_url: '',
-  weapon_type: '', weapon_grip: '', modifier: '',
+  weapon_type: '', weapon_grip: [], modifier: '',
   armor_weight: '',
   collectionIds: [],
 };
@@ -30,6 +32,7 @@ export default function EquipmentForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const { weaponTypes, weaponGrips } = useWeaponOptions();
 
   // Coming from a specific type tab (?type=armor from /equipment/armor's
   // "+ Новий предмет") preselects that type instead of always defaulting to
@@ -64,7 +67,7 @@ export default function EquipmentForm() {
           damage_die: i.damage_die || '', defense_value: i.defense_value ?? '',
           description: i.description || '', is_public: i.is_public,
           price: i.price ?? '', image_url: i.image_url || '',
-          weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || '', modifier: i.modifier || '',
+          weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || [], modifier: i.modifier || '',
           armor_weight: i.armor_weight || '',
         }));
       })
@@ -133,7 +136,7 @@ export default function EquipmentForm() {
         price: form.price === '' ? null : Number(form.price),
         image_url: form.image_url || null,
         weapon_type: form.weapon_type || null,
-        weapon_grip: form.weapon_grip || null,
+        weapon_grip: form.weapon_grip.length ? form.weapon_grip : null,
         modifier: form.modifier || null,
         armor_weight: form.armor_weight || null,
       };
@@ -233,14 +236,15 @@ export default function EquipmentForm() {
                 <Field label="Тип зброї">
                   <select className={inputClass} value={form.weapon_type} onChange={set('weapon_type')}>
                     <option value="">Не обрано</option>
-                    {Object.entries(WEAPON_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {weaponTypes.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                   </select>
                 </Field>
                 <Field label="Особливості">
-                  <select className={inputClass} value={form.weapon_grip} onChange={set('weapon_grip')}>
-                    <option value="">Не обрано</option>
-                    {Object.entries(WEAPON_GRIPS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
+                  <MultiSelectDropdown
+                    options={weaponGrips}
+                    value={form.weapon_grip}
+                    onChange={(grips) => setForm((f) => ({ ...f, weapon_grip: grips }))}
+                  />
                 </Field>
               </div>
             </>
@@ -303,7 +307,7 @@ export default function EquipmentForm() {
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
-        <div className="fixed inset-x-0 bottom-16 z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
+        <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
           <Button type="button" variant="ghost" to={isEdit ? `/equipment/${id}` : typeCatalogHref}>
             Скасувати
           </Button>

@@ -35,20 +35,10 @@ export const EQUIPMENT_TYPE_PATHS = {
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
-export const WEAPON_TYPES = {
-  melee:     { label: 'Ближня' },
-  ranged:    { label: 'Дальньобійна' },
-  thrown:    { label: 'Метальна' },
-  universal: { label: 'Універсальна' },
-  other:     { label: 'Інше' },
-};
-
-export const WEAPON_GRIPS = {
-  one_handed: { label: 'Одноручна' },
-  two_handed: { label: 'Дворучна' },
-  versatile:  { label: 'Універсальна' },
-  other:      { label: 'Інше' },
-};
+// Типи зброї (weapon_type) та особливості/хват (weapon_grip) більше не
+// захардкоджені тут — набір значень редагується з адмін-панелі
+// (services/admin) і читається через useWeaponOptions() /
+// GET /api/equipment/weapons/options.
 
 // The two most common weapon modifiers get their own shortcut button in the
 // form; "Інше" (not a stored value itself) opens a picker over every skill

@@ -439,10 +439,10 @@ export default function SkillTree() {
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
   return (
-    <div className="skill-tree-page flex h-full flex-col pb-16 md:pb-0">
+    <div className="skill-tree-page flex h-full flex-col">
       {toast && (
         <div
-          className={`fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-4 py-2 text-sm font-semibold shadow-lg md:bottom-6 ${
+          className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 rounded-lg border px-4 py-2 text-sm font-semibold shadow-lg md:bottom-6 ${
             toast.type === 'success'
               ? 'border-sage/50 bg-sage/15 text-sage'
               : 'border-danger/50 bg-danger/15 text-danger'

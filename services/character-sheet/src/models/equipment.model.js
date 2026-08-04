@@ -15,7 +15,7 @@ const CATALOG = `(
         SELECT id, name, 'item'::varchar AS type,
                NULL::varchar AS damage_die, NULL::smallint AS defense_value,
                description, is_public, price, image_url,
-               NULL::varchar AS weapon_type, NULL::varchar AS weapon_grip,
+               NULL::varchar AS weapon_type, NULL::varchar[] AS weapon_grip,
                NULL::varchar AS armor_weight,
                NULL::varchar AS creator, NULL::varchar AS rarity
         FROM equipment.items
@@ -30,14 +30,14 @@ const CATALOG = `(
         SELECT id, name, 'armor'::varchar,
                NULL::varchar, defense_value,
                description, is_public, price, image_url,
-               NULL::varchar, NULL::varchar, armor_weight,
+               NULL::varchar, NULL::varchar[], armor_weight,
                NULL::varchar, NULL::varchar
         FROM equipment.armor
         UNION ALL
         SELECT id, name, 'artifact'::varchar,
                NULL::varchar, NULL::smallint,
                description, is_public, price, image_url,
-               NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar[], NULL::varchar,
                creator, rarity
         FROM equipment.artifacts
       )`;

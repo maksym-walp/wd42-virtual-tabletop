@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, ChevronDown, Settings, Sun, Moon, CircleUserRound } from 'lucide-react';
+import { LogOut, ChevronDown, Settings, Sun, Moon, CircleUserRound, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { NAV_MAIN_ITEMS, NAV_MORE_ITEMS } from '../constants/navigation';
@@ -113,6 +113,17 @@ export default function Navbar() {
                       <CircleUserRound size={16} strokeWidth={1.75} />
                       Особистий профіль
                     </NavLink>
+                    {user.role === 'admin' && (
+                      <NavLink
+                        to="/admin"
+                        className={({ isActive }) =>
+                          `flex items-center gap-2.5 border-b border-border px-4 py-2.5 text-sm font-semibold ${isActive ? 'text-accent' : 'text-text'}`
+                        }
+                      >
+                        <Shield size={16} strokeWidth={1.75} />
+                        Адмін панель
+                      </NavLink>
+                    )}
                     <button
                       type="button"
                       onClick={toggleTheme}

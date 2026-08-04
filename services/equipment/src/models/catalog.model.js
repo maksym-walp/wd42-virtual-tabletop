@@ -85,7 +85,7 @@ const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, p
 const CATALOG_UNION = `(
         SELECT ${UNION_COMMON}, 'item'::varchar AS type,
                NULL::varchar AS damage_die, NULL::varchar AS weapon_type,
-               NULL::varchar AS weapon_grip, NULL::varchar AS modifier,
+               NULL::varchar[] AS weapon_grip, NULL::varchar AS modifier,
                NULL::smallint AS defense_value, NULL::varchar AS armor_weight,
                NULL::varchar AS creator, NULL::varchar AS rarity
         FROM equipment.items
@@ -97,13 +97,13 @@ const CATALOG_UNION = `(
         FROM equipment.weapons
         UNION ALL
         SELECT ${UNION_COMMON}, 'armor'::varchar,
-               NULL::varchar, NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar[], NULL::varchar,
                defense_value, armor_weight,
                NULL::varchar, NULL::varchar
         FROM equipment.armor
         UNION ALL
         SELECT ${UNION_COMMON}, 'artifact'::varchar,
-               NULL::varchar, NULL::varchar, NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar[], NULL::varchar,
                NULL::smallint, NULL::varchar,
                creator, rarity
         FROM equipment.artifacts
@@ -211,7 +211,10 @@ function createCatalogModel(kind) {
       for (const [param, column] of Object.entries(filters)) {
         if (!query[param]) continue;
         params.push(query[param]);
-        conditions.push(`${column} = $${params.length}`);
+        // weapon_grip is the one array column (a weapon can have several
+        // grips) — filtering means "has this grip among possibly several",
+        // i.e. containment, not equality.
+        conditions.push(param === 'weapon_grip' ? `$${params.length} = ANY(${column})` : `${column} = $${params.length}`);
       }
       if (query.search) {
         params.push(`%${query.search}%`);
@@ -310,6 +313,21 @@ function createCatalogModel(kind) {
   };
 }
 
+// Допустимі типи зброї та особливості (weapon_grip) редагуються з
+// адмін-панелі й живуть у admin.site_configs — той самий Postgres, той самий
+// довірений доступ до чужої схеми, що й auth.users/spellbook.spells вище,
+// тож звичайний cross-schema SELECT, без HTTP-виклику іншого сервіса.
+async function getWeaponOptions() {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM admin.site_configs WHERE key IN ('weapon_types', 'weapon_grips')`
+  );
+  const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  return {
+    weapon_types: byKey.weapon_types || [],
+    weapon_grips: byKey.weapon_grips || [],
+  };
+}
+
 // Спільний список/деталь через усі чотири таблиці — для тих, кому вид наперед
 // невідомий або неважливий.
 const UnionModel = {
@@ -365,4 +383,5 @@ module.exports = {
   createCatalogModel,
   findKindById,
   UnionModel,
+  getWeaponOptions,
 };

@@ -87,6 +87,9 @@ export default function SpellView() {
             );
           })}
           {kind && <span className="rounded border border-border px-1.5 py-0.5 text-xs font-semibold text-text-dim">{kind.label}</span>}
+          <span className={`text-xs italic ${spell.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+            {spell.is_canonical ? 'канонічне' : 'спільнота'}
+          </span>
           {spell.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 

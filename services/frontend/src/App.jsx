@@ -6,7 +6,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import DiceWidget from './components/DiceWidget';
+import ScrollToTopButton from './components/ScrollToTopButton';
 import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -48,6 +50,7 @@ import CompendiumEntryView from './pages/CompendiumEntryView';
 import CompendiumSpeciesList from './pages/CompendiumSpeciesList';
 import CompendiumSpeciesDetail from './pages/CompendiumSpeciesDetail';
 import CompendiumSpeciesForm from './pages/CompendiumSpeciesForm';
+import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
   return (
@@ -58,7 +61,7 @@ export default function App() {
           <DiceProvider>
             <div className="flex h-dvh flex-col">
               <Navbar />
-              <div id="app-scroll" className="flex-1 overflow-y-auto overscroll-contain">
+              <div id="app-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 <Routes>
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
@@ -146,11 +149,14 @@ export default function App() {
                   <Route path="/compendium/entries/:id" element={<PrivateRoute><CompendiumEntryView /></PrivateRoute>} />
                   <Route path="/compendium/entries/:id/edit" element={<PrivateRoute><CompendiumEntryForm /></PrivateRoute>} />
 
+                  <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>
               <BottomNav />
               <DiceWidget />
+              <ScrollToTopButton />
             </div>
           </DiceProvider>
         </AuthProvider>

@@ -1,8 +1,14 @@
 const express = require('express');
-const { createCatalogController, UnionController } = require('../controllers/catalog.controller');
+const { createCatalogController, UnionController, getWeaponOptionsHandler } = require('../controllers/catalog.controller');
 const { requireAuth, requireCanonicalManager } = require('../middleware/auth.middleware');
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// Мусить бути змонтований ДО загального роутера /weapons (createCatalogRouter),
+// інакше його власний GET /:id прийме "options" за id. Лише читання, без
+// admin-гейта — форма й фільтри зброї потрібні будь-якому залогіненому.
+const weaponOptionsRouter = express.Router();
+weaponOptionsRouter.get('/', requireAuth, wrap(getWeaponOptionsHandler));
 
 // Повний CRUD одного виду спорядження: /items, /weapons, /armor, /artifacts.
 function createCatalogRouter(kind) {
@@ -25,4 +31,4 @@ const unionRouter = express.Router();
 unionRouter.get('/',    requireAuth, wrap(UnionController.list));
 unionRouter.get('/:id', requireAuth, wrap(UnionController.getOne));
 
-module.exports = { createCatalogRouter, unionRouter };
+module.exports = { createCatalogRouter, unionRouter, weaponOptionsRouter };
