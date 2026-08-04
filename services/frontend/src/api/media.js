@@ -10,11 +10,21 @@ export const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
 
 const mediaApi = {
   /**
-   * Завантажує файл і повертає site-relative URL (/uploads/...).
+   * Завантажує файл і повертає site-relative URL оригіналу (/uploads/...).
    * entityType: 'campaign-gallery' | 'map-lenses' | 'character' | 'item'
    * entityId потрібен для всіх, окрім 'item' (для 'map-lenses' — це id кампанії).
    */
   async upload(file, { entityType, entityId } = {}) {
+    const { image_url } = await mediaApi.uploadWithThumbnail(file, { entityType, entityId });
+    return image_url;
+  },
+
+  /**
+   * Те саме завантаження, але повертає й посилання на мініатюру
+   * (400px, webp) поряд з оригіналом — для списків каталогу, де оригінал
+   * зайвий.
+   */
+  async uploadWithThumbnail(file, { entityType, entityId } = {}) {
     const fd = new FormData();
     // Текстові поля перед файлом: memoryStorage на сервері до порядку
     // байдужий, але парсери, які стрімлять на диск, бачать лише поля перед
@@ -26,7 +36,7 @@ const mediaApi = {
     // Content-Type НЕ виставляємо: axios сам додасть його разом із boundary.
     // Виставити вручну = втратити boundary = зіпсоване тіло запиту.
     const { data } = await api.post(`${BASE}/upload`, fd);
-    return data.url;
+    return { image_url: data.image_url, thumbnail_url: data.thumbnail_url };
   },
 };
 

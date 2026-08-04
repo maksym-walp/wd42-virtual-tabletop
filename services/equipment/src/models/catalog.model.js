@@ -41,7 +41,7 @@ const KINDS = {
   },
 };
 
-const COMMON_COLUMNS = ['name', 'description', 'is_public', 'price', 'image_url'];
+const COMMON_COLUMNS = ['name', 'description', 'is_public', 'price', 'image_url', 'thumbnail_url'];
 const COMMON_SORT_EXPR = { name: 'i.name', price: 'i.price' };
 
 function buildOrderBy(sortExpr, sort, dir) {
@@ -76,7 +76,7 @@ const usedInSpellsSelect = `COALESCE(
 // Спільні колонки чотирьох таблиць у фіксованому порядку — основа для UNION,
 // де відсутні для конкретного виду поля добиваються NULL-ами, щоб усі чотири
 // гілки мали однакову форму рядка.
-const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, price, image_url, created_at, updated_at';
+const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, price, image_url, thumbnail_url, created_at, updated_at';
 
 // Читальний зріз через усі чотири таблиці: ним живуть спільні списки (пікер
 // предметів у листі персонажа, реагенти в заклинаннях) і перехід за голим
@@ -116,6 +116,11 @@ const withType = (rows, kind) => rows.map((row) => ({ ...row, type: kind }));
 // У якій із чотирьох таблиць лежить цей id (і чи взагалі видно його користувачу).
 async function findKindById(id, userId, isAdmin = false) {
   const visibility = isAdmin ? 'TRUE' : '(user_id = $2 OR is_public = true)';
+  // Для адміна visibility — літерал без $2, тож і params мусить нести лише
+  // $1 — інакше Postgres відповідає protocol-помилкою ("bind message
+  // supplies 2 parameters, but prepared statement requires 1"), а не просто
+  // ігнорує зайвий параметр.
+  const params = isAdmin ? [id] : [id, userId];
   const { rows } = await pool.query(
     `SELECT 'item' AS kind FROM equipment.items WHERE id = $1 AND ${visibility}
      UNION ALL
@@ -125,7 +130,7 @@ async function findKindById(id, userId, isAdmin = false) {
      UNION ALL
      SELECT 'artifact' FROM equipment.artifacts WHERE id = $1 AND ${visibility}
      LIMIT 1`,
-    [id, userId]
+    params
   );
   return rows[0]?.kind || null;
 }
@@ -374,6 +379,47 @@ const UnionModel = {
       [id, userId]
     );
     return rows[0] || null;
+  },
+
+  // Імпорт зі /export: записи групуються за `type` (по одному bulk INSERT на
+  // таблицю виду, замість запиту на рядок), id ігнорується — нові рядки
+  // отримують власні id, user_id примусово стає імпортером, а image_url/
+  // thumbnail_url скидаються в NULL, бо зображення з чужого експорту тут не
+  // лежать на диску. Рядки з невідомим/відсутнім `type` пропускаються.
+  async bulkImport(userId, records) {
+    const grouped = new Map();
+    for (const record of records) {
+      if (!record || !KINDS[record.type]) continue;
+      if (!grouped.has(record.type)) grouped.set(record.type, []);
+      grouped.get(record.type).push(record);
+    }
+
+    let imported = 0;
+    for (const [kind, rows] of grouped) {
+      const { table, columns } = KINDS[kind];
+      const writeColumns = ['user_id', ...COMMON_COLUMNS, ...columns];
+
+      const values = [];
+      const tuples = rows.map((row) => {
+        const start = values.length;
+        values.push(
+          userId,
+          ...COMMON_COLUMNS.map((column) => (
+            column === 'image_url' || column === 'thumbnail_url' ? null : normalize(column, row)
+          )),
+          ...columns.map((column) => normalize(column, row))
+        );
+        return `(${writeColumns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
+      });
+
+      const { rowCount } = await pool.query(
+        `INSERT INTO ${table} (${writeColumns.join(', ')}) VALUES ${tuples.join(', ')}`,
+        values
+      );
+      imported += rowCount;
+    }
+
+    return imported;
   },
 };
 

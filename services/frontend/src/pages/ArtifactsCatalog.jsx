@@ -4,6 +4,7 @@ import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ArtifactCard from '../components/ArtifactCard';
 import CatalogTabs from '../components/CatalogTabs';
+import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { RARITIES } from '../constants/artifacts';
@@ -67,7 +68,11 @@ export default function ArtifactsCatalog() {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {artifacts.length} {pluralizeUk(artifacts.length, ['артефакт', 'артефакти', 'артефактів'])}
         </p>
-        <Button to="/equipment/artifacts/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Новий артефакт</Button>
+        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
+          {/* Кнопки лише візуальні тут: підключено тільки в EquipmentCatalog. */}
+          <ExportImportActions />
+          <Button to="/equipment/artifacts/new" className="whitespace-nowrap">+ Новий артефакт</Button>
+        </div>
       </div>
 
       <div className="mb-3 flex gap-2.5">

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import api from '../api/client';
 import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import useWeaponOptions from '../hooks/useWeaponOptions';
 import { recordView, removeView } from '../utils/recentlyViewed';
+import { downloadJsonFile } from '../utils/downloadJson';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
@@ -52,6 +53,15 @@ export default function EquipmentView() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const { data } = await api.get(`/api/equipment/export?id=${id}`);
+      downloadJsonFile(data, `equipment_${id}.json`);
+    } catch {
+      alert('Не вдалося експортувати предмет');
+    }
+  };
+
   const handleMarkCanonical = async () => {
     setSettingCanonical(true);
     try {
@@ -82,14 +92,22 @@ export default function EquipmentView() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
-          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
-            {type.label}
-          </span>
-          <span className={`text-xs italic ${item.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
-            {item.is_canonical ? 'канонічне' : 'спільнота'}
-          </span>
-          {item.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+              {type.label}
+            </span>
+            <span className={`text-xs italic ${item.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+              {item.is_canonical ? 'канонічне' : 'спільнота'}
+            </span>
+            {item.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
+          </div>
+          <button
+            type="button" onClick={handleExport}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
+          >
+            <Download size={14} /> Експорт
+          </button>
         </div>
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{item.name}</h1>

@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import EquipmentCard from '../components/EquipmentCard';
 import CatalogTabs from '../components/CatalogTabs';
+import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_MODIFIERS, DAMAGE_DICE, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import useWeaponOptions from '../hooks/useWeaponOptions';
 import { pluralizeUk } from '../utils/pluralize';
+import { downloadJsonFile } from '../utils/downloadJson';
+import { buildEquipmentImportTemplate } from '../utils/equipmentImportTemplate';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -50,7 +53,7 @@ export default function EquipmentCatalog({ type }) {
     setWeaponGrip('');
   }, [type]);
 
-  useEffect(() => {
+  const fetchItems = useCallback(() => {
     const params = new URLSearchParams({ sort, dir });
     if (search) params.set('search', search);
     if (scope) params.set('scope', scope);
@@ -62,15 +65,50 @@ export default function EquipmentCatalog({ type }) {
     }
 
     setLoading(true);
-    api.get(`${EQUIPMENT_ENDPOINTS[type]}/?${params}`)
+    return api.get(`${EQUIPMENT_ENDPOINTS[type]}/?${params}`)
       .then(({ data }) => setItems(data.items))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [type, search, sort, dir, scope, weaponType, modifier, damageDie, weaponGrip]);
 
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
   const toggleSort = (key) => {
     if (sort === key) { setDir((d) => (d === 'asc' ? 'desc' : 'asc')); }
     else { setSort(key); setDir('asc'); }
+  };
+
+  // /export читає наскрізь усі чотири таблиці спорядження (сама union-модель
+  // не знає per-kind фільтрів на кшталт weapon_type) — лишаємо тут той самий
+  // search/scope/sort/dir, що й у звичайному списку, і додатково відсікаємо
+  // на клієнті все, що не належить виду поточної вкладки каталогу.
+  const handleExport = async () => {
+    const params = new URLSearchParams({ sort, dir });
+    if (search) params.set('search', search);
+    if (scope) params.set('scope', scope);
+
+    try {
+      const { data } = await api.get(`/api/equipment/export?${params}`);
+      downloadJsonFile(data.filter((row) => row.type === type), 'equipment_export.json');
+    } catch {
+      alert('Не вдалося експортувати предмети');
+    }
+  };
+
+  const handleTemplate = () => buildEquipmentImportTemplate(weaponTypes, weaponGrips);
+
+  const handleImport = async (data) => {
+    if (!Array.isArray(data)) {
+      alert('Файл має містити масив предметів');
+      return;
+    }
+    try {
+      const { data: result } = await api.post('/api/equipment/import', data);
+      alert(`Імпортовано записів: ${result.imported}`);
+      fetchItems();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати предмети');
+    }
   };
 
   const showCards = view === 'cards';
@@ -109,7 +147,10 @@ export default function EquipmentCatalog({ type }) {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {items.length} {pluralizeUk(items.length, ['запис', 'записи', 'записів'])}
         </p>
-        <Button to={newHref} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ {newLabel}</Button>
+        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
+          <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
+          <Button to={newHref} className="whitespace-nowrap">+ {newLabel}</Button>
+        </div>
       </div>
 
       <div className="mb-3 flex gap-2.5">

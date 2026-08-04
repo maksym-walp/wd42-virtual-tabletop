@@ -4,7 +4,7 @@ import { Share2, Check, ArrowLeft } from 'lucide-react';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
-import { inputClass } from '../components/ui/Field';
+import CollectionItemPicker from '../components/CollectionItemPicker';
 import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
 
@@ -20,7 +20,8 @@ export default function CollectionView({ domainKey, publicView = false }) {
   const [settingCanonical, setSettingCanonical] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [catalog, setCatalog] = useState([]);
-  const [search, setSearch] = useState('');
+  const [pendingIds, setPendingIds] = useState([]);
+  const [adding, setAdding] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const load = () => (publicView ? domain.collectionsApi.getPublic(id) : domain.collectionsApi.getOne(id));
@@ -55,10 +56,25 @@ export default function CollectionView({ domainKey, publicView = false }) {
     }
   };
 
-  const handleAddItem = async (itemId) => {
-    await domain.collectionsApi.addItem(id, domain.itemIdField, itemId);
-    setShowPicker(false);
-    setCollection(await load());
+  const openPicker = () => {
+    setPendingIds([]);
+    setShowPicker(true);
+  };
+
+  const togglePending = (itemId) => {
+    setPendingIds((ids) => (ids.includes(itemId) ? ids.filter((v) => v !== itemId) : [...ids, itemId]));
+  };
+
+  const handleAddSelected = async () => {
+    setAdding(true);
+    try {
+      await Promise.all(pendingIds.map((itemId) => domain.collectionsApi.addItem(id, domain.itemIdField, itemId)));
+      setShowPicker(false);
+      setPendingIds([]);
+      setCollection(await load());
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleRemoveItem = async (itemId) => {
@@ -93,9 +109,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
 
   const items = collection.items || [];
   const knownIds = new Set(items.map((i) => i.id));
-  const filteredCatalog = catalog.filter(
-    (i) => !knownIds.has(i.id) && i.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const pickerOptions = catalog.filter((i) => !knownIds.has(i.id));
   const shareUrl = `${window.location.origin}${domain.basePath}/collections/public/${id}`;
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
@@ -149,7 +163,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
           <div className="flex items-center justify-between bg-bg px-5 py-2">
             <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Елементи</span>
             {!publicView && canManage && (
-              <button type="button" className="text-xs font-semibold text-accent" onClick={() => setShowPicker(true)}>
+              <button type="button" className="text-xs font-semibold text-accent" onClick={openPicker}>
                 + Додати
               </button>
             )}
@@ -188,22 +202,18 @@ export default function CollectionView({ domainKey, publicView = false }) {
         )}
       </div>
 
-      <Sheet open={showPicker} onClose={() => setShowPicker(false)} title="Додати елемент">
-        <input
-          className={`${inputClass} mb-3 text-sm`} placeholder="Пошук..." value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      <Sheet open={showPicker} onClose={() => setShowPicker(false)} title="Додати елементи">
+        <CollectionItemPicker
+          items={pickerOptions}
+          selectedIds={pendingIds}
+          onToggle={togglePending}
+          itemMeta={domain.itemMeta}
         />
-        <div className="max-h-[300px] overflow-y-auto">
-          {filteredCatalog.length === 0 && <p className="py-3 text-sm text-text-dim">Немає доступних елементів</p>}
-          {filteredCatalog.map((item) => (
-            <div key={item.id} className="flex items-center justify-between border-b border-border/50 py-2 last:border-0">
-              <div className="flex flex-col">
-                <span className="text-sm text-text">{item.name}</span>
-                {domain.itemMeta(item) && <span className="text-xs text-text-dim">{domain.itemMeta(item)}</span>}
-              </div>
-              <button type="button" className="text-sm text-accent" onClick={() => handleAddItem(item.id)}>+</button>
-            </div>
-          ))}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => setShowPicker(false)}>Скасувати</Button>
+          <Button type="button" onClick={handleAddSelected} disabled={pendingIds.length === 0 || adding}>
+            {adding ? 'Додавання...' : `Додати${pendingIds.length ? ` (${pendingIds.length})` : ''}`}
+          </Button>
         </div>
       </Sheet>
     </div>

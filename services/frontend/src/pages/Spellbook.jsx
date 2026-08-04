@@ -5,6 +5,7 @@ import api from '../api/client';
 import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
 import CatalogTabs from '../components/CatalogTabs';
+import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
@@ -90,7 +91,11 @@ export default function Spellbook() {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {spells.length} {pluralizeUk(spells.length, ['заклинання', 'заклинання', 'заклинань'])}
         </p>
-        <Button to="/spellbook/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Нове заклинання</Button>
+        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
+          {/* Бекенд для заклинань поки не має /export і /import — кнопки лише візуальні (неактивні без пропсів). */}
+          <ExportImportActions />
+          <Button to="/spellbook/new" className="whitespace-nowrap">+ Нове заклинання</Button>
+        </div>
       </div>
 
       {/* Search — always visible, prominent */}

@@ -10,6 +10,7 @@ import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import KindSwitch from '../components/KindSwitch';
+import CollectionItemPicker from '../components/CollectionItemPicker';
 
 const EMPTY = {
   name: '', description: '', is_public: false, image_url: '',
@@ -33,11 +34,22 @@ export default function CollectionForm({ domainKey }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [nodes, setNodes] = useState([]);
+  // Елементи додаються під час створення лише тут, локальним вибором до
+  // POST /collections — самої колекції ще не існує, тож addItem нікуди
+  // слати. Після створення керування складом переїжджає в CollectionView
+  // (додати/прибрати), тож для редагування цей пікер не показуємо.
+  const [catalog, setCatalog] = useState([]);
+  const [itemIds, setItemIds] = useState([]);
 
   useEffect(() => {
     if (!domain.supportsPrerequisites) return;
     skillTreeApi.getNodes().then(setNodes).catch(() => {});
   }, [domainKey]);
+
+  useEffect(() => {
+    if (isEdit) return;
+    domain.catalogApi.getAll().then(setCatalog).catch(() => {});
+  }, [domainKey, isEdit]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -63,6 +75,9 @@ export default function CollectionForm({ domainKey }) {
         navigate(`${domain.basePath}/collections/${id}`);
       } else {
         const created = await domain.collectionsApi.create(form);
+        if (itemIds.length > 0) {
+          await Promise.all(itemIds.map((itemId) => domain.collectionsApi.addItem(created.id, domain.itemIdField, itemId)));
+        }
         navigate(`${domain.basePath}/collections/${created.id}`);
       }
     } catch (err) {
@@ -70,6 +85,10 @@ export default function CollectionForm({ domainKey }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleItem = (itemId) => {
+    setItemIds((ids) => (ids.includes(itemId) ? ids.filter((v) => v !== itemId) : [...ids, itemId]));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -123,6 +142,17 @@ export default function CollectionForm({ domainKey }) {
               nodes={nodes}
               value={form}
               onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+            />
+          </FormSection>
+        )}
+
+        {!isEdit && (
+          <FormSection title="Елементи" hint="Можна додати одразу зараз або пізніше зі сторінки колекції.">
+            <CollectionItemPicker
+              items={catalog}
+              selectedIds={itemIds}
+              onToggle={toggleItem}
+              itemMeta={domain.itemMeta}
             />
           </FormSection>
         )}

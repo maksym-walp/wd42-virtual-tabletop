@@ -4,6 +4,7 @@ import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
 import CatalogTabs from '../components/CatalogTabs';
+import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
@@ -63,7 +64,11 @@ export default function AbilityCatalog() {
         <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
           {abilities.length} {pluralizeUk(abilities.length, ['вміння', 'вміння', 'вмінь'])}
         </p>
-        <Button to="/abilities/new" className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ Нове вміння</Button>
+        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
+          {/* Бекенд для вмінь поки не має /export і /import — кнопки лише візуальні (неактивні без пропсів). */}
+          <ExportImportActions />
+          <Button to="/abilities/new" className="whitespace-nowrap">+ Нове вміння</Button>
+        </div>
       </div>
 
       <div className="mb-3 flex gap-2.5">

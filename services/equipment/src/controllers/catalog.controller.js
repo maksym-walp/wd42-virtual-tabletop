@@ -50,6 +50,22 @@ function createCatalogController(kind) {
   };
 }
 
+// Поля, яких немає (чи не має бути) в експортованому JSON: зображення не
+// експортуються (лежать на диску конкретного деплою, ре-імпорт скидає їх у
+// NULL), а created_at/updated_at/is_owner/owner_username/used_in_spells —
+// обчислені чи прив'язані до поточного користувача/деплою, тож для
+// перевикористання в іншому місці не мають сенсу.
+const EXPORT_OMIT_FIELDS = [
+  'image_url', 'thumbnail_url', 'created_at', 'updated_at',
+  'is_owner', 'owner_username', 'used_in_spells',
+];
+
+function sanitizeForExport(row) {
+  const clean = { ...row };
+  for (const field of EXPORT_OMIT_FIELDS) delete clean[field];
+  return clean;
+}
+
 // Читання наскрізь по всіх чотирьох таблицях: спільний список для пікерів
 // (лист персонажа, реагенти заклинань) і перехід за голим id, коли вид
 // наперед невідомий.
@@ -64,6 +80,31 @@ const UnionController = {
     const item = await UnionModel.findById(req.params.id, req.user.sub, req.user.role === 'admin');
     if (!item) return res.status(404).json({ message: 'Спорядження не знайдено' });
     res.json({ item });
+  },
+
+  // Той самий набір фільтрів, що й у звичайному каталозі (GET /), плюс ?id=
+  // для експорту рівно одного запису — той самий результат, що дав би
+  // /:id, лише обгорнутий у масив з одним елементом.
+  async export(req, res) {
+    const isAdmin = req.user.role === 'admin';
+    let items;
+    if (req.query.id) {
+      const item = await UnionModel.findById(req.query.id, req.user.sub, isAdmin);
+      items = item ? [item] : [];
+    } else {
+      const { search, scope, sort, dir, limit } = req.query;
+      items = await UnionModel.findAll(req.user.sub, { search, scope, sort, dir, limit }, isAdmin);
+    }
+    res.json(items.map(sanitizeForExport));
+  },
+
+  // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
+  async import(req, res) {
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив обʼєктів' });
+    }
+    const imported = await UnionModel.bulkImport(req.user.sub, req.body);
+    res.status(201).json({ imported });
   },
 };
 

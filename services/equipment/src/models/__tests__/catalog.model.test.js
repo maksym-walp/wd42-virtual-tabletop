@@ -167,29 +167,29 @@ describe('create / update column sets', () => {
   it('writes only the columns its own table has', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'w1' }] });
     await WeaponModel.create('u1', {
-      name: 'Меч', price: 40, image_url: 'https://x/y.png',
+      name: 'Меч', price: 40, image_url: 'https://x/y.png', thumbnail_url: 'https://x/y_thumb.webp',
       weapon_type: 'melee', weapon_grip: 'one_handed',
       // Поля іншого виду — не колонки цієї таблиці, тож мають бути відкинуті.
       defense_value: 3, armor_weight: 'heavy',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip, modifier\)/);
-    expect(params).toEqual(['u1', 'Меч', null, false, 40, 'https://x/y.png', null, 'melee', 'one_handed', null]);
+    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(params).toEqual(['u1', 'Меч', null, false, 40, 'https://x/y.png', 'https://x/y_thumb.webp', null, 'melee', 'one_handed', null]);
   });
 
   it('defaults is_public to false and every other unset column to NULL', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'i1' }] });
     await ItemModel.create('u1', { name: 'Мотузка' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Мотузка', null, false, null, null]);
+    expect(params).toEqual(['u1', 'Мотузка', null, false, null, null, null]);
   });
 
   it('updates the armor-only columns, leaving the id/owner/admin params first', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'a1' }] });
     await ArmorModel.update('a1', 'u1', { name: 'Кіраса', defense_value: 3, armor_weight: 'heavy' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/SET name=\$4, description=\$5, is_public=\$6, price=\$7, image_url=\$8, defense_value=\$9, armor_weight=\$10, updated_at=NOW\(\)/);
-    expect(params).toEqual(['a1', 'u1', false, 'Кіраса', null, false, null, null, 3, 'heavy']);
+    expect(sql).toMatch(/SET name=\$4, description=\$5, is_public=\$6, price=\$7, image_url=\$8, thumbnail_url=\$9, defense_value=\$10, armor_weight=\$11, updated_at=NOW\(\)/);
+    expect(params).toEqual(['a1', 'u1', false, 'Кіраса', null, false, null, null, null, 3, 'heavy']);
   });
 
   it('tags the created row with its kind', async () => {
@@ -247,7 +247,7 @@ describe('update across kinds', () => {
     const moved = await WeaponModel.update('x1', 'owner', { name: 'Меч', damage_die: 'd8' });
 
     const insert = client.query.mock.calls.find(([sql]) => /INSERT INTO equipment\.weapons/.test(sql));
-    expect(insert[0]).toMatch(/\(id, user_id, created_at, name, description, is_public, price, image_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(insert[0]).toMatch(/\(id, user_id, created_at, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
     expect(insert[1].slice(0, 3)).toEqual(['x1', 'owner', 'ts']);
     expect(moved).toEqual({ id: 'x1', name: 'Меч', type: 'weapon' });
   });
@@ -309,6 +309,18 @@ describe('findKindById', () => {
     const [sql] = pool.query.mock.calls[0];
     expect(sql).not.toMatch(/is_public = true/);
   });
+
+  // Regression: for admins, `visibility` becomes the literal 'TRUE' — no $2
+  // left anywhere in the query text — so a params array still carrying userId
+  // makes pg's bind step reject the query outright ("bind message supplies 2
+  // parameters, but prepared statement requires 1"), not just ignore the
+  // extra value. Caught in prod via CollectionModel.addItem as admin.
+  it('sends only one param for admins, since $2 no longer appears anywhere in the query', async () => {
+    await findKindById('a1', 'u1', true);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/\$2/);
+    expect(params).toEqual(['a1']);
+  });
 });
 
 describe('UnionModel', () => {
@@ -340,6 +352,79 @@ describe('UnionModel', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/ORDER BY i\.name ASC LIMIT \$2/);
     expect(params).toEqual(['u1', 200]);
+  });
+});
+
+describe('UnionModel.bulkImport', () => {
+  it('groups records by type and issues one multi-row INSERT per table', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+
+    const imported = await UnionModel.bulkImport('importer', [
+      { id: 'old-1', type: 'weapon', name: 'Меч', weapon_type: 'melee' },
+      { id: 'old-2', type: 'armor', name: 'Кіраса', defense_value: 3 },
+    ]);
+
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    const [weaponSql, weaponParams] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.weapons'));
+    expect(weaponSql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11\)/);
+    expect(weaponParams).toEqual(['importer', 'Меч', null, false, null, null, null, null, 'melee', null, null]);
+
+    const [armorSql] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.armor'));
+    expect(armorSql).toMatch(/INSERT INTO equipment\.armor/);
+
+    expect(imported).toBe(2); // one row inserted per kind-grouped INSERT
+  });
+
+  it('batches multiple records of the same kind into a single multi-row VALUES list', async () => {
+    pool.query.mockResolvedValue({ rowCount: 2 });
+
+    const imported = await UnionModel.bulkImport('importer', [
+      { type: 'item', name: 'Мотузка' },
+      { type: 'item', name: 'Смолоскип' },
+    ]);
+
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\), \(\$8, \$9, \$10, \$11, \$12, \$13, \$14\)/);
+    expect(imported).toBe(2);
+  });
+
+  it('forces user_id to the importer, regardless of any user_id in the record', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await UnionModel.bulkImport('importer', [{ type: 'item', name: 'Мотузка', user_id: 'someone-else' }]);
+    const [, params] = pool.query.mock.calls[0];
+    expect(params[0]).toBe('importer');
+  });
+
+  it('nulls out image_url and thumbnail_url even when the record carries them', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await UnionModel.bulkImport('importer', [
+      { type: 'item', name: 'Мотузка', image_url: '/uploads/items/x.png', thumbnail_url: '/uploads/items/x_thumb.webp' },
+    ]);
+    const [, params] = pool.query.mock.calls[0];
+    expect(params).not.toContain('/uploads/items/x.png');
+    expect(params).not.toContain('/uploads/items/x_thumb.webp');
+  });
+
+  it('ignores the id field — INSERT never mentions it as a column', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await UnionModel.bulkImport('importer', [{ id: 'old-id', type: 'item', name: 'Мотузка' }]);
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/\bid\b,/);
+  });
+
+  it('skips records with an unknown or missing type, without querying for them', async () => {
+    const imported = await UnionModel.bulkImport('importer', [
+      { type: 'not-a-kind', name: 'Ghost' },
+      { name: 'No type at all' },
+    ]);
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(imported).toBe(0);
+  });
+
+  it('returns 0 for an empty record list', async () => {
+    await expect(UnionModel.bulkImport('importer', [])).resolves.toBe(0);
+    expect(pool.query).not.toHaveBeenCalled();
   });
 });
 

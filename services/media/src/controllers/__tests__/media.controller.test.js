@@ -2,7 +2,15 @@ jest.mock('fs', () => ({
   promises: { mkdir: jest.fn().mockResolvedValue(undefined), writeFile: jest.fn().mockResolvedValue(undefined) },
 }));
 
+const mockThumbBuffer = Buffer.from('thumb');
+jest.mock('sharp', () => jest.fn(() => ({
+  resize: jest.fn().mockReturnThis(),
+  webp: jest.fn().mockReturnThis(),
+  toBuffer: jest.fn().mockResolvedValue(mockThumbBuffer),
+})));
+
 const fs = require('fs');
+const sharp = require('sharp');
 const MediaController = require('../media.controller');
 
 const UUID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
@@ -46,7 +54,24 @@ it('writes an item upload to the flat items directory and returns its url', asyn
   expect(opts).toEqual({ mode: 0o644 });
 
   expect(res.status).toHaveBeenCalledWith(201);
-  expect(res.json.mock.calls[0][0].url).toMatch(/^\/uploads\/items\/[0-9a-f-]{36}\.png$/);
+  expect(res.json.mock.calls[0][0].image_url).toMatch(/^\/uploads\/items\/[0-9a-f-]{36}\.png$/);
+});
+
+it('also writes a 400px webp thumbnail alongside the original and returns its url', async () => {
+  const res = mockRes();
+  await MediaController.upload(mockReq({ body: { entity_type: 'item' }, file: pngFile() }), res);
+
+  expect(sharp).toHaveBeenCalledWith(PNG);
+  const sharpInstance = sharp.mock.results[0].value;
+  expect(sharpInstance.resize).toHaveBeenCalledWith({ width: 400, withoutEnlargement: true });
+  expect(sharpInstance.webp).toHaveBeenCalledWith({ quality: 80 });
+
+  const [thumbPath, thumbBuffer, opts] = fs.promises.writeFile.mock.calls[1];
+  expect(thumbPath).toMatch(/^\/uploads\/items\/[0-9a-f-]{36}_thumb\.webp$/);
+  expect(thumbBuffer).toBe(mockThumbBuffer);
+  expect(opts).toEqual({ mode: 0o644 });
+
+  expect(res.json.mock.calls[0][0].thumbnail_url).toMatch(/^\/uploads\/items\/[0-9a-f-]{36}_thumb\.webp$/);
 });
 
 it('nests a campaign-gallery upload under the campaign id', async () => {
@@ -76,7 +101,9 @@ it('gives each upload a distinct filename', async () => {
   const res = mockRes();
   await MediaController.upload(mockReq({ body: { entity_type: 'item' }, file: pngFile() }), res);
   await MediaController.upload(mockReq({ body: { entity_type: 'item' }, file: pngFile() }), res);
-  const [a, b] = fs.promises.writeFile.mock.calls.map((c) => c[0]);
+  // Кожен виклик пише два файли (оригінал + мініатюра) — беремо лише
+  // оригінали, щоб порівняти імена саме різних завантажень.
+  const [a, , b] = fs.promises.writeFile.mock.calls.map((c) => c[0]);
   expect(a).not.toBe(b);
 });
 

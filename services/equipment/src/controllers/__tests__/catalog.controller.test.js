@@ -12,7 +12,7 @@ jest.mock('../../models/catalog.model', () => {
   return {
     __model: model,
     createCatalogModel: jest.fn(() => model),
-    UnionModel: { findAll: jest.fn(), findById: jest.fn() },
+    UnionModel: { findAll: jest.fn(), findById: jest.fn(), bulkImport: jest.fn() },
   };
 });
 
@@ -210,5 +210,75 @@ describe('UnionController', () => {
     await UnionController.getOne(mockReq({ params: { id: 'a1' } }), res);
 
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'a1', name: 'Кіраса', type: 'armor' } });
+  });
+});
+
+describe('UnionController.export', () => {
+  it('strips image/thumbnail and system fields before responding with a bare array', async () => {
+    UnionModel.findAll.mockResolvedValue([{
+      id: 'w1', name: 'Меч', type: 'weapon',
+      image_url: '/uploads/items/w1.png', thumbnail_url: '/uploads/items/w1_thumb.webp',
+      created_at: '2026-01-01', updated_at: '2026-01-02',
+      is_owner: true, owner_username: 'gm', is_canonical: true,
+    }]);
+    const res = mockRes();
+
+    await UnionController.export(mockReq({ query: { scope: 'canonical' } }), res);
+
+    expect(res.json).toHaveBeenCalledWith([{ id: 'w1', name: 'Меч', type: 'weapon', is_canonical: true }]);
+  });
+
+  it('forwards the same filters as the regular catalog list', async () => {
+    UnionModel.findAll.mockResolvedValue([]);
+    const req = mockReq({ query: { search: 'меч', scope: 'user', sort: 'price', dir: 'desc' } });
+
+    await UnionController.export(req, mockRes());
+
+    expect(UnionModel.findAll).toHaveBeenCalledWith(
+      'user-1', { search: 'меч', scope: 'user', sort: 'price', dir: 'desc' }, false
+    );
+  });
+
+  it('exports exactly one record, wrapped in an array, when ?id= is given', async () => {
+    UnionModel.findById.mockResolvedValue({ id: 'a1', name: 'Кіраса', type: 'armor', image_url: '/x.png' });
+    const res = mockRes();
+
+    await UnionController.export(mockReq({ query: { id: 'a1' } }), res);
+
+    expect(UnionModel.findById).toHaveBeenCalledWith('a1', 'user-1', false);
+    expect(UnionModel.findAll).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith([{ id: 'a1', name: 'Кіраса', type: 'armor' }]);
+  });
+
+  it('exports an empty array when ?id= matches nothing visible to the user', async () => {
+    UnionModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+
+    await UnionController.export(mockReq({ query: { id: 'ghost' } }), res);
+
+    expect(res.json).toHaveBeenCalledWith([]);
+  });
+});
+
+describe('UnionController.import', () => {
+  it('rejects a non-array body without touching the model', async () => {
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: { not: 'an array' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(UnionModel.bulkImport).not.toHaveBeenCalled();
+  });
+
+  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
+    UnionModel.bulkImport.mockResolvedValue(3);
+    const res = mockRes();
+    const body = [{ type: 'item', name: 'A' }, { type: 'weapon', name: 'B' }];
+
+    await UnionController.import(mockReq({ body }), res);
+
+    expect(UnionModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ imported: 3 });
   });
 });

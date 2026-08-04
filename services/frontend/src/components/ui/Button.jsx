@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 
 const VARIANTS = {
@@ -13,15 +14,20 @@ const SIZES = {
   icon: 'h-11 w-11 p-0',
 };
 
-export default function Button({
-  variant = 'primary', size = 'md', to, className = '', children, ...props
-}) {
+// forwardRef so callers that need the rendered DOM node (e.g. a dropdown
+// positioning itself off the trigger button, à la MultiSelectDropdown) can
+// get one — plain function components can't receive a ref at all.
+const Button = forwardRef(function Button(
+  { variant = 'primary', size = 'md', to, className = '', children, ...props }, ref
+) {
   const classes = [
     'inline-flex items-center justify-center gap-2 rounded-lg font-semibold',
     'transition-opacity disabled:opacity-50 disabled:cursor-not-allowed',
     SIZES[size], VARIANTS[variant], className,
   ].join(' ');
 
-  if (to) return <Link to={to} className={classes} {...props}>{children}</Link>;
-  return <button className={classes} {...props}>{children}</button>;
-}
+  if (to) return <Link ref={ref} to={to} className={classes} {...props}>{children}</Link>;
+  return <button ref={ref} className={classes} {...props}>{children}</button>;
+});
+
+export default Button;

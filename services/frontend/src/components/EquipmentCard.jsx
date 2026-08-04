@@ -4,6 +4,9 @@ import AuthorBadge from './AuthorBadge';
 
 export default function EquipmentCard({ item }) {
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
+  // Каталог показує мініатюру (400px webp) замість оригіналу — менше даних
+  // на список карток; старі записи без thumbnail_url падають на оригінал.
+  const thumbnail = item.thumbnail_url || item.image_url;
 
   return (
     <Link
@@ -11,9 +14,9 @@ export default function EquipmentCard({ item }) {
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-accent)' }}
     >
-      {item.image_url && (
+      {thumbnail && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+          <img src={thumbnail} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
         </div>
       )}
 
@@ -35,7 +38,7 @@ export default function EquipmentCard({ item }) {
         </div>
       )}
 
-      {!item.image_url && item.description && (
+      {!thumbnail && item.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{item.description}</p>
       )}
     </Link>

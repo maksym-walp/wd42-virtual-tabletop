@@ -28,6 +28,10 @@ function createCatalogRouter(kind) {
 // Корінь сервіса — лише читання наскрізь по чотирьох таблицях. Запис іде на
 // ендпоінт конкретного виду, бо саме він визначає набір полів.
 const unionRouter = express.Router();
+// export/import мусять стояти ДО GET /:id — інакше той прийме "export" за id
+// (той самий патерн, що й weaponOptionsRouter вище).
+unionRouter.get('/export', requireAuth, wrap(UnionController.export));
+unionRouter.post('/import', requireCanonicalManager, wrap(UnionController.import));
 unionRouter.get('/',    requireAuth, wrap(UnionController.list));
 unionRouter.get('/:id', requireAuth, wrap(UnionController.getOne));
 
