@@ -1,4 +1,12 @@
 @import "tailwindcss";
+/* Explicit source paths — Docker's build context for this service is
+   ./services/frontend, so it never contains the repo's .git directory that
+   Tailwind's automatic content detection relies on to find the project root.
+   Without this, only @theme-derived color utilities get generated (those
+   don't need scanning); every other utility (flex, grid, spacing...) is
+   silently missing from the build. */
+@source "../**/*.{js,jsx}";
+@source "../../index.html";
 @import "@fontsource/cinzel/500.css";
 @import "@fontsource/cinzel/700.css";
 @import "@fontsource/lora/400.css";

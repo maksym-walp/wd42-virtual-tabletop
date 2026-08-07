@@ -65,5 +65,8 @@ export default defineConfig({
     hmr: {
       clientPort: 80,
     },
+    allowedHosts: [
+      'tabletop.walpapur.com',
+    ],
   },
 });
