@@ -1,4 +1,4 @@
-import { Users, BookOpen, Swords, Star, TreePine, Castle, Map, Skull } from 'lucide-react';
+import { Users, BookOpen, Swords, Star, TreePine, Castle, Map, Skull, CalendarDays } from 'lucide-react';
 
 // Desktop Navbar: main inline links (logo already covers Home).
 export const NAV_MAIN_ITEMS = [
@@ -14,6 +14,7 @@ export const NAV_MORE_ITEMS = [
   { to: '/maps',       label: 'Мапи',        icon: Map },
   { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
   { to: '/campaigns',  label: 'Кампанії',  icon: Castle },
+  { to: '/calendars',  label: 'Календарі', icon: CalendarDays },
 ];
 
 // Mobile BottomNav: a settings icon (not sourced from this array — opens a
@@ -29,6 +30,7 @@ export const MOBILE_PRIMARY_NAV_ITEMS = [
 export const MOBILE_MORE_NAV_ITEMS = [
   { to: '/campaigns',  label: 'Кампанії',    icon: Castle },
   { to: '/maps',       label: 'Мапи',        icon: Map },
+  { to: '/calendars',  label: 'Календарі',   icon: CalendarDays },
   { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },

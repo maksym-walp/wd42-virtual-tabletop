@@ -29,11 +29,20 @@ function buildIcon(iconValue) {
 
 // Fits the image and pins the zoom scale so the fully-zoomed-out view is the
 // map's minimum zoom — the basis for the 0..1 zoom fraction used by levels.
+//
+// MapContainer's `bounds`/`maxBounds` props only seed the Leaflet map at
+// construction — react-leaflet v4 never re-applies them on prop change, so
+// switching to a lens with different pixel dimensions left the OLD image's
+// maxBounds in effect: the view would re-fit to the new image (fitBounds
+// below), but panning stayed clamped to the previous, differently-sized
+// rectangle, cropping the new image or blocking scroll into parts of it.
+// map.setMaxBounds(bounds) is the one call that actually updates it.
 function MapController({ bounds }) {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
       map.invalidateSize();
+      map.setMaxBounds(bounds);
       const fit = map.getBoundsZoom(bounds, false);
       map.setMinZoom(fit);
       map.setMaxZoom(fit + 8);

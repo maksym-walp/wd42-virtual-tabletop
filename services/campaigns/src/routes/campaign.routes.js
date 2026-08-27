@@ -22,6 +22,7 @@ router.delete('/:id', wrap(CampaignController.remove));
 router.patch('/:id/shared-notes', wrap(CampaignController.updateSharedNotes));
 router.patch('/:id/gm-notes', wrap(CampaignController.updateGmNotes));
 router.patch('/:id/description', wrap(CampaignController.updateDescription));
+router.patch('/:id/date', wrap(CampaignController.updateCurrentDate));
 
 router.post('/:id/characters', wrap(CampaignCharacterController.addByGm));
 router.get('/:id/characters', wrap(CampaignCharacterController.list));

@@ -1,8 +1,10 @@
 jest.mock('../../models/map.model');
+jest.mock('../../models/campaign-membership.model');
 
 const MapModel = require('../../models/map.model');
+const CampaignMembershipModel = require('../../models/campaign-membership.model');
 const {
-  isAdmin, canCreate, canReadMap, canWriteMap, canWriteLocation, stripGmNote, loadMapOr404,
+  isAdmin, canCreate, canReadMap, canWriteMap, canWriteLocation, stripGmNote, loadMapOr404, isCampaignMember,
 } = require('../access');
 
 function mockRes() {
@@ -60,6 +62,14 @@ describe('stripGmNote', () => {
   it('removes gm_note otherwise', () => {
     expect(stripGmNote(row, false)).toEqual({ id: 'loc1', name: 'X' });
     expect(stripGmNote(row, false)).not.toHaveProperty('gm_note');
+  });
+});
+
+describe('isCampaignMember', () => {
+  it('delegates to CampaignMembershipModel.isMember', async () => {
+    CampaignMembershipModel.isMember.mockResolvedValue(true);
+    expect(await isCampaignMember('camp-1', 'p-1')).toBe(true);
+    expect(CampaignMembershipModel.isMember).toHaveBeenCalledWith('camp-1', 'p-1');
   });
 });
 

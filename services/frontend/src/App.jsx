@@ -44,6 +44,9 @@ import CampaignDetail from './pages/CampaignDetail';
 import MapList from './pages/MapList';
 import LocationLibrary from './pages/LocationLibrary';
 import MapView from './pages/MapView';
+import CalendarList from './pages/CalendarList';
+import CalendarBuilder from './pages/CalendarBuilder';
+import CalendarView from './pages/CalendarView';
 import CompendiumEntries from './pages/CompendiumEntries';
 import CompendiumEntryForm from './pages/CompendiumEntryForm';
 import CompendiumEntryView from './pages/CompendiumEntryView';
@@ -131,6 +134,9 @@ export default function App() {
                   <Route path="/maps" element={<PrivateRoute><MapList /></PrivateRoute>} />
                   <Route path="/maps/locations" element={<PrivateRoute><LocationLibrary /></PrivateRoute>} />
                   <Route path="/maps/:id" element={<PrivateRoute><MapView /></PrivateRoute>} />
+                  <Route path="/calendars" element={<PrivateRoute><CalendarList /></PrivateRoute>} />
+                  <Route path="/calendars/build/:id" element={<PrivateRoute><CalendarBuilder /></PrivateRoute>} />
+                  <Route path="/calendars/:id" element={<PrivateRoute><CalendarView /></PrivateRoute>} />
 
                   <Route path="/compendium" element={<PrivateRoute><CompendiumEntries entityType="npc" title="НІПи" newLabel="Новий НІП" /></PrivateRoute>} />
                   <Route path="/compendium/bestiary" element={<PrivateRoute><CompendiumEntries entityType="creature" title="Бестіарій" newLabel="Нова істота" /></PrivateRoute>} />

@@ -26,6 +26,8 @@ Nginx проксує `/api/campaigns/` → цей сервіс (див. корі
 | DELETE | `/:id` | GM-only | — | `204` (каскадно видаляє `campaign_characters` і `campaign_gallery`) або `404`, `403` |
 | PATCH | `/:id/shared-notes` | GM-only | `{ shared_notes? }` (дефолт `''`) | `200 { campaign }` або `404`, `403` |
 | PATCH | `/:id/gm-notes` | GM-only | `{ gm_notes? }` (дефолт `''`) | `200 { campaign }` або `404`, `403` |
+| PATCH | `/:id/description` | GM-only | `{ description? }` (дефолт `''`) | `200 { campaign }` або `404`, `403` |
+| PATCH | `/:id/date` | GM-only | `{ calendar_id?, current_year?, current_month_id?, current_day? }` — усі чотири поля замінюються разом (відсутні → `null`) | `200 { campaign }` або `404`, `403` |
 
 ### Персонажі в кампанії
 
@@ -54,7 +56,7 @@ Nginx проксує `/api/campaigns/` → цей сервіс (див. корі
 
 Власна схема `campaigns` (`database/migrations/23-campaigns-service.sql`, `26-campaign-gallery.sql`):
 
-- **`campaigns.campaigns`** (`src/models/campaign.model.js`) — `id`, `gm_id`, `name` (`VARCHAR(200)`), `invite_code` (`VARCHAR(12)`, унікальний, генерується сервісом при створенні — `crypto.randomBytes` → base64url → 8 символів A-Z0-9, з ретраєм при колізії `23505`), `shared_notes` (`TEXT`), `gm_notes` (`TEXT`), `created_at`, `updated_at`.
+- **`campaigns.campaigns`** (`src/models/campaign.model.js`) — `id`, `gm_id`, `name` (`VARCHAR(200)`), `invite_code` (`VARCHAR(12)`, унікальний, генерується сервісом при створенні — `crypto.randomBytes` → base64url → 8 символів A-Z0-9, з ретраєм при колізії `23505`), `shared_notes` (`TEXT`), `gm_notes` (`TEXT`), `description` (`TEXT`), `calendar_id`/`current_year`/`current_month_id`/`current_day` (`database/migrations/60-campaign-time-tracking.sql` — трекінг поточної дати кампанії, усі nullable; `calendar_id`/`current_month_id` — крос-сервісні посилання на `calendar.calendars`/`calendar.calendar_months` у сервісі `calendar`, без FK, як і `character_id` нижче), `created_at`, `updated_at`.
 - **`campaigns.campaign_characters`** (`src/models/campaign-character.model.js`) — звʼязка кампанія↔персонаж: `id`, `campaign_id` (FK → `campaigns.id`, `ON DELETE CASCADE`), `character_id` (без FK — крос-схемний UUID, як і в `character_sheet`, персонажі належать сервісу `character-sheet`), `added_at`, унікальність по парі `(campaign_id, character_id)`.
 - **`campaigns.campaign_gallery`** (`src/models/campaign-gallery.model.js`) — `id`, `campaign_id` (FK → `campaigns.id`, `ON DELETE CASCADE`), `image_url` (`VARCHAR(500)`), `created_at`.
 

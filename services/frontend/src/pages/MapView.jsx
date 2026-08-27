@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus } from 'lucide-react';
 import mapsApi from '../api/maps';
+import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { typeKey } from '../constants/maps';
 import MapCanvas from '../components/map/MapCanvas';
@@ -34,16 +35,22 @@ export default function MapView() {
   // Pin authoring (owner only)
   const [placing, setPlacing] = useState(false);
   const [pendingCoords, setPendingCoords] = useState(null);
+  const [editingPin, setEditingPin] = useState(null);
   const [myLocations, setMyLocations] = useState([]);
+  const [myCampaigns, setMyCampaigns] = useState([]);
 
   const isOwner = Boolean(map?.is_owner);
 
   const refreshPins = () => mapsApi.listPins(id).then(setPins).catch(() => {});
   const refreshMyLocations = () => mapsApi.listLocations().then(setMyLocations).catch(() => {});
 
-  // The owner's location library powers the "pick existing location" option.
+  // The owner's location library powers the "pick existing location" option;
+  // their own campaigns (is_gm — not ones they merely play in) power the pin
+  // form's "Visible in campaigns" picker.
   useEffect(() => {
-    if (isOwner) refreshMyLocations();
+    if (!isOwner) return;
+    refreshMyLocations();
+    campaignApi.list().then((all) => setMyCampaigns(all.filter((c) => c.is_gm))).catch(() => {});
   }, [isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The pin (if any) for the currently open location on THIS map — lets the
@@ -86,18 +93,26 @@ export default function MapView() {
     [lenses, activeLensId],
   );
 
+  // Empty lens_ids means "not restricted to specific lenses" (see
+  // 61-map-pins-lens-campaign-visibility.sql) — a pin with none set still
+  // renders on every lens, only an explicit, non-matching list hides it.
+  const pinsOnActiveLens = useMemo(
+    () => pins.filter((p) => !p.lens_ids?.length || p.lens_ids.includes(activeLens?.id)),
+    [pins, activeLens?.id],
+  );
+
   const typeBuckets = useMemo(() => {
     const acc = new Map();
-    for (const p of pins) {
+    for (const p of pinsOnActiveLens) {
       const key = typeKey(p.location_type);
       acc.set(key, (acc.get(key) || 0) + 1);
     }
     return [...acc.entries()].map(([key, count]) => ({ key, count }));
-  }, [pins]);
+  }, [pinsOnActiveLens]);
 
   const visiblePins = useMemo(
-    () => pins.filter((p) => !hiddenTypes.has(typeKey(p.location_type))),
-    [pins, hiddenTypes],
+    () => pinsOnActiveLens.filter((p) => !hiddenTypes.has(typeKey(p.location_type))),
+    [pinsOnActiveLens, hiddenTypes],
   );
 
   const toggleType = (key) => setHiddenTypes((prev) => {
@@ -181,8 +196,9 @@ export default function MapView() {
     setPendingCoords(coords);
   };
 
-  const handlePinCreated = async () => {
+  const handlePinSaved = async () => {
     setPendingCoords(null);
+    setEditingPin(null);
     await Promise.all([refreshPins(), refreshMyLocations()]);
   };
 
@@ -371,7 +387,8 @@ export default function MapView() {
         <LocationDrawer
           locationId={selectedLocationId}
           isGm={isOwner}
-          pinId={selectedPin?.id}
+          pin={selectedPin}
+          onEditPin={setEditingPin}
           onRemovePin={handleRemovePin}
           onDeleteLocation={handleDeleteLocation}
           onLocationUpdated={refreshPins}
@@ -379,13 +396,17 @@ export default function MapView() {
         />
       )}
 
-      {pendingCoords && (
+      {(pendingCoords || editingPin) && (
         <PinForm
           mapId={id}
           coords={pendingCoords}
+          pin={editingPin}
+          lenses={lenses}
+          campaigns={myCampaigns}
+          activeLensId={activeLens?.id}
           myLocations={myLocations}
-          onCreated={handlePinCreated}
-          onClose={() => setPendingCoords(null)}
+          onSaved={handlePinSaved}
+          onClose={() => { setPendingCoords(null); setEditingPin(null); }}
         />
       )}
 

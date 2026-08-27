@@ -18,23 +18,47 @@ describe('MapPinModel.listByMap', () => {
   });
 });
 
-describe('MapPinModel.add', () => {
-  it('inserts all six columns with concrete zoom values', async () => {
+describe('MapPinModel.listVisibleToPlayer', () => {
+  it('keeps pins with an empty visible_campaign_ids or a matching campaignId', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'p1' }] });
-    await MapPinModel.add('m1', { locationId: 'loc1', x: 0.25, y: 0.75, minZoom: 1, maxZoom: 5 });
+    await MapPinModel.listVisibleToPlayer('m1', 'camp-1');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/JOIN maps\.locations/);
+    expect(sql).toMatch(/array_length\(p\.visible_campaign_ids, 1\) IS NULL OR \$2::uuid = ANY\(p\.visible_campaign_ids\)/);
+    expect(params).toEqual(['m1', 'camp-1']);
+  });
+
+  it('passes a null campaignId through as-is (only unrestricted pins match)', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await MapPinModel.listVisibleToPlayer('m1', null);
+    expect(pool.query.mock.calls[0][1]).toEqual(['m1', null]);
+  });
+});
+
+describe('MapPinModel.add', () => {
+  it('inserts lens_ids/visible_campaign_ids alongside the six original columns', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'p1' }] });
+    await MapPinModel.add('m1', {
+      locationId: 'loc1', x: 0.25, y: 0.75, minZoom: 1, maxZoom: 5,
+      lensIds: ['lens-1'], visibleCampaignIds: [],
+    });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO maps\.map_pins/);
-    expect(params).toEqual(['m1', 'loc1', 0.25, 0.75, 1, 5]);
+    expect(sql).toMatch(/lens_ids, visible_campaign_ids/);
+    expect(params).toEqual(['m1', 'loc1', 0.25, 0.75, 1, 5, ['lens-1'], []]);
   });
 });
 
 describe('MapPinModel.update', () => {
-  it('scopes the update by both pin id and map id', async () => {
+  it('scopes the update by both pin id and map id, including the new array columns', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'p1' }] });
-    await MapPinModel.update('p1', 'm1', { x: 0.1, y: 0.2, minZoom: 0, maxZoom: 100 });
+    await MapPinModel.update('p1', 'm1', {
+      x: 0.1, y: 0.2, minZoom: 0, maxZoom: 100, lensIds: [], visibleCampaignIds: ['camp-1'],
+    });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/WHERE id = \$1 AND map_id = \$2/);
-    expect(params).toEqual(['p1', 'm1', 0.1, 0.2, 0, 100]);
+    expect(sql).toMatch(/lens_ids = \$7::uuid\[\], visible_campaign_ids = \$8::uuid\[\]/);
+    expect(params).toEqual(['p1', 'm1', 0.1, 0.2, 0, 100, [], ['camp-1']]);
   });
 });
 

@@ -152,6 +152,31 @@ describe('CampaignModel notes updates', () => {
   });
 });
 
+describe('CampaignModel.updateCurrentDate', () => {
+  it('updates calendar_id and current date fields together', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', calendar_id: 'cal-1', current_year: 100 }] });
+    const updated = await CampaignModel.updateCurrentDate('c1', {
+      calendar_id: 'cal-1', current_year: 100, current_month_id: 'm1', current_day: 5,
+    });
+    expect(updated).toEqual({ id: 'c1', calendar_id: 'cal-1', current_year: 100 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SET calendar_id = \$2, current_year = \$3, current_month_id = \$4, current_day = \$5/);
+    expect(params).toEqual(['c1', 'cal-1', 100, 'm1', 5]);
+  });
+
+  it('defaults every field to null when omitted (clearing the tracked date)', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1' }] });
+    await CampaignModel.updateCurrentDate('c1', {});
+    const [, params] = pool.query.mock.calls[0];
+    expect(params).toEqual(['c1', null, null, null, null]);
+  });
+
+  it('returns null when the campaign does not exist', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await CampaignModel.updateCurrentDate('missing', {})).toBeNull();
+  });
+});
+
 describe('CampaignModel.remove', () => {
   it('deletes the campaign and returns true when a row was removed', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 1 });

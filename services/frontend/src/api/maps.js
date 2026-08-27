@@ -56,6 +56,11 @@ const mapsApi = {
     return data.pin;
   },
 
+  async updatePin(mapId, pinId, payload) {
+    const { data } = await api.patch(`${BASE}/${mapId}/pins/${pinId}`, payload);
+    return data.pin;
+  },
+
   async removePin(mapId, pinId) {
     await api.delete(`${BASE}/${mapId}/pins/${pinId}`);
   },

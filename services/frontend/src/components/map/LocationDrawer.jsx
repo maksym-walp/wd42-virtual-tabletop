@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Share2, Check, Pencil, Trash2, MapPin } from 'lucide-react';
+import { X, Share2, Check, Pencil, Trash2, MapPin, SlidersHorizontal } from 'lucide-react';
 import mapsApi from '../../api/maps';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
@@ -20,8 +20,8 @@ const toEditValue = (l) => ({
 
 // Side panel (right rail on desktop, bottom sheet on mobile) showing a location.
 // gm_note is returned by the server only for the owner/admin; `isGm` here also
-// unlocks editing / deleting and (when a pin is given) removing the pin.
-export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, onDeleteLocation, onLocationUpdated, onClose }) {
+// unlocks editing / deleting and (when a pin is given) editing/removing the pin.
+export default function LocationDrawer({ locationId, isGm, pin, onEditPin, onRemovePin, onDeleteLocation, onLocationUpdated, onClose }) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -141,10 +141,15 @@ export default function LocationDrawer({ locationId, isGm, pinId, onRemovePin, o
           {isGm && (
             <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">
               <Button variant="ghost" size="sm" onClick={startEdit}><Pencil size={14} /> Редагувати</Button>
-              {pinId && (
-                <Button variant="ghost" size="sm" onClick={() => onRemovePin?.(pinId)}>
-                  <MapPin size={14} /> Прибрати мітку
-                </Button>
+              {pin && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => onEditPin?.(pin)}>
+                    <SlidersHorizontal size={14} /> Видимість мітки
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onRemovePin?.(pin.id)}>
+                    <MapPin size={14} /> Прибрати мітку
+                  </Button>
+                </>
               )}
               <Button variant="danger" size="sm" onClick={() => { if (confirm('Видалити локацію разом з усіма її мітками?')) onDeleteLocation?.(locationId); }}>
                 <Trash2 size={14} /> Видалити локацію

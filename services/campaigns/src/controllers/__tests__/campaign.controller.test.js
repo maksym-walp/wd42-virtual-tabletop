@@ -227,6 +227,38 @@ describe('CampaignController.updateDescription', () => {
   });
 });
 
+describe('CampaignController.updateCurrentDate', () => {
+  it('returns 404 when campaign is missing', async () => {
+    CampaignModel.findById.mockResolvedValue(null);
+    const req = mockReq({ params: { id: 'missing' } });
+    const res = mockRes();
+    await CampaignController.updateCurrentDate(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 403 when requester is not GM', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'not-gm' } });
+    const res = mockRes();
+    await CampaignController.updateCurrentDate(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CampaignModel.updateCurrentDate).not.toHaveBeenCalled();
+  });
+
+  it('updates the current date for the GM', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignModel.updateCurrentDate.mockResolvedValue({ id: 'c1', current_year: 100 });
+    const body = { calendar_id: 'cal-1', current_year: 100, current_month_id: 'm1', current_day: 5 };
+    const req = mockReq({ params: { id: 'c1' }, body, user: { sub: 'gm-1' } });
+    const res = mockRes();
+
+    await CampaignController.updateCurrentDate(req, res);
+
+    expect(CampaignModel.updateCurrentDate).toHaveBeenCalledWith('c1', body);
+    expect(res.json).toHaveBeenCalledWith({ campaign: { id: 'c1', current_year: 100 } });
+  });
+});
+
 describe('CampaignController.rename', () => {
   it('returns 404 when campaign is missing', async () => {
     CampaignModel.findById.mockResolvedValue(null);

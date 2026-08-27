@@ -57,6 +57,18 @@ const CampaignController = {
     res.json({ campaign: updated });
   },
 
+  async updateCurrentDate(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { calendar_id, current_year, current_month_id, current_day } = req.body;
+    const updated = await CampaignModel.updateCurrentDate(campaign.id, {
+      calendar_id, current_year, current_month_id, current_day,
+    });
+    res.json({ campaign: updated });
+  },
+
   async rename(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;

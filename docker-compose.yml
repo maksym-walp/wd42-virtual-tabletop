@@ -248,6 +248,23 @@ services:
     networks:
       - walp-network
 
+  calendar:
+    build:
+      context: ./services/calendar
+      target: development
+    container_name: walp-calendar
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3015
+    volumes:
+      - ./services/calendar/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless, уся метаінформація
   # про файли живе в БД інших сервісів (campaign_gallery, characters.image_url).
   media:
@@ -303,6 +320,7 @@ services:
       - maps
       - compendium
       - admin
+      - calendar
       - media
       - frontend
     networks:

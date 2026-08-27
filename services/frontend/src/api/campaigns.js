@@ -38,6 +38,13 @@ const campaignApi = {
     return data.campaign;
   },
 
+  // Прив'язка календаря й поточна дата кампанії (усі чотири поля йдуть
+  // разом — див. 60-campaign-time-tracking.sql / CampaignController.updateCurrentDate).
+  async updateCurrentDate(id, { calendar_id, current_year, current_month_id, current_day }) {
+    const { data } = await api.patch(`${BASE}/${id}/date`, { calendar_id, current_year, current_month_id, current_day });
+    return data.campaign;
+  },
+
   async remove(id) {
     await api.delete(`${BASE}/${id}`);
   },

@@ -1,4 +1,5 @@
 const MapModel = require('../models/map.model');
+const CampaignMembershipModel = require('../models/campaign-membership.model');
 
 // Standalone maps: no campaign coupling. Access is owner + public + role-based,
 // mirroring the artifacts/spellbook catalog pattern (created_by + is_public).
@@ -40,6 +41,12 @@ async function loadMapOr404(mapId, res) {
   return map;
 }
 
+// Is this user a member (GM or player) of this campaign? Gates whether a
+// pin reader's ?campaign_id is trusted as their "current campaign" context.
+async function isCampaignMember(campaignId, userId) {
+  return CampaignMembershipModel.isMember(campaignId, userId);
+}
+
 module.exports = {
   isAdmin,
   canCreate,
@@ -48,4 +55,5 @@ module.exports = {
   canWriteLocation,
   stripGmNote,
   loadMapOr404,
+  isCampaignMember,
 };

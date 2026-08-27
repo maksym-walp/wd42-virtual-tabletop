@@ -102,6 +102,22 @@ const CampaignModel = {
     return rows[0] || null;
   },
 
+  // calendar_id / current_month_id are cross-service refs into the
+  // calendar service's schema (calendar.calendars / calendar.calendar_months)
+  // — FK-less plain UUID columns, same convention as campaign_characters.character_id.
+  // All four fields are set together since a current date only means
+  // something relative to the calendar it's set against.
+  async updateCurrentDate(id, { calendar_id, current_year, current_month_id, current_day }) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.campaigns
+       SET calendar_id = $2, current_year = $3, current_month_id = $4, current_day = $5, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id, calendar_id ?? null, current_year ?? null, current_month_id ?? null, current_day ?? null]
+    );
+    return rows[0] || null;
+  },
+
   // campaign_characters rows cascade-delete with the campaign (FK ON DELETE
   // CASCADE); the characters themselves live in character_sheet and are untouched.
   async remove(id) {
