@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import AuthorBadge from './AuthorBadge';
+import { StatGrid, StatBox } from './StatGrid';
 
 export default function ManeuverCard({ maneuver }) {
   return (
@@ -14,11 +15,12 @@ export default function ManeuverCard({ maneuver }) {
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-b border-border px-3.5 py-2">
-        <span className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim">
-          {maneuver.duration_actions} {maneuver.duration_actions === 1 ? 'дія' : 'дії'}
-        </span>
-      </div>
+      {/* Same stat-cell treatment as the spell/equipment cards' rows, in
+          place of the old loose badge — a maneuver only ever has one stat
+          (its action cost), so this is a single full-width cell. */}
+      <StatGrid className="grid-cols-1">
+        <StatBox label="Дії" value={`${maneuver.duration_actions}/3`} />
+      </StatGrid>
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{maneuver.name}</h3>
       <AuthorBadge username={maneuver.owner_username} variant="inline" className="px-3.5 pb-1" />

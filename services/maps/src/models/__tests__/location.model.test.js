@@ -6,33 +6,45 @@ const LocationModel = require('../location.model');
 beforeEach(() => jest.clearAllMocks());
 
 describe('LocationModel.create', () => {
-  it('inserts created_by + all columns incl. image_urls array and marker icon/level', async () => {
+  it('inserts created_by + base fields only (name, type, marker icon/level)', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({
-      createdBy: 'u1', name: 'Rivertown', description: 'A town',
-      gmNote: 'secret', imageUrls: ['/uploads/a.jpg', '/uploads/b.jpg'], type: 'city',
-      markerIcon: '🏰', markerLevel: 3,
+      createdBy: 'u1', name: 'Rivertown', type: 'city', markerIcon: '🏰', markerLevel: 3,
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO maps\.locations/);
-    expect(params).toEqual(['u1', 'Rivertown', 'A town', 'secret', ['/uploads/a.jpg', '/uploads/b.jpg'], 'city', '🏰', 3]);
+    expect(sql).not.toMatch(/description|gm_note|image_url/);
+    expect(params).toEqual(['u1', 'Rivertown', 'city', '🏰', 3]);
   });
 
-  it('defaults omitted optional fields (image_urls -> [])', async () => {
+  it('defaults omitted optional base fields to null', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({ createdBy: 'u1', name: 'Nowhere' });
-    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', null, null, [], null, null, null]);
+    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', null, null, null]);
   });
 });
 
 describe('LocationModel.listByOwner', () => {
-  it('scopes by created_by newest first', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
+  it('scopes by created_by newest first, with a nested versions array', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1', versions: [] }] });
     await LocationModel.listByOwner('u1');
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE created_by = \$1/);
-    expect(sql).toMatch(/ORDER BY created_at DESC/);
+    expect(sql).toMatch(/WHERE l\.created_by = \$1/);
+    expect(sql).toMatch(/ORDER BY l\.created_at DESC/);
+    expect(sql).toMatch(/json_agg/);
+    expect(sql).toMatch(/maps\.location_versions/);
     expect(params).toEqual(['u1']);
+  });
+});
+
+describe('LocationModel.findByIdWithVersions', () => {
+  it('returns the base row plus its aggregated versions', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1', versions: [] }] });
+    await LocationModel.findByIdWithVersions('loc1');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/FROM maps\.locations l WHERE l\.id = \$1/);
+    expect(sql).toMatch(/json_agg/);
+    expect(params).toEqual(['loc1']);
   });
 });
 
@@ -54,13 +66,61 @@ describe('LocationModel.isPinnedOnReadableMap', () => {
 });
 
 describe('LocationModel.update', () => {
-  it('updates the mutable fields and updated_at', async () => {
+  it('updates the base fields and updated_at', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
-    await LocationModel.update('loc1', { name: 'New', description: null, gmNote: 'n', imageUrls: ['/uploads/x.jpg'], type: 'ruin', markerIcon: null, markerLevel: 2 });
+    await LocationModel.update('loc1', { name: 'New', type: 'ruin', markerIcon: null, markerLevel: 2 });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE maps\.locations/);
     expect(sql).toMatch(/updated_at = NOW\(\)/);
-    expect(params).toEqual(['loc1', 'New', null, 'n', ['/uploads/x.jpg'], 'ruin', null, 2]);
+    expect(sql).not.toMatch(/description|gm_note|image_url/);
+    expect(params).toEqual(['loc1', 'New', 'ruin', null, 2]);
+  });
+});
+
+describe('LocationModel.bulkImport', () => {
+  const mappers = {
+    toBase: (r) => ({ name: r.name, type: r.type ?? null, markerIcon: null, markerLevel: null }),
+    toVersion: (v) => ({ startYear: v.start_year ?? null, description: v.description ?? null, gmNote: null, name: null, markerIcon: null, markerLevel: null }),
+  };
+
+  it('inserts each location + its versions inside one transaction', async () => {
+    const client = { query: jest.fn(), release: jest.fn() };
+    client.query.mockResolvedValue({ rows: [{ id: 'new-loc' }] });
+    pool.connect.mockResolvedValue(client);
+
+    const count = await LocationModel.bulkImport('u1', [
+      { name: 'A', versions: [{ start_year: 500 }, { start_year: 600 }] },
+      { name: 'B' },
+    ], mappers);
+
+    expect(count).toBe(2);
+    const sqls = client.query.mock.calls.map((c) => c[0]);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls.some((s) => /INSERT INTO maps\.locations/.test(s))).toBe(true);
+    expect(sqls.some((s) => /INSERT INTO maps\.location_versions/.test(s))).toBe(true);
+    expect(sqls[sqls.length - 1]).toBe('COMMIT');
+    // B has no versions -> still gets one base version row
+    expect(sqls.filter((s) => /INSERT INTO maps\.location_versions/.test(s))).toHaveLength(3);
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('rolls back and rethrows on failure', async () => {
+    const client = { query: jest.fn(), release: jest.fn() };
+    client.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockRejectedValueOnce(new Error('boom'));
+    pool.connect.mockResolvedValue(client);
+
+    await expect(LocationModel.bulkImport('u1', [{ name: 'A' }], mappers)).rejects.toThrow('boom');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('skips records without a name', async () => {
+    const client = { query: jest.fn().mockResolvedValue({ rows: [{ id: 'x' }] }), release: jest.fn() };
+    pool.connect.mockResolvedValue(client);
+    const count = await LocationModel.bulkImport('u1', [{ type: 'city' }, null, 'bad'], mappers);
+    expect(count).toBe(0);
   });
 });
 

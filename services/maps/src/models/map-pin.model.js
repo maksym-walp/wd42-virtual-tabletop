@@ -1,5 +1,23 @@
 const pool = require('../config/db');
 
+// Per-pin, the location's DATED versions with only the fields the map needs to
+// render a marker over time (name label + icon + zoom level). The base name /
+// icon / level already come through as location_name / location_marker_* — a
+// NULL override on a version means "keep the base". description / gm_note stay
+// out: they're only read when a pin is clicked (LocationDrawer fetches the
+// full location then).
+const LOCATION_VERSIONS_AGG = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+             'start_year', v.start_year,
+             'name', v.name,
+             'marker_icon', v.marker_icon,
+             'marker_level', v.marker_level
+           ) ORDER BY v.start_year ASC)
+    FROM maps.location_versions v
+    WHERE v.location_id = l.id AND v.start_year IS NOT NULL
+  ), '[]'::json) AS location_versions`;
+
 const MapPinModel = {
   // Join the location for display labels. Deliberately excludes gm_note — pins
   // are read by any campaign member, so no GM-only field may leak through here.
@@ -11,7 +29,8 @@ const MapPinModel = {
               l.name  AS location_name,
               l.type  AS location_type,
               l.marker_icon  AS location_marker_icon,
-              l.marker_level AS location_marker_level
+              l.marker_level AS location_marker_level,
+              ${LOCATION_VERSIONS_AGG}
        FROM maps.map_pins p
        JOIN maps.locations l ON l.id = p.location_id
        WHERE p.map_id = $1
@@ -34,7 +53,8 @@ const MapPinModel = {
               l.name  AS location_name,
               l.type  AS location_type,
               l.marker_icon  AS location_marker_icon,
-              l.marker_level AS location_marker_level
+              l.marker_level AS location_marker_level,
+              ${LOCATION_VERSIONS_AGG}
        FROM maps.map_pins p
        JOIN maps.locations l ON l.id = p.location_id
        WHERE p.map_id = $1
@@ -48,26 +68,27 @@ const MapPinModel = {
   // The controller supplies concrete min_zoom/max_zoom (defaulting them when
   // omitted) and validated lens_ids/visible_campaign_ids arrays (defaulting
   // to [] when omitted), so the model stays a plain INSERT.
-  async add(mapId, { locationId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds }) {
+  async add(mapId, { locationId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds, startYear, endYear }) {
     const { rows } = await pool.query(
       `INSERT INTO maps.map_pins
-         (map_id, location_id, x_coordinate, y_coordinate, min_zoom, max_zoom, lens_ids, visible_campaign_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[], $8::uuid[])
+         (map_id, location_id, x_coordinate, y_coordinate, min_zoom, max_zoom, lens_ids, visible_campaign_ids, start_year, end_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::uuid[], $8::uuid[], $9, $10)
        RETURNING *`,
-      [mapId, locationId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds]
+      [mapId, locationId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds, startYear, endYear]
     );
     return rows[0];
   },
 
   // Scope by both pin id AND map_id (defensive, like map-lens).
-  async update(id, mapId, { x, y, minZoom, maxZoom, lensIds, visibleCampaignIds }) {
+  async update(id, mapId, { x, y, minZoom, maxZoom, lensIds, visibleCampaignIds, startYear, endYear }) {
     const { rows } = await pool.query(
       `UPDATE maps.map_pins
        SET x_coordinate = $3, y_coordinate = $4, min_zoom = $5, max_zoom = $6,
-           lens_ids = $7::uuid[], visible_campaign_ids = $8::uuid[], updated_at = NOW()
+           lens_ids = $7::uuid[], visible_campaign_ids = $8::uuid[],
+           start_year = $9, end_year = $10, updated_at = NOW()
        WHERE id = $1 AND map_id = $2
        RETURNING *`,
-      [id, mapId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds]
+      [id, mapId, x, y, minZoom, maxZoom, lensIds, visibleCampaignIds, startYear, endYear]
     );
     return rows[0] || null;
   },

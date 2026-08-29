@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Trash2, Upload, Map, CalendarDays, Globe, Lock, Plus, LogOut, ArrowLeft } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
-import calendarApi from '../api/calendar';
+import chronologyApi from '../api/chronology';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import useDebounce from '../hooks/useDebounce';
 import Card from '../components/ui/Card';
@@ -358,9 +358,9 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
   );
 }
 
-// Links a campaign to one calendar (the calendar service's own custom
-// calendars — see calendarApi). This is the only entry point into
-// /calendars/:id?campaign_id=... — without it CalendarView never receives a
+// Links a campaign to one calendar (the chronology service's own custom
+// calendars — see chronologyApi). This is the only entry point into
+// /chronology/:id?campaign_id=... — without it ChronologyView never receives a
 // campaign_id and so never shows the current-date UI (today highlight,
 // "Сьогодні", "Встановити як поточну дату кампанії") at all.
 // calendar_id/current_year/current_month_id/current_day are always sent
@@ -387,8 +387,8 @@ function CalendarBlock({ campaign, isGm, onChange }) {
     // calendar's name. Player: just the one linked calendar (if any) — visible
     // to them the same way the calendar service already gates it (own/public/admin).
     const task = isGm
-      ? calendarApi.list()
-      : calendarApi.getOne(campaign.calendar_id).then((c) => [c]);
+      ? chronologyApi.list()
+      : chronologyApi.getOne(campaign.calendar_id).then((c) => [c]);
     task
       .then((list) => {
         if (!alive) return;
@@ -442,7 +442,7 @@ function CalendarBlock({ campaign, isGm, onChange }) {
   // Nothing to show a player when the GM hasn't linked a calendar yet.
   if (!isGm && !campaign.calendar_id && !loading) return null;
 
-  const viewHref = `/calendars/${campaign.calendar_id}?campaign_id=${campaign.id}`;
+  const viewHref = `/chronology/${campaign.calendar_id}?campaign_id=${campaign.id}`;
 
   return (
     <div>
@@ -453,7 +453,7 @@ function CalendarBlock({ campaign, isGm, onChange }) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Привʼязати календар</p>
           {calendars.length === 0 ? (
             <p className="text-sm text-text-dim">
-              Немає доступних календарів. Створіть їх у розділі <Link to="/calendars" className="text-accent">Календарі</Link>.
+              Немає доступних календарів. Створіть їх у розділі <Link to="/chronology" className="text-accent">Хронологія</Link>.
             </p>
           ) : (
             <div className="flex gap-2">
@@ -547,7 +547,7 @@ function MapsBlock({ campaignId, isGm }) {
   };
 
   const renderCard = (card) => (
-    <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}`)}>
+    <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}?campaign_id=${campaignId}`)}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex items-center gap-2 font-display text-base text-text">
           <Map size={16} className="text-text-dim" /> {card.map_name}

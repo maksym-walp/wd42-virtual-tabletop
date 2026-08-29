@@ -1,7 +1,9 @@
 jest.mock('../../models/map-lens.model');
+jest.mock('../../models/map-lens-version.model');
 jest.mock('../../models/map.model');
 
 const MapLensModel = require('../../models/map-lens.model');
+const MapLensVersionModel = require('../../models/map-lens-version.model');
 const MapModel = require('../../models/map.model');
 const MapLensController = require('../map-lens.controller');
 
@@ -51,12 +53,32 @@ describe('MapLensController.add', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  it('201 for the owner', async () => {
-    MapLensModel.add.mockResolvedValue({ id: 'l1' });
+  it('400 for a malformed year', async () => {
     const res = mockRes();
-    await MapLensController.add(mockReq({ params: { mapId: 'm1' }, body: { name: '  Political  ', image_url: '/uploads/p.jpg' } }), res);
-    expect(MapLensModel.add).toHaveBeenCalledWith('m1', 'Political', '/uploads/p.jpg');
+    await MapLensController.add(mockReq({ params: { mapId: 'm1' }, body: { name: 'P', image_url: '/uploads/p.jpg', year: 'soon' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(MapLensModel.add).not.toHaveBeenCalled();
+  });
+
+  it('201 for the owner — creates the lens and its first version', async () => {
+    MapLensModel.add.mockResolvedValue({ id: 'l1', name: 'Political' });
+    MapLensVersionModel.add.mockResolvedValue({ id: 'v1', year: 1200, image_url: '/uploads/p.jpg' });
+    const res = mockRes();
+    await MapLensController.add(mockReq({ params: { mapId: 'm1' }, body: { name: '  Political  ', image_url: '/uploads/p.jpg', year: 1200 } }), res);
+    expect(MapLensModel.add).toHaveBeenCalledWith('m1', 'Political');
+    expect(MapLensVersionModel.add).toHaveBeenCalledWith('l1', { year: 1200, imageUrl: '/uploads/p.jpg' });
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      lens: { id: 'l1', name: 'Political', versions: [{ id: 'v1', year: 1200, image_url: '/uploads/p.jpg' }] },
+    });
+  });
+
+  it('defaults an omitted year to a timeless (null) version', async () => {
+    MapLensModel.add.mockResolvedValue({ id: 'l1', name: 'Political' });
+    MapLensVersionModel.add.mockResolvedValue({ id: 'v1', year: null, image_url: '/uploads/p.jpg' });
+    const res = mockRes();
+    await MapLensController.add(mockReq({ params: { mapId: 'm1' }, body: { name: 'Political', image_url: '/uploads/p.jpg' } }), res);
+    expect(MapLensVersionModel.add).toHaveBeenCalledWith('l1', { year: null, imageUrl: '/uploads/p.jpg' });
   });
 });
 
@@ -64,8 +86,16 @@ describe('MapLensController.update / remove', () => {
   it('update 404 when the lens is not on this map', async () => {
     MapLensModel.update.mockResolvedValue(null);
     const res = mockRes();
-    await MapLensController.update(mockReq({ params: { mapId: 'm1', lensId: 'x' }, body: { name: 'Geo', image_url: 'https://x/y.jpg' } }), res);
+    await MapLensController.update(mockReq({ params: { mapId: 'm1', lensId: 'x' }, body: { name: 'Geo' } }), res);
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('update renames without touching images', async () => {
+    MapLensModel.update.mockResolvedValue({ id: 'l1', name: 'Geo' });
+    const res = mockRes();
+    await MapLensController.update(mockReq({ params: { mapId: 'm1', lensId: 'l1' }, body: { name: '  Geo  ' } }), res);
+    expect(MapLensModel.update).toHaveBeenCalledWith('l1', 'm1', { name: 'Geo' });
+    expect(res.json).toHaveBeenCalledWith({ lens: { id: 'l1', name: 'Geo' } });
   });
 
   it('remove 204 for the owner', async () => {

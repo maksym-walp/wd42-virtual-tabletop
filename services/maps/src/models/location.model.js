@@ -1,15 +1,26 @@
 const pool = require('../config/db');
 
-// Locations are owned by created_by. gm_note lives on the row; stripping it from
-// non-owner responses is the controller's job (access.stripGmNote).
+// Locations are owned by created_by. Their time-varying lore (description,
+// gm_note, image) lives on maps.location_versions — the base row here only
+// holds the identity + map-marker presentation. gm_note stripping from
+// non-owner responses is the controller's job (access.serializeLocation).
+const VERSIONS_AGG = `
+  COALESCE((
+    SELECT json_agg(v ORDER BY v.start_year ASC NULLS LAST)
+    FROM (
+      SELECT id, start_year, description, gm_note, image_url, name, marker_icon, marker_level
+      FROM maps.location_versions
+      WHERE location_id = l.id
+    ) v
+  ), '[]'::json) AS versions`;
+
 const LocationModel = {
-  async create({ createdBy, name, description, gmNote, imageUrls, type, markerIcon, markerLevel }) {
+  async create({ createdBy, name, type, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
-      `INSERT INTO maps.locations
-         (created_by, name, description, gm_note, image_urls, type, marker_icon, marker_level)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO maps.locations (created_by, name, type, marker_icon, marker_level)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [createdBy, name, description ?? null, gmNote ?? null, imageUrls ?? [], type ?? null, markerIcon ?? null, markerLevel ?? null]
+      [createdBy, name, type ?? null, markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0];
   },
@@ -22,11 +33,20 @@ const LocationModel = {
     return rows[0] || null;
   },
 
+  async findByIdWithVersions(id) {
+    const { rows } = await pool.query(
+      `SELECT l.*, ${VERSIONS_AGG} FROM maps.locations l WHERE l.id = $1`,
+      [id]
+    );
+    return rows[0] || null;
+  },
+
   async listByOwner(userId) {
     const { rows } = await pool.query(
-      `SELECT * FROM maps.locations
-       WHERE created_by = $1
-       ORDER BY created_at DESC`,
+      `SELECT l.*, ${VERSIONS_AGG}
+       FROM maps.locations l
+       WHERE l.created_by = $1
+       ORDER BY l.created_at DESC`,
       [userId]
     );
     return rows;
@@ -48,14 +68,13 @@ const LocationModel = {
     return rows.length > 0;
   },
 
-  async update(id, { name, description, gmNote, imageUrls, type, markerIcon, markerLevel }) {
+  async update(id, { name, type, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
       `UPDATE maps.locations
-       SET name = $2, description = $3, gm_note = $4, image_urls = $5, type = $6,
-           marker_icon = $7, marker_level = $8, updated_at = NOW()
+       SET name = $2, type = $3, marker_icon = $4, marker_level = $5, updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, description ?? null, gmNote ?? null, imageUrls ?? [], type ?? null, markerIcon ?? null, markerLevel ?? null]
+      [id, name, type ?? null, markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0] || null;
   },
@@ -66,6 +85,52 @@ const LocationModel = {
       [id]
     );
     return rowCount > 0;
+  },
+
+  // Bulk import of previously exported locations. Each record becomes a new
+  // location (own id, created_by forced to the importer) plus its versions.
+  // image_url is dropped on every version — images from a foreign export don't
+  // live on this disk (same rule as the equipment importer). A record with no
+  // versions still gets one empty base version so the location isn't broken.
+  // All-or-nothing: the whole batch runs in one transaction.
+  async bulkImport(userId, records, { toBase, toVersion }) {
+    const client = await pool.connect();
+    let imported = 0;
+    try {
+      await client.query('BEGIN');
+      for (const record of records) {
+        if (!record || typeof record !== 'object') continue;
+        const base = toBase(record);
+        if (!base.name) continue;
+        const { rows } = await client.query(
+          `INSERT INTO maps.locations (created_by, name, type, marker_icon, marker_level)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [userId, base.name, base.type, base.markerIcon, base.markerLevel]
+        );
+        const locationId = rows[0].id;
+
+        const versions = Array.isArray(record.versions) && record.versions.length
+          ? record.versions
+          : [{}];
+        for (const rawVersion of versions) {
+          const v = toVersion(rawVersion);
+          await client.query(
+            `INSERT INTO maps.location_versions
+               (location_id, start_year, description, gm_note, image_url, name, marker_icon, marker_level)
+             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7)`,
+            [locationId, v.startYear, v.description, v.gmNote, v.name, v.markerIcon, v.markerLevel]
+          );
+        }
+        imported += 1;
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return imported;
   },
 };
 

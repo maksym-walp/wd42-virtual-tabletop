@@ -5,8 +5,10 @@ import Field, { inputClass } from '../ui/Field';
 import MultiSelectDropdown from '../ui/MultiSelectDropdown';
 import mapsApi from '../../api/maps';
 import LocationFields from './LocationFields';
+import LocationVersionFields from './LocationVersionFields';
 
-const EMPTY_LOCATION = { name: '', type: null, description: '', gm_note: '', image_urls: [], marker_icon: null, marker_level: null };
+const EMPTY_BASE = { name: '', type: null, marker_icon: null, marker_level: null };
+const EMPTY_VERSION = { start_year: null, description: '', gm_note: '', image_url: null };
 
 // Sheet for both creating a pin (after the owner clicks the map in placement
 // mode — pass `coords`) and editing an existing one's visibility (pass `pin`
@@ -16,13 +18,25 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
   const isEdit = Boolean(pin);
   const [mode, setMode] = useState('new');
   const [existingId, setExistingId] = useState('');
-  const [loc, setLoc] = useState(EMPTY_LOCATION);
+  const [locBase, setLocBase] = useState(EMPTY_BASE);
+  const [locVersion, setLocVersion] = useState(EMPTY_VERSION);
   // Empty means unrestricted (see 61-map-pins-lens-campaign-visibility.sql) —
   // a new pin defaults to the lens it's being placed on, and to every campaign.
   const [lensIds, setLensIds] = useState(() => (isEdit ? pin.lens_ids || [] : (activeLensId ? [activeLensId] : [])));
   const [visibleCampaignIds, setVisibleCampaignIds] = useState(() => (isEdit ? pin.visible_campaign_ids || [] : []));
+  // Optional [start, end] year window — blank means unbounded that side.
+  const [startYear, setStartYear] = useState(() => (isEdit && pin.start_year != null ? String(pin.start_year) : ''));
+  const [endYear, setEndYear] = useState(() => (isEdit && pin.end_year != null ? String(pin.end_year) : ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // '' -> undefined (omitted), else the integer, or NaN when malformed.
+  const readYear = (raw) => {
+    const s = raw.trim();
+    if (s === '') return undefined;
+    const n = Number(s);
+    return Number.isInteger(n) ? n : NaN;
+  };
 
   const lensOptions = (lenses || []).map((l) => ({ key: l.id, label: l.name }));
   const campaignOptions = (campaigns || []).map((c) => ({ key: c.id, label: c.name }));
@@ -33,6 +47,12 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
 
   const save = async () => {
     setError('');
+    const start = readYear(startYear);
+    const end = readYear(endYear);
+    if (Number.isNaN(start) || Number.isNaN(end)) { setError('Рік має бути цілим числом'); return; }
+    if (start != null && end != null && start > end) { setError('Рік початку пізніший за рік завершення'); return; }
+    const yearFields = { start_year: start ?? null, end_year: end ?? null };
+
     setSaving(true);
     try {
       if (isEdit) {
@@ -43,6 +63,7 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
           max_zoom: pin.max_zoom,
           lens_ids: lensIds,
           visible_campaign_ids: visibleCampaignIds,
+          ...yearFields,
         });
         onSaved();
         return;
@@ -50,15 +71,15 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
 
       let locationId = existingId;
       if (mode === 'new') {
-        if (!loc.name.trim()) { setError('Вкажіть назву локації'); setSaving(false); return; }
+        if (!locBase.name.trim()) { setError('Вкажіть назву локації'); setSaving(false); return; }
         const created = await mapsApi.createLocation({
-          name: loc.name.trim(),
-          type: loc.type || undefined,
-          description: loc.description || undefined,
-          gm_note: loc.gm_note || undefined,
-          image_urls: loc.image_urls?.length ? loc.image_urls : undefined,
-          marker_icon: loc.marker_icon || undefined,
-          marker_level: loc.marker_level ?? undefined,
+          name: locBase.name.trim(),
+          type: locBase.type || undefined,
+          marker_icon: locBase.marker_icon || undefined,
+          marker_level: locBase.marker_level ?? undefined,
+          description: locVersion.description || undefined,
+          gm_note: locVersion.gm_note || undefined,
+          image_url: locVersion.image_url || undefined,
         });
         locationId = created.id;
       }
@@ -70,6 +91,7 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
         y_coordinate: coords.y,
         lens_ids: lensIds,
         visible_campaign_ids: visibleCampaignIds,
+        ...yearFields,
       });
       onSaved();
     } catch (err) {
@@ -102,7 +124,11 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
                 {myLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             ) : (
-              <LocationFields value={loc} onChange={setLoc} />
+              <>
+                <LocationFields value={locBase} onChange={setLocBase} />
+                <LocationVersionFields value={locVersion} onChange={setLocVersion} isBase />
+                <p className="text-xs text-text-dim">Це базова версія локації. Хронологічні версії за роками додаються в редакторі локації.</p>
+              </>
             )}
           </>
         )}
@@ -114,6 +140,15 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
         <Field label="Видима в кампаніях" hint="Порожньо — видима в будь-якій кампанії, що має доступ до мапи.">
           <MultiSelectDropdown options={campaignOptions} value={visibleCampaignIds} onChange={setVisibleCampaignIds} placeholder="Усі кампанії" />
         </Field>
+
+        <div className="flex gap-3">
+          <Field label="Рік початку" className="flex-1" hint="Порожньо — без нижньої межі.">
+            <input type="number" className={inputClass} value={startYear} onChange={(e) => setStartYear(e.target.value)} placeholder="—" />
+          </Field>
+          <Field label="Рік завершення" className="flex-1" hint="Порожньо — без верхньої межі.">
+            <input type="number" className={inputClass} value={endYear} onChange={(e) => setEndYear(e.target.value)} placeholder="—" />
+          </Field>
+        </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}
 

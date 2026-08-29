@@ -63,9 +63,12 @@ export default function MultiSelectDropdown({ options, value, onChange, placehol
 
       {open && rect && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          {/* z above the modal layer (Sheet/Drawer are z-50): portaled to
+              <body>, this popover would otherwise paint behind an open Sheet
+              and look like an empty list. */}
+          <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
           <div
-            className="fixed z-40 max-h-64 overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
+            className="fixed z-[60] max-h-64 overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
             style={{ top: rect.top, left: rect.left, width: rect.width }}
           >
             {options.map((o) => (

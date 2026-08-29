@@ -1,4 +1,4 @@
-import { mod } from '../utils/calendarMath';
+import { mod } from '../utils/chronologyMath';
 
 // Draws the illuminated region as a single path made of two arcs sharing
 // the same top/bottom points on the disc: the outer arc is always the

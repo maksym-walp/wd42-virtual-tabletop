@@ -1,19 +1,18 @@
 import { useRef, useState } from 'react';
-import { Upload, X } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../../api/media';
 import { isIconUrl, DEFAULT_MARKER_LEVEL } from '../../constants/maps';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
-import SmartTextarea from '../ui/SmartTextarea';
 import MarkerIcon from './MarkerIcon';
 
-// Controlled editor for a location. value = { name, type, description, gm_note,
-// image_urls[], marker_icon, marker_level }. The marker icon is either an
-// uploaded image URL or an emoji glyph; image_urls is the photo gallery.
+// Controlled editor for a location's BASE (time-invariant) fields:
+// value = { name, type, marker_icon, marker_level }. The time-varying lore
+// (description, gm_note, image) lives on chronological versions — see
+// LocationVersionFields. The marker icon is either an uploaded image URL or an
+// emoji glyph.
 export default function LocationFields({ value, onChange }) {
-  const photoRef = useRef(null);
   const markerRef = useRef(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
   const [markerUploading, setMarkerUploading] = useState(false);
   const [error, setError] = useState('');
   const set = (patch) => onChange({ ...value, ...patch });
@@ -31,29 +30,6 @@ export default function LocationFields({ value, onChange }) {
       setBusy(false);
     }
   };
-
-  // Location gallery: upload one or several photos, appended to image_urls.
-  const handlePhotos = async (e) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
-    if (!files.length) return;
-    setError('');
-    setPhotoUploading(true);
-    try {
-      const added = [];
-      for (const file of files) {
-        if (file.size > MAX_UPLOAD_BYTES) { setError('Файл завеликий — максимум 25 МБ'); continue; }
-        added.push(await mediaApi.upload(file, { entityType: 'location' }));
-      }
-      if (added.length) set({ image_urls: [...(value.image_urls || []), ...added] });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Не вдалось завантажити зображення');
-    } finally {
-      setPhotoUploading(false);
-    }
-  };
-
-  const removeImage = (idx) => set({ image_urls: (value.image_urls || []).filter((_, i) => i !== idx) });
 
   const effectiveLevel = value.marker_level ?? DEFAULT_MARKER_LEVEL;
   // The emoji field only reflects marker_icon when it isn't an image URL.
@@ -113,35 +89,6 @@ export default function LocationFields({ value, onChange }) {
           ))}
         </div>
         <p className="mt-1 text-xs text-text-dim">4 — видно на всіх масштабах · 1 — лише при значному приближенні.</p>
-      </div>
-
-      <SmartTextarea
-        label="Опис"
-        hint="Кнопкою «Посилання» вставте посилання — воно стане клікабельним у картці локації."
-        rows={3}
-        placeholder="Опис (бачать усі, хто відкриє локацію)"
-        value={value.description || ''}
-        onChange={(e) => set({ description: e.target.value })}
-      />
-      <textarea className={`${inputClass} resize-y`} rows={2} placeholder="Нотатка майстра (лише для вас)" value={value.gm_note || ''} onChange={(e) => set({ gm_note: e.target.value })} />
-
-      {/* Location photos — shown as a slider in the location card. */}
-      <div>
-        <p className="mb-1 text-xs text-text-dim">Фото локації (можна кілька)</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {(value.image_urls || []).map((url, i) => (
-            <div key={`${url}-${i}`} className="relative">
-              <img src={url} alt="" className="h-16 w-16 rounded border border-border object-cover" />
-              <button type="button" onClick={() => removeImage(i)} aria-label="Видалити фото" className="absolute -right-1.5 -top-1.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80">
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-          <Button type="button" variant="ghost" size="sm" onClick={() => photoRef.current?.click()} disabled={photoUploading}>
-            <Upload size={14} /> {photoUploading ? 'Завантаження…' : 'Додати фото'}
-          </Button>
-        </div>
-        <input ref={photoRef} type="file" accept={ACCEPTED_IMAGE_TYPES} multiple className="hidden" onChange={handlePhotos} />
       </div>
 
       {error && <p className="text-xs text-danger">{error}</p>}

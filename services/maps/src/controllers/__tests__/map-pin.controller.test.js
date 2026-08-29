@@ -118,24 +118,44 @@ describe('MapPinController.add', () => {
     expect(MapPinModel.add).not.toHaveBeenCalled();
   });
 
-  it('201 with default zoom and empty id arrays applied', async () => {
+  it('400 when start_year > end_year', async () => {
+    const res = mockRes();
+    await MapPinController.add(mockReq({ params: { mapId: 'm1' }, body: { ...okBody, start_year: 1500, end_year: 1400 } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(MapPinModel.add).not.toHaveBeenCalled();
+  });
+
+  it('400 for a non-integer year', async () => {
+    const res = mockRes();
+    await MapPinController.add(mockReq({ params: { mapId: 'm1' }, body: { ...okBody, start_year: 12.5 } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('201 with default zoom, empty id arrays and null years applied', async () => {
     MapPinModel.add.mockResolvedValue({ id: 'p1' });
     const res = mockRes();
     await MapPinController.add(mockReq({ params: { mapId: 'm1' }, body: okBody }), res);
     expect(MapPinModel.add).toHaveBeenCalledWith('m1', {
-      locationId: 'loc1', x: 0.5, y: 0.5, minZoom: 0, maxZoom: 100, lensIds: [], visibleCampaignIds: [],
+      locationId: 'loc1', x: 0.5, y: 0.5, minZoom: 0, maxZoom: 100,
+      lensIds: [], visibleCampaignIds: [], startYear: null, endYear: null,
     });
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('201 with lens_ids/visible_campaign_ids passed through once validated', async () => {
+  it('201 with lens_ids/visible_campaign_ids and years passed through once validated', async () => {
+    const lensId = '11111111-1111-4111-8111-111111111111';
+    MapLensModel.listByMap.mockResolvedValue([{ id: lensId }]);
     MapPinModel.add.mockResolvedValue({ id: 'p1' });
     const res = mockRes();
-    const body = { ...okBody, lens_ids: ['lens-1'], visible_campaign_ids: ['22222222-2222-4222-8222-222222222222'] };
+    const body = {
+      ...okBody, lens_ids: [lensId], visible_campaign_ids: ['22222222-2222-4222-8222-222222222222'],
+      start_year: 1200, end_year: 1400,
+    };
     await MapPinController.add(mockReq({ params: { mapId: 'm1' }, body }), res);
     expect(MapPinModel.add).toHaveBeenCalledWith('m1', {
       locationId: 'loc1', x: 0.5, y: 0.5, minZoom: 0, maxZoom: 100,
-      lensIds: ['lens-1'], visibleCampaignIds: ['22222222-2222-4222-8222-222222222222'],
+      lensIds: [lensId], visibleCampaignIds: ['22222222-2222-4222-8222-222222222222'],
+      startYear: 1200, endYear: 1400,
     });
   });
 });
@@ -153,7 +173,7 @@ describe('MapPinController.update / remove', () => {
     const res = mockRes();
     await MapPinController.update(mockReq({ params: { mapId: 'm1', pinId: 'p1' }, body: { x_coordinate: 0.2, y_coordinate: 0.3 } }), res);
     expect(MapPinModel.update).toHaveBeenCalledWith('p1', 'm1', {
-      x: 0.2, y: 0.3, minZoom: 0, maxZoom: 100, lensIds: [], visibleCampaignIds: [],
+      x: 0.2, y: 0.3, minZoom: 0, maxZoom: 100, lensIds: [], visibleCampaignIds: [], startYear: null, endYear: null,
     });
   });
 

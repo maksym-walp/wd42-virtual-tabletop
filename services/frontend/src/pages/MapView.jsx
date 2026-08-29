@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus } from 'lucide-react';
+import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus, Clock } from 'lucide-react';
 import mapsApi from '../api/maps';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
-import { typeKey } from '../constants/maps';
+import { typeKey, datedYears, resolveLensImage, pinVisibleInYear } from '../constants/maps';
 import MapCanvas from '../components/map/MapCanvas';
 import LocationDrawer from '../components/map/LocationDrawer';
 import PinForm from '../components/map/PinForm';
+import TimelineSlider from '../components/map/TimelineSlider';
+import LensVersionsSheet from '../components/map/LensVersionsSheet';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import { inputClass } from '../components/ui/Field';
@@ -17,6 +19,9 @@ export default function MapView() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedLocationId = searchParams.get('location');
+  // Opened from a campaign: no timeline slider — the view is pinned to the
+  // campaign's in-fiction year (resolved to the closest lens version).
+  const campaignId = searchParams.get('campaign_id');
 
   const [map, setMap] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +31,12 @@ export default function MapView() {
   const [activeLensId, setActiveLensId] = useState(null);
   const [pins, setPins] = useState([]);
   const [hiddenTypes, setHiddenTypes] = useState(() => new Set());
+
+  // Timeline. `year` drives the slider (standalone view); `campaignYear` is the
+  // fixed year when opened from a campaign.
+  const [year, setYear] = useState(null);
+  const [campaignYear, setCampaignYear] = useState(null);
+  const [versionsLensId, setVersionsLensId] = useState(null);
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -42,7 +53,16 @@ export default function MapView() {
   const isOwner = Boolean(map?.is_owner);
 
   const refreshPins = () => mapsApi.listPins(id).then(setPins).catch(() => {});
+  const refreshLenses = () => mapsApi.listLenses(id).then(setLenses).catch(() => {});
   const refreshMyLocations = () => mapsApi.listLocations().then(setMyLocations).catch(() => {});
+
+  // Campaign context: pin the view to the campaign's current in-fiction year.
+  useEffect(() => {
+    if (!campaignId) { setCampaignYear(null); return; }
+    campaignApi.getOne(campaignId)
+      .then((c) => setCampaignYear(c?.current_year ?? null))
+      .catch(() => setCampaignYear(null));
+  }, [campaignId]);
 
   // The owner's location library powers the "pick existing location" option;
   // their own campaigns (is_gm — not ones they merely play in) power the pin
@@ -93,12 +113,38 @@ export default function MapView() {
     [lenses, activeLensId],
   );
 
+  // Years that have a version image on the active lens, ascending.
+  const timelineYears = useMemo(() => datedYears(activeLens?.versions), [activeLens?.versions]);
+  const campaignMode = Boolean(campaignId);
+  // The slider shows only in the standalone view, and only when the lens spans
+  // more than one year.
+  const hasTimeline = !campaignMode && timelineYears.length >= 2;
+
+  // When the active lens changes, snap the slider to its latest year.
+  useEffect(() => {
+    setYear(timelineYears.length ? timelineYears[timelineYears.length - 1] : null);
+  }, [activeLens?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The year the map is currently showing: fixed campaign year, slider year, or
+  // none (a lens with no timeline).
+  const currentYear = campaignMode ? campaignYear : hasTimeline ? year : null;
+  const activeImageUrl = useMemo(
+    () => resolveLensImage(activeLens?.versions, currentYear),
+    [activeLens?.versions, currentYear],
+  );
+  // Pin year-window filtering only kicks in when a year is actually active.
+  const filterYear = (hasTimeline || (campaignMode && campaignYear != null)) ? currentYear : null;
+
   // Empty lens_ids means "not restricted to specific lenses" (see
   // 61-map-pins-lens-campaign-visibility.sql) — a pin with none set still
   // renders on every lens, only an explicit, non-matching list hides it.
+  // A pin also drops out when the active year falls outside its
+  // [start_year, end_year] window (filterYear === null disables that check).
   const pinsOnActiveLens = useMemo(
-    () => pins.filter((p) => !p.lens_ids?.length || p.lens_ids.includes(activeLens?.id)),
-    [pins, activeLens?.id],
+    () => pins.filter((p) =>
+      (!p.lens_ids?.length || p.lens_ids.includes(activeLens?.id))
+      && pinVisibleInYear(p, filterYear)),
+    [pins, activeLens?.id, filterYear],
   );
 
   const typeBuckets = useMemo(() => {
@@ -163,11 +209,19 @@ export default function MapView() {
     const name = (prompt('Назва шару (напр. Політична, Географічна):', `Шар ${lenses.length + 1}`) || '').trim();
     if (!name) return;
 
+    // Optional year for the first version — blank means a "timeless" image.
+    const yearRaw = (prompt('Рік цього зображення (необовʼязково — залиште порожнім):', '') || '').trim();
+    let firstYear;
+    if (yearRaw !== '') {
+      firstYear = Number(yearRaw);
+      if (!Number.isInteger(firstYear)) { setError('Рік має бути цілим числом'); return; }
+    }
+
     setError('');
     setUploading(true);
     try {
       const image_url = await mediaApi.upload(file, { entityType: 'map-lenses', entityId: id });
-      const lens = await mapsApi.addLens(id, { name, image_url });
+      const lens = await mapsApi.addLens(id, { name, image_url, year: firstYear });
       setLenses((prev) => [...prev, lens]);
       setActiveLensId(lens.id);
     } catch (err) {
@@ -309,8 +363,9 @@ export default function MapView() {
           <>
             <MapCanvas
               key={id}
-              imageUrl={activeLens.image_url}
+              imageUrl={activeImageUrl}
               pins={visiblePins}
+              year={filterYear}
               focusLocationId={selectedLocationId}
               onSelect={selectLocation}
               placing={placing}
@@ -344,16 +399,27 @@ export default function MapView() {
                   )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-1.5">
-                  {lenses.map((lens) => (
-                    <div key={lens.id} className={`group flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${lens.id === activeLens.id ? 'bg-gold/20 text-gold ring-1 ring-gold/50' : 'text-text-dim hover:bg-surface-hover'}`}>
-                      <button onClick={() => setActiveLensId(lens.id)}>{lens.name}</button>
-                      {isOwner && (
-                        <button onClick={() => handleRemoveLens(lens.id)} aria-label="Видалити шар" className="text-text-dim hover:text-danger">
-                          <XIcon size={12} />
+                  {lenses.map((lens) => {
+                    const yrs = datedYears(lens.versions);
+                    return (
+                      <div key={lens.id} className={`group flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${lens.id === activeLens.id ? 'bg-gold/20 text-gold ring-1 ring-gold/50' : 'text-text-dim hover:bg-surface-hover'}`}>
+                        <button onClick={() => setActiveLensId(lens.id)}>
+                          {lens.name}
+                          {yrs.length > 1 && <span className="ml-1 font-normal opacity-70">{yrs[0]}–{yrs[yrs.length - 1]}</span>}
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        {isOwner && (
+                          <button onClick={() => setVersionsLensId(lens.id)} aria-label="Часова шкала шару" title="Часова шкала" className="text-text-dim hover:text-accent">
+                            <Clock size={12} />
+                          </button>
+                        )}
+                        {isOwner && (
+                          <button onClick={() => handleRemoveLens(lens.id)} aria-label="Видалити шар" className="text-text-dim hover:text-danger">
+                            <XIcon size={12} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -379,14 +445,40 @@ export default function MapView() {
                 </div>
               )}
             </div>
+
+            {hasTimeline && (
+              <TimelineSlider
+                min={timelineYears[0]}
+                max={timelineYears[timelineYears.length - 1]}
+                value={year}
+                ticks={timelineYears}
+                onChange={setYear}
+              />
+            )}
+
+            {campaignMode && campaignYear != null && (
+              <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] -translate-x-1/2 rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-xs font-semibold text-text-dim shadow-lg backdrop-blur">
+                <span className="flex items-center gap-1.5"><Clock size={12} /> Рік кампанії: <span className="tabular-nums text-gold">{campaignYear}</span></span>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {versionsLensId && (
+        <LensVersionsSheet
+          mapId={id}
+          lens={lenses.find((l) => l.id === versionsLensId) || { id: versionsLensId, name: '', versions: [] }}
+          onChanged={refreshLenses}
+          onClose={() => setVersionsLensId(null)}
+        />
+      )}
 
       {selectedLocationId && (
         <LocationDrawer
           locationId={selectedLocationId}
           isGm={isOwner}
+          year={filterYear}
           pin={selectedPin}
           onEditPin={setEditingPin}
           onRemovePin={handleRemovePin}

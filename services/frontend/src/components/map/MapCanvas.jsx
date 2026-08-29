@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, ImageOverlay, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { levelThreshold, isIconUrl, DEFAULT_MARKER_LEVEL } from '../../constants/maps';
+import { levelThreshold, isIconUrl, DEFAULT_MARKER_LEVEL, resolvePinMarker } from '../../constants/maps';
 
 // Flat images use L.CRS.Simple: [lat, lng] = [y, x], latitude grows upward.
 // Pins are stored normalized (0..1), y measured from the TOP, so we flip y.
@@ -49,15 +49,20 @@ function MapController({ bounds }) {
       map.fitBounds(bounds, { animate: false });
     };
     apply();
+    // A second pass on the next frame: right after a remount the container may
+    // not have its final size yet, so the first getBoundsZoom() can be wrong
+    // (over-zoomed). rAF runs it again once layout has settled.
+    const raf = requestAnimationFrame(apply);
     map.on('resize', apply);
-    return () => { map.off('resize', apply); };
+    return () => { cancelAnimationFrame(raf); map.off('resize', apply); };
   }, [map, bounds]);
   return null;
 }
 
 // Visibility is driven by each pin's LEVEL (1..4): level 4 shows at any zoom;
-// each lower level needs more of the zoom range.
-function PinMarkers({ pins, dims, onSelect }) {
+// each lower level needs more of the zoom range. Icon + level are resolved per
+// `year` — a location version can override them for a stretch of history.
+function PinMarkers({ pins, dims, year, onSelect }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoom: () => setZoom(map.getZoom()), zoomend: () => setZoom(map.getZoom()) });
@@ -67,21 +72,23 @@ function PinMarkers({ pins, dims, onSelect }) {
   const frac = range > 0 ? Math.min(1, Math.max(0, (zoom - min) / range)) : 0;
 
   return pins
-    .filter((p) => frac >= levelThreshold(p.location_marker_level ?? DEFAULT_MARKER_LEVEL))
-    .map((p) => (
+    .map((p) => ({ pin: p, marker: resolvePinMarker(p, year) }))
+    .filter(({ marker }) => frac >= levelThreshold(marker.level ?? DEFAULT_MARKER_LEVEL))
+    .map(({ pin, marker }) => (
       <Marker
-        key={p.id}
-        position={toLatLng(p, dims)}
-        icon={buildIcon(p.location_marker_icon)}
+        key={pin.id}
+        position={toLatLng(pin, dims)}
+        icon={buildIcon(marker.icon)}
+        title={marker.name || undefined}
         keyboard
-        eventHandlers={{ click: () => onSelect(p.location_id) }}
+        eventHandlers={{ click: () => onSelect(pin.location_id) }}
       />
     ));
 }
 
 // Centers on a pin when the selected location changes (click or deep-link), and
 // zooms in enough to reveal that marker's level. Guarded to fly once per id.
-function FocusController({ focusLocationId, pins, dims }) {
+function FocusController({ focusLocationId, pins, dims, year }) {
   const map = useMap();
   const flownFor = useRef(null);
   useEffect(() => {
@@ -92,10 +99,10 @@ function FocusController({ focusLocationId, pins, dims }) {
     flownFor.current = focusLocationId;
     const min = map.getMinZoom();
     const range = map.getMaxZoom() - min;
-    const level = pin.location_marker_level ?? DEFAULT_MARKER_LEVEL;
+    const level = resolvePinMarker(pin, year).level ?? DEFAULT_MARKER_LEVEL;
     const revealZoom = min + (levelThreshold(level) + 0.05) * range;
     map.flyTo(toLatLng(pin, dims), Math.max(map.getZoom(), revealZoom), { duration: 0.6 });
-  }, [focusLocationId, pins, dims, map]);
+  }, [focusLocationId, pins, dims, year, map]);
   return null;
 }
 
@@ -112,32 +119,46 @@ function ClickToPlace({ enabled, dims, onPick }) {
   return null;
 }
 
-export default function MapCanvas({ imageUrl, pins, focusLocationId, onSelect, placing = false, onMapClick }) {
-  const [dims, setDims] = useState(null);
+export default function MapCanvas({ imageUrl, pins, year = null, focusLocationId, onSelect, placing = false, onMapClick }) {
+  // url + pixel size are committed together, on load — never a render where the
+  // overlay URL and the bounds belong to different images (that mismatch was
+  // what left a freshly-scrubbed timeline image drawn inside the previous
+  // image's rectangle: over-zoomed and impossible to pan).
+  const [img, setImg] = useState(null); // { url, w, h }
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     if (!imageUrl) return undefined;
     let alive = true;
     setImgError(false);
-    const img = new Image();
-    img.onload = () => { if (alive) setDims({ w: img.naturalWidth || 1000, h: img.naturalHeight || 1000 }); };
-    img.onerror = () => { if (alive) setImgError(true); };
-    img.src = imageUrl;
+    const probe = new Image();
+    probe.onload = () => { if (alive) setImg({ url: imageUrl, w: probe.naturalWidth || 1000, h: probe.naturalHeight || 1000 }); };
+    probe.onerror = () => { if (alive) setImgError(true); };
+    probe.src = imageUrl;
     return () => { alive = false; };
   }, [imageUrl]);
 
-  const bounds = useMemo(() => (dims ? [[0, 0], [dims.h, dims.w]] : null), [dims?.w, dims?.h]);
+  // Bounds change only when the pixel size does — so scrubbing between
+  // same-size timeline versions keeps the current pan/zoom instead of
+  // re-fitting on every drag step.
+  const bounds = useMemo(() => (img ? [[0, 0], [img.h, img.w]] : null), [img?.w, img?.h]);
 
   if (imgError) {
     return <div className="grid h-full place-items-center px-6 text-center text-sm text-danger">Не вдалось завантажити зображення мапи</div>;
   }
-  if (!dims || !bounds) {
+  if (!img || !bounds) {
     return <div className="grid h-full place-items-center text-sm text-text-dim">Завантаження мапи…</div>;
   }
 
   return (
     <MapContainer
+      // Remount on a pixel-size change: react-leaflet v4 reads bounds / maxBounds
+      // / min-max zoom only at construction, and re-applying them by hand after a
+      // big size jump (e.g. a 1024px timeline version to a 12288px one) left the
+      // map fitted for the old image — over-zoomed, unpannable. A fresh mount
+      // seeds Leaflet with the right bounds; same-size scrubbing keeps the key
+      // stable, so pan/zoom is preserved there.
+      key={`${img.w}x${img.h}`}
       crs={L.CRS.Simple}
       bounds={bounds}
       maxBounds={bounds}
@@ -150,12 +171,12 @@ export default function MapCanvas({ imageUrl, pins, focusLocationId, onSelect, p
       className="h-full w-full"
     >
       {/* Keyed by url: react-leaflet v4's ImageOverlay updater doesn't call
-          setUrl on prop change, so switching lenses must remount the overlay. */}
-      <ImageOverlay key={imageUrl} url={imageUrl} bounds={bounds} />
+          setUrl on prop change, so switching image must remount the overlay. */}
+      <ImageOverlay key={img.url} url={img.url} bounds={bounds} />
       <MapController bounds={bounds} />
-      <PinMarkers pins={pins} dims={dims} onSelect={onSelect} />
-      <FocusController focusLocationId={focusLocationId} pins={pins} dims={dims} />
-      {onMapClick && <ClickToPlace enabled={placing} dims={dims} onPick={onMapClick} />}
+      <PinMarkers pins={pins} dims={img} year={year} onSelect={onSelect} />
+      <FocusController focusLocationId={focusLocationId} pins={pins} dims={img} year={year} />
+      {onMapClick && <ClickToPlace enabled={placing} dims={img} onPick={onMapClick} />}
     </MapContainer>
   );
 }

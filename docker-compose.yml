@@ -248,17 +248,17 @@ services:
     networks:
       - walp-network
 
-  calendar:
+  chronology:
     build:
-      context: ./services/calendar
+      context: ./services/chronology
       target: development
-    container_name: walp-calendar
+    container_name: walp-chronology
     restart: unless-stopped
     env_file: .env
     environment:
       PORT: 3015
     volumes:
-      - ./services/calendar/src:/app/src:delegated
+      - ./services/chronology/src:/app/src:delegated
     depends_on:
       postgres:
         condition: service_healthy
@@ -320,7 +320,7 @@ services:
       - maps
       - compendium
       - admin
-      - calendar
+      - chronology
       - media
       - frontend
     networks:

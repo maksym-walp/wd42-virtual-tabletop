@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
+import { natureLabels, SPELL_KINDS } from '../constants/spellbook';
 import DiceFormulaText from './DiceFormulaText';
 import AuthorBadge from './AuthorBadge';
+import { StatGrid, StatBox } from './StatGrid';
 
 export default function SpellCard({ spell }) {
-  const ritual = RITUAL_TYPES[spell.ritual];
   const kind = SPELL_KINDS[spell.spell_kind];
 
   return (
@@ -19,34 +19,18 @@ export default function SpellCard({ spell }) {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border bg-surface-hover px-3.5 py-2">
-        {(spell.nature || []).map((key) => {
-          const n = NATURE_TYPES[key];
-          if (!n) return null;
-          return (
-            <span
-              key={key}
-              className="rounded border border-border px-1.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide text-text-dim"
-            >
-              {n.label}
-            </span>
-          );
-        })}
-        {kind && <span className="rounded border border-border px-1.5 py-0.5 text-[0.68rem] font-semibold text-text-dim">{kind.label}</span>}
-      </div>
-
-      {/* Title */}
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{spell.name}</h3>
       <AuthorBadge username={spell.owner_username} variant="inline" className="px-3.5 pb-1" />
 
-      {/* Stats row */}
-      <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-4">
+      {/* Stats row — nature/kind moved down here (from the removed header
+          bar) alongside the action-economy numbers, matching the equipment
+          card's single stats-row layout. */}
+      <StatGrid className="grid-cols-2 sm:grid-cols-4">
+        <StatBox label="Природа" value={natureLabels(spell.nature) || '—'} />
+        <StatBox label="Вид" value={kind?.label || '—'} />
         <StatBox label="Енергія" value={spell.energy_cost} />
         <StatBox label="Дії" value={`${spell.action_time}/3`} />
-        <StatBox label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} />
-        <StatBox label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
-      </div>
+      </StatGrid>
 
       {/* Narrative preview */}
       {!spell.image_url && spell.narrative_desc && (
@@ -55,14 +39,5 @@ export default function SpellCard({ spell }) {
         </p>
       )}
     </Link>
-  );
-}
-
-function StatBox({ label, value }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5 bg-surface px-1.5 py-2">
-      <span className="text-[0.62rem] uppercase tracking-wide text-text-dim">{label}</span>
-      <span className="text-sm font-semibold text-text">{value}</span>
-    </div>
   );
 }

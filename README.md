@@ -27,7 +27,7 @@
     ├── media/                     # порт 3012 — завантаження зображень
     ├── maps/                      # порт 3013 — інтерактивні мапи та локації
     ├── compendium/                 # порт 3014 — НІП та бестіарій
-    ├── calendar/                   # порт 3015 — власні фентезійні календарі
+    ├── chronology/                 # порт 3015 — власні фентезійні календарі та події
     └── frontend/                 # порт 5173 (dev) — React/Vite SPA
 ```
 
@@ -48,7 +48,7 @@
 - [campaigns](services/campaigns/README.md) — кампанії ГМ/гравців
 - [media](services/media/README.md) — завантаження зображень
 - [compendium](services/compendium/README.md) — НІП та бестіарій
-- [calendar](services/calendar/README.md) — власні фентезійні календарі
+- [chronology](services/chronology/README.md) — власні фентезійні календарі та події
 
 Nginx проксує запити з порту 80:
 - `/api/auth/` → auth

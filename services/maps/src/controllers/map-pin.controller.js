@@ -2,6 +2,7 @@ const MapPinModel = require('../models/map-pin.model');
 const LocationModel = require('../models/location.model');
 const MapLensModel = require('../models/map-lens.model');
 const { canReadMap, canWriteMap, canWriteLocation, loadMapOr404, isCampaignMember } = require('./access');
+const { parseYearRange } = require('../utils/year');
 
 const DEFAULT_MIN_ZOOM = 0;
 const DEFAULT_MAX_ZOOM = 100;
@@ -91,6 +92,9 @@ const MapPinController = {
       return res.status(400).json({ message: 'Локацію не знайдено або немає доступу' });
     }
 
+    const years = parseYearRange(req.body);
+    if (years.error) return res.status(400).json({ message: years.error });
+
     if (lensIds.value.length > 0) {
       const lensCheck = await assertLensesBelongToMap(lensIds.value, map.id);
       if (lensCheck.error) return res.status(400).json({ message: lensCheck.error });
@@ -99,6 +103,7 @@ const MapPinController = {
     const pin = await MapPinModel.add(map.id, {
       locationId: location_id, ...coords.value,
       lensIds: lensIds.value, visibleCampaignIds: visibleCampaignIds.value,
+      startYear: years.startYear, endYear: years.endYear,
     });
     res.status(201).json({ pin });
   },
@@ -116,6 +121,9 @@ const MapPinController = {
     const visibleCampaignIds = readIdArray(req.body.visible_campaign_ids, 'visible_campaign_ids');
     if (visibleCampaignIds.error) return res.status(400).json({ message: visibleCampaignIds.error });
 
+    const years = parseYearRange(req.body);
+    if (years.error) return res.status(400).json({ message: years.error });
+
     if (lensIds.value.length > 0) {
       const lensCheck = await assertLensesBelongToMap(lensIds.value, map.id);
       if (lensCheck.error) return res.status(400).json({ message: lensCheck.error });
@@ -123,6 +131,7 @@ const MapPinController = {
 
     const pin = await MapPinModel.update(req.params.pinId, map.id, {
       ...coords.value, lensIds: lensIds.value, visibleCampaignIds: visibleCampaignIds.value,
+      startYear: years.startYear, endYear: years.endYear,
     });
     if (!pin) return res.status(404).json({ message: 'Мітку не знайдено' });
     res.json({ pin });
