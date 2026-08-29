@@ -4,8 +4,11 @@ import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Glob
 import mapsApi from '../api/maps';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
-import { typeKey, datedYears, resolveLensImage, pinVisibleInYear } from '../constants/maps';
+import { typeKey, datedYears, resolveLensImage, pinVisibleInYear, pinBornBy } from '../constants/maps';
+import useMediaQuery from '../hooks/useMediaQuery';
 import MapCanvas from '../components/map/MapCanvas';
+import LensSwitcher from '../components/map/LensSwitcher';
+import MapControlMenu from '../components/map/MapControlMenu';
 import LocationDrawer from '../components/map/LocationDrawer';
 import PinForm from '../components/map/PinForm';
 import TimelineSlider from '../components/map/TimelineSlider';
@@ -51,6 +54,10 @@ export default function MapView() {
   const [myCampaigns, setMyCampaigns] = useState([]);
 
   const isOwner = Boolean(map?.is_owner);
+  // Wide layout: lens switcher goes in the header, timeline is a vertical rail
+  // on the left. Narrow: lens switcher + type filter share a row, timeline
+  // stays a horizontal bar at the bottom.
+  const wide = useMediaQuery('(min-width: 768px)');
 
   const refreshPins = () => mapsApi.listPins(id).then(setPins).catch(() => {});
   const refreshLenses = () => mapsApi.listLenses(id).then(setLenses).catch(() => {});
@@ -139,11 +146,13 @@ export default function MapView() {
   // 61-map-pins-lens-campaign-visibility.sql) — a pin with none set still
   // renders on every lens, only an explicit, non-matching list hides it.
   // A pin also drops out when the active year falls outside its
-  // [start_year, end_year] window (filterYear === null disables that check).
+  // [start_year, end_year] window, or before its location's earliest dated
+  // chronological version (filterYear === null disables both checks).
   const pinsOnActiveLens = useMemo(
     () => pins.filter((p) =>
       (!p.lens_ids?.length || p.lens_ids.includes(activeLens?.id))
-      && pinVisibleInYear(p, filterYear)),
+      && pinVisibleInYear(p, filterYear)
+      && pinBornBy(p, filterYear)),
     [pins, activeLens?.id, filterYear],
   );
 
@@ -277,6 +286,44 @@ export default function MapView() {
     }
   };
 
+  // Shared by both LensSwitcher slots (header tabs on wide, dropdown on narrow).
+  const lensSwitcherProps = {
+    lenses,
+    activeLensId: activeLens?.id ?? null,
+    isOwner,
+    uploading,
+    onSelect: setActiveLensId,
+    onManageVersions: setVersionsLensId,
+    onRemoveLens: handleRemoveLens,
+    onAddLens: () => fileRef.current?.click(),
+  };
+
+  // The type-filter toggle list — reused in the wide left rail (wrapped in a
+  // card) and the narrow dropdown menu (bare).
+  const typeFilterList = (
+    <div className="flex flex-col gap-1">
+      {typeBuckets.map(({ key, count }) => {
+        const on = !hiddenTypes.has(key);
+        return (
+          <button key={key} onClick={() => toggleType(key)} aria-pressed={on}
+            className={`flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:bg-surface-hover ${on ? 'text-text' : 'text-text-dim line-through'}`}>
+            {on ? <Eye size={13} /> : <EyeOff size={13} />}
+            <span className="flex-1 text-left">{key === 'other' ? 'Без типу' : key}</span>
+            <span className="tabular-nums text-text-dim">{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+  const typeFilterPanel = typeBuckets.length > 0 ? (
+    <div className="pointer-events-auto rounded-lg border border-border bg-surface/95 p-2 shadow-lg backdrop-blur">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">
+        <SlidersHorizontal size={13} /> Типи локацій
+      </div>
+      {typeFilterList}
+    </div>
+  ) : null;
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження…</div>;
   if (error && !map) {
     return (
@@ -320,7 +367,20 @@ export default function MapView() {
               </>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          {/* Wide screens: the lenses live here in the header as a tab strip
+              that stretches across the free space. */}
+          {wide && activeLens && (
+            <div className="min-w-0 flex-1">
+              <LensSwitcher {...lensSwitcherProps} variant="tabs" />
+            </div>
+          )}
+
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {isOwner && activeLens && !placing && (
+              <Button size="sm" onClick={() => setPlacing(true)}>
+                <Plus size={15} /> Додати мітку
+              </Button>
+            )}
             {isOwner ? (
               <button
                 onClick={togglePublic}
@@ -372,87 +432,59 @@ export default function MapView() {
               onMapClick={isOwner ? handleMapClick : undefined}
             />
 
-            <div className="pointer-events-none absolute right-2 top-2 z-[1000] flex max-w-[75vw] flex-col items-end gap-2 sm:max-w-xs">
-              {/* Owner: add-pin control / placement hint — above the panels */}
-              {isOwner && (placing ? (
-                <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-gold/60 bg-surface/95 px-3 py-2 text-sm text-text shadow-lg backdrop-blur">
-                  <MapPin size={15} className="text-gold" />
-                  Клікніть на мапі…
-                  <button onClick={() => setPlacing(false)} className="ml-1 text-text-dim hover:text-danger" aria-label="Скасувати">
-                    <XIcon size={15} />
-                  </button>
-                </div>
-              ) : (
-                <Button size="sm" className="pointer-events-auto shadow-lg" onClick={() => setPlacing(true)}>
-                  <Plus size={15} /> Додати мітку
-                </Button>
-              ))}
-
-              {/* Lens switcher */}
-              <div className="pointer-events-auto rounded-lg border border-border bg-surface/95 p-2 shadow-lg backdrop-blur">
-                <div className="mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-text-dim">
-                  <span className="flex items-center gap-1.5"><Layers size={13} /> Шари</span>
-                  {isOwner && (
-                    <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-accent hover:opacity-80" title="Додати шар">
-                      <Upload size={14} />
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  {lenses.map((lens) => {
-                    const yrs = datedYears(lens.versions);
-                    return (
-                      <div key={lens.id} className={`group flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${lens.id === activeLens.id ? 'bg-gold/20 text-gold ring-1 ring-gold/50' : 'text-text-dim hover:bg-surface-hover'}`}>
-                        <button onClick={() => setActiveLensId(lens.id)}>
-                          {lens.name}
-                          {yrs.length > 1 && <span className="ml-1 font-normal opacity-70">{yrs[0]}–{yrs[yrs.length - 1]}</span>}
-                        </button>
-                        {isOwner && (
-                          <button onClick={() => setVersionsLensId(lens.id)} aria-label="Часова шкала шару" title="Часова шкала" className="text-text-dim hover:text-accent">
-                            <Clock size={12} />
-                          </button>
-                        )}
-                        {isOwner && (
-                          <button onClick={() => handleRemoveLens(lens.id)} aria-label="Видалити шар" className="text-text-dim hover:text-danger">
-                            <XIcon size={12} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+            {/* Placement hint — floating, centred at the top */}
+            {isOwner && placing && (
+              <div className="pointer-events-auto absolute left-1/2 top-3 z-[1000] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-gold/60 bg-surface/95 px-3 py-2 text-sm text-text shadow-lg backdrop-blur">
+                <MapPin size={15} className="text-gold" />
+                Клікніть на мапі…
+                <button onClick={() => setPlacing(false)} className="ml-1 text-text-dim hover:text-danger" aria-label="Скасувати">
+                  <XIcon size={15} />
+                </button>
               </div>
+            )}
 
-              {/* Type filter */}
-              {typeBuckets.length > 0 && (
-                <div className="pointer-events-auto rounded-lg border border-border bg-surface/95 p-2 shadow-lg backdrop-blur">
-                  <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">
-                    <SlidersHorizontal size={13} /> Типи локацій
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {typeBuckets.map(({ key, count }) => {
-                      const on = !hiddenTypes.has(key);
-                      return (
-                        <button key={key} onClick={() => toggleType(key)} aria-pressed={on}
-                          className={`flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:bg-surface-hover ${on ? 'text-text' : 'text-text-dim line-through'}`}>
-                          {on ? <Eye size={13} /> : <EyeOff size={13} />}
-                          <span className="flex-1 text-left">{key === 'other' ? 'Без типу' : key}</span>
-                          <span className="tabular-nums text-text-dim">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Narrow: two dropdown buttons instead of the full panels. */}
+            {!wide && (activeLens || typeBuckets.length > 0) && (
+              <div className="pointer-events-none absolute inset-x-2 top-2 z-[1000] flex justify-end gap-2">
+                {activeLens && (
+                  <MapControlMenu icon={Layers} label="Шари">
+                    <LensSwitcher {...lensSwitcherProps} variant="menu" />
+                  </MapControlMenu>
+                )}
+                {typeBuckets.length > 0 && (
+                  <MapControlMenu icon={SlidersHorizontal} label="Типи">
+                    {typeFilterList}
+                  </MapControlMenu>
+                )}
+              </div>
+            )}
 
-            {hasTimeline && (
+            {/* Wide: a left rail — vertical timeline over the type filter. */}
+            {wide && (hasTimeline || typeBuckets.length > 0) && (
+              <div className="no-scrollbar pointer-events-auto absolute left-3 top-1/2 z-[1000] flex max-h-[calc(100%-1.5rem)] -translate-y-1/2 flex-col gap-2 overflow-y-auto">
+                {hasTimeline && (
+                  <TimelineSlider
+                    min={timelineYears[0]}
+                    max={timelineYears[timelineYears.length - 1]}
+                    value={year}
+                    ticks={timelineYears}
+                    onChange={setYear}
+                    orientation="vertical"
+                  />
+                )}
+                {typeFilterPanel}
+              </div>
+            )}
+
+            {/* Narrow: horizontal timeline pinned to the bottom. */}
+            {!wide && hasTimeline && (
               <TimelineSlider
                 min={timelineYears[0]}
                 max={timelineYears[timelineYears.length - 1]}
                 value={year}
                 ticks={timelineYears}
                 onChange={setYear}
+                orientation="horizontal"
               />
             )}
 

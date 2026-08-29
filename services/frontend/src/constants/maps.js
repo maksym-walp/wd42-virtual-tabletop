@@ -54,6 +54,16 @@ export function pinVisibleInYear(pin, year) {
   return true;
 }
 
+// If a pin's location has any DATED chronological version, the earliest of
+// those years is when the location comes into existence — before it, the pin
+// isn't on the map at all. Locations with only a base version (no dated ones)
+// are unaffected. `pin.location_versions` is dated-only, ascending.
+export function pinBornBy(pin, year) {
+  if (year == null) return true;
+  const firstYear = pin.location_versions?.[0]?.start_year;
+  return firstYear == null || year >= firstYear;
+}
+
 // The chronological version of a location to show for `year`: the newest
 // version whose start_year is at or before `year`. Falls back to the base
 // (start_year === null) version, then the earliest dated one. versions:
