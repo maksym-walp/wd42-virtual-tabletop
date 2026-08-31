@@ -1,18 +1,21 @@
 const pool = require('../config/db');
 
 // Per-pin, the location's DATED versions with only the fields the map needs to
-// render a marker over time (name label + icon + zoom level). The base name /
-// icon / level already come through as location_name / location_marker_* — a
-// NULL override on a version means "keep the base". description / gm_note stay
-// out: they're only read when a pin is clicked (LocationDrawer fetches the
-// full location then).
+// render a marker over time (name label + icon + zoom level + type set) and to
+// know when the location exists ([start_year, end_year]). The base name / icon /
+// level / types come through as location_name / location_marker_* /
+// location_types — a NULL override on a version means "keep the base".
+// description / gm_note stay out: they're only read when a pin is clicked
+// (LocationDrawer fetches the full location then).
 const LOCATION_VERSIONS_AGG = `
   COALESCE((
     SELECT json_agg(json_build_object(
              'start_year', v.start_year,
+             'end_year', v.end_year,
              'name', v.name,
              'marker_icon', v.marker_icon,
-             'marker_level', v.marker_level
+             'marker_level', v.marker_level,
+             'types', v.types
            ) ORDER BY v.start_year ASC)
     FROM maps.location_versions v
     WHERE v.location_id = l.id AND v.start_year IS NOT NULL
@@ -27,7 +30,7 @@ const MapPinModel = {
     const { rows } = await pool.query(
       `SELECT p.*,
               l.name  AS location_name,
-              l.type  AS location_type,
+              l.types AS location_types,
               l.marker_icon  AS location_marker_icon,
               l.marker_level AS location_marker_level,
               ${LOCATION_VERSIONS_AGG}
@@ -51,7 +54,7 @@ const MapPinModel = {
     const { rows } = await pool.query(
       `SELECT p.*,
               l.name  AS location_name,
-              l.type  AS location_type,
+              l.types AS location_types,
               l.marker_icon  AS location_marker_icon,
               l.marker_level AS location_marker_level,
               ${LOCATION_VERSIONS_AGG}

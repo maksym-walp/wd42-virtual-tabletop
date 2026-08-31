@@ -6,21 +6,22 @@ const LocationModel = require('../location.model');
 beforeEach(() => jest.clearAllMocks());
 
 describe('LocationModel.create', () => {
-  it('inserts created_by + base fields only (name, type, marker icon/level)', async () => {
+  it('inserts created_by + base fields only (name, types, marker icon/level)', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({
-      createdBy: 'u1', name: 'Rivertown', type: 'city', markerIcon: '🏰', markerLevel: 3,
+      createdBy: 'u1', name: 'Rivertown', types: ['city', 'capital'], markerIcon: '🏰', markerLevel: 3,
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO maps\.locations/);
+    expect(sql).toMatch(/types/);
     expect(sql).not.toMatch(/description|gm_note|image_url/);
-    expect(params).toEqual(['u1', 'Rivertown', 'city', '🏰', 3]);
+    expect(params).toEqual(['u1', 'Rivertown', ['city', 'capital'], '🏰', 3]);
   });
 
-  it('defaults omitted optional base fields to null', async () => {
+  it('defaults omitted optional base fields (types -> [])', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
     await LocationModel.create({ createdBy: 'u1', name: 'Nowhere' });
-    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', null, null, null]);
+    expect(pool.query.mock.calls[0][1]).toEqual(['u1', 'Nowhere', [], null, null]);
   });
 });
 
@@ -68,19 +69,19 @@ describe('LocationModel.isPinnedOnReadableMap', () => {
 describe('LocationModel.update', () => {
   it('updates the base fields and updated_at', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1' }] });
-    await LocationModel.update('loc1', { name: 'New', type: 'ruin', markerIcon: null, markerLevel: 2 });
+    await LocationModel.update('loc1', { name: 'New', types: ['ruin'], markerIcon: null, markerLevel: 2 });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE maps\.locations/);
     expect(sql).toMatch(/updated_at = NOW\(\)/);
     expect(sql).not.toMatch(/description|gm_note|image_url/);
-    expect(params).toEqual(['loc1', 'New', 'ruin', null, 2]);
+    expect(params).toEqual(['loc1', 'New', ['ruin'], null, 2]);
   });
 });
 
 describe('LocationModel.bulkImport', () => {
   const mappers = {
-    toBase: (r) => ({ name: r.name, type: r.type ?? null, markerIcon: null, markerLevel: null }),
-    toVersion: (v) => ({ startYear: v.start_year ?? null, description: v.description ?? null, gmNote: null, name: null, markerIcon: null, markerLevel: null }),
+    toBase: (r) => ({ name: r.name, types: r.types ?? [], markerIcon: null, markerLevel: null }),
+    toVersion: (v) => ({ startYear: v.start_year ?? null, endYear: v.end_year ?? null, description: v.description ?? null, gmNote: null, name: null, markerIcon: null, markerLevel: null, types: null }),
   };
 
   it('inserts each location + its versions inside one transaction', async () => {
@@ -119,7 +120,7 @@ describe('LocationModel.bulkImport', () => {
   it('skips records without a name', async () => {
     const client = { query: jest.fn().mockResolvedValue({ rows: [{ id: 'x' }] }), release: jest.fn() };
     pool.connect.mockResolvedValue(client);
-    const count = await LocationModel.bulkImport('u1', [{ type: 'city' }, null, 'bad'], mappers);
+    const count = await LocationModel.bulkImport('u1', [{ types: ['city'] }, null, 'bad'], mappers);
     expect(count).toBe(0);
   });
 });

@@ -4,7 +4,7 @@ import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Glob
 import mapsApi from '../api/maps';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
-import { typeKey, datedYears, resolveLensImage, pinVisibleInYear, pinBornBy } from '../constants/maps';
+import { datedYears, resolveLensImage, pinVisibleInYear, pinExistsInYear, resolvePinTypeKeys } from '../constants/maps';
 import useMediaQuery from '../hooks/useMediaQuery';
 import MapCanvas from '../components/map/MapCanvas';
 import LensSwitcher from '../components/map/LensSwitcher';
@@ -145,29 +145,35 @@ export default function MapView() {
   // Empty lens_ids means "not restricted to specific lenses" (see
   // 61-map-pins-lens-campaign-visibility.sql) — a pin with none set still
   // renders on every lens, only an explicit, non-matching list hides it.
-  // A pin also drops out when the active year falls outside its
-  // [start_year, end_year] window, or before its location's earliest dated
-  // chronological version (filterYear === null disables both checks).
+  // A pin also drops out when the active year falls outside its own
+  // [start_year, end_year] window, or outside its location's existence
+  // (before the earliest dated version / after a version's end_year).
+  // filterYear === null disables all year checks.
   const pinsOnActiveLens = useMemo(
     () => pins.filter((p) =>
       (!p.lens_ids?.length || p.lens_ids.includes(activeLens?.id))
       && pinVisibleInYear(p, filterYear)
-      && pinBornBy(p, filterYear)),
+      && pinExistsInYear(p, filterYear)),
     [pins, activeLens?.id, filterYear],
   );
 
+  // A location can carry several types (and they can change per version), so
+  // each pin lands in every one of its resolved type buckets.
   const typeBuckets = useMemo(() => {
     const acc = new Map();
     for (const p of pinsOnActiveLens) {
-      const key = typeKey(p.location_type);
-      acc.set(key, (acc.get(key) || 0) + 1);
+      for (const key of resolvePinTypeKeys(p, filterYear)) {
+        acc.set(key, (acc.get(key) || 0) + 1);
+      }
     }
     return [...acc.entries()].map(([key, count]) => ({ key, count }));
-  }, [pinsOnActiveLens]);
+  }, [pinsOnActiveLens, filterYear]);
 
+  // Shown unless every one of the pin's types is hidden.
   const visiblePins = useMemo(
-    () => pinsOnActiveLens.filter((p) => !hiddenTypes.has(typeKey(p.location_type))),
-    [pinsOnActiveLens, hiddenTypes],
+    () => pinsOnActiveLens.filter((p) =>
+      resolvePinTypeKeys(p, filterYear).some((k) => !hiddenTypes.has(k))),
+    [pinsOnActiveLens, hiddenTypes, filterYear],
   );
 
   const toggleType = (key) => setHiddenTypes((prev) => {

@@ -7,7 +7,7 @@ import mapsApi from '../../api/maps';
 import LocationFields from './LocationFields';
 import LocationVersionFields from './LocationVersionFields';
 
-const EMPTY_BASE = { name: '', type: null, marker_icon: null, marker_level: null };
+const EMPTY_BASE = { name: '', types: [], marker_icon: null, marker_level: null };
 const EMPTY_VERSION = { start_year: null, description: '', gm_note: '', image_url: null };
 
 // Sheet for both creating a pin (after the owner clicks the map in placement
@@ -74,7 +74,7 @@ export default function PinForm({ mapId, coords, pin, lenses, campaigns, activeL
         if (!locBase.name.trim()) { setError('Вкажіть назву локації'); setSaving(false); return; }
         const created = await mapsApi.createLocation({
           name: locBase.name.trim(),
-          type: locBase.type || undefined,
+          types: locBase.types?.length ? locBase.types : undefined,
           marker_icon: locBase.marker_icon || undefined,
           marker_level: locBase.marker_level ?? undefined,
           description: locVersion.description || undefined,

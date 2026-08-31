@@ -30,30 +30,30 @@ describe('LocationController.create', () => {
     expect(LocationModel.create).not.toHaveBeenCalled();
   });
 
-  it('accepts an arbitrary config-defined type', async () => {
+  it('accepts an arbitrary set of free-form types', async () => {
     const res = mockRes();
-    await LocationController.create(mockReq({ body: { name: 'X', type: 'capital' }, user: OWNER }), res);
+    await LocationController.create(mockReq({ body: { name: 'X', types: ['capital', 'city'] }, user: OWNER }), res);
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(LocationModel.create).toHaveBeenCalledWith(expect.objectContaining({ type: 'capital' }));
+    expect(LocationModel.create).toHaveBeenCalledWith(expect.objectContaining({ types: ['capital', 'city'] }));
   });
 
-  it('400 for an over-long type', async () => {
+  it('400 for an over-long type key', async () => {
     const res = mockRes();
-    await LocationController.create(mockReq({ body: { name: 'X', type: 'a'.repeat(51) }, user: OWNER }), res);
+    await LocationController.create(mockReq({ body: { name: 'X', types: ['a'.repeat(51)] }, user: OWNER }), res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
   it('201 — splits body into base fields + the first (base) version', async () => {
     const res = mockRes();
     await LocationController.create(mockReq({
-      body: { name: '  Rivertown  ', gm_note: 'secret plot', description: 'A town', type: 'city' }, user: OWNER,
+      body: { name: '  Rivertown  ', gm_note: 'secret plot', description: 'A town', types: ['city'] }, user: OWNER,
     }), res);
     expect(LocationModel.create).toHaveBeenCalledWith({
-      createdBy: 'gm-1', name: 'Rivertown', type: 'city', markerIcon: null, markerLevel: null,
+      createdBy: 'gm-1', name: 'Rivertown', types: ['city'], markerIcon: null, markerLevel: null,
     });
     expect(LocationVersionModel.add).toHaveBeenCalledWith('loc1', {
-      startYear: null, description: 'A town', gmNote: 'secret plot', imageUrl: null,
-      name: null, markerIcon: null, markerLevel: null,
+      startYear: null, endYear: null, description: 'A town', gmNote: 'secret plot', imageUrl: null,
+      name: null, markerIcon: null, markerLevel: null, types: null,
     });
     expect(res.status).toHaveBeenCalledWith(201);
     const payload = res.json.mock.calls[0][0].location;
@@ -70,6 +70,13 @@ describe('LocationController.create', () => {
   it('400 for a malformed start_year', async () => {
     const res = mockRes();
     await LocationController.create(mockReq({ body: { name: 'X', start_year: 12.5 }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(LocationModel.create).not.toHaveBeenCalled();
+  });
+
+  it('400 when start_year is after end_year', async () => {
+    const res = mockRes();
+    await LocationController.create(mockReq({ body: { name: 'X', start_year: 700, end_year: 600 }, user: OWNER }), res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(LocationModel.create).not.toHaveBeenCalled();
   });
@@ -178,16 +185,17 @@ describe('LocationController.export / import', () => {
   it('import maps records through the sanitizers and reports the count', async () => {
     LocationModel.bulkImport.mockImplementation(async (userId, records, { toBase, toVersion }) => {
       expect(userId).toBe('gm-1');
-      expect(toBase(records[0])).toEqual({ name: 'Town', type: 'city', markerIcon: '🏰', markerLevel: 3 });
+      expect(toBase(records[0])).toEqual({ name: 'Town', types: ['city', 'capital'], markerIcon: '🏰', markerLevel: 3 });
       expect(toVersion(records[0].versions[0])).toEqual({
-        startYear: 600, description: 'Ruins', gmNote: null, name: 'Руїни', markerIcon: '🏚', markerLevel: 1,
+        startYear: 600, endYear: 650, description: 'Ruins', gmNote: null,
+        name: 'Руїни', markerIcon: '🏚', markerLevel: 1, types: ['ruin'],
       });
       return 1;
     });
     const res = mockRes();
     await LocationController.import(mockReq({
-      body: [{ name: '  Town  ', type: 'city', marker_icon: '🏰', marker_level: 3, versions: [
-        { start_year: 600, description: 'Ruins', name: '  Руїни  ', marker_icon: '🏚', marker_level: 1 },
+      body: [{ name: '  Town  ', types: ['city', 'capital'], marker_icon: '🏰', marker_level: 3, versions: [
+        { start_year: 600, end_year: 650, description: 'Ruins', name: '  Руїни  ', marker_icon: '🏚', marker_level: 1, types: ['ruin'] },
       ] }],
       user: OWNER,
     }), res);
@@ -208,8 +216,8 @@ describe('LocationController.update / remove', () => {
   it('update 200 for the owner — base fields only', async () => {
     LocationModel.update.mockResolvedValue({ ...baseLocation, name: 'Renamed' });
     const res = mockRes();
-    await LocationController.update(mockReq({ params: { id: 'loc1' }, body: { name: 'Renamed', type: 'ruin' }, user: OWNER }), res);
-    expect(LocationModel.update).toHaveBeenCalledWith('loc1', { name: 'Renamed', type: 'ruin', markerIcon: null, markerLevel: null });
+    await LocationController.update(mockReq({ params: { id: 'loc1' }, body: { name: 'Renamed', types: ['ruin'] }, user: OWNER }), res);
+    expect(LocationModel.update).toHaveBeenCalledWith('loc1', { name: 'Renamed', types: ['ruin'], markerIcon: null, markerLevel: null });
     expect(res.json).toHaveBeenCalledWith({ location: { ...baseLocation, name: 'Renamed' } });
   });
 

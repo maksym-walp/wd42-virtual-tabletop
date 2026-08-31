@@ -1,26 +1,27 @@
 const pool = require('../config/db');
 
 // Locations are owned by created_by. Their time-varying lore (description,
-// gm_note, image) lives on maps.location_versions — the base row here only
-// holds the identity + map-marker presentation. gm_note stripping from
-// non-owner responses is the controller's job (access.serializeLocation).
+// gm_note, image, name/marker/types overrides) lives on maps.location_versions
+// — the base row here holds the identity + default marker + default types.
+// gm_note stripping from non-owner responses is the controller's job
+// (access.serializeLocation).
 const VERSIONS_AGG = `
   COALESCE((
     SELECT json_agg(v ORDER BY v.start_year ASC NULLS LAST)
     FROM (
-      SELECT id, start_year, description, gm_note, image_url, name, marker_icon, marker_level
+      SELECT id, start_year, end_year, description, gm_note, image_url, name, marker_icon, marker_level, types
       FROM maps.location_versions
       WHERE location_id = l.id
     ) v
   ), '[]'::json) AS versions`;
 
 const LocationModel = {
-  async create({ createdBy, name, type, markerIcon, markerLevel }) {
+  async create({ createdBy, name, types, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
-      `INSERT INTO maps.locations (created_by, name, type, marker_icon, marker_level)
+      `INSERT INTO maps.locations (created_by, name, types, marker_icon, marker_level)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [createdBy, name, type ?? null, markerIcon ?? null, markerLevel ?? null]
+      [createdBy, name, types ?? [], markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0];
   },
@@ -68,13 +69,13 @@ const LocationModel = {
     return rows.length > 0;
   },
 
-  async update(id, { name, type, markerIcon, markerLevel }) {
+  async update(id, { name, types, markerIcon, markerLevel }) {
     const { rows } = await pool.query(
       `UPDATE maps.locations
-       SET name = $2, type = $3, marker_icon = $4, marker_level = $5, updated_at = NOW()
+       SET name = $2, types = $3, marker_icon = $4, marker_level = $5, updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, type ?? null, markerIcon ?? null, markerLevel ?? null]
+      [id, name, types ?? [], markerIcon ?? null, markerLevel ?? null]
     );
     return rows[0] || null;
   },
@@ -103,9 +104,9 @@ const LocationModel = {
         const base = toBase(record);
         if (!base.name) continue;
         const { rows } = await client.query(
-          `INSERT INTO maps.locations (created_by, name, type, marker_icon, marker_level)
+          `INSERT INTO maps.locations (created_by, name, types, marker_icon, marker_level)
            VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-          [userId, base.name, base.type, base.markerIcon, base.markerLevel]
+          [userId, base.name, base.types, base.markerIcon, base.markerLevel]
         );
         const locationId = rows[0].id;
 
@@ -116,9 +117,9 @@ const LocationModel = {
           const v = toVersion(rawVersion);
           await client.query(
             `INSERT INTO maps.location_versions
-               (location_id, start_year, description, gm_note, image_url, name, marker_icon, marker_level)
-             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7)`,
-            [locationId, v.startYear, v.description, v.gmNote, v.name, v.markerIcon, v.markerLevel]
+               (location_id, start_year, end_year, description, gm_note, image_url, name, marker_icon, marker_level, types)
+             VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)`,
+            [locationId, v.startYear, v.endYear, v.description, v.gmNote, v.name, v.markerIcon, v.markerLevel, v.types]
           );
         }
         imported += 1;

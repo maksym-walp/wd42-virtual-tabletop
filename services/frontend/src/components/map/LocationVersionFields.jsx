@@ -6,11 +6,13 @@ import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 import SmartTextarea from '../ui/SmartTextarea';
 import MarkerIcon from './MarkerIcon';
+import TypeTagsInput from './TypeTagsInput';
 
 // Controlled editor for ONE chronological version of a location.
-// value = { start_year, description, gm_note, image_url, name, marker_icon, marker_level }.
-// `isBase` (the undated base version): hides the year input and the name/marker
-// overrides — those live on the location row itself, edited via LocationFields.
+// value = { start_year, end_year, description, gm_note, image_url, name,
+//           marker_icon, marker_level, types }.
+// `isBase` (the undated base version): hides the year window and the
+// name/marker/types overrides — those live on the location row itself.
 export default function LocationVersionFields({ value, onChange, isBase = false }) {
   const fileRef = useRef(null);
   const markerRef = useRef(null);
@@ -34,23 +36,40 @@ export default function LocationVersionFields({ value, onChange, isBase = false 
   };
 
   const emojiValue = isIconUrl(value.marker_icon) ? '' : (value.marker_icon || '');
+  // An undated version row is the "base" version — its name / marker / types
+  // live on the location itself, so only offer the overrides once it's dated.
+  const undated = value.start_year == null || value.start_year === '';
+  const showOverrides = !isBase && !undated;
 
   return (
     <div className="flex flex-col gap-3">
       {!isBase && (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Починаючи з року</span>
-          <input
-            type="number"
-            className={inputClass}
-            placeholder="напр. 600"
-            value={value.start_year ?? ''}
-            onChange={(e) => set({ start_year: e.target.value === '' ? null : e.target.value })}
-          />
-        </label>
+        <div className="flex gap-3">
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Починаючи з</span>
+            <input
+              type="number"
+              className={inputClass}
+              placeholder="напр. 600"
+              value={value.start_year ?? ''}
+              onChange={(e) => set({ start_year: e.target.value === '' ? null : e.target.value })}
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Завершення</span>
+            <input
+              type="number"
+              className={inputClass}
+              placeholder="Порожньо — без межі"
+              value={value.end_year ?? ''}
+              onChange={(e) => set({ end_year: e.target.value === '' ? null : e.target.value })}
+              disabled={undated}
+            />
+          </label>
+        </div>
       )}
 
-      {!isBase && (
+      {showOverrides && (
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Назва в цей період</span>
           <input
@@ -61,6 +80,22 @@ export default function LocationVersionFields({ value, onChange, isBase = false 
             maxLength={200}
           />
         </label>
+      )}
+
+      {showOverrides && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Типи в цей період</span>
+            {value.types == null ? (
+              <button type="button" onClick={() => set({ types: [] })} className="text-xs text-accent hover:opacity-80">Змінити</button>
+            ) : (
+              <button type="button" onClick={() => set({ types: null })} className="text-xs text-text-dim hover:text-accent">↺ як у локації</button>
+            )}
+          </div>
+          {value.types == null
+            ? <p className="text-xs text-text-dim">Типи локації без змін.</p>
+            : <TypeTagsInput value={value.types} onChange={(types) => set({ types })} />}
+        </div>
       )}
 
       <SmartTextarea
@@ -98,7 +133,7 @@ export default function LocationVersionFields({ value, onChange, isBase = false 
         <input ref={fileRef} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; upload(f, 'location', (url) => set({ image_url: url }), setUploading); }} />
       </div>
 
-      {!isBase && (
+      {showOverrides && (
         <div className="rounded-lg border border-border p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Іконка мітки в цей період</p>
           <div className="mb-2 flex flex-wrap items-center gap-3">

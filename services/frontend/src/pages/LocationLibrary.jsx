@@ -30,7 +30,7 @@ const LOCATION_COLUMNS = [
   { key: 'name', label: 'Назва', render: (loc) => (
     <span className="inline-flex items-center gap-1.5"><MarkerIcon icon={loc.marker_icon} size={14} /> {loc.name}</span>
   ) },
-  { key: 'type', label: 'Тип', render: (loc) => loc.type || '—' },
+  { key: 'types', label: 'Типи', render: (loc) => (loc.types?.length ? loc.types.join(', ') : '—') },
   { key: 'description', label: 'Опис', render: (loc) => snippet(baseVersion(loc)?.description) },
 ];
 
@@ -122,7 +122,13 @@ export default function LocationLibrary() {
                     <h3 className="flex items-center gap-1.5 truncate font-display text-base text-text">
                       <MarkerIcon icon={loc.marker_icon} size={16} /> {loc.name}
                     </h3>
-                    {loc.type && <Badge className="mt-1 border border-border text-text-muted">{loc.type}</Badge>}
+                    {loc.types?.length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {loc.types.map((t) => (
+                          <Badge key={t} className="border border-border text-text-muted">{t}</Badge>
+                        ))}
+                      </span>
+                    )}
                     {base?.description && <p className="mt-2 line-clamp-2 text-sm text-text-dim">{base.description}</p>}
                     {loc.versions?.length > 1 && (
                       <p className="mt-1 text-xs text-text-dim">{loc.versions.length} хронологічні версії</p>

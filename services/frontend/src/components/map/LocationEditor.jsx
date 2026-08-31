@@ -6,24 +6,26 @@ import mapsApi from '../../api/maps';
 import LocationFields from './LocationFields';
 import LocationVersionFields from './LocationVersionFields';
 
-const emptyBase = () => ({ name: '', type: null, marker_icon: null, marker_level: null });
+const emptyBase = () => ({ name: '', types: [], marker_icon: null, marker_level: null });
 const emptyVersion = (key) => ({
-  _key: key, id: null, start_year: null, description: '', gm_note: '', image_url: null,
-  name: null, marker_icon: null, marker_level: null,
+  _key: key, id: null, start_year: null, end_year: null, description: '', gm_note: '', image_url: null,
+  name: null, marker_icon: null, marker_level: null, types: null,
 });
 
-// Normalizes a version row for the API: start_year '' / null -> null, else Number.
+const toYear = (raw) => (raw === '' || raw == null ? null : Number(raw));
+
+// Normalizes a version row for the API.
 function versionPayload(v) {
-  const raw = v.start_year;
-  const start_year = raw === '' || raw == null ? null : Number(raw);
   return {
-    start_year,
+    start_year: toYear(v.start_year),
+    end_year: toYear(v.end_year),
     description: v.description || null,
     gm_note: v.gm_note || null,
     image_url: v.image_url || null,
     name: v.name || null,
     marker_icon: v.marker_icon || null,
     marker_level: v.marker_level ?? null,
+    types: v.types == null ? null : v.types,
   };
 }
 
@@ -35,16 +37,17 @@ export default function LocationEditor({ location, onClose, onSaved }) {
   const keySeq = useRef(1);
 
   const [base, setBase] = useState(() => (isEdit
-    ? { name: location.name || '', type: location.type || null, marker_icon: location.marker_icon || null, marker_level: location.marker_level ?? null }
+    ? { name: location.name || '', types: location.types || [], marker_icon: location.marker_icon || null, marker_level: location.marker_level ?? null }
     : emptyBase()));
 
   const [versions, setVersions] = useState(() => {
     if (isEdit && location.versions?.length) {
       return location.versions.map((v) => ({
         _key: keySeq.current++, id: v.id,
-        start_year: v.start_year ?? null,
+        start_year: v.start_year ?? null, end_year: v.end_year ?? null,
         description: v.description || '', gm_note: v.gm_note || '', image_url: v.image_url || null,
         name: v.name || null, marker_icon: v.marker_icon || null, marker_level: v.marker_level ?? null,
+        types: v.types ?? null,
       }));
     }
     return [emptyVersion(keySeq.current++)];
@@ -65,16 +68,19 @@ export default function LocationEditor({ location, onClose, onSaved }) {
   const save = async () => {
     if (!base.name.trim()) { setError('Вкажіть назву'); return; }
     for (const v of versions) {
-      if (v.start_year != null && v.start_year !== '' && !Number.isInteger(Number(v.start_year))) {
+      const s = toYear(v.start_year); const e = toYear(v.end_year);
+      if ((v.start_year !== '' && v.start_year != null && !Number.isInteger(s))
+        || (v.end_year !== '' && v.end_year != null && !Number.isInteger(e))) {
         setError('Рік має бути цілим числом'); return;
       }
+      if (s != null && e != null && s > e) { setError('Рік завершення раніше за рік початку'); return; }
     }
     setError('');
     setSaving(true);
     try {
       const baseFields = {
         name: base.name.trim(),
-        type: base.type || null,
+        types: base.types || [],
         marker_icon: base.marker_icon || null,
         marker_level: base.marker_level ?? null,
       };

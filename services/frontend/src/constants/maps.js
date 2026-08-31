@@ -4,9 +4,11 @@
 export const UNTYPED_KEY = 'other';
 export const DEFAULT_MARKER_LEVEL = 4;
 
-// Stable bucket key: real category values pass through, null/empty collapse.
-export function typeKey(type) {
-  return type || UNTYPED_KEY;
+// Bucket keys for a location's type SET: real values pass through (deduped),
+// an empty set collapses to the single UNTYPED_KEY.
+export function typeKeysOf(types) {
+  const list = (Array.isArray(types) ? types : []).map((t) => t || '').filter(Boolean);
+  return list.length ? [...new Set(list)] : [UNTYPED_KEY];
 }
 
 // A marker icon value is an image URL when it looks like a path/URL; otherwise
@@ -54,38 +56,10 @@ export function pinVisibleInYear(pin, year) {
   return true;
 }
 
-// If a pin's location has any DATED chronological version, the earliest of
-// those years is when the location comes into existence — before it, the pin
-// isn't on the map at all. Locations with only a base version (no dated ones)
-// are unaffected. `pin.location_versions` is dated-only, ascending.
-export function pinBornBy(pin, year) {
-  if (year == null) return true;
-  const firstYear = pin.location_versions?.[0]?.start_year;
-  return firstYear == null || year >= firstYear;
-}
-
-// The chronological version of a location to show for `year`: the newest
-// version whose start_year is at or before `year`. Falls back to the base
-// (start_year === null) version, then the earliest dated one. versions:
-// [{ id, start_year, description, gm_note, image_url, name, marker_icon, marker_level }].
-export function resolveLocationVersion(versions, year) {
-  if (!versions?.length) return null;
-  const dated = versions
-    .filter((v) => v.start_year != null)
-    .sort((a, b) => a.start_year - b.start_year);
-  const base = versions.find((v) => v.start_year == null) || null;
-  if (year != null) {
-    let pick = null;
-    for (const v of dated) if (v.start_year <= year) pick = v;
-    if (pick) return pick;
-  }
-  return base || dated[0] || null;
-}
-
-// The dated version active at `year`, or null when `year` is before every dated
-// version (or unset). Unlike resolveLocationVersion this never falls back to the
-// earliest — the caller keeps its base value in that case. Used for the compact
-// per-pin `location_versions` the map endpoint returns (dated rows only).
+// The dated version "governing" `year`: the latest one whose start_year is at
+// or before `year`. null when `year` is before every dated version (or unset).
+// `versions` is dated-only, ascending (matches the compact per-pin
+// `location_versions` the map endpoint returns).
 export function datedVersionAt(versions, year) {
   if (year == null || !versions?.length) return null;
   let pick = null;
@@ -93,6 +67,40 @@ export function datedVersionAt(versions, year) {
     if (v.start_year != null && v.start_year <= year) pick = v;
   }
   return pick;
+}
+
+// A pin's location exists at `year` iff it has been "born" (a dated version has
+// started) and not "ended" (the governing version's end_year, if set, hasn't
+// passed — this also covers gaps before the next version). Locations with no
+// dated versions always exist.
+export function pinExistsInYear(pin, year) {
+  if (year == null) return true;
+  const vs = pin.location_versions;
+  if (!vs?.length) return true;
+  if (year < vs[0].start_year) return false; // not born yet
+  const gov = datedVersionAt(vs, year);
+  if (gov && gov.end_year != null && year > gov.end_year) return false; // ended / gap
+  return true;
+}
+
+// The chronological version of a location to show for `year`: the version
+// governing that year while its [start, end] window still holds; once a
+// version has ended it falls back to the base (start_year === null) version.
+// With no year / no dated version → base, then the earliest dated one.
+export function resolveLocationVersion(versions, year) {
+  if (!versions?.length) return null;
+  const base = versions.find((v) => v.start_year == null) || null;
+  if (year != null) {
+    const gov = datedVersionAt(versions, year);
+    if (gov) {
+      if (gov.end_year == null || year <= gov.end_year) return gov;
+      return base || gov;
+    }
+  }
+  const dated = versions
+    .filter((v) => v.start_year != null)
+    .sort((a, b) => a.start_year - b.start_year);
+  return base || dated[0] || null;
 }
 
 // A pin's effective marker at `year`: per-version override wins, else the base
@@ -104,4 +112,12 @@ export function resolvePinMarker(pin, year) {
     icon: v?.marker_icon ?? pin.location_marker_icon,
     level: v?.marker_level ?? pin.location_marker_level,
   };
+}
+
+// A pin's effective type bucket keys at `year`: a version's `types` override
+// (non-null, may be []) wins over the base `location_types`.
+export function resolvePinTypeKeys(pin, year) {
+  const v = datedVersionAt(pin.location_versions, year);
+  const types = (v && v.types != null) ? v.types : pin.location_types;
+  return typeKeysOf(types);
 }

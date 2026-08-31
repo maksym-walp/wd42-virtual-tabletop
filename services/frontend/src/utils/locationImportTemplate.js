@@ -8,36 +8,41 @@ export function buildLocationImportTemplate() {
 // стають null — зображення з чужого експорту тут не лежать на диску.
 // Власником усіх імпортованих локацій стає користувач, що робить імпорт.
 //
-// Поля локації (базові, незмінні в часі):
+// Поля локації (базові):
 //   name         — обов'язкове, рядок (до 200)
-//   type         — рядок-ключ типу для фільтра на мапі, або null
+//   types        — масив рядків-ключів типів для фільтра на мапі (або [])
 //   marker_icon  — emoji ("🏰") або URL іконки ("/uploads/..."), або null
 //   marker_level — 1..4 (видимість за масштабом) або null
 //   versions     — масив версій (див. нижче). Одна версія без "start_year"
 //                  вважається базовою.
 //
 // Поля версії:
-//   start_year   — рік, з якого версія стає активною (ціле число), або
-//                  null для базової версії
+//   start_year   — рік, з якого версія активна (ціле), або null для базової
+//   end_year     — рік, після якого версія більше не діє, або null (без межі)
 //   description  — рядок або null. Підтримує [[1d6]] і [текст](URL).
 //   gm_note      — рядок або null (лише для власника)
 //   name         — назва саме в цей період, або null (=успадкувати базову)
 //   marker_icon  — іконка саме в цей період, або null (=успадкувати)
 //   marker_level — 1..4 саме в цей період, або null (=успадкувати)
+//   types        — масив типів саме в цей період, або null (=успадкувати)
 [
   {
     "name": "Вірантія",
-    "type": "capital",
+    "types": ["capital", "city"],
     "marker_icon": "🏛",
     "marker_level": 4,
     "versions": [
       {
         "start_year": null,
         "description": "Столиця Старого Легіону.",
+        "gm_note": null
+      },
+      {
+        "start_year": 500,
+        "end_year": 599,
+        "description": "Розквіт: центр торгівлі та магії.",
         "gm_note": null,
-        "name": null,
-        "marker_icon": null,
-        "marker_level": null
+        "types": ["capital"]
       },
       {
         "start_year": 600,
@@ -45,7 +50,8 @@ export function buildLocationImportTemplate() {
         "gm_note": "Під руїнами — запечатана крипта.",
         "name": "Руїни Вірантії",
         "marker_icon": "🏚",
-        "marker_level": 2
+        "marker_level": 2,
+        "types": ["ruin"]
       }
     ]
   }

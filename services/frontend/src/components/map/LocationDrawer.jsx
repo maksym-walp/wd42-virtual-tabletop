@@ -44,9 +44,10 @@ export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin,
     [location, year],
   );
   const datedCount = (location?.versions || []).filter((v) => v.start_year != null).length;
-  // Version overrides win over the base location for name / marker icon.
+  // Version overrides win over the base location for name / marker icon / types.
   const displayName = version?.name || location?.name || 'Локація';
   const displayIcon = version?.marker_icon ?? location?.marker_icon;
+  const displayTypes = (version && version.types != null) ? version.types : (location?.types || []);
 
   const copyLink = async () => {
     try {
@@ -83,7 +84,8 @@ export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin,
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
-              <MarkerIcon icon={displayIcon} size={14} /> {location.type || 'Локація'}
+              <MarkerIcon icon={displayIcon} size={14} />
+              {displayTypes.length ? displayTypes.join(' · ') : 'Локація'}
             </Badge>
             {year != null && datedCount > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-text-dim">

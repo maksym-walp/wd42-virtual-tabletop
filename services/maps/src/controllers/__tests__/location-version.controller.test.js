@@ -53,21 +53,28 @@ describe('LocationVersionController.add', () => {
     const res = mockRes();
     await LocationVersionController.add(mockReq({ params: { id: 'loc1' }, body: OK_BODY }), res);
     expect(LocationVersionModel.add).toHaveBeenCalledWith('loc1', {
-      startYear: 600, description: 'Ruins', gmNote: 'sunk', imageUrl: '/uploads/r.jpg',
-      name: null, markerIcon: null, markerLevel: null,
+      startYear: 600, endYear: null, description: 'Ruins', gmNote: 'sunk', imageUrl: '/uploads/r.jpg',
+      name: null, markerIcon: null, markerLevel: null, types: null,
     });
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('carries per-version name / marker overrides', async () => {
+  it('carries per-version name / marker / types / end_year overrides', async () => {
     LocationVersionModel.add.mockResolvedValue({ id: 'v2' });
     const res = mockRes();
     await LocationVersionController.add(mockReq({ params: { id: 'loc1' }, body: {
-      ...OK_BODY, name: '  Руїни  ', marker_icon: '🏚', marker_level: 1,
+      ...OK_BODY, end_year: 650, name: '  Руїни  ', marker_icon: '🏚', marker_level: 1, types: ['ruin', 'dungeon'],
     } }), res);
     expect(LocationVersionModel.add).toHaveBeenCalledWith('loc1', expect.objectContaining({
-      name: 'Руїни', markerIcon: '🏚', markerLevel: 1,
+      endYear: 650, name: 'Руїни', markerIcon: '🏚', markerLevel: 1, types: ['ruin', 'dungeon'],
     }));
+  });
+
+  it('400 when start_year is after end_year', async () => {
+    const res = mockRes();
+    await LocationVersionController.add(mockReq({ params: { id: 'loc1' }, body: { start_year: 700, end_year: 600 } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(LocationVersionModel.add).not.toHaveBeenCalled();
   });
 
   it('400 for a bad per-version marker level', async () => {

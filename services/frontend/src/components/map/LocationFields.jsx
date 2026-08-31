@@ -5,12 +5,12 @@ import { isIconUrl, DEFAULT_MARKER_LEVEL } from '../../constants/maps';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 import MarkerIcon from './MarkerIcon';
+import TypeTagsInput from './TypeTagsInput';
 
-// Controlled editor for a location's BASE (time-invariant) fields:
-// value = { name, type, marker_icon, marker_level }. The time-varying lore
-// (description, gm_note, image) lives on chronological versions — see
-// LocationVersionFields. The marker icon is either an uploaded image URL or an
-// emoji glyph.
+// Controlled editor for a location's BASE fields:
+// value = { name, types[], marker_icon, marker_level }. The time-varying lore
+// (description, gm_note, image, and per-period name/marker/types overrides)
+// lives on chronological versions — see LocationVersionFields.
 export default function LocationFields({ value, onChange }) {
   const markerRef = useRef(null);
   const [markerUploading, setMarkerUploading] = useState(false);
@@ -39,7 +39,10 @@ export default function LocationFields({ value, onChange }) {
     <div className="flex flex-col gap-3">
       <input className={inputClass} placeholder="Назва*" value={value.name} onChange={(e) => set({ name: e.target.value })} maxLength={200} />
 
-      <input className={inputClass} placeholder="Тип / категорія (для фільтра, необовʼязково)" value={value.type || ''} onChange={(e) => set({ type: e.target.value || null })} maxLength={50} />
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Типи / категорії (для фільтра)</span>
+        <TypeTagsInput value={value.types || []} onChange={(types) => set({ types })} />
+      </label>
 
       {/* Marker icon + zoom level */}
       <div className="rounded-lg border border-border p-3">

@@ -19,28 +19,47 @@ function isValidMarkerLevel(value) {
     || (Number.isInteger(value) && value >= 1 && value <= 4);
 }
 
-// Type keys are defined by the frontend config (public/map-markers/types.json),
-// so the server no longer whitelists them — it only guards the column width.
-function validateBaseFields({ type, marker_icon, marker_level }) {
-  if (type !== undefined && type !== null && (typeof type !== 'string' || type.length > 50)) {
-    return 'Некоректний тип';
+// Type keys are free-form strings (no server whitelist) — only the count and
+// per-key length are guarded. -> { value: string[] | null } | { error }.
+// undefined/null -> { value: null } (inherit / omitted); an array (even []) is
+// an explicit set.
+function cleanTypes(value) {
+  if (value === undefined || value === null) return { value: null };
+  if (!Array.isArray(value)) return { error: 'types має бути масивом' };
+  const clean = [];
+  for (const t of value) {
+    if (typeof t !== 'string' || t.length > 50) return { error: 'Некоректний тип' };
+    const trimmed = t.trim();
+    if (trimmed && !clean.includes(trimmed)) clean.push(trimmed);
   }
+  return { value: clean };
+}
+
+function validateBaseFields({ marker_icon, marker_level, types }) {
   if (marker_icon !== undefined && marker_icon !== null && marker_icon !== '' && !isAllowedMarkerIcon(marker_icon)) {
     return 'Некоректне посилання на іконку мітки';
   }
   if (!isValidMarkerLevel(marker_level)) {
     return 'Рівень мітки має бути цілим числом від 1 до 4';
   }
+  const cleaned = cleanTypes(types);
+  if (cleaned.error) return cleaned.error;
   return null;
 }
 
-// Validates one chronological version. name / marker_icon / marker_level are
-// optional per-version overrides (null = inherit the base location).
-// -> { value: { startYear, description, gmNote, imageUrl, name, markerIcon,
-// markerLevel } } or { error }.
+// Validates one chronological version. name / marker_icon / marker_level /
+// types are optional per-version overrides (null = inherit the base location).
+// end_year is the year the version stops applying (null = open-ended).
+// -> { value: { startYear, endYear, description, gmNote, imageUrl, name,
+// markerIcon, markerLevel, types } } or { error }.
 function readVersionFields(body) {
-  const year = parseYear(body.start_year);
-  if (year.error) return { error: year.error };
+  const start = parseYear(body.start_year);
+  if (start.error) return { error: start.error };
+  const end = parseYear(body.end_year);
+  if (end.error) return { error: end.error };
+  if (start.value !== null && end.value !== null && start.value > end.value) {
+    return { error: 'Рік завершення не може бути раніше за рік початку' };
+  }
   if (body.image_url !== undefined && body.image_url !== null && body.image_url !== ''
       && !isAllowedImageUrl(body.image_url)) {
     return { error: 'Некоректне посилання на зображення' };
@@ -56,23 +75,28 @@ function readVersionFields(body) {
   if (!isValidMarkerLevel(body.marker_level)) {
     return { error: 'Рівень мітки має бути цілим числом від 1 до 4' };
   }
+  const types = cleanTypes(body.types);
+  if (types.error) return { error: types.error };
   return {
     value: {
-      startYear: year.value,
+      startYear: start.value,
+      endYear: end.value,
       description: body.description ?? null,
       gmNote: body.gm_note ?? null,
       imageUrl: body.image_url || null,
       name: (typeof body.name === 'string' && body.name.trim()) ? body.name.trim() : null,
       markerIcon: body.marker_icon || null,
       markerLevel: body.marker_level ?? null,
+      types: types.value,
     },
   };
 }
 
 function toBaseFields(body) {
+  const types = cleanTypes(body.types);
   return {
     name: body.name.trim(),
-    type: body.type ?? null,
+    types: (!types.error && types.value) ? types.value : [],
     markerIcon: body.marker_icon || null,
     markerLevel: body.marker_level ?? null,
   };
@@ -110,24 +134,28 @@ const LocationController = {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив локацій' });
     }
+    const importTypes = (raw) => {
+      const c = cleanTypes(raw);
+      return (!c.error && c.value) ? c.value : [];
+    };
+    const importYear = (raw) => (raw != null && raw !== '' && Number.isInteger(Number(raw)) ? Number(raw) : null);
     const imported = await LocationModel.bulkImport(req.user.sub, req.body, {
       toBase: (record) => ({
         name: typeof record.name === 'string' ? record.name.trim() : '',
-        type: typeof record.type === 'string' && record.type ? record.type.slice(0, 50) : null,
+        types: importTypes(record.types),
         markerIcon: isAllowedMarkerIcon(record.marker_icon) ? record.marker_icon : null,
         markerLevel: isValidMarkerLevel(record.marker_level) ? (record.marker_level ?? null) : null,
       }),
-      toVersion: (v) => {
-        const y = Number(v.start_year);
-        return {
-          startYear: Number.isInteger(y) ? y : null,
-          description: typeof v.description === 'string' ? v.description : null,
-          gmNote: typeof v.gm_note === 'string' ? v.gm_note : null,
-          name: (typeof v.name === 'string' && v.name.trim()) ? v.name.trim().slice(0, 200) : null,
-          markerIcon: isAllowedMarkerIcon(v.marker_icon) ? v.marker_icon : null,
-          markerLevel: isValidMarkerLevel(v.marker_level) ? (v.marker_level ?? null) : null,
-        };
-      },
+      toVersion: (v) => ({
+        startYear: importYear(v.start_year),
+        endYear: importYear(v.end_year),
+        description: typeof v.description === 'string' ? v.description : null,
+        gmNote: typeof v.gm_note === 'string' ? v.gm_note : null,
+        name: (typeof v.name === 'string' && v.name.trim()) ? v.name.trim().slice(0, 200) : null,
+        markerIcon: isAllowedMarkerIcon(v.marker_icon) ? v.marker_icon : null,
+        markerLevel: isValidMarkerLevel(v.marker_level) ? (v.marker_level ?? null) : null,
+        types: Array.isArray(v.types) ? importTypes(v.types) : null,
+      }),
     });
     res.status(201).json({ imported });
   },
@@ -146,10 +174,10 @@ const LocationController = {
     if (version.error) return res.status(400).json({ message: version.error });
 
     const location = await LocationModel.create({ createdBy: req.user.sub, ...toBaseFields(req.body) });
-    // The first version IS the base version — name/marker overrides live on the
-    // location row, so they're never set here.
+    // The first version IS the base version — name/marker/types overrides live
+    // on the location row, so they're never set here.
     const v = await LocationVersionModel.add(location.id, {
-      ...version.value, name: null, markerIcon: null, markerLevel: null,
+      ...version.value, name: null, markerIcon: null, markerLevel: null, types: null,
     });
     res.status(201).json({ location: serializeLocation(location, [v], true) });
   },

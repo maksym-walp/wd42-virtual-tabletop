@@ -39,6 +39,7 @@ export default function LocationDetail() {
   const version = resolveLocationVersion(location?.versions, null);
   const displayName = version?.name || location?.name || 'Локація';
   const displayIcon = version?.marker_icon ?? location?.marker_icon;
+  const displayTypes = (version && version.types != null) ? version.types : (location?.types || []);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -57,7 +58,8 @@ export default function LocationDetail() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-xl text-text">{displayName}</h1>
               <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
-                <MarkerIcon icon={displayIcon} size={14} /> {location.type || 'Локація'}
+                <MarkerIcon icon={displayIcon} size={14} />
+                {displayTypes.length ? displayTypes.join(' · ') : 'Локація'}
               </Badge>
             </div>
 
