@@ -20,7 +20,8 @@ router.patch('/edges/:id',  requireGameMaster, wrap(EdgeController.update));
 router.delete('/edges/:id', requireGameMaster, wrap(EdgeController.remove));
 
 // Export / Import (export readable by all auth users, import GM only)
-router.get('/export',  requireAuth,       wrap(TreeController.export));
-router.post('/import', requireGameMaster, wrap(TreeController.import));
+router.get('/export',        requireAuth,       wrap(TreeController.export));
+router.post('/import',       requireGameMaster, wrap(TreeController.import));
+router.post('/import-nodes', requireGameMaster, wrap(TreeController.importNodes));
 
 module.exports = router;

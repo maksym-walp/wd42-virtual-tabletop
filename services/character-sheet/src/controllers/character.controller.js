@@ -43,7 +43,7 @@ const CharacterController = {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
-    const [skills, spells, tree, equipment, maneuvers, abilities, rituals, owner_username] = await Promise.all([
+    const [skills, spells, tree, equipment, maneuvers, abilities, rituals, owner_username, experience] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -52,6 +52,7 @@ const CharacterController = {
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
+      CharacterModel.experienceSummary(char.id),
     ]);
 
     // is_owner drives all edit UI on the frontend — a campaign GM or an admin
@@ -59,7 +60,7 @@ const CharacterController = {
     // so they get the same flag here rather than a separate "read-only" view.
     res.json({
       character: { ...char, owner_username },
-      skills, spells, tree, equipment, maneuvers, abilities, rituals,
+      skills, spells, tree, equipment, maneuvers, abilities, rituals, experience,
       is_owner: isOwner || isCampaignGm || isAdmin,
     });
   },
@@ -68,17 +69,19 @@ const CharacterController = {
     const char = await CharacterModel.findPublicById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено або він приватний' });
 
-    const [skills, spells, equipment, maneuvers, abilities, rituals, owner_username] = await Promise.all([
+    const [skills, spells, tree, equipment, maneuvers, abilities, rituals, owner_username, experience] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
+      TreeProgressModel.findAll(char.id),
       EquipmentModel.findAll(char.id),
       ManeuverModel.findAll(char.id),
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
+      CharacterModel.experienceSummary(char.id),
     ]);
 
-    res.json({ character: { ...char, owner_username }, skills, spells, equipment, maneuvers, abilities, rituals, is_owner: false });
+    res.json({ character: { ...char, owner_username }, skills, spells, tree, equipment, maneuvers, abilities, rituals, experience, is_owner: false });
   },
 
   async update(req, res) {

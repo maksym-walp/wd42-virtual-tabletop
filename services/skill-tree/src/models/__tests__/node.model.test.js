@@ -9,17 +9,24 @@ beforeEach(() => {
 });
 
 describe('NodeModel.findAll WHERE builder', () => {
-  it('has no WHERE clause and no params when archetype is absent', async () => {
+  it('has no archetype filter and no params when archetype is absent', async () => {
     await NodeModel.findAll({});
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).not.toMatch(/WHERE/);
+    expect(sql).not.toMatch(/WHERE n\.archetype/);
     expect(params).toEqual([]);
   });
 
-  it('adds a WHERE clause with the archetype param when provided', async () => {
+  it('adds an archetype filter with the param when provided', async () => {
     await NodeModel.findAll({ archetype: 'warrior' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE archetype = \$1/);
+    expect(sql).toMatch(/WHERE n\.archetype = \$1/);
     expect(params).toEqual(['warrior']);
+  });
+
+  it('always aggregates linked grants', async () => {
+    await NodeModel.findAll({});
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/node_grants/);
+    expect(sql).toMatch(/AS grants/);
   });
 });

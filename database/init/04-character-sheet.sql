@@ -21,8 +21,10 @@ CREATE TABLE IF NOT EXISTS character_sheet.characters (
     -- Death scale: NULL = not set, positive = successes, negative = failures
     death_scale          SMALLINT
                          CHECK (death_scale IS NULL OR death_scale BETWEEN -3 AND 3),
-    -- Development points budget (assigned by GM or earned)
-    dev_points           SMALLINT     NOT NULL DEFAULT 0,
+    -- Experience-points wallet (assigned by GM or earned). Single currency
+    -- for both raising skills and unlocking skill-tree nodes; spend is
+    -- derived on read, not decremented here. See migration 70.
+    experience_points    SMALLINT     NOT NULL DEFAULT 0,
     -- Health dice rolled values, sorted ASC (length = dice count from physique level)
     health_dice_values   INTEGER[]    NOT NULL DEFAULT '{}',
     -- [{type: 'exhaustion'|'injury'|'illness'|'poison'|'trauma', level: N}]
@@ -44,7 +46,12 @@ CREATE TABLE IF NOT EXISTS character_sheet.skills (
                      'will','deception','artistry','persuasion'
                    )),
     value          SMALLINT    NOT NULL DEFAULT 1 CHECK (value BETWEEN 0 AND 12),
-    progress_marks SMALLINT    NOT NULL DEFAULT 0 CHECK (progress_marks BETWEEN 0 AND 5),
+    -- Skill value at the end of character creation (point-buy is its own
+    -- pool). Experience spent on a skill = (value - base_value) * 5 +
+    -- progress_marks. See migration 70.
+    base_value     SMALLINT    NOT NULL DEFAULT 1 CHECK (base_value BETWEEN 0 AND 12),
+    -- 4 circles + the "+1" action raise a skill one level. See migration 69.
+    progress_marks SMALLINT    NOT NULL DEFAULT 0 CHECK (progress_marks BETWEEN 0 AND 4),
     UNIQUE (character_id, skill_key)
 );
 

@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { TreePine } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import equipmentApi from '../api/equipment';
+import spellbookApi from '../api/spellbook';
+import maneuversApi from '../api/maneuvers';
+import abilitiesApi from '../api/abilities';
+import { createCollectionsApi } from '../api/collections';
+import DevelopmentTree from '../components/DevelopmentTree';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
@@ -73,13 +78,21 @@ export default function CharacterNew() {
   const [archetype, setArchetype] = useState('');
   const [race, setRace] = useState('');
 
-  // Step 2 — skills
+  // Step 2 — skills. The pool defaults to 42 (46 for sangvi) but the player may
+  // set any number — homebrew tables adjust it.
   const [skills, setSkills] = useState({});
-  const skillBudget = budgetFor(race);
-  // The racial +1 to 4 skills is a bonus on top of the 42-point pool, not paid
-  // out of it — so those 4 "free" points are added back before computing what's left.
+  const [skillBudget, setSkillBudget] = useState(BASE_BUDGET);
+  // The racial +1 to 4 skills is a bonus on top of the pool, not paid out of it —
+  // so those 4 "free" points are added back before computing what's left.
   const skillBonusCount = boostedSkillKeysFor(race).size;
   const skillRemaining = skillBudget - Object.values(skills).reduce((s, v) => s + (v - 1), 0) + skillBonusCount;
+
+  // Step 5 — development tree. Starting experience defaults to 10, editable.
+  const [experiencePoints, setExperiencePoints] = useState(10);
+  const [treeProgress, setTreeProgress] = useState([]);
+  const [treeCatalog, setTreeCatalog] = useState({
+    abilities: [], maneuvers: [], spells: [], abilityCollections: [], spellCollections: [],
+  });
 
   // Step 3 — vitals
   const [healthDice, setHealthDice] = useState([]);
@@ -108,6 +121,7 @@ export default function CharacterNew() {
       const char = await characterApi.create({ name: name.trim(), archetype, race });
       setCharacterId(char.id);
       setSkills(initialSkillsFor(race));
+      setSkillBudget(budgetFor(race));
       setStep(2);
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка при створенні');
@@ -120,9 +134,11 @@ export default function CharacterNew() {
     setSaving(true);
     setError('');
     try {
+      // base_value snapshots the post-creation value — experience spent later
+      // is measured against it (the point-buy pool is separate from experience).
       await characterApi.bulkUpdateSkills(
         characterId,
-        Object.entries(skills).map(([skill_key, value]) => ({ skill_key, value }))
+        Object.entries(skills).map(([skill_key, value]) => ({ skill_key, value, base_value: value }))
       );
       // physique may have changed — any dice rolled for a previous physique level are stale
       setHealthDice([]);
@@ -157,13 +173,40 @@ export default function CharacterNew() {
     setSaving(true);
     setError('');
     try {
-      await characterApi.update(characterId, { money });
+      await characterApi.update(characterId, { money, experience_points: experiencePoints });
       setStep(5);
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка при збереженні грошей');
     } finally {
       setSaving(false);
     }
+  };
+
+  // Load catalogs + current tree progress once the tree step opens.
+  useEffect(() => {
+    if (step !== 5 || !characterId) return;
+    Promise.all([
+      spellbookApi.getAll().catch(() => []),
+      maneuversApi.getAll().catch(() => []),
+      abilitiesApi.getAll().catch(() => []),
+      createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
+      createCollectionsApi('/api/spellbook/collections/').getAll().catch(() => []),
+      characterApi.getSheet(characterId).then((s) => s.tree || []).catch(() => []),
+    ]).then(([spells, maneuvers, abilities, abilityCollections, spellCollections, tree]) => {
+      setTreeCatalog({ spells, maneuvers, abilities, abilityCollections, spellCollections });
+      setTreeProgress(tree);
+    });
+  }, [step, characterId]);
+
+  const persistExperience = (v) => {
+    setExperiencePoints(v);
+    characterApi.update(characterId, { experience_points: v }).catch(() => {});
+  };
+
+  const unlockTreeNode = async (nodeId) => {
+    await characterApi.unlockNode(characterId, nodeId).catch(() => {});
+    const fresh = await characterApi.getSheet(characterId).catch(() => null);
+    if (fresh) setTreeProgress(fresh.tree || []);
   };
 
   const finish = () => navigate(`/characters/${characterId}`);
@@ -184,7 +227,7 @@ export default function CharacterNew() {
         {step === 2 && (
           <Step2Skills
             skills={skills} setSkills={setSkills} remaining={skillRemaining}
-            budget={skillBudget} boostedKeys={boostedSkillKeysFor(race)}
+            budget={skillBudget} setBudget={setSkillBudget} boostedKeys={boostedSkillKeysFor(race)}
           />
         )}
         {step === 3 && (
@@ -205,7 +248,16 @@ export default function CharacterNew() {
             allEquipment={allEquipment}
           />
         )}
-        {step === 5 && <Step5TreePlaceholder />}
+        {step === 5 && (
+          <Step5Tree
+            archetype={archetype}
+            treeProgress={treeProgress}
+            experiencePoints={experiencePoints}
+            onExperienceChange={persistExperience}
+            onUnlock={unlockTreeNode}
+            catalog={treeCatalog}
+          />
+        )}
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
@@ -365,7 +417,7 @@ function ChoicePlaceholder({ letter, color }) {
   );
 }
 
-function Step2Skills({ skills, setSkills, remaining, budget, boostedKeys }) {
+function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedKeys }) {
   const floorFor = (key) => (boostedKeys.has(key) ? 2 : 1);
 
   const setSkill = (key, delta) => {
@@ -387,11 +439,20 @@ function Step2Skills({ skills, setSkills, remaining, budget, boostedKeys }) {
           Залишилось: <strong>{remaining}</strong> / {budget}
         </div>
       </div>
-      <p className="mb-5 text-sm text-text-dim">
+      <p className="mb-2 text-sm text-text-dim">
         {boostedLabel
           ? `Навички характеристики «${boostedLabel}» починаються з 2, решта — з 1. `
           : 'Усі навички починаються з 1. '}
-        Розподіліть {budget} додаткових очок між навичками (від {boostedLabel ? '2 для бустнутих' : '1'} до 12).
+        Розподіліть очки між навичками (від {boostedLabel ? '2 для бустнутих' : '1'} до 12).
+      </p>
+      <p className="mb-5 text-xs text-text-dim">
+        Пул очок (типово 42):
+        <IntInput
+          className="mx-1 w-10 border-0 border-b border-border/60 bg-transparent px-0.5 py-0 text-center text-text-muted focus:border-accent focus:outline-none"
+          value={budget}
+          min={0}
+          onChange={(v) => setBudget(Math.max(0, v))}
+        />
       </p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -602,17 +663,30 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
   );
 }
 
-function Step5TreePlaceholder() {
+function Step5Tree({ archetype, treeProgress, experiencePoints, onExperienceChange, onUnlock, catalog }) {
   return (
-    <Card className="flex flex-col items-center gap-4 py-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-accent">
-        <TreePine size={32} strokeWidth={1.75} />
+    <Card>
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/10 text-accent">
+          <TreePine size={22} strokeWidth={1.75} />
+        </div>
+        <div>
+          <h2 className="font-display text-lg text-accent">5. Дерево розвитку архетипу</h2>
+          <p className="text-sm text-text-dim">
+            Витрать стартові пункти досвіду зараз або пізніше — на листі персонажа.
+          </p>
+        </div>
       </div>
-      <h2 className="font-display text-lg text-accent">5. Дерево розвитку архетипу</h2>
-      <p className="max-w-sm text-sm text-text-dim">
-        Дерево розвитку буде доступне пізніше — цей сервіс ще в розробці. Персонажа вже створено,
-        і ви зможете повернутись до розвитку дерева, коли він буде готовий.
-      </p>
+      <DevelopmentTree
+        archetype={archetype}
+        tree={treeProgress}
+        experienceTotal={experiencePoints}
+        experienceSkillSpent={0}
+        is_owner
+        onUnlock={onUnlock}
+        onExperienceChange={onExperienceChange}
+        catalog={catalog}
+      />
     </Card>
   );
 }

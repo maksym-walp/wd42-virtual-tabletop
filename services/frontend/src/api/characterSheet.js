@@ -77,7 +77,9 @@ const characterApi = {
 
   async unlockNode(characterId, nodeId) {
     const { data } = await api.post(`${BASE}/${characterId}/tree/${nodeId}`);
-    return data.progress;
+    // { progress, granted: { abilities, maneuvers, spells } } — granted holds
+    // any entries a "видавати автоматично" node link added to the sheet.
+    return data;
   },
 
   async lockNode(characterId, nodeId) {

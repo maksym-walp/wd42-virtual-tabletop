@@ -40,6 +40,7 @@ function mockAggregationModels() {
   AbilityModel.findAll.mockResolvedValue(['ability-x']);
   RitualTrackerModel.findAll.mockResolvedValue(['ritual-x']);
   CharacterModel.findOwnerUsername.mockResolvedValue('ownerName');
+  CharacterModel.experienceSummary.mockResolvedValue({ total: 10, spent: 0, remaining: 10 });
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -207,7 +208,7 @@ describe('CharacterController.getPublicSheet', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it('returns the reduced payload (no tree) with is_owner always false', async () => {
+  it('returns the public payload with is_owner always false', async () => {
     CharacterModel.findPublicById.mockResolvedValue({ id: 'c1', user_id: 'owner-1', is_public: true });
     mockAggregationModels();
     const req = mockReq({ params: { id: 'c1' } });
@@ -219,11 +220,12 @@ describe('CharacterController.getPublicSheet', () => {
     expect(payload.character).toEqual({ id: 'c1', user_id: 'owner-1', is_public: true, owner_username: 'ownerName' });
     expect(payload.skills).toEqual(['skill-x']);
     expect(payload.spells).toEqual(['spell-x']);
+    expect(payload.tree).toEqual(['tree-x']);
     expect(payload.equipment).toEqual(['equip-x']);
     expect(payload.maneuvers).toEqual(['maneuver-x']);
     expect(payload.abilities).toEqual(['ability-x']);
     expect(payload.rituals).toEqual(['ritual-x']);
-    expect(payload.tree).toBeUndefined();
+    expect(payload.experience).toEqual({ total: 10, spent: 0, remaining: 10 });
     expect(payload.is_owner).toBe(false);
   });
 });

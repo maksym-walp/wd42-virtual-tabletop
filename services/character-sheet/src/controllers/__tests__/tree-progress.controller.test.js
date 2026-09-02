@@ -39,9 +39,22 @@ describe('TreeProgressController.unlock', () => {
     expect(TreeProgressModel.unlock).not.toHaveBeenCalled();
   });
 
+  it('403s (without unlocking) when canUnlock rejects', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    TreeProgressModel.canUnlock.mockResolvedValue({ ok: false, status: 403, message: 'Недостатньо пунктів досвіду' });
+    const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
+    const res = mockRes();
+
+    await TreeProgressController.unlock(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(TreeProgressModel.unlock).not.toHaveBeenCalled();
+  });
+
   it('is idempotent: returns 200 (not 201) when the node was already unlocked', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    TreeProgressModel.unlock.mockResolvedValue(null); // ON CONFLICT DO NOTHING -> already unlocked
+    TreeProgressModel.canUnlock.mockResolvedValue({ ok: true });
+    TreeProgressModel.unlock.mockResolvedValue({ progress: null, granted: { abilities: [], maneuvers: [], spells: [] } });
     const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
     const res = mockRes();
 
@@ -51,9 +64,11 @@ describe('TreeProgressController.unlock', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Вузол вже відкрито' });
   });
 
-  it('201s with the new progress row on success', async () => {
+  it('201s with the new progress row and granted items on success', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    TreeProgressModel.unlock.mockResolvedValue({ id: 'p1', node_id: 'n1' });
+    TreeProgressModel.canUnlock.mockResolvedValue({ ok: true });
+    const granted = { abilities: [{ ability_id: 'a1' }], maneuvers: [], spells: [] };
+    TreeProgressModel.unlock.mockResolvedValue({ progress: { id: 'p1', node_id: 'n1' }, granted });
     const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
     const res = mockRes();
 
@@ -61,7 +76,7 @@ describe('TreeProgressController.unlock', () => {
 
     expect(TreeProgressModel.unlock).toHaveBeenCalledWith('c1', 'n1');
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ progress: { id: 'p1', node_id: 'n1' } });
+    expect(res.json).toHaveBeenCalledWith({ progress: { id: 'p1', node_id: 'n1' }, granted });
   });
 });
 

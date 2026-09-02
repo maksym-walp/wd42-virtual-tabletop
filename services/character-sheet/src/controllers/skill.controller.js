@@ -20,8 +20,8 @@ const SkillController = {
 
   async patch(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const { value, progress_marks } = req.body;
-    const skill = await SkillModel.patch(req.params.id, req.params.key, { value, progress_marks });
+    const { value, progress_marks, base_value } = req.body;
+    const skill = await SkillModel.patch(req.params.id, req.params.key, { value, progress_marks, base_value });
     if (!skill) return res.status(404).json({ message: 'Навичку не знайдено' });
     res.json({ skill });
   },

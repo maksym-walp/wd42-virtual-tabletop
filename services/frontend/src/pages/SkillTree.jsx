@@ -1,10 +1,16 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
-  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2,
+  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
+import spellbookApi from '../api/spellbook';
+import maneuversApi from '../api/maneuvers';
+import abilitiesApi from '../api/abilities';
+import { createCollectionsApi } from '../api/collections';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
+import NodeGrantsPicker from '../components/NodeGrantsPicker';
+import { downloadJsonFile } from '../utils/downloadJson';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { isIconUrl } from '../constants/maps';
 import { useTheme } from '../context/ThemeContext';
@@ -33,7 +39,25 @@ export default function SkillTree() {
   const [edges, setEdges] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Catalogs offered by the node form's "видає / робить доступним" picker.
+  const [grantCatalogs, setGrantCatalogs] = useState({
+    abilities: [], maneuvers: [], spells: [], abilityCollections: [], spellCollections: [],
+  });
+  useEffect(() => {
+    if (!isGM) return;
+    Promise.all([
+      abilitiesApi.getAll().catch(() => []),
+      maneuversApi.getAll().catch(() => []),
+      spellbookApi.getAll().catch(() => []),
+      createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
+      createCollectionsApi('/api/spellbook/collections/').getAll().catch(() => []),
+    ]).then(([abilities, maneuvers, spells, abilityCollections, spellCollections]) => {
+      setGrantCatalogs({ abilities, maneuvers, spells, abilityCollections, spellCollections });
+    });
+  }, [isGM]);
+
   const [activeArchetype, setActiveArchetype] = useState('fighter');
+  const [importPrompt, setImportPrompt] = useState(null); // { data } — partial-node import awaiting a parent choice
 
   const panZoom = useSvgPanZoom({ initial: { x: 120, y: 120, k: 1 } });
   const { transform, setTransform } = panZoom;
@@ -310,7 +334,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [],
+      effect: [], grants: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
     });
@@ -325,7 +349,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [],
+      effect: [], grants: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
@@ -338,6 +362,7 @@ export default function SkillTree() {
       enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
       narrative_condition: n.narrative_condition || [],
       effect: n.effect || [],
+      grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode })),
       archetype: n.archetype || activeArchetype,
       require_both: n.require_both || false,
     });
@@ -393,13 +418,44 @@ export default function SkillTree() {
 
   // ── Export / Import ───────────────────────────────────────────────
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify({ nodes, edges, archetype: activeArchetype }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `skill-tree-${activeArchetype}-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJsonFile(
+      { nodes, edges, archetype: activeArchetype },
+      `skill-tree-${activeArchetype}-${new Date().toISOString().split('T')[0]}.json`,
+    );
+  };
+
+  // Export one node — optionally with every node reachable from it (its
+  // branches). Client-side: we already hold the whole graph.
+  const handleExportNode = (node) => {
+    const withBranches = window.confirm(
+      `Експортувати вузол «${node.title}» разом з усіма похідними гілками?\n\nОК — з гілками, Скасувати — лише цей вузол.`,
+    );
+    let ids = new Set([node.id]);
+    if (withBranches) {
+      const queue = [node.id];
+      while (queue.length) {
+        const cur = queue.shift();
+        for (const e of edges) {
+          if (e.source_id === cur && !ids.has(e.target_id)) { ids.add(e.target_id); queue.push(e.target_id); }
+        }
+      }
+    }
+    const subNodes = nodes.filter((n) => ids.has(n.id));
+    const subEdges = edges.filter((e) => ids.has(e.source_id) && ids.has(e.target_id));
+    downloadJsonFile(
+      { partial: true, archetype: activeArchetype, nodes: subNodes, edges: subEdges },
+      `skill-node-${(node.title || 'node').replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.json`,
+    );
+  };
+
+  const reloadTree = async () => {
+    const [n, ed] = await Promise.all([
+      skillTreeApi.getNodes({ archetype: activeArchetype }),
+      skillTreeApi.getEdges({ archetype: activeArchetype }),
+    ]);
+    pendingCenterRef.current = true;
+    setNodes(n); setEdges(ed);
+    setSelectedNode(null);
   };
 
   const handleImport = async (e) => {
@@ -412,20 +468,36 @@ export default function SkillTree() {
         setActionError('Невірний формат файлу');
         return;
       }
-      const archetypeLabel = ARCHETYPES[activeArchetype]?.label ?? activeArchetype;
-      if (!window.confirm(
-        `Імпортувати ${data.nodes.length} вузлів і ${data.edges.length} звʼязків у дерево «${archetypeLabel}»?\n\nПрогрес персонажів по ЦЬОМУ дереву буде видалено!`
-      )) return;
-      await skillTreeApi.importTree({ ...data, archetype: activeArchetype });
-      const [n, ed] = await Promise.all([
-        skillTreeApi.getNodes({ archetype: activeArchetype }),
-        skillTreeApi.getEdges({ archetype: activeArchetype }),
-      ]);
-      pendingCenterRef.current = true;
-      setNodes(n); setEdges(ed);
-      setSelectedNode(null);
+      // Partial documents (a node / a branch) go through the attach-parent
+      // dialog; a full document offers whole-tree replace.
+      setImportPrompt({ data, mode: data.partial ? 'nodes' : 'choose', attachTo: '' });
     } catch {
       setActionError('Помилка імпорту — перевір формат файлу');
+    }
+  };
+
+  const doReplaceImport = async (data) => {
+    const archetypeLabel = ARCHETYPES[activeArchetype]?.label ?? activeArchetype;
+    if (!window.confirm(
+      `Замінити ВСЕ дерево «${archetypeLabel}» на ${data.nodes.length} вузлів?\n\nПрогрес персонажів по цьому дереву буде видалено!`
+    )) return;
+    await skillTreeApi.importTree({ ...data, archetype: activeArchetype });
+    await reloadTree();
+    setImportPrompt(null);
+  };
+
+  const doNodesImport = async (data, attachToNodeId) => {
+    try {
+      await skillTreeApi.importNodes({
+        nodes: data.nodes, edges: data.edges,
+        archetype: activeArchetype,
+        attach_to_node_id: attachToNodeId || undefined,
+      });
+      await reloadTree();
+      setImportPrompt(null);
+      showToast('success', `Додано ${data.nodes.length} вузлів`);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Не вдалось імпортувати вузли');
     }
   };
 
@@ -650,6 +722,7 @@ export default function SkillTree() {
             edges={edges}
             level={levels[selectedNode.id]}
             isGM={isGM}
+            grantCatalogs={grantCatalogs}
             onEdit={openEditNodeForm}
             onDelete={handleDeleteNode}
             onClose={() => setSelectedNode(null)}
@@ -671,6 +744,10 @@ export default function SkillTree() {
               <MenuAction
                 icon={Link2} label="Редагувати звʼязки"
                 onClick={() => { setConnectionsNodeId(actionMenuNode.id); setActionMenuNodeId(null); }}
+              />
+              <MenuAction
+                icon={GitBranch} label="Експортувати вузол"
+                onClick={() => { const n = actionMenuNode; setActionMenuNodeId(null); handleExportNode(n); }}
               />
               <div className="mt-2 border-t border-border pt-3">
                 <MenuAction
@@ -711,12 +788,75 @@ export default function SkillTree() {
         <NodeFormModal
           form={nodeForm}
           error={formError}
+          grantCatalogs={grantCatalogs}
           onChange={setNodeForm}
           onSave={handleSaveNode}
           onClose={() => { setNodeForm(null); setFormError(''); }}
         />
       )}
+
+      {importPrompt && (
+        <ImportModal
+          prompt={importPrompt}
+          nodes={nodes}
+          archetypeLabel={ARCHETYPES[activeArchetype]?.label ?? activeArchetype}
+          onChangeAttach={(id) => setImportPrompt((p) => ({ ...p, attachTo: id }))}
+          onReplaceAll={() => doReplaceImport(importPrompt.data)}
+          onImportNodes={() => doNodesImport(importPrompt.data, importPrompt.attachTo)}
+          onClose={() => setImportPrompt(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Import dialog: replace the whole tree, or add the document's nodes under
+// a chosen parent (branches keep their internal wiring; roots of the set
+// attach to the parent). ────────────────────────────────────────────────────
+function ImportModal({ prompt, nodes, archetypeLabel, onChangeAttach, onReplaceAll, onImportNodes, onClose }) {
+  const { data, mode, attachTo } = prompt;
+  const count = data.nodes.length;
+  return (
+    <Sheet open onClose={onClose} title="Імпорт з JSON">
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-text-dim">
+          У файлі: <strong className="text-text">{count}</strong> вузлів, {data.edges.length} звʼязків.
+        </p>
+
+        {mode === 'choose' && (
+          <button
+            type="button"
+            onClick={onReplaceAll}
+            className="rounded-md border border-danger/40 bg-danger/5 px-3 py-2 text-left text-sm text-danger"
+          >
+            Замінити ВСЕ дерево «{archetypeLabel}»
+            <span className="block text-xs text-text-dim">Прогрес персонажів по цьому дереву буде видалено.</span>
+          </button>
+        )}
+
+        <div className="rounded-md border border-border p-3">
+          <p className="mb-2 text-sm font-semibold text-text">Додати вузли у поточне дерево</p>
+          <label className="flex flex-col gap-1.5 text-sm text-text-dim">
+            Прив'язати до вузла:
+            <select
+              className={`${inputClass} text-sm`}
+              value={attachTo}
+              onChange={(e) => onChangeAttach(e.target.value)}
+            >
+              <option value="">— не прив'язувати (з'єднаю вручну) —</option>
+              {nodes.map((n) => (
+                <option key={n.id} value={n.id}>{n.title}</option>
+              ))}
+            </select>
+          </label>
+          <Button type="button" className="mt-3" onClick={onImportNodes}>
+            Додати {count} вузлів
+          </Button>
+        </div>
+
+        <Button type="button" variant="ghost" onClick={onClose}>Скасувати</Button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -816,7 +956,7 @@ function Tooltip({ tooltip, nodes, edges }) {
       {(node.cost > 0 || node.narrative_condition?.length > 0) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {node.cost > 0 && (
-            <TtBadge>💰 {node.cost} {node.cost === 1 ? 'очко' : 'очків'}</TtBadge>
+            <TtBadge>💰 {node.cost} {node.cost === 1 ? 'пункт' : 'пунктів'} досвіду</TtBadge>
           )}
           {node.narrative_condition?.length > 0 && <TtBadge>📖 наратив</TtBadge>}
         </div>
@@ -832,7 +972,20 @@ function TtBadge({ children }) {
   return <span className="inline-block rounded bg-bg px-2 py-0.5 text-xs text-text-dim">{children}</span>;
 }
 // ── Node detail panel (view mode / non-GM click) ────────────────────
-function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose }) {
+const GRANT_KIND_LABEL = {
+  ability: 'вміння', maneuver: 'маневр', spell: 'заклинання',
+  ability_collection: 'колекція вмінь', spell_collection: 'колекція заклинань',
+};
+
+function grantName(grant, cat = {}) {
+  const pools = {
+    ability: cat.abilities, maneuver: cat.maneuvers, spell: cat.spells,
+    ability_collection: cat.abilityCollections, spell_collection: cat.spellCollections,
+  };
+  return (pools[grant.item_kind] || []).find((x) => x.id === grant.item_id)?.name || '—';
+}
+
+function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onDelete, onClose }) {
   const prereqEdges = edges.filter((e) => e.target_id === node.id);
   const prereqs = prereqEdges
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
@@ -841,6 +994,9 @@ function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose 
   const hasOptional = prereqEdges.some((e) => e.edge_type === 'optional');
   const hasRequired = prereqEdges.some((e) => e.edge_type !== 'optional');
   const hasNarrative = (node.narrative_condition?.length ?? 0) > 0;
+  const grantList = node.grants || [];
+  const grantsGrant = grantList.filter((g) => g.mode === 'grant');
+  const grantsUnlock = grantList.filter((g) => g.mode === 'unlock');
 
   return (
     <Sheet open onClose={onClose} title={node.title}>
@@ -874,6 +1030,22 @@ function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose 
         </InfoBlock>
       )}
 
+      {grantsGrant.length > 0 && (
+        <InfoBlock label="Додає автоматично">
+          <ul className="list-disc space-y-1 pl-4">
+            {grantsGrant.map((g, i) => <li key={i}>{grantName(g, grantCatalogs)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>)}
+          </ul>
+        </InfoBlock>
+      )}
+
+      {grantsUnlock.length > 0 && (
+        <InfoBlock label="Робить доступним">
+          <ul className="list-disc space-y-1 pl-4">
+            {grantsUnlock.map((g, i) => <li key={i}>{grantName(g, grantCatalogs)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>)}
+          </ul>
+        </InfoBlock>
+      )}
+
       {prereqs.length > 0 && (
         <InfoBlock label={
           <>
@@ -894,7 +1066,7 @@ function NodePanel({ node, nodes, edges, level, isGM, onEdit, onDelete, onClose 
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {node.cost > 0 && <Badge>💰 {node.cost} {node.cost === 1 ? 'очко' : 'очків'}</Badge>}
+        {node.cost > 0 && <Badge>💰 {node.cost} {node.cost === 1 ? 'пункт' : 'пунктів'} досвіду</Badge>}
         {hasNarrative && <Badge tone="accent">📖 наратив</Badge>}
       </div>
 
@@ -1049,7 +1221,7 @@ function ArrayListField({ label, items, placeholder, onAdd, onRemove, onChangeIt
 }
 
 // ── Node form modal ───────────────────────────────────────────────
-function NodeFormModal({ form, error, onChange, onSave, onClose }) {
+function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }) {
   const set = (field) => (e) => onChange((f) => ({ ...f, [field]: e.target.value }));
   const hasPoints = form.cost > 0;
   const hasNarrative = !!form.enableNarrative;
@@ -1092,7 +1264,7 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
         </label>
 
         <ArrayListField
-          label="Ефект (механіка)"
+          label="Ефект (текстовий опис)"
           items={form.effect || []}
           placeholder="Ефект"
           onAdd={() => onChange((f) => ({ ...f, effect: [...(f.effect || []), ''] }))}
@@ -1101,6 +1273,19 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
             ...f, effect: f.effect.map((v, idx) => (idx === i ? val : v)),
           }))}
         />
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння, заклинання, маневри</span>
+          <p className="text-xs text-text-dim">
+            «🎁 Видавати» — відкриття вузла одразу додає запис у лист персонажа.
+            «🔓 Доступним» — лише дозволяє додати його вручну.
+          </p>
+          <NodeGrantsPicker
+            catalogs={grantCatalogs}
+            value={form.grants || []}
+            onChange={(grants) => onChange((f) => ({ ...f, grants }))}
+          />
+        </div>
 
         <div className="rounded-lg border border-border bg-bg p-3">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-dim">Способи відкриття</p>
@@ -1112,7 +1297,7 @@ function NodeFormModal({ form, error, onChange, onSave, onClose }) {
                 checked={hasPoints}
                 onChange={(e) => onChange((f) => ({ ...f, cost: e.target.checked ? (f._lastCost || 1) : 0, _lastCost: f.cost || f._lastCost, require_both: e.target.checked ? f.require_both : false }))}
               />
-              💰 За очки
+              💰 За пункти досвіду
             </label>
             {hasPoints && (
               <input

@@ -15,21 +15,21 @@
 
 | Метод | Шлях | Доступ | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/public/:id` | публічний, без токена (лише якщо `is_public = true`) | — | `{ character, skills, spells, equipment, maneuvers, abilities, rituals, is_owner: false }` |
+| GET | `/public/:id` | публічний, без токена (лише якщо `is_public = true`) | — | `{ character, skills, spells, tree, equipment, maneuvers, abilities, rituals, experience, is_owner: false }` |
 | GET | `/` | лише логін (свої персонажі) | — | `{ characters: [...] }` |
 | POST | `/` | лише логін | `{ name, archetype, race, skills? }` | `201 { character }` |
-| GET | `/:id` | власник/GM-роль/campaign-GM/публічний | — | `{ character, skills, spells, tree, equipment, maneuvers, abilities, rituals, is_owner }` |
-| PUT | `/:id` | власник/campaign-GM | довільні поля `characters` (див. модель) | `{ character }` |
+| GET | `/:id` | власник/GM-роль/campaign-GM/публічний | — | `{ character, skills, spells, tree, equipment, maneuvers, abilities, rituals, experience, is_owner }` |
+| PUT | `/:id` | власник/campaign-GM | довільні поля `characters` (див. модель, зокрема `experience_points`) | `{ character }` |
 | DELETE | `/:id` | власник/campaign-GM | — | `{ message }` |
 | GET | `/:id/skills` | власник/GM-роль/campaign-GM/публічний | — | `{ skills }` |
-| PUT | `/:id/skills` | власник/campaign-GM | `{ updates: [{ skill_key, value?, progress_marks? }] }` | `{ skills }` |
-| PATCH | `/:id/skills/:key` | власник/campaign-GM | `{ value?, progress_marks? }` | `{ skill }` |
+| PUT | `/:id/skills` | власник/campaign-GM | `{ updates: [{ skill_key, value?, progress_marks?, base_value? }] }` (`base_value` — лише майстер створення) | `{ skills }` |
+| PATCH | `/:id/skills/:key` | власник/campaign-GM | `{ value?, progress_marks?, base_value? }` — значення клампуються (`value` 0–12, `progress_marks` 0–4) | `{ skill }` |
 | GET | `/:id/spells` | лише логін | — | `{ spells }` |
 | POST | `/:id/spells` | власник/campaign-GM | `{ spell_id }` | `201 { spell }` |
 | PATCH | `/:id/spells/:spellId` | власник/campaign-GM | `{ mastered?, cast_count? }` | `{ spell }` |
 | DELETE | `/:id/spells/:spellId` | власник/campaign-GM | — | `{ message }` |
 | GET | `/:id/tree` | лише логін | — | `{ progress }` |
-| POST | `/:id/tree/:nodeId` | власник/campaign-GM | — | `201 { progress }` або `200` якщо вже відкрито |
+| POST | `/:id/tree/:nodeId` | власник/campaign-GM | — | `201 { progress, granted: { abilities, maneuvers, spells } }` (перевіряє передумови ребер і, коли пункти обов'язкові, `cost <= remaining` — інакше `403`; `granted` — записи, додані «видавати автоматично»-прив'язками вузла, з розгортанням колекцій) / `200` якщо вже відкрито |
 | DELETE | `/:id/tree/:nodeId` | власник/campaign-GM | — | `{ message }` |
 | GET | `/:id/equipment` | лише логін | — | `{ equipment }` |
 | POST | `/:id/equipment` | власник/campaign-GM | `{ equipment_id }` | `201 { item }` |
@@ -53,16 +53,22 @@
 Заклинання, маневри, вміння та спорядження — це не власні таблиці цього сервіса, а посилання (`spell_id`/`maneuver_id`/`ability_id`/`equipment_id`) на каталоги інших сервісів (`spellbook.spells`, `maneuvers.entries`, `abilities.entries`, `equipment.items`/`equipment.weapons`/`equipment.armor`/`equipment.artifacts`). Перш ніж додати запис до листа персонажа, `add`-контролери (`ability`, `maneuver`, `spell`, `equipment`) проганяють дві перевірки з `prerequisite.model.js`:
 
 1. **`isVisibleToUser(sourceTable, itemId, userId)`** — запис каталогу видимий, якщо користувач є його власником (`user_id = $2`) АБО він публічний (`is_public = true`); інакше `404` (той самий код, що й "не існує" — приватний чужий запис навмисно не відрізняється від відсутнього).
-2. **`checkPrerequisites(characterId, sourceTable, itemId)`** — якщо в запису каталогу заповнено `prerequisite_node_ids`, перевіряється, які з цих вузлів дерева навичок уже відкриті персонажем (`character_sheet.tree_progress`). При `prerequisite_logic = 'and'` потрібні всі вузли; за будь-якого іншого значення (типово `'or'`) достатньо хоча б одного. Якщо вимога не виконана — `403` з `missing_node_ids` (переліком ще не відкритих вузлів, навіть за OR-логіки). Спорядження (`equipment.controller.js`) цю перевірку не проходить — лише видимість.
+2. **`checkPrerequisites(characterId, sourceTable, itemId)`** — запис вважається доступним, якщо задоволена **АБО** його власна `prerequisite_node_ids`/`prerequisite_logic` (`'and'` — усі вузли відкриті, інакше — хоча б один), **АБО** відкрито будь-який вузол `skill_tree.node_grants`, що вказує на цей запис чи на колекцію, яка його містить. Якщо в запису немає ні `prerequisite_node_ids`, ні grant-прив'язок — він вільно додається. Невиконана вимога — `403` з `missing_node_ids`. Спорядження (`equipment.controller.js`) цю перевірку не проходить — лише видимість.
+
+### Пункти досвіду (`experienceSummary`)
+
+`characters.experience_points` — єдиний «гаманець»: одна валюта і для прокачки навичок, і для відкривання вузлів дерева. Витрати **обчислюються** на читання (`character.model.js` `experienceSummary`), не декрементуються:
+`spent = Σ skills[max(value − base_value, 0) * 5 + progress_marks] + Σ (cost відкритих не-кореневих вузлів)`.
+`GET /:id` та `/public/:id` повертають `experience: { total, spent, remaining, tree_spent, skill_spent }`. `base_value` фіксується майстром створення (пул розподілу навичок — окремий від досвіду).
 
 ## Схема БД (`character_sheet`)
 
-Створюється в `database/init/04-character-sheet.sql` і `database/init/05-skill-tree-racial.sql`, доповнюється міграціями (`05`, `06`, `07`, `10`, `12`, `13`, `16`, `18`, `27` у `database/migrations/`).
+Створюється в `database/init/04-character-sheet.sql` і `database/init/05-skill-tree-racial.sql`, доповнюється міграціями (`05`, `06`, `07`, `10`, `12`, `13`, `16`, `18`, `27`, `69`, `70` у `database/migrations/`).
 
 | Таблиця | Призначення |
 |---|---|
-| `characters` | Основний запис персонажа: `user_id`, `name`, `archetype` (fighter/spellcaster/rogue), `race` (не впливає на дерево навичок — лише на стартовий бонус навичок, див. фронтенд `constants/characterSheet.js`), вітали (`current_hp`, `current_magic`, `death_scale`...), `is_public`, гроші, натхнення, портрет тощо |
-| `skills` | 20 фіксованих навичок на персонажа (`value` 0–12, `progress_marks` 0–5), унікальні за `(character_id, skill_key)` |
+| `characters` | Основний запис персонажа: `user_id`, `name`, `archetype` (fighter/spellcaster/rogue), `race`, вітали (`current_hp`, `current_magic`, `death_scale`...), `experience_points` (єдиний гаманець досвіду, раніше `dev_points`), `is_public`, гроші, натхнення, портрет тощо |
+| `skills` | 20 фіксованих навичок на персонажа (`value` 0–12, `base_value` 0–12 — знімок після створення, `progress_marks` 0–4), унікальні за `(character_id, skill_key)` |
 | `known_spells` | Прогрес по заклинанню (`spell_id` → `spellbook.spells`): `mastered`, `cast_count` |
 | `tree_progress` | Відкриті вузли дерева навичок (`node_id` → `skill_tree.nodes`), унікальні за `(character_id, node_id)` |
 | `equipment` | Прив'язане спорядження (`equipment_id` → `equipment.items`/`equipment.weapons`/`equipment.armor`/`equipment.artifacts`), `mastery_count`/`mastered` |

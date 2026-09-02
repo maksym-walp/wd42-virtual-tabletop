@@ -1,6 +1,6 @@
 # skill-tree
 
-Сервіс дерева навичок: вузли (`nodes`), звʼязки між ними (`edges`), прогрес гравців по вузлах (`player_progress`), а також експорт/імпорт цілого дерева одним JSON-документом (для перенесення дерева архетипу між середовищами). Порт **3004**, проксується Nginx як `/api/skill-tree/`.
+Сервіс дерева навичок: вузли (`nodes`), звʼязки між ними (`edges`), прив'язки вузлів до записів каталогів (`node_grants` — вміння/заклинання/маневри/колекції з режимом «видавати автоматично» чи «робити доступним»), прогрес гравців по вузлах (`player_progress`), а також експорт/імпорт цілого дерева **або окремих вузлів/гілок** JSON-документом. Порт **3004**, проксується Nginx як `/api/skill-tree/`.
 
 ## Ендпоінти
 
@@ -10,9 +10,9 @@
 
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/nodes` | Bearer JWT | — (query: `archetype?`) | `200 { nodes: [...] }` |
-| POST | `/nodes` | Bearer JWT, роль `game_master` | `{ title, description?, icon?, cost?, pos_x?, pos_y?, narrative_condition?, effect?, archetype?, require_both?, is_root? }` — без валідації полів | `201 { node }` |
-| PUT | `/nodes/:id` | Bearer JWT, роль `game_master` | те саме, що й POST | `200 { node }` / `404` якщо вузол не знайдено |
+| GET | `/nodes` | Bearer JWT | — (query: `archetype?`) | `200 { nodes: [...] }` — кожен вузол містить `grants: [{ item_kind, item_id, mode }]` |
+| POST | `/nodes` | Bearer JWT, роль `game_master` | `{ title, description?, icon?, cost?, pos_x?, pos_y?, narrative_condition?, effect?, archetype?, require_both?, is_root?, grants? }` — без валідації полів; `grants` замінює список прив'язок вузла | `201 { node }` |
+| PUT | `/nodes/:id` | Bearer JWT, роль `game_master` | те саме, що й POST; `grants` перезаписується лише якщо ключ переданий (drag-reorder PATCH його не чіпає) | `200 { node }` / `404` якщо вузол не знайдено |
 | DELETE | `/nodes/:id` | Bearer JWT, роль `game_master` | — | `200 { message: 'Видалено' }` / `404` якщо вузол не знайдено |
 
 ### Звʼязки (`src/controllers/edge.controller.js`)
@@ -28,10 +28,13 @@
 
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/export` | Bearer JWT | — (query: `archetype?`) | `200 { nodes: [...], edges: [...] }` — усі вузли/звʼязки, за потреби відфільтровані за архетипом |
+| GET | `/export` | Bearer JWT | — (query: `archetype?`) | `200 { nodes: [...], edges: [...] }` — усі вузли (з `grants`) та звʼязки, за потреби відфільтровані за архетипом |
 | POST | `/import` | Bearer JWT, роль `game_master` | `{ nodes: [...], edges: [...], archetype }` | `200 { message, nodeCount, edgeCount }` / `400` при невірному форматі або якщо якийсь вузол належить іншому архетипу |
+| POST | `/import-nodes` | Bearer JWT, роль `game_master` | `{ nodes: [...], edges: [...], archetype, attach_to_node_id? }` | `200 { message, nodeCount, edgeCount }` / `400` при невірному форматі, порожньому наборі, або якщо `attach_to_node_id` належить іншому архетипу |
 
-Формат JSON для `/export` і `/import` — однаковий: `nodes` — масив об'єктів вузлів (поля як у схемі `skill_tree.nodes`, `id` включно), `edges` — масив `{ source_id, target_id, edge_type? }` з `id`, що посилаються на `id` вузлів з того ж документа. `POST /import` повністю перезаписує вузли й звʼязки **лише вказаного архетипу** (`DELETE ... WHERE archetype = $1` з каскадом на `edges`/`player_progress` цього архетипу, в одній транзакції) — інші архетипи не зачіпаються.
+Формат JSON для `/export` і `/import` — однаковий: `nodes` — масив об'єктів вузлів (поля як у схемі `skill_tree.nodes`, `id` включно, плюс `grants`), `edges` — масив `{ source_id, target_id, edge_type? }`, що посилаються на `id` вузлів з того ж документа. `POST /import` повністю перезаписує вузли/звʼязки/grants **лише вказаного архетипу** (`DELETE ... WHERE archetype = $1` з каскадом, в одній транзакції) — інші архетипи не зачіпаються.
+
+`POST /import-nodes` — **не деструктивний**: додає підмножину вузлів (один вузол чи вузол + гілки), кожен з **новим** `id`, у вказаний архетип (`is_root` завжди `false`); внутрішні ребра/grants ремапляться на нові `id`. Кожен імпортований вузол без вхідного ребра в межах набору приєднується ребром `required` до `attach_to_node_id` (якщо переданий); інакше лишається орфаном для ручного з'єднання. Частковий документ позначається `partial: true` у файлі експорту вузла.
 
 ### Прогрес (`src/controllers/progress.controller.js`) — контролер існує, але наразі **не змонтований** у `skill-tree.routes.js`
 
@@ -51,11 +54,12 @@
 
 Сервіс володіє схемою `skill_tree`:
 
-- `skill_tree.nodes` — вузол дерева навичок: `title`, `description`, `icon`, `cost` (ціна в очках, 0 = недоступний за очки), `pos_x`/`pos_y` (координати на канві), `narrative_condition` (`TEXT[]`, умови розблокування через наратив), `effect` (`TEXT[]`, опис ефекту), `archetype` (власник-архетип), `archetypes` (`TEXT[]`, використовується при імпорті/стартових вузлах), `require_both` (для вузлів із двома вхідними звʼязками), `is_root` (стартовий вузол архетипу, автоматично розблоковується при створенні персонажа). Дерево не залежить від раси персонажа — усі вузли доступні всім расам одного архетипу.
+- `skill_tree.nodes` — вузол дерева навичок: `title`, `description`, `icon`, `cost` (ціна в пунктах досвіду, 0 = недоступний за пункти), `pos_x`/`pos_y`, `narrative_condition` (`TEXT[]`), `effect` (`TEXT[]`, текстовий опис ефекту), `archetype`, `archetypes` (`TEXT[]`), `require_both`, `is_root`.
 - `skill_tree.edges` — звʼязок між двома вузлами: `source_id`, `target_id` (обидва `ON DELETE CASCADE`, унікальна пара, `source_id <> target_id`), `edge_type` (`required` | `optional`).
-- `skill_tree.player_progress` — які вузли розблокував який користувач: `user_id`, `node_id` (`ON DELETE CASCADE`), `unlocked_at`, унікальна пара `(user_id, node_id)`.
+- `skill_tree.node_grants` — прив'язка вузла до запису каталогу: `node_id` (`ON DELETE CASCADE`), `item_kind` (`ability` | `maneuver` | `spell` | `ability_collection` | `spell_collection`), `item_id` (голий UUID у `abilities.*`/`spellbook.*`, без FK), `mode` (`grant` — відкриття вузла додає запис у лист персонажа; `unlock` — лише робить доступним для ручного додавання), унікальна трійка `(node_id, item_kind, item_id)`. Читається character-sheet сервісом при відкритті вузла (`tree-progress.model.js`) та при перевірці передумов (`prerequisite.model.js`).
+- `skill_tree.player_progress` — успадкований (не змонтований). Прогрес персонажів живе в `character_sheet.tree_progress`.
 
-DDL — `database/init/03-skill-tree.sql`, `database/init/05-skill-tree-racial.sql`, `database/init/06-default-archetype-nodes.sql` та подальші міграції `database/migrations/{01,02,03,04,09,11}-*.sql`.
+DDL — `database/init/03-skill-tree.sql`, `database/init/05-skill-tree-racial.sql`, `database/init/06-default-archetype-nodes.sql` та подальші міграції `database/migrations/{01,02,03,04,09,11,71}-*.sql`.
 
 ## Змінні оточення
 

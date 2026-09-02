@@ -121,3 +121,42 @@ describe('TreeController.import archetype-mismatch detection', () => {
     await expect(TreeController.import(req, res)).rejects.toBe(err);
   });
 });
+
+describe('TreeController.importNodes', () => {
+  it('400s when nodes is empty', async () => {
+    const req = { body: { nodes: [], edges: [], archetype: 'fighter' } };
+    const res = mockRes();
+    await TreeController.importNodes(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(TreeModel.importNodes).not.toHaveBeenCalled();
+  });
+
+  it('400s when the chosen parent belongs to another archetype', async () => {
+    NodeModel.findById.mockResolvedValue({ id: 'p1', archetype: 'rogue' });
+    const req = { body: { nodes: [{ id: 'n1', title: 'A' }], edges: [], archetype: 'fighter', attach_to_node_id: 'p1' } };
+    const res = mockRes();
+    await TreeController.importNodes(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(TreeModel.importNodes).not.toHaveBeenCalled();
+  });
+
+  it('delegates to TreeModel.importNodes and returns the counts', async () => {
+    NodeModel.findById.mockResolvedValue({ id: 'p1', archetype: 'fighter' });
+    TreeModel.importNodes.mockResolvedValue({ nodeCount: 2, edgeCount: 1 });
+    const nodes = [{ id: 'n1', title: 'A' }, { id: 'n2', title: 'B' }];
+    const edges = [{ source_id: 'n1', target_id: 'n2' }];
+    const req = { body: { nodes, edges, archetype: 'fighter', attach_to_node_id: 'p1' } };
+    const res = mockRes();
+    await TreeController.importNodes(req, res);
+    expect(TreeModel.importNodes).toHaveBeenCalledWith(nodes, edges, 'fighter', 'p1');
+    expect(res.json).toHaveBeenCalledWith({ message: 'Вузли імпортовано', nodeCount: 2, edgeCount: 1 });
+  });
+
+  it('passes null parent through when none chosen', async () => {
+    TreeModel.importNodes.mockResolvedValue({ nodeCount: 1, edgeCount: 0 });
+    const req = { body: { nodes: [{ id: 'n1', title: 'A' }], edges: [], archetype: 'fighter' } };
+    const res = mockRes();
+    await TreeController.importNodes(req, res);
+    expect(TreeModel.importNodes).toHaveBeenCalledWith([{ id: 'n1', title: 'A' }], [], 'fighter', null);
+  });
+});

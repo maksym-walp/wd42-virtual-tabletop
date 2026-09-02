@@ -9,9 +9,12 @@ const TreeProgressController = {
 
   async unlock(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const entry = await TreeProgressModel.unlock(req.params.id, req.params.nodeId);
-    if (!entry) return res.status(200).json({ message: 'Вузол вже відкрито' });
-    res.status(201).json({ progress: entry });
+    const check = await TreeProgressModel.canUnlock(req.params.id, req.params.nodeId);
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+
+    const { progress, granted } = await TreeProgressModel.unlock(req.params.id, req.params.nodeId);
+    if (!progress) return res.status(200).json({ message: 'Вузол вже відкрито' });
+    res.status(201).json({ progress, granted });
   },
 
   async lock(req, res) {

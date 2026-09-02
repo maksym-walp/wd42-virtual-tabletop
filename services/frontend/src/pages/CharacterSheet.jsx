@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft, Maximize2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -8,19 +8,17 @@ import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
 import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
-import skillTreeApi from '../api/skillTree';
+import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
 import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, LEVEL_MIN_VALUE, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES,
+  valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES, SKILL_PROGRESS_MARKS,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
-import { isIconUrl } from '../constants/maps';
-import useSvgPanZoom from '../hooks/useSvgPanZoom';
-import { computeLayout, elbowPath, computeFitTransform, ancestorClosure, computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y } from '../utils/skillTreeLayout';
+import DevelopmentTree from '../components/DevelopmentTree';
 import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
 import Button from '../components/ui/Button';
@@ -74,6 +72,8 @@ export default function CharacterSheet({ publicView = false }) {
   const [allEquipment, setAllEquipment] = useState([]);
   const [allManeuvers, setAllManeuvers] = useState([]);
   const [allAbilities, setAllAbilities] = useState([]);
+  const [allAbilityCollections, setAllAbilityCollections] = useState([]);
+  const [allSpellCollections, setAllSpellCollections] = useState([]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName]     = useState('');
   const [editingDefense, setEditingDefense]         = useState(false);
@@ -92,14 +92,19 @@ export default function CharacterSheet({ publicView = false }) {
     const fetchSheet = publicView
       ? characterApi.getPublicSheet(id)
       : characterApi.getSheet(id);
+    const noop = Promise.resolve([]);
+    const abilityCollectionsApi = createCollectionsApi('/api/abilities/collections/');
+    const spellCollectionsApi = createCollectionsApi('/api/spellbook/collections/');
     Promise.all([
       fetchSheet,
-      publicView ? Promise.resolve([]) : (spellbookApi?.getAll?.() ?? Promise.resolve([])),
-      publicView ? Promise.resolve([]) : (equipmentApi?.getAll?.() ?? Promise.resolve([])),
-      publicView ? Promise.resolve([]) : (maneuversApi?.getAll?.() ?? Promise.resolve([])),
-      publicView ? Promise.resolve([]) : (abilitiesApi?.getAll?.() ?? Promise.resolve([])),
+      publicView ? noop : (spellbookApi?.getAll?.() ?? noop),
+      publicView ? noop : (equipmentApi?.getAll?.() ?? noop),
+      publicView ? noop : (maneuversApi?.getAll?.() ?? noop),
+      publicView ? noop : (abilitiesApi?.getAll?.() ?? noop),
+      publicView ? noop : abilityCollectionsApi.getAll().catch(() => []),
+      publicView ? noop : spellCollectionsApi.getAll().catch(() => []),
     ])
-      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog]) => {
+      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog, abilityCollections, spellCollections]) => {
         setData(sheet);
         recordView({
           type: 'character', id, name: sheet.character.name,
@@ -112,6 +117,8 @@ export default function CharacterSheet({ publicView = false }) {
         setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
         setAllManeuvers(Array.isArray(maneuverCatalog) ? maneuverCatalog : []);
         setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
+        setAllAbilityCollections(Array.isArray(abilityCollections) ? abilityCollections : []);
+        setAllSpellCollections(Array.isArray(spellCollections) ? spellCollections : []);
       })
       .catch(() => setError('Не вдалось завантажити лист персонажа'))
       .finally(() => setLoading(false));
@@ -188,8 +195,26 @@ export default function CharacterSheet({ publicView = false }) {
   };
 
   const unlockTreeNode = async (nodeId) => {
-    const entry = await characterApi.unlockNode(id, nodeId);
-    if (entry) setData(prev => ({ ...prev, tree: [...(prev.tree || []), entry] }));
+    const { progress, granted } = await characterApi.unlockNode(id, nodeId);
+    if (progress) {
+      setData(prev => (prev ? { ...prev, tree: [...(prev.tree || []), progress] } : prev));
+    }
+    // A "видавати автоматично" link added catalog entries, and any unlock
+    // changed remaining experience — pull a fresh sheet to stay consistent.
+    const grantedAnything = granted && (granted.abilities?.length || granted.maneuvers?.length || granted.spells?.length);
+    if (progress || grantedAnything) {
+      try {
+        const fresh = await characterApi.getSheet(id);
+        setData(prev => (prev ? {
+          ...prev,
+          tree: fresh.tree,
+          abilities: fresh.abilities,
+          maneuvers: fresh.maneuvers,
+          spells: fresh.spells,
+          experience: fresh.experience,
+        } : prev));
+      } catch { /* keep optimistic state */ }
+    }
   };
 
   const addSpell    = async (spellId) => {
@@ -267,6 +292,17 @@ export default function CharacterSheet({ publicView = false }) {
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
 
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
+
+  // Single experience wallet. Skill spend is derived here (updates instantly on
+  // a circle click); tree spend comes from the server summary and refreshes
+  // after every unlock. See DevelopmentTree for the tree-side breakdown.
+  const experienceTotal   = c.experience_points || 0;
+  const skillExperienceSpent = skills.reduce(
+    (sum, s) => sum + Math.max(0, (s.value - (s.base_value ?? s.value))) * (SKILL_PROGRESS_MARKS + 1) + (s.progress_marks || 0),
+    0,
+  );
+  const treeExperienceSpent  = data.experience?.tree_spent ?? 0;
+  const experienceRemaining  = experienceTotal - skillExperienceSpent - treeExperienceSpent;
 
   const charLevels = Object.fromEntries(
     CHARACTERISTICS.map(ch => [
@@ -449,6 +485,12 @@ export default function CharacterSheet({ publicView = false }) {
           accent={heroicLeft > 0}
         />
         <BannerBox
+          label="ПУНКТИ ДОСВІДУ"
+          sub={`${experienceRemaining} / ${experienceTotal}`}
+          accent={experienceRemaining > 0}
+          onClick={() => setTab('tree')}
+        />
+        <BannerBox
           label="ІНІЦІАТИВА"
           accent
           sub={
@@ -488,6 +530,7 @@ export default function CharacterSheet({ publicView = false }) {
             skillMap={skillMap}
             charLevels={charLevels}
             is_owner={is_owner}
+            canSpendExperience={experienceRemaining > 0}
             onPatchSkill={patchSkill}
           />
         )}
@@ -551,15 +594,21 @@ export default function CharacterSheet({ publicView = false }) {
           />
         )}
         {tab === 'tree' && (
-          <TreeTab
-            c={c}
+          <DevelopmentTree
+            archetype={c.archetype}
             tree={data.tree || []}
+            experienceTotal={experienceTotal}
+            experienceSkillSpent={skillExperienceSpent}
             is_owner={is_owner}
-            patchCharacter={patchCharacter}
             onUnlock={unlockTreeNode}
-            allAbilities={allAbilities}
-            allSpells={allSpells}
-            allManeuvers={allManeuvers}
+            onExperienceChange={(v) => patchCharacter({ experience_points: v })}
+            catalog={{
+              abilities: allAbilities,
+              maneuvers: allManeuvers,
+              spells: allSpells,
+              abilityCollections: allAbilityCollections,
+              spellCollections: allSpellCollections,
+            }}
           />
         )}
         {tab === 'notes' && (
@@ -775,7 +824,7 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 
 // ── SkillsTab ─────────────────────────────────────────────────────────────────
 
-function SkillsTab({ characteristics, skillMap, charLevels, is_owner, onPatchSkill }) {
+function SkillsTab({ characteristics, skillMap, charLevels, is_owner, canSpendExperience, onPatchSkill }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
       {characteristics.map(char => {
@@ -807,16 +856,20 @@ function SkillsTab({ characteristics, skillMap, charLevels, is_owner, onPatchSki
                     progress={s.progress_marks}
                     minValue={minValue}
                     is_owner={is_owner}
+                    canSpendExperience={canSpendExperience}
                     onProgressClick={idx => {
                       if (!is_owner) return;
                       const newMarks = s.progress_marks === idx + 1 ? idx : idx + 1;
+                      // spending a fresh circle needs experience left; erasing always allowed
+                      if (newMarks > s.progress_marks && !canSpendExperience) return;
                       onPatchSkill(skill.key, { progress_marks: newMarks });
                     }}
                     onLevelAdjust={delta => {
                       if (!is_owner) return;
+                      if (delta > 0 && !canSpendExperience) return;
                       const next = Math.max(minValue, Math.min(12, s.value + delta));
                       if (next === s.value) return;
-                      onPatchSkill(skill.key, { value: next, progress_marks: delta > 0 ? 0 : 5 });
+                      onPatchSkill(skill.key, { value: next, progress_marks: delta > 0 ? 0 : SKILL_PROGRESS_MARKS });
                     }}
                   />
                 );
@@ -839,11 +892,11 @@ function LevelSquares({ level }) {
   );
 }
 
-function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressClick, onLevelAdjust }) {
+function SkillRow({ label, value, progress, minValue = 1, is_owner, canSpendExperience = true, onProgressClick, onLevelAdjust }) {
   const die = modifierDie(value);
   const rollFormula = die === '—' ? '1d20' : `1d20+1${die}`;
   const canLevelDown = is_owner && progress === 0 && value > minValue;
-  const canLevelUp   = is_owner && progress === 5 && value < 12;
+  const canLevelUp   = is_owner && progress === SKILL_PROGRESS_MARKS && value < 12 && canSpendExperience;
   return (
     <div className="flex flex-col gap-1 border-b border-bg py-1.5">
       <div className="flex items-center justify-between">
@@ -872,7 +925,7 @@ function SkillRow({ label, value, progress, minValue = 1, is_owner, onProgressCl
           >−</button>
         )}
         <div className="flex items-center">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: SKILL_PROGRESS_MARKS }).map((_, i) => (
             <button key={i}
               className={`flex h-9 w-9 items-center justify-center ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
               onClick={() => onProgressClick(i)}
@@ -1924,490 +1977,6 @@ function LuckTab({ c, is_owner, patchCharacter }) {
         </label>
       </div>
     </div>
-  );
-}
-
-// ── TreeTab ───────────────────────────────────────────────────────────────────
-
-const TREE_NODE_R = 22;
-const TREE_ARROW_GAP = 5; // extra clearance beyond a node's radius before the arrowhead
-const TREE_NODE_ICON_SIZE = TREE_NODE_R * 1.3; // uploaded-image icon size — stays inside the circle
-
-function TreeTab({ c, tree, is_owner, patchCharacter, onUnlock, allAbilities, allSpells, allManeuvers }) {
-  const [nodes, setNodes]               = useState([]);
-  const [edges, setEdges]               = useState([]);
-  const [treeLoading, setTreeLoading]   = useState(true);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [hoverLabel, setHoverLabel] = useState(null); // { title, x, y } — names only show on hover now
-  const panZoom = useSvgPanZoom({ initial: { x: 80, y: 80, k: 0.85 }, maxK: 3 });
-  const { transform, setTransform } = panZoom;
-  const [editingBudget, setEditingBudget] = useState(false);
-  const [budgetDraft, setBudgetDraft]   = useState('');
-  const svgRef   = useRef(null);
-  const pendingCenterRef = useRef(false); // armed on load so the next render centers on the root node
-
-  useEffect(() => {
-    pendingCenterRef.current = true;
-    Promise.all([
-      skillTreeApi.getNodes({ archetype: c.archetype }),
-      skillTreeApi.getEdges({ archetype: c.archetype }),
-    ])
-      .then(([n, e]) => { setNodes(n); setEdges(e); })
-      .catch(() => {})
-      .finally(() => setTreeLoading(false));
-  }, []);
-
-  // Layout is always fully derived from the graph (level + parent
-  // references) — no stored pixel coordinates, shared with the GM editor
-  // (pages/SkillTree.jsx / utils/skillTreeLayout.js) so both stay visually
-  // consistent. This is a read-only viewer, so no "+" slots and no drag.
-  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
-  const { levels, positions } = layout;
-  const edgeLanes = useMemo(() => computeEdgeLanes(edges, levels, positions), [edges, levels, positions]);
-  const entryOffsets = useMemo(() => computeEntryOffsets(edges, positions), [edges, positions]);
-  const highlightSet = selectedNode ? ancestorClosure(selectedNode.id, edges) : null;
-
-  // Centers the camera on the root node once the tree loads, so opening this
-  // tab never leaves the player staring at empty canvas because the node
-  // graph sits away from the fixed default {x:80,y:80} origin.
-  useEffect(() => {
-    if (!pendingCenterRef.current || treeLoading || !svgRef.current || nodes.length === 0) return;
-    const root = nodes.find((n) => n.is_root) || nodes[0];
-    const pos = positions.get(root.id) || { x: 0, y: 0 };
-    const rect = svgRef.current.getBoundingClientRect();
-    setTransform((t) => ({
-      ...t,
-      x: rect.width / 2 - pos.x * t.k,
-      y: rect.height / 2 - pos.y * t.k,
-    }));
-    pendingCenterRef.current = false;
-  }, [nodes, treeLoading, positions, setTransform]);
-
-  const handleFitView = () => {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const fit = computeFitTransform(positions, rect.width, rect.height);
-    if (fit) setTransform(fit);
-  };
-
-  const visibleIdSet = new Set(nodes.map(n => n.id));
-
-  // ── Edge visibility ──
-  const visibleEdges = edges.filter(e => visibleIdSet.has(e.source_id) && visibleIdSet.has(e.target_id));
-
-  // ── Unlocked set (root nodes auto-included) ──
-  const rootNodeIds = new Set(nodes.filter(n => n.is_root).map(n => n.id));
-  const unlockedIds = new Set([...(tree || []).map(t => t.node_id), ...rootNodeIds]);
-
-  const budget    = c.dev_points || 0;
-  const spent     = nodes.filter(n => unlockedIds.has(n.id) && !n.is_root).reduce((s, n) => s + (n.cost || 0), 0);
-  const remaining = budget - spent;
-
-  const checkCanUnlock = (node) => {
-    if (unlockedIds.has(node.id)) return { unlocked: true };
-
-    const prereqEdges = edges.filter(e => e.target_id === node.id);
-    let prereqsMet = true;
-    if (prereqEdges.length > 0) {
-      const required = prereqEdges.filter(e => e.edge_type === 'required');
-      const optional = prereqEdges.filter(e => e.edge_type === 'optional');
-      prereqsMet =
-        required.every(e => unlockedIds.has(e.source_id)) &&
-        (optional.length === 0 || optional.some(e => unlockedIds.has(e.source_id)));
-    }
-
-    const hasPoints    = node.cost > 0;
-    const hasNarrative = !!node.narrative_condition;
-    const requireBoth  = !!node.require_both;
-
-    let points = false, narrative = false, bothAvail = false;
-    if (prereqsMet) {
-      if (requireBoth && hasPoints && hasNarrative) {
-        bothAvail = node.cost <= remaining;
-      } else {
-        points    = hasPoints    && node.cost <= remaining;
-        narrative = hasNarrative;
-      }
-    }
-
-    return { unlocked: false, prereqsMet, points, narrative, bothAvail };
-  };
-
-  // ── Handlers ──
-  const handleUnlock = async (nodeId) => {
-    await onUnlock(nodeId);
-    setSelectedNode(null);
-  };
-
-  // ── Pan/zoom (mouse-drag/wheel or touch-drag/pinch) ──
-  const handleSvgPointerDown = (e) => {
-    if (e.button !== 0) return;
-    const tag = e.target.tagName;
-    if (tag === 'circle' || tag === 'text') return;
-    panZoom.bind.onPointerDown(e);
-  };
-
-  const handleNodeEnter = (node) => {
-    // Anchored to the node's own screen position (not the cursor) so the
-    // label can reliably sit flush against its top edge — see the render
-    // below, where it flips below the node only if that would clip it.
-    const pos = positions.get(node.id) || { x: 0, y: 0 };
-    const r = TREE_NODE_R * transform.k;
-    const cx = transform.x + pos.x * transform.k;
-    const cy = transform.y + pos.y * transform.k;
-    setHoverLabel({ title: node.title, left: cx + r + 10, nodeTop: cy - r, nodeBottom: cy + r });
-  };
-  const handleNodeLeave = () => setHoverLabel(null);
-
-  // Orthogonal edge path — mirrors pages/SkillTree.jsx's edgePathFor (tree
-  // grows upward: source exits at its top, target is entered at its bottom).
-  // Different sources sharing the same pair of levels get their own lane
-  // (see computeEdgeLanes) so their bus heights never visually merge.
-  const edgePathFor = (edge) => {
-    const s = positions.get(edge.source_id);
-    const d = positions.get(edge.target_id);
-    if (!s || !d) return null;
-    const sLevel = levels[edge.source_id] ?? 1;
-    const dLevel = levels[edge.target_id] ?? 1;
-    const x1 = s.x, y1 = s.y - TREE_NODE_R;
-    const x2 = d.x + (entryOffsets.get(edge.id) ?? 0), y2 = d.y + TREE_NODE_R + TREE_ARROW_GAP;
-    const midY = dLevel - sLevel > 1
-      ? y1 - LEVEL_SPACING_Y / 2
-      : y1 - (edgeLanes.get(edge.source_id) ?? 0.5) * (y1 - y2);
-    return { path: elbowPath(x1, y1, x2, y2, midY) };
-  };
-
-  const commitBudget = () => {
-    const val = Math.max(0, parseInt(budgetDraft) || 0);
-    patchCharacter({ dev_points: val });
-    setEditingBudget(false);
-  };
-
-  if (treeLoading) return <p className="py-4 text-text-dim">Завантаження дерева...</p>;
-
-  return (
-    <div className="flex flex-col gap-3">
-
-      {/* Budget bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm uppercase tracking-wide text-text-dim">Очки розвитку:</span>
-            {is_owner && editingBudget ? (
-              <input
-                autoFocus
-                type="number" min={0} value={budgetDraft}
-                className="w-[60px] border-0 border-b-2 border-gold bg-transparent text-center text-base font-bold text-gold outline-none"
-                onChange={e => setBudgetDraft(e.target.value)}
-                onBlur={commitBudget}
-                onKeyDown={e => { if (e.key === 'Enter') commitBudget(); if (e.key === 'Escape') setEditingBudget(false); }}
-              />
-            ) : (
-              <span
-                className={`text-lg font-bold text-gold ${is_owner ? 'cursor-pointer underline decoration-dotted' : 'cursor-default'}`}
-                onClick={() => { if (!is_owner) return; setBudgetDraft(String(budget)); setEditingBudget(true); }}
-                title={is_owner ? 'Натисни щоб змінити' : undefined}
-              >
-                {budget}
-              </span>
-            )}
-            <span className="text-sm text-border">·</span>
-            <span className="text-sm text-text-dim">Витрачено: <strong className="text-danger">{spent}</strong></span>
-            <span className="text-sm text-border">·</span>
-            <span className="text-sm text-text-dim">
-              Залишилось: <strong className={remaining >= 0 ? 'text-sage' : 'text-danger'}>{remaining}</strong>
-            </span>
-          </div>
-        </div>
-
-      {/* Canvas */}
-      <div className="relative h-[520px] overflow-hidden rounded-lg border border-border bg-surface">
-        <button
-          type="button"
-          onClick={handleFitView}
-          title="Показати все дерево"
-          className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-text-dim hover:text-text"
-        >
-          <Maximize2 size={15} />
-        </button>
-        <svg
-          ref={svgRef}
-          className="block h-full w-full select-none touch-none overscroll-contain"
-          style={{ cursor: 'grab' }}
-          onPointerDown={handleSvgPointerDown}
-          onPointerMove={panZoom.bind.onPointerMove}
-          onPointerUp={panZoom.bind.onPointerUp}
-          onPointerCancel={panZoom.bind.onPointerCancel}
-          onWheel={panZoom.bind.onWheel}
-          onClick={() => setSelectedNode(null)}
-        >
-          <defs>
-            <marker id="tree-tab-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L7,3 z" fill="var(--color-text-muted)" />
-            </marker>
-          </defs>
-          <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
-            {visibleEdges.map(edge => {
-              const pts = edgePathFor(edge);
-              if (!pts) return null;
-              const srcUnlocked = unlockedIds.has(edge.source_id);
-              const dstUnlocked = unlockedIds.has(edge.target_id);
-              const bothUnlocked = srcUnlocked && dstUnlocked;
-              const isOptional = edge.edge_type === 'optional';
-              const stroke = bothUnlocked ? 'var(--color-sage)'
-                : isOptional ? 'var(--color-edge-optional)'
-                : 'var(--color-text-muted)';
-              const dimmed = highlightSet && !(highlightSet.has(edge.source_id) && highlightSet.has(edge.target_id));
-              return (
-                <path key={edge.id}
-                  d={pts.path}
-                  fill="none"
-                  stroke={stroke}
-                  strokeWidth={isOptional ? 1.5 : 2}
-                  strokeDasharray={isOptional ? '5,4' : undefined}
-                  markerEnd="url(#tree-tab-arrow)"
-                  opacity={dimmed ? 0.15 : 1}
-                  style={{ pointerEvents: 'none' }}
-                />
-              );
-            })}
-
-            {nodes.map(node => {
-              const pos        = positions.get(node.id) || { x: 0, y: 0 };
-              const unlocked   = unlockedIds.has(node.id);
-              const selected   = selectedNode?.id === node.id;
-              const avail      = checkCanUnlock(node);
-              const dimmed     = highlightSet && !highlightSet.has(node.id);
-              const stroke = selected   ? 'var(--color-accent)'
-                : unlocked  ? 'var(--color-sage)'
-                : avail.points      ? 'var(--color-gold)'
-                : avail.narrative   ? 'var(--color-node-narrative)'
-                : 'var(--color-text-dim)';
-              const fill      = unlocked ? 'var(--color-node-unlocked-bg)' : 'var(--color-bg)';
-              const textColor = unlocked ? 'var(--color-sage)' : 'var(--color-text)';
-
-              return (
-                <g key={node.id}
-                  transform={`translate(${pos.x},${pos.y})`}
-                  opacity={dimmed ? 0.25 : 1}
-                  style={{ cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); setSelectedNode(prev => prev?.id === node.id ? null : node); }}
-                  onMouseEnter={() => handleNodeEnter(node)}
-                  onMouseLeave={handleNodeLeave}
-                >
-                  <circle r={TREE_NODE_R} fill={fill}
-                    stroke={stroke} strokeWidth={selected || unlocked ? 2.5 : 1.5} />
-                  {unlocked && !node.is_root && (
-                    <circle r={TREE_NODE_R + 4} fill="none" stroke="var(--color-sage)"
-                      strokeWidth={1} opacity={0.25} style={{ pointerEvents: 'none' }} />
-                  )}
-                  {node.is_root && (
-                    <circle r={TREE_NODE_R + 4} fill="none" stroke="var(--color-gold)"
-                      strokeWidth={1} opacity={0.35} style={{ pointerEvents: 'none' }} />
-                  )}
-                  {isIconUrl(node.icon) ? (
-                    <image
-                      href={node.icon}
-                      x={-TREE_NODE_ICON_SIZE / 2} y={-TREE_NODE_ICON_SIZE / 2}
-                      width={TREE_NODE_ICON_SIZE} height={TREE_NODE_ICON_SIZE}
-                      preserveAspectRatio="xMidYMid slice"
-                      style={{ pointerEvents: 'none' }}
-                    />
-                  ) : (
-                    <text x={0} y={node.icon ? 7 : 5} textAnchor="middle"
-                      fontSize={node.icon ? 16 : 11} fill={textColor}
-                      style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                      {node.icon || node.title.substring(0, 2)}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        {/* Names only show on hover now — this is the only place a node's title appears outside the click-to-open panel */}
-        {hoverLabel && <HoverLabel hoverLabel={hoverLabel} />}
-
-        {nodes.length === 0 && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
-            Дерево розвитку ще порожнє
-          </div>
-        )}
-
-        {selectedNode && (
-          <TreeNodePanel
-            node={selectedNode}
-            nodes={nodes}
-            edges={edges}
-            unlocked={unlockedIds.has(selectedNode.id)}
-            canUnlock={checkCanUnlock(selectedNode)}
-            is_owner={is_owner}
-            onUnlock={() => handleUnlock(selectedNode.id)}
-            onClose={() => setSelectedNode(null)}
-            allAbilities={allAbilities}
-            allSpells={allSpells}
-            allManeuvers={allManeuvers}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Prereqs live below a hovered node (the tree grows upward), so the label
-// sits above it by default — its bottom edge flush with the node's top edge —
-// keeping that path visible, and only drops below the node if sitting above
-// would clip past the canvas's top edge. Mirrors pages/SkillTree.jsx's Tooltip.
-function HoverLabel({ hoverLabel }) {
-  const { title, left, nodeTop, nodeBottom } = hoverLabel;
-  const elRef = useRef(null);
-  const [placement, setPlacement] = useState('above');
-
-  useLayoutEffect(() => {
-    const height = elRef.current?.offsetHeight ?? 0;
-    setPlacement(nodeTop - height < 8 ? 'below' : 'above');
-  }, [nodeTop]);
-
-  const style = placement === 'above'
-    ? { left, top: nodeTop, transform: 'translateY(-100%)' }
-    : { left, top: nodeBottom };
-
-  return (
-    <div
-      ref={elRef}
-      className="pointer-events-none absolute z-20 max-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text shadow-lg"
-      style={style}
-    >
-      {title}
-    </div>
-  );
-}
-
-function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUnlock, onClose, allAbilities, allSpells, allManeuvers }) {
-  const prereqEdges = edges.filter(e => e.target_id === node.id);
-  const prereqs = prereqEdges
-    .map(e => ({ node: nodes.find(n => n.id === e.source_id), type: e.edge_type }))
-    .filter(x => x.node);
-
-  const unlockedAbilities = (allAbilities || []).filter(a => (a.prerequisite_node_ids || []).includes(node.id));
-  const unlockedSpells    = (allSpells || []).filter(s => (s.prerequisite_node_ids || []).includes(node.id));
-  const unlockedManeuvers = (allManeuvers || []).filter(m => (m.prerequisite_node_ids || []).includes(node.id));
-
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={node.icon ? (
-        <span className="inline-flex items-center gap-2">
-          {isIconUrl(node.icon)
-            ? <img src={node.icon} alt="" className="h-6 w-6 object-contain" />
-            : <span>{node.icon}</span>}
-          {node.title}
-        </span>
-      ) : node.title}
-    >
-      {node.is_root && <span className="mb-2 block text-xs text-gold">★ Кореневий вузол</span>}
-
-      {node.description && <p className="mb-1 text-sm leading-relaxed text-text-muted">{node.description}</p>}
-
-      {node.effect && (
-        <div className="mt-2 rounded-md border border-border bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Ефект</p>
-          <p className="text-sm leading-relaxed text-text-muted">{node.effect}</p>
-        </div>
-      )}
-
-      {unlockedAbilities.length > 0 && (
-        <div className="mt-2 rounded-md border border-border bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні вміння</p>
-          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
-            {unlockedAbilities.map(a => <li key={a.id}>{a.name}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {unlockedSpells.length > 0 && (
-        <div className="mt-2 rounded-md border border-border bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні заклинання</p>
-          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
-            {unlockedSpells.map(s => <li key={s.id}>{s.name}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {unlockedManeuvers.length > 0 && (
-        <div className="mt-2 rounded-md border border-border bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває наступні маневри</p>
-          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
-            {unlockedManeuvers.map(m => <li key={m.id}>{m.name}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {node.narrative_condition && (
-        <div className="mt-2 rounded-md border border-accent/30 bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Наративна умова</p>
-          <p className="text-sm leading-relaxed text-text-muted">{node.narrative_condition}</p>
-        </div>
-      )}
-
-      {prereqs.length > 0 && (
-        <div className="mt-2 rounded-md border border-border bg-bg p-3">
-          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Вимоги</p>
-          <div className="mt-1 flex flex-col gap-1.5">
-            {prereqs.map(({ node: n, type }) => (
-              <span key={n.id} className="flex items-center gap-1.5 text-sm">
-                <span className={`shrink-0 rounded px-1 text-[0.65rem] ${type === 'optional' ? 'bg-accent/15 text-accent' : 'bg-sage/15 text-sage'}`}>
-                  {type === 'optional' ? 'АБО' : 'І'}
-                </span>
-                <span className="text-text-dim">{n.title}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="my-3 flex flex-wrap gap-1.5">
-        {node.cost > 0 && node.narrative_condition && node.require_both ? (
-          <span className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-dim">💰+📖 {node.cost} {node.cost === 1 ? 'очко' : 'очків'} + наратив</span>
-        ) : (
-          <>
-            {node.cost > 0 && (
-              <span className="rounded border border-border bg-surface-hover px-2 py-1 text-sm text-text-dim">💰 {node.cost} {node.cost === 1 ? 'очко' : 'очків'}</span>
-            )}
-            {node.narrative_condition && (
-              <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-sm text-accent">📖 наратив</span>
-            )}
-          </>
-        )}
-        {unlocked && <span className="rounded border border-sage/30 bg-sage/10 px-2 py-1 text-sm text-sage">✓ відкрито</span>}
-      </div>
-
-      {is_owner && (
-        <div className="mt-1 flex flex-wrap gap-2">
-          {!unlocked && canUnlock.bothAvail && (
-            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
-              Витратити {node.cost} {node.cost === 1 ? 'очко' : 'очків'} + наратив
-            </button>
-          )}
-          {!unlocked && canUnlock.points && (
-            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
-              Витратити {node.cost} {node.cost === 1 ? 'очко' : 'очків'}
-            </button>
-          )}
-          {!unlocked && canUnlock.narrative && (
-            <button className="min-h-9 rounded border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent" onClick={onUnlock}>
-              Відкрити наративно
-            </button>
-          )}
-          {!unlocked && !canUnlock.points && !canUnlock.narrative && !canUnlock.bothAvail && (
-            <span className="self-center text-sm italic text-text-dim">
-              {!canUnlock.prereqsMet ? 'Вимоги не виконані' : 'Недостатньо очок'}
-            </span>
-          )}
-        </div>
-      )}
-    </Sheet>
   );
 }
 

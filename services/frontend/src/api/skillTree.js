@@ -54,6 +54,12 @@ const skillTreeApi = {
   async importTree(data) {
     await api.post('/api/skill-tree/import', data);
   },
+  // Additive import of one node / a node + its branches. `data`:
+  // { nodes, edges, archetype, attach_to_node_id? }
+  async importNodes(data) {
+    const { data: res } = await api.post('/api/skill-tree/import-nodes', data);
+    return res;
+  },
 };
 
 export default skillTreeApi;

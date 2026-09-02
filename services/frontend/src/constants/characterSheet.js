@@ -142,6 +142,11 @@ export const CHARACTERISTICS = [
 // minimum skill value required to keep characteristic at a given level
 export const LEVEL_MIN_VALUE = { 1: 1, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12 };
 
+// Progress circles per skill, and the total experience-point cost to raise a
+// skill one level (the circles + the "+1" action). See migration 69.
+export const SKILL_PROGRESS_MARKS = 4;
+export const SKILL_LEVEL_COST = SKILL_PROGRESS_MARKS + 1;
+
 // value → level (1..6)
 export function valueToLevel(value) {
   if (value >= 12)  return 6;
