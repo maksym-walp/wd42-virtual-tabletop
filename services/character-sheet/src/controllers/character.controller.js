@@ -43,6 +43,13 @@ const CharacterController = {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
+    // Distinct from is_owner below: true only when this viewer's write
+    // access comes from campaign-GM/admin authority rather than literal
+    // ownership. Drives the GM-only skill/experience editing UI on the
+    // frontend (direct value entry, budget controls) as opposed to the
+    // player's circle-stepper + spend-to-level flow.
+    const isGmViewer = !isOwner && (isCampaignGm || isAdmin);
+
     const [skills, spells, tree, equipment, maneuvers, abilities, rituals, owner_username, experience] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
@@ -62,6 +69,7 @@ const CharacterController = {
       character: { ...char, owner_username },
       skills, spells, tree, equipment, maneuvers, abilities, rituals, experience,
       is_owner: isOwner || isCampaignGm || isAdmin,
+      is_gm: isGmViewer,
     });
   },
 
@@ -81,7 +89,7 @@ const CharacterController = {
       CharacterModel.experienceSummary(char.id),
     ]);
 
-    res.json({ character: { ...char, owner_username }, skills, spells, tree, equipment, maneuvers, abilities, rituals, experience, is_owner: false });
+    res.json({ character: { ...char, owner_username }, skills, spells, tree, equipment, maneuvers, abilities, rituals, experience, is_owner: false, is_gm: false });
   },
 
   async update(req, res) {

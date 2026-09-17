@@ -888,6 +888,8 @@ function CampaignCharactersAdmin({ campaignId, characters, setCharacters }) {
   const [newCharacterId, setNewCharacterId] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [granting, setGranting] = useState(false);
+  const [success, setSuccess] = useState('');
 
   const refresh = () => campaignApi.listCharacters(campaignId).then(setCharacters);
 
@@ -916,9 +918,35 @@ function CampaignCharactersAdmin({ campaignId, characters, setCharacters }) {
     }
   };
 
+  const handleGrantExperience = async (amount) => {
+    setGranting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { updated } = await campaignApi.grantExperience(campaignId, amount);
+      setSuccess(`Видано +${amount} досвіду персонажам (${updated})`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при видачі досвіду');
+    } finally {
+      setGranting(false);
+    }
+  };
+
   return (
     <Card>
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-dim">Персонажі кампанії</p>
+      {characters.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-text-dim">Видати досвід усім:</span>
+          {[1, 5, 10].map((amount) => (
+            <Button key={amount} variant="ghost" size="sm" disabled={granting}
+              onClick={() => handleGrantExperience(amount)}>
+              +{amount}
+            </Button>
+          ))}
+        </div>
+      )}
+      {success && <p className="mb-2 text-sm text-sage">{success}</p>}
       <div className="mb-4 flex gap-2">
         <input
           className={`${inputClass} flex-1`}

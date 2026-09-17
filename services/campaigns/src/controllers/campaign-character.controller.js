@@ -80,6 +80,21 @@ const CampaignCharacterController = {
     res.status(204).send();
   },
 
+  // Майстер видає N пунктів досвіду одразу всім персонажам кампанії.
+  async grantExperience(req, res) {
+    const campaign = await CampaignModel.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
+    if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const amount = parseInt(req.body.amount, 10);
+    if (!Number.isInteger(amount) || amount === 0) {
+      return res.status(400).json({ message: 'amount має бути цілим числом, відмінним від нуля' });
+    }
+
+    const updated = await CampaignCharacterModel.grantExperienceToAll(campaign.id, amount);
+    res.json({ updated: updated.length });
+  },
+
   // A player leaves the campaign: every character THEY own gets detached.
   // The GM can't "leave" their own campaign — they'd have to delete it.
   async leave(req, res) {

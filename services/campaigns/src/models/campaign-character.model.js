@@ -12,6 +12,21 @@ const CampaignCharacterModel = {
     return rows[0] || null; // null means it was already attached
   },
 
+  // Cross-schema bulk update: grants (or, with a negative amount, deducts)
+  // XP for every character currently attached to this campaign in one query.
+  async grantExperienceToAll(campaignId, amount) {
+    const { rows } = await pool.query(
+      `UPDATE character_sheet.characters
+          SET experience_points = experience_points + $2
+        WHERE id IN (
+          SELECT character_id FROM campaigns.campaign_characters WHERE campaign_id = $1
+        )
+        RETURNING id`,
+      [campaignId, amount]
+    );
+    return rows;
+  },
+
   // Cross-schema join: campaign_characters -> character_sheet.characters -> auth.users
   async listWithOwners(campaignId) {
     const { rows } = await pool.query(

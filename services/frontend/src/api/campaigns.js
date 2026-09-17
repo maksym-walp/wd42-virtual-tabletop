@@ -75,6 +75,12 @@ const campaignApi = {
     return data.characters;
   },
 
+  // Майстер видає N пунктів досвіду одразу всім персонажам кампанії.
+  async grantExperience(id, amount) {
+    const { data } = await api.post(`${BASE}/${id}/characters/experience`, { amount });
+    return data; // { updated: <count> }
+  },
+
   // Галерея майстра: файл спершу летить у media-service, а сюди приходить
   // уже готовий URL — саме цей запис і робить зображення власністю кампанії.
   async listGallery(id) {

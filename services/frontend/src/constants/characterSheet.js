@@ -93,7 +93,7 @@ export const CHARACTERISTICS = [
     key: 'physique',
     label: 'Тілобудова',
     effect: (level) => PHYSIQUE_HEALTH[level],
-    effectLabel: 'Кількість кісток здоров\'я',
+    effectLabel: 'Кістки здоров\'я',
     skills: [
       { key: 'strength',    label: 'Сила' },
       { key: 'immunity',    label: 'Імунітет' },

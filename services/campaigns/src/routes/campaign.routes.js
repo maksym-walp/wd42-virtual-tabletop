@@ -27,6 +27,7 @@ router.patch('/:id/date', wrap(CampaignController.updateCurrentDate));
 router.post('/:id/characters', wrap(CampaignCharacterController.addByGm));
 router.get('/:id/characters', wrap(CampaignCharacterController.list));
 router.delete('/:id/characters/:characterId', wrap(CampaignCharacterController.remove));
+router.post('/:id/characters/experience', wrap(CampaignCharacterController.grantExperience));
 router.post('/:id/leave', wrap(CampaignCharacterController.leave));
 
 router.get('/:id/gallery', wrap(CampaignGalleryController.list));
