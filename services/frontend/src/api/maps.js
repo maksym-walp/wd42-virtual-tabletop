@@ -71,8 +71,11 @@ const mapsApi = {
   },
 
   // Pins carry joined location_name / location_type / location_marker_icon / location_marker_level.
-  async listPins(mapId) {
-    const { data } = await api.get(`${BASE}/${mapId}/pins`);
+  // campaignId (optional) scopes visibility to pins opened for that campaign.
+  async listPins(mapId, campaignId) {
+    const { data } = await api.get(`${BASE}/${mapId}/pins`, {
+      params: campaignId ? { campaign_id: campaignId } : undefined,
+    });
     return data.pins;
   },
 
