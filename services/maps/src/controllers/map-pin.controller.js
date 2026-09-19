@@ -1,7 +1,7 @@
 const MapPinModel = require('../models/map-pin.model');
 const LocationModel = require('../models/location.model');
 const MapLensModel = require('../models/map-lens.model');
-const { canReadMap, canWriteMap, canWriteLocation, loadMapOr404, isCampaignMember } = require('./access');
+const { canReadMap, canWriteMap, canWriteLocation, loadMapOr404, memberCampaignIdsForMap } = require('./access');
 const { parseYearRange } = require('../utils/year');
 
 const DEFAULT_MIN_ZOOM = 0;
@@ -55,18 +55,17 @@ const MapPinController = {
     // The map owner/admin ("GM" for a standalone map) sees every pin
     // unfiltered, including its full visible_campaign_ids, so they can see
     // which campaigns each pin belongs to. Anyone else only sees pins with
-    // no campaign restriction, plus — if ?campaign_id names a campaign
-    // they're actually a member of — pins scoped to that campaign too.
+    // no campaign restriction, plus pins scoped to any campaign this map is
+    // linked to that they're actually a member of — computed server-side so
+    // it's the same on a refresh, a bare/shared map link, or the campaign
+    // page, not only when a ?campaign_id happened to be in the URL.
     if (canWriteMap(map, req.user)) {
       const pins = await MapPinModel.listByMap(map.id);
       return res.json({ pins });
     }
 
-    const campaignId = req.query.campaign_id || null;
-    const verifiedCampaignId = campaignId && await isCampaignMember(campaignId, req.user.sub)
-      ? campaignId
-      : null;
-    const pins = await MapPinModel.listVisibleToPlayer(map.id, verifiedCampaignId);
+    const memberCampaignIds = await memberCampaignIdsForMap(map.id, req.user.sub);
+    const pins = await MapPinModel.listVisibleToPlayer(map.id, memberCampaignIds);
     res.json({ pins });
   },
 

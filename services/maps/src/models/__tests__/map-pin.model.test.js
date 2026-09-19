@@ -21,19 +21,19 @@ describe('MapPinModel.listByMap', () => {
 });
 
 describe('MapPinModel.listVisibleToPlayer', () => {
-  it('keeps pins with an empty visible_campaign_ids or a matching campaignId', async () => {
+  it('keeps pins with an empty visible_campaign_ids or one overlapping memberCampaignIds', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'p1' }] });
-    await MapPinModel.listVisibleToPlayer('m1', 'camp-1');
+    await MapPinModel.listVisibleToPlayer('m1', ['camp-1', 'camp-2']);
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/JOIN maps\.locations/);
-    expect(sql).toMatch(/array_length\(p\.visible_campaign_ids, 1\) IS NULL OR \$2::uuid = ANY\(p\.visible_campaign_ids\)/);
-    expect(params).toEqual(['m1', 'camp-1']);
+    expect(sql).toMatch(/array_length\(p\.visible_campaign_ids, 1\) IS NULL OR p\.visible_campaign_ids && \$2::uuid\[\]/);
+    expect(params).toEqual(['m1', ['camp-1', 'camp-2']]);
   });
 
-  it('passes a null campaignId through as-is (only unrestricted pins match)', async () => {
+  it('passes an empty memberCampaignIds array through as-is (only unrestricted pins match)', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
-    await MapPinModel.listVisibleToPlayer('m1', null);
-    expect(pool.query.mock.calls[0][1]).toEqual(['m1', null]);
+    await MapPinModel.listVisibleToPlayer('m1', []);
+    expect(pool.query.mock.calls[0][1]).toEqual(['m1', []]);
   });
 });
 

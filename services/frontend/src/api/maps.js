@@ -71,11 +71,10 @@ const mapsApi = {
   },
 
   // Pins carry joined location_name / location_type / location_marker_icon / location_marker_level.
-  // campaignId (optional) scopes visibility to pins opened for that campaign.
-  async listPins(mapId, campaignId) {
-    const { data } = await api.get(`${BASE}/${mapId}/pins`, {
-      params: campaignId ? { campaign_id: campaignId } : undefined,
-    });
+  // Campaign-scoped visibility is resolved server-side from the viewer's own
+  // campaign membership, not from anything the client passes here.
+  async listPins(mapId) {
+    const { data } = await api.get(`${BASE}/${mapId}/pins`);
     return data.pins;
   },
 

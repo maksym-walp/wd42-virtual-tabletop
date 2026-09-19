@@ -38,29 +38,21 @@ describe('MapPinController.list', () => {
     expect(res.json).toHaveBeenCalledWith({ pins: [{ id: 'p1', visible_campaign_ids: ['camp-1'] }] });
   });
 
-  it('filters for a non-owner without a campaign_id (unrestricted pins only)', async () => {
+  it('filters for a non-owner using their campaign membership on this map (unrestricted pins only, when they belong to none)', async () => {
+    CampaignMembershipModel.memberCampaignIdsForMap.mockResolvedValue([]);
     MapPinModel.listVisibleToPlayer.mockResolvedValue([{ id: 'p1' }]);
     const res = mockRes();
     await MapPinController.list(mockReq({ params: { mapId: 'm1' }, user: PLAYER }), res);
-    expect(MapPinModel.listVisibleToPlayer).toHaveBeenCalledWith('m1', null);
-    expect(CampaignMembershipModel.isMember).not.toHaveBeenCalled();
+    expect(CampaignMembershipModel.memberCampaignIdsForMap).toHaveBeenCalledWith('m1', 'p-1');
+    expect(MapPinModel.listVisibleToPlayer).toHaveBeenCalledWith('m1', []);
   });
 
-  it('trusts ?campaign_id only once membership is verified', async () => {
-    CampaignMembershipModel.isMember.mockResolvedValue(true);
+  it('passes every campaign the player belongs to on this map, regardless of query params', async () => {
+    CampaignMembershipModel.memberCampaignIdsForMap.mockResolvedValue(['camp-1', 'camp-2']);
     MapPinModel.listVisibleToPlayer.mockResolvedValue([]);
     const res = mockRes();
-    await MapPinController.list(mockReq({ params: { mapId: 'm1' }, query: { campaign_id: 'camp-1' }, user: PLAYER }), res);
-    expect(CampaignMembershipModel.isMember).toHaveBeenCalledWith('camp-1', 'p-1');
-    expect(MapPinModel.listVisibleToPlayer).toHaveBeenCalledWith('m1', 'camp-1');
-  });
-
-  it('ignores ?campaign_id when the requester is not actually a member of it', async () => {
-    CampaignMembershipModel.isMember.mockResolvedValue(false);
-    MapPinModel.listVisibleToPlayer.mockResolvedValue([]);
-    const res = mockRes();
-    await MapPinController.list(mockReq({ params: { mapId: 'm1' }, query: { campaign_id: 'camp-1' }, user: PLAYER }), res);
-    expect(MapPinModel.listVisibleToPlayer).toHaveBeenCalledWith('m1', null);
+    await MapPinController.list(mockReq({ params: { mapId: 'm1' }, query: { campaign_id: 'camp-9' }, user: PLAYER }), res);
+    expect(MapPinModel.listVisibleToPlayer).toHaveBeenCalledWith('m1', ['camp-1', 'camp-2']);
   });
 });
 

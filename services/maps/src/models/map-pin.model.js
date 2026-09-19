@@ -44,13 +44,14 @@ const MapPinModel = {
   },
 
   // Same as listByMap, but drops any pin whose visible_campaign_ids is
-  // non-empty and doesn't include campaignId — for a regular reader (not the
-  // map owner/admin), who only ever sees pins with no campaign restriction,
-  // plus (if campaignId is given, already verified as one they're a member
-  // of — see access.isCampaignMember) pins scoped to that campaign.
-  // array_length(..., 1) IS NULL is the correct "is this array empty" check
-  // in Postgres — an empty array's length is NULL, not 0.
-  async listVisibleToPlayer(mapId, campaignId) {
+  // non-empty and shares none of memberCampaignIds — for a regular reader
+  // (not the map owner/admin), who only ever sees pins with no campaign
+  // restriction, plus pins scoped to any campaign in memberCampaignIds
+  // (already verified as ones they're a member of — see
+  // access.memberCampaignIdsForMap). array_length(..., 1) IS NULL is the
+  // correct "is this array empty" check in Postgres — an empty array's
+  // length is NULL, not 0. `&&` is array overlap (shares at least one element).
+  async listVisibleToPlayer(mapId, memberCampaignIds) {
     const { rows } = await pool.query(
       `SELECT p.*,
               l.name  AS location_name,
@@ -61,9 +62,9 @@ const MapPinModel = {
        FROM maps.map_pins p
        JOIN maps.locations l ON l.id = p.location_id
        WHERE p.map_id = $1
-         AND (array_length(p.visible_campaign_ids, 1) IS NULL OR $2::uuid = ANY(p.visible_campaign_ids))
+         AND (array_length(p.visible_campaign_ids, 1) IS NULL OR p.visible_campaign_ids && $2::uuid[])
        ORDER BY p.created_at ASC`,
-      [mapId, campaignId]
+      [mapId, memberCampaignIds]
     );
     return rows;
   },

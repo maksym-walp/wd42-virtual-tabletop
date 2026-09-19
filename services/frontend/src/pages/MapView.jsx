@@ -59,7 +59,7 @@ export default function MapView() {
   // stays a horizontal bar at the bottom.
   const wide = useMediaQuery('(min-width: 768px)');
 
-  const refreshPins = () => mapsApi.listPins(id, campaignId).then(setPins).catch(() => {});
+  const refreshPins = () => mapsApi.listPins(id).then(setPins).catch(() => {});
   const refreshLenses = () => mapsApi.listLenses(id).then(setLenses).catch(() => {});
   const refreshMyLocations = () => mapsApi.listLocations().then(setMyLocations).catch(() => {});
 
@@ -99,7 +99,7 @@ export default function MapView() {
       .then((m) => {
         if (!alive) return null;
         setMap(m);
-        return Promise.all([mapsApi.listLenses(id), mapsApi.listPins(id, campaignId)]);
+        return Promise.all([mapsApi.listLenses(id), mapsApi.listPins(id)]);
       })
       .then((res) => {
         if (!alive || !res) return;
@@ -113,7 +113,7 @@ export default function MapView() {
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [id, campaignId]);
+  }, [id]);
 
   const activeLens = useMemo(
     () => lenses.find((l) => l.id === activeLensId) || lenses[0] || null,

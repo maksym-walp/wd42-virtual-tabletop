@@ -59,10 +59,12 @@ async function loadLensOr404(lensId, mapId, res) {
   return lens;
 }
 
-// Is this user a member (GM or player) of this campaign? Gates whether a
-// pin reader's ?campaign_id is trusted as their "current campaign" context.
-async function isCampaignMember(campaignId, userId) {
-  return CampaignMembershipModel.isMember(campaignId, userId);
+// Every campaign this map is linked to that the user is a member (GM or
+// player) of — the pin reader's "current campaigns" context, derived
+// server-side so it doesn't depend on the client naming the right
+// campaign_id (refresh, a bare map link, a shared link all work the same).
+async function memberCampaignIdsForMap(mapId, userId) {
+  return CampaignMembershipModel.memberCampaignIdsForMap(mapId, userId);
 }
 
 module.exports = {
@@ -75,5 +77,5 @@ module.exports = {
   serializeLocation,
   loadMapOr404,
   loadLensOr404,
-  isCampaignMember,
+  memberCampaignIdsForMap,
 };

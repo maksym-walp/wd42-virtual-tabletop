@@ -4,7 +4,7 @@ jest.mock('../../models/campaign-membership.model');
 const MapModel = require('../../models/map.model');
 const CampaignMembershipModel = require('../../models/campaign-membership.model');
 const {
-  isAdmin, canCreate, canReadMap, canWriteMap, canWriteLocation, stripGmNote, loadMapOr404, isCampaignMember,
+  isAdmin, canCreate, canReadMap, canWriteMap, canWriteLocation, stripGmNote, loadMapOr404, memberCampaignIdsForMap,
 } = require('../access');
 
 function mockRes() {
@@ -65,11 +65,11 @@ describe('stripGmNote', () => {
   });
 });
 
-describe('isCampaignMember', () => {
-  it('delegates to CampaignMembershipModel.isMember', async () => {
-    CampaignMembershipModel.isMember.mockResolvedValue(true);
-    expect(await isCampaignMember('camp-1', 'p-1')).toBe(true);
-    expect(CampaignMembershipModel.isMember).toHaveBeenCalledWith('camp-1', 'p-1');
+describe('memberCampaignIdsForMap', () => {
+  it('delegates to CampaignMembershipModel.memberCampaignIdsForMap', async () => {
+    CampaignMembershipModel.memberCampaignIdsForMap.mockResolvedValue(['camp-1']);
+    expect(await memberCampaignIdsForMap('m1', 'p-1')).toEqual(['camp-1']);
+    expect(CampaignMembershipModel.memberCampaignIdsForMap).toHaveBeenCalledWith('m1', 'p-1');
   });
 });
 
