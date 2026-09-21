@@ -114,13 +114,13 @@ export default function SpellComponentsField({ components, onChange, equipmentIt
                 value={row.quantity}
                 onChange={(n) => patchRow(row.key, { quantity: n })}
                 min={1}
-                className={`${inputClass} w-20`}
+                className={`${inputClass} !w-20 shrink-0`}
               />
               {isCustomUnit ? (
-                <div className="flex flex-1 items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   <input
                     type="text"
-                    className={`${inputClass} flex-1`}
+                    className={`${inputClass} min-w-0 flex-1`}
                     value={row.unit}
                     onChange={(e) => patchRow(row.key, { unit: e.target.value })}
                     placeholder="Своя одиниця виміру..."
@@ -135,7 +135,7 @@ export default function SpellComponentsField({ components, onChange, equipmentIt
                   </button>
                 </div>
               ) : (
-                <select className={`${inputClass} flex-1`} value={row.unit} onChange={(e) => setUnit(row, e.target.value)}>
+                <select className={`${inputClass} min-w-0 flex-1`} value={row.unit} onChange={(e) => setUnit(row, e.target.value)}>
                   {COMPONENT_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                   <option value={CUSTOM_UNIT}>Інша...</option>
                 </select>

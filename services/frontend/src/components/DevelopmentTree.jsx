@@ -352,7 +352,6 @@ function HoverLabel({ hoverLabel }) {
 function grantLabel(grant, catalog) {
   const pools = {
     ability: catalog.abilities,
-    maneuver: catalog.maneuvers,
     spell: catalog.spells,
     ability_collection: catalog.abilityCollections,
     spell_collection: catalog.spellCollections,
@@ -363,7 +362,6 @@ function grantLabel(grant, catalog) {
 
 const GRANT_KIND_LABEL = {
   ability: 'вміння',
-  maneuver: 'маневр',
   spell: 'заклинання',
   ability_collection: 'колекція вмінь',
   spell_collection: 'колекція заклинань',

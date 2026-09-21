@@ -5,10 +5,9 @@ import { inputClass } from './ui/Field';
 // with a mode: 'grant' (opening the node adds it to the character) or
 // 'unlock' (opening the node just makes it available to add).
 // value: [{ item_kind, item_id, mode }]
-const KIND_ORDER = ['ability', 'maneuver', 'spell', 'ability_collection', 'spell_collection'];
+const KIND_ORDER = ['ability', 'spell', 'ability_collection', 'spell_collection'];
 const KIND_LABEL = {
   ability: 'Вміння',
-  maneuver: 'Маневр',
   spell: 'Заклинання',
   ability_collection: 'Колекція вмінь',
   spell_collection: 'Колекція заклинань',
@@ -20,7 +19,6 @@ export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }
   const pool = useMemo(() => {
     const rows = [
       ...(catalogs.abilities || []).map((x) => ({ item_kind: 'ability', id: x.id, name: x.name })),
-      ...(catalogs.maneuvers || []).map((x) => ({ item_kind: 'maneuver', id: x.id, name: x.name })),
       ...(catalogs.spells || []).map((x) => ({ item_kind: 'spell', id: x.id, name: x.name })),
       ...(catalogs.abilityCollections || []).map((x) => ({ item_kind: 'ability_collection', id: x.id, name: x.name })),
       ...(catalogs.spellCollections || []).map((x) => ({ item_kind: 'spell_collection', id: x.id, name: x.name })),
@@ -88,7 +86,7 @@ export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }
       <input
         type="text"
         className={`${inputClass} text-sm`}
-        placeholder="Пошук вміння, заклинання, маневру, колекції..."
+        placeholder="Пошук вміння, заклинання, колекції..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />

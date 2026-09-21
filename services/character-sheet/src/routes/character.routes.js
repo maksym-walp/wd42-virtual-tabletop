@@ -5,7 +5,6 @@ const SkillController = require('../controllers/skill.controller');
 const SpellController = require('../controllers/spell.controller');
 const TreeProgressController = require('../controllers/tree-progress.controller');
 const EquipmentController = require('../controllers/equipment.controller');
-const ManeuverController = require('../controllers/maneuver.controller');
 const AbilityController = require('../controllers/ability.controller');
 const RitualTrackerController = require('../controllers/ritual-tracker.controller');
 
@@ -47,11 +46,6 @@ router.get('/:id/equipment',                 wrap(EquipmentController.list));
 router.post('/:id/equipment',                wrap(EquipmentController.add));
 router.patch('/:id/equipment/:equipmentId',  wrap(EquipmentController.patch));
 router.delete('/:id/equipment/:equipmentId', wrap(EquipmentController.remove));
-
-// Maneuvers (fighter) — references abilities.maneuvers catalog
-router.get('/:id/maneuvers',                wrap(ManeuverController.list));
-router.post('/:id/maneuvers',               wrap(ManeuverController.add));
-router.delete('/:id/maneuvers/:maneuverId', wrap(ManeuverController.remove));
 
 // Abilities (вміння, all archetypes) — references abilities.entries catalog
 router.get('/:id/abilities',               wrap(AbilityController.list));

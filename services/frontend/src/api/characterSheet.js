@@ -77,7 +77,7 @@ const characterApi = {
 
   async unlockNode(characterId, nodeId) {
     const { data } = await api.post(`${BASE}/${characterId}/tree/${nodeId}`);
-    // { progress, granted: { abilities, maneuvers, spells } } — granted holds
+    // { progress, granted: { abilities, spells } } — granted holds
     // any entries a "видавати автоматично" node link added to the sheet.
     return data;
   },
@@ -104,21 +104,6 @@ const characterApi = {
 
   async removeEquipment(characterId, equipmentId) {
     await api.delete(`${BASE}/${characterId}/equipment/${equipmentId}`);
-  },
-
-  // Maneuvers (fighter) — references maneuvers.entries catalog
-  async listManeuvers(characterId) {
-    const { data } = await api.get(`${BASE}/${characterId}/maneuvers`);
-    return data.maneuvers;
-  },
-
-  async addManeuver(characterId, maneuverId) {
-    const { data } = await api.post(`${BASE}/${characterId}/maneuvers`, { maneuver_id: maneuverId });
-    return data.maneuver;
-  },
-
-  async removeManeuver(characterId, maneuverId) {
-    await api.delete(`${BASE}/${characterId}/maneuvers/${maneuverId}`);
   },
 
   // Abilities (вміння, all archetypes) — references abilities.entries catalog

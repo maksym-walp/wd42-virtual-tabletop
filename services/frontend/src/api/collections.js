@@ -1,6 +1,6 @@
 import api from './client';
 
-// Factory since each domain (equipment/abilities/maneuvers/spellbook) runs its
+// Factory since each domain (equipment/abilities/spellbook) runs its
 // own collections module on its own service, at its own /collections base path.
 export function createCollectionsApi(base) {
   return {

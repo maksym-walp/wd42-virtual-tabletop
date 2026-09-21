@@ -5,11 +5,11 @@ import CanonBadge from '../CanonBadge';
 import ScopeFilter, { matchesScope } from '../ScopeFilter';
 import { inputClass } from '../ui/Field';
 
-// Attaches existing catalog entries (equipment/spells/maneuvers) from another
+// Attaches existing catalog entries (equipment/spells/abilities) from another
 // microservice to a compendium entry. Same search + ScopeFilter + list +
 // "+"/"x" shape used three times in the entry form (one per catalog), so it's
 // one component instead of copy-pasted per catalog — mirrors the inline
-// picker pattern in CharacterSheet.jsx's EquipmentTypeSection/ManeuversTab,
+// picker pattern in CharacterSheet.jsx's EquipmentTypeSection/AbilitiesTab,
 // factored since all three are being authored fresh together here.
 export default function CatalogAttachPicker({
   label, addLabel, catalogApi, attached, attachedIdField, onAdd, onRemove, itemLink, itemMeta, rollFormula,
@@ -76,7 +76,7 @@ export default function CatalogAttachPicker({
         <p className="text-sm text-text-dim">Немає</p>
       ) : (
         attached.map((entry) => {
-          const item = entry.equipment || entry.spell || entry.maneuver;
+          const item = entry.equipment || entry.spell || entry.ability;
           const externalId = entry[attachedIdField];
           return (
             <div key={externalId} className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2.5">

@@ -5,6 +5,7 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
+import compendiumApi from '../api/compendium';
 import {
   NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_KINDS,
@@ -19,12 +20,13 @@ import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
+import AuthorField from '../components/AuthorField';
 
 const domain = COLLECTION_DOMAINS.spellbook;
 
 const EMPTY = {
   name: '', nature: ['arcana'], spell_kind: 'utility',
-  mechanical_desc: '', narrative_desc: '', lore_creator: '',
+  mechanical_desc: '', narrative_desc: '', lore_creator: '', lore_creator_npc_id: null,
   energy_cost: 0, action_time: 1, ritual: 'impossible',
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true,
@@ -54,9 +56,14 @@ export default function SpellForm() {
   const membershipInitialized = useRef(false);
   const [traditions, setTraditions] = useState([]);
   const initialTraditionIds = useRef([]);
+  const [npcs, setNpcs] = useState([]);
 
   useEffect(() => {
     skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    compendiumApi.listEntries('npc').then(setNpcs).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -87,6 +94,7 @@ export default function SpellForm() {
           mechanical_desc: s.mechanical_desc || '',
           narrative_desc: s.narrative_desc || '',
           lore_creator: s.lore_creator || '',
+          lore_creator_npc_id: s.lore_creator_npc_id ?? null,
           energy_cost: s.energy_cost, action_time: s.action_time,
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
@@ -305,11 +313,11 @@ export default function SpellForm() {
               <div className="flex gap-2">
                 {form.duration_unit !== 'instant' && form.duration_unit !== 'permanent' && (
                   <input
-                    type="number" min={1} className={`${inputClass} w-20`} value={form.duration_value}
+                    type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={form.duration_value}
                     onChange={set('duration_value')}
                   />
                 )}
-                <select className={`${inputClass} flex-1`} value={form.duration_unit} onChange={set('duration_unit')}>
+                <select className={`${inputClass} min-w-0 flex-1`} value={form.duration_unit} onChange={set('duration_unit')}>
                   {Object.entries(DURATION_UNITS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
@@ -347,12 +355,14 @@ export default function SpellForm() {
             rows={3}
             placeholder="Як це виглядає та відчувається у світі гри..."
           />
-          <Field label="Творець" hint="Лорне поле — напр. ім'я архімага, що винайшов це заклинання">
-            <input
-              type="text" className={inputClass} value={form.lore_creator} onChange={set('lore_creator')}
-              placeholder="напр. Архімаг Ельдран Сірий..." maxLength={200}
-            />
-          </Field>
+          <AuthorField
+            name={form.lore_creator}
+            npcId={form.lore_creator_npc_id}
+            onChange={({ name, npc_id }) => setForm((f) => ({ ...f, lore_creator: name, lore_creator_npc_id: npc_id }))}
+            npcs={npcs}
+            label="Творець"
+            hint="Лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне (напр. ім'я архімага, що винайшов це заклинання)"
+          />
         </FormSection>
 
         {/* — Вимоги дерева розвитку — */}

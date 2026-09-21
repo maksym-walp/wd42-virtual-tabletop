@@ -165,3 +165,78 @@ describe('SpellController.remove', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });
+
+describe('SpellController.export', () => {
+  it('strips system/computed fields before responding with a bare array', async () => {
+    SpellModel.findAll.mockResolvedValue([{
+      id: 's1', name: 'Вогняна куля',
+      image_url: '/uploads/spells/s1.png',
+      created_at: '2026-01-01', updated_at: '2026-01-02',
+      is_owner: true, owner_username: 'gm', is_canonical: true,
+      prerequisite_node_ids: ['n1'], prerequisite_logic: 'and',
+      prerequisite_nodes: [{ id: 'n1', title: 'Node' }],
+      traditions: [{ id: 't1', name: 'Fire' }],
+    }]);
+    const req = mockReq({ query: { scope: 'canonical' } });
+    const res = mockRes();
+
+    await SpellController.export(req, res);
+
+    expect(res.json).toHaveBeenCalledWith([{ id: 's1', name: 'Вогняна куля' }]);
+  });
+
+  it('forwards the same filters as the regular list', async () => {
+    SpellModel.findAll.mockResolvedValue([]);
+    const req = mockReq({ query: { nature: 'fire', spell_kind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user', tradition: 't1' } });
+
+    await SpellController.export(req, mockRes());
+
+    expect(SpellModel.findAll).toHaveBeenCalledWith('user-1', {
+      nature: 'fire', spellKind: 'attack', ritual: 'possible', search: 'bolt', sort: 'name', scope: 'user', limit: undefined, traditionId: 't1',
+    }, false);
+  });
+
+  it('exports exactly one record, wrapped in an array, when ?id= is given', async () => {
+    SpellModel.findById.mockResolvedValue({ id: 's1', name: 'Вогняна куля', image_url: '/x.png' });
+    const res = mockRes();
+
+    await SpellController.export(mockReq({ query: { id: 's1' } }), res);
+
+    expect(SpellModel.findById).toHaveBeenCalledWith('s1', 'user-1', false);
+    expect(SpellModel.findAll).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith([{ id: 's1', name: 'Вогняна куля' }]);
+  });
+
+  it('exports an empty array when ?id= matches nothing visible to the user', async () => {
+    SpellModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+
+    await SpellController.export(mockReq({ query: { id: 'ghost' } }), res);
+
+    expect(res.json).toHaveBeenCalledWith([]);
+  });
+});
+
+describe('SpellController.import', () => {
+  it('rejects a non-array body without touching the model', async () => {
+    const res = mockRes();
+
+    await SpellController.import(mockReq({ body: { not: 'an array' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Очікується масив обʼєктів' });
+    expect(SpellModel.bulkImport).not.toHaveBeenCalled();
+  });
+
+  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
+    SpellModel.bulkImport.mockResolvedValue(2);
+    const res = mockRes();
+    const body = [{ name: 'A' }, { name: 'B' }];
+
+    await SpellController.import(mockReq({ body }), res);
+
+    expect(SpellModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+  });
+});

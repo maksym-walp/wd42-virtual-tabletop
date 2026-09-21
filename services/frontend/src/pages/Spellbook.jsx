@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
@@ -10,6 +10,8 @@ import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
 import { pluralizeUk } from '../utils/pluralize';
+import { downloadJsonFile } from '../utils/downloadJson';
+import { buildSpellbookImportTemplate } from '../utils/spellbookImportTemplate';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -50,7 +52,7 @@ export default function Spellbook() {
     traditionsApi.getAll().then(setTraditions).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
     filter.nature.forEach((n) => params.append('nature', n));
     if (filter.spell_kind) params.set('spell_kind', filter.spell_kind);
@@ -59,13 +61,43 @@ export default function Spellbook() {
     if (filter.search)     params.set('search', filter.search);
     if (filter.sort)       params.set('sort', filter.sort);
     if (filter.scope)      params.set('scope', filter.scope);
+    return params;
+  }, [filter]);
 
+  const fetchSpells = useCallback(() => {
     setLoading(true);
-    api.get(`/api/spellbook/?${params}`)
+    return api.get(`/api/spellbook/?${buildFilterParams()}`)
       .then(({ data }) => setSpells(data.spells))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, [buildFilterParams]);
+
+  useEffect(() => { fetchSpells(); }, [fetchSpells]);
+
+  const handleExport = async () => {
+    try {
+      const { data } = await api.get(`/api/spellbook/export?${buildFilterParams()}`);
+      downloadJsonFile(data, 'spellbook_export.json');
+    } catch {
+      alert('Не вдалося експортувати заклинання');
+    }
+  };
+
+  const handleTemplate = () => buildSpellbookImportTemplate();
+
+  const handleImport = async (data) => {
+    if (!Array.isArray(data)) {
+      alert('Файл має містити масив заклинань');
+      return;
+    }
+    try {
+      const { data: result } = await api.post('/api/spellbook/import', data);
+      alert(`Імпортовано записів: ${result.imported}`);
+      fetchSpells();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати заклинання');
+    }
+  };
 
   const toggle = (field, key) =>
     setFilter((f) => ({ ...f, [field]: f[field] === key ? '' : key }));
@@ -92,8 +124,7 @@ export default function Spellbook() {
           {spells.length} {pluralizeUk(spells.length, ['заклинання', 'заклинання', 'заклинань'])}
         </p>
         <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
-          {/* Бекенд для заклинань поки не має /export і /import — кнопки лише візуальні (неактивні без пропсів). */}
-          <ExportImportActions />
+          <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
           <Button to="/spellbook/new" className="whitespace-nowrap">+ Нове заклинання</Button>
         </div>
       </div>

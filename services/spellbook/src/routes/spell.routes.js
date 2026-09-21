@@ -7,6 +7,10 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 
 router.get('/',        requireAuth, wrap(SpellController.list));
 router.post('/',       requireAuth, wrap(SpellController.create));
+// export/import мусять стояти ДО GET /:id — інакше той прийме "export"/
+// "import" за id (той самий патерн, що й в services/equipment).
+router.get('/export',  requireAuth, wrap(SpellController.export));
+router.post('/import', requireCanonicalManager, wrap(SpellController.import));
 router.get('/:id',     requireAuth, wrap(SpellController.getOne));
 router.put('/:id',     requireAuth, wrap(SpellController.update));
 router.delete('/:id',  requireAuth, wrap(SpellController.remove));

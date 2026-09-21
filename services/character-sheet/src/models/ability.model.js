@@ -16,7 +16,10 @@ const AbilityModel = {
                 'archetypes', ae.archetypes, 'is_public', ae.is_public,
                 'prerequisite_node_ids', ae.prerequisite_node_ids,
                 'prerequisite_logic', ae.prerequisite_logic,
-                'prerequisite_nodes', ${prereqNodesSelect}
+                'prerequisite_nodes', ${prereqNodesSelect},
+                'is_maneuver', ae.is_maneuver,
+                'duration_value', ae.duration_value,
+                'duration_unit', ae.duration_unit
               ) END AS ability
        FROM character_sheet.abilities ca
        LEFT JOIN abilities.entries ae ON ae.id = ca.ability_id

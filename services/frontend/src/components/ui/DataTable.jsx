@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 // Generic table view paired with ViewToggle — every catalog list page (weapon/
-// armor/item, artifacts, abilities, maneuvers, spells, compendium entries/
+// armor/item, artifacts, abilities, spells, compendium entries/
 // species) shares this one component instead of hand-rolling its own <table>,
 // so row hover, borders and header style read identically everywhere. Each
 // page supplies its own column defs; a column opts into click-to-sort by

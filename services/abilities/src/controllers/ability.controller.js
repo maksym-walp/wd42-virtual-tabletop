@@ -1,9 +1,27 @@
 const AbilityModel = require('../models/ability.model');
 
+// Поля, яких немає (чи не має бути) в експортованому JSON: зображення не
+// експортуються (лежать на диску конкретного деплою, ре-імпорт скидає їх у
+// NULL), created_at/updated_at/is_owner/owner_username/is_canonical —
+// обчислені чи прив'язані до поточного користувача/деплою, а
+// prerequisite_node_ids/prerequisite_logic/prerequisite_nodes вказують на
+// вузли скіл-дерева конкретного користувача — для перевикористання в іншому
+// місці не мають сенсу (той самий підхід, що й у equipment/catalog.controller).
+const EXPORT_OMIT_FIELDS = [
+  'image_url', 'created_at', 'updated_at', 'is_owner', 'owner_username',
+  'is_canonical', 'prerequisite_node_ids', 'prerequisite_logic', 'prerequisite_nodes',
+];
+
+function sanitizeForExport(row) {
+  const clean = { ...row };
+  for (const field of EXPORT_OMIT_FIELDS) delete clean[field];
+  return clean;
+}
+
 const AbilityController = {
   async list(req, res) {
-    const { search, sort, archetype, scope, limit } = req.query;
-    const abilities = await AbilityModel.findAll(req.user.sub, { search, sort, archetype, scope, limit }, req.user.role === 'admin');
+    const { search, sort, archetype, scope, limit, is_maneuver } = req.query;
+    const abilities = await AbilityModel.findAll(req.user.sub, { search, sort, archetype, scope, limit, is_maneuver }, req.user.role === 'admin');
     res.json({ abilities });
   },
 
@@ -37,6 +55,31 @@ const AbilityController = {
     const ability = await AbilityModel.setCanonical(req.params.id, isCanonical);
     if (!ability) return res.status(404).json({ message: 'Вміння не знайдено' });
     res.json({ ability });
+  },
+
+  // Той самий набір фільтрів, що й list, плюс ?id= для експорту рівно
+  // одного запису — той самий результат, що дав би /:id, лише обгорнутий у
+  // масив з одним елементом.
+  async export(req, res) {
+    const isAdmin = req.user.role === 'admin';
+    let items;
+    if (req.query.id) {
+      const ability = await AbilityModel.findById(req.query.id, req.user.sub, isAdmin);
+      items = ability ? [ability] : [];
+    } else {
+      const { search, sort, archetype, scope, limit, is_maneuver } = req.query;
+      items = await AbilityModel.findAll(req.user.sub, { search, sort, archetype, scope, limit, is_maneuver }, isAdmin);
+    }
+    res.json(items.map(sanitizeForExport));
+  },
+
+  // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
+  async import(req, res) {
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив обʼєктів' });
+    }
+    const imported = await AbilityModel.bulkImport(req.user.sub, req.body);
+    res.status(201).json({ imported });
   },
 };
 

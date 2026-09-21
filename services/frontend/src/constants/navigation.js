@@ -4,7 +4,7 @@ import { Users, BookOpen, Swords, Star, TreePine, Castle, Map, Skull, CalendarDa
 export const NAV_MAIN_ITEMS = [
   { to: '/characters', label: 'Персонажі', icon: Users },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
-  { to: '/abilities',  label: 'Вміння і маневри', icon: Star },
+  { to: '/abilities',  label: 'Вміння', icon: Star },
   { to: '/equipment',  label: 'Спорядження', icon: Swords },
 ];
 
@@ -34,6 +34,6 @@ export const MOBILE_MORE_NAV_ITEMS = [
   { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
-  { to: '/abilities',  label: 'Вміння і маневри', icon: Star },
+  { to: '/abilities',  label: 'Вміння', icon: Star },
   { to: '/equipment',  label: 'Спорядження', icon: Swords },
 ];

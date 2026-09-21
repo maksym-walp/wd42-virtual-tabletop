@@ -8,18 +8,14 @@ import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import SpellCard from '../components/SpellCard';
 import AbilityCard from '../components/AbilityCard';
-import ManeuverCard from '../components/ManeuverCard';
 import EquipmentCard from '../components/EquipmentCard';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK, RACES } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 
-// Маневри-колекції не мають власного домену з 52-merge-maneuvers-into-abilities.sql
-// — вони просто рядки в abilities.collections, тож приходять з domain='abilities'
-// разом зі вміннями.
 const COLLECTION_LABELS = {
   equipment: 'Спорядження',
   spellbook: 'Заклинання',
-  abilities: 'Вміння та маневри',
+  abilities: 'Вміння',
 };
 
 export default function PublicProfile() {
@@ -117,7 +113,6 @@ function Section({ items, tab }) {
     equipment: (i) => <EquipmentCard key={i.id} item={i} />,
     spells:    (i) => <SpellCard key={i.id} spell={i} />,
     abilities: (i) => <AbilityCard key={i.id} ability={i} />,
-    maneuvers: (i) => <ManeuverCard key={i.id} maneuver={i} />,
   }[tab];
 
   return (
@@ -178,6 +173,5 @@ const SECTIONS = [
   { key: 'equipment',   label: 'Спорядження' },
   { key: 'spells',      label: 'Заклинання' },
   { key: 'abilities',   label: 'Вміння' },
-  { key: 'maneuvers',   label: 'Маневри' },
   { key: 'collections', label: 'Колекції' },
 ];

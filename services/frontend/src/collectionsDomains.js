@@ -1,6 +1,5 @@
 import equipmentApi from './api/equipment';
 import abilitiesApi from './api/abilities';
-import maneuversApi from './api/maneuvers';
 import spellbookApi from './api/spellbook';
 import compendiumApi from './api/compendium';
 import { createCollectionsApi } from './api/collections';
@@ -32,7 +31,7 @@ export const COLLECTION_DOMAINS = {
       item.creator,
     ].filter(Boolean).join(' · '),
     // Equipment items have no prerequisite_node_ids concept of their own
-    // (unlike abilities/maneuvers/spells), so equipment collections don't
+    // (unlike abilities/spells), so equipment collections don't
     // carry a skill-tree node dependency either — nothing for it to inherit into.
     supportsPrerequisites: false,
     // Equipment has four browsable lists (one per type-table, artifacts
@@ -59,36 +58,24 @@ export const COLLECTION_DOMAINS = {
     ],
   },
   abilities: {
-    title: 'Вміння та маневри',
+    title: 'Вміння',
     basePath: '/abilities',
     itemLabel: 'записів',
     collectionsApi: createCollectionsApi('/api/abilities/collections/'),
-    // Пікер "Додати елемент" у CollectionView мусить пропонувати і вміння, і
-    // маневри — жоден з двох окремих API-врапперів цього сам не дає, тож
-    // об'єднуємо клієнтською стороною (як catalogApi компендіуму нижче).
-    catalogApi: { getAll: () => Promise.all([abilitiesApi.getAll(), maneuversApi.getAll()]).then(([a, m]) => [...a, ...m]) },
+    catalogApi: abilitiesApi,
     itemIdField: 'item_id',
-    // Маневри мають власну View/Form-пару (/abilities/maneuvers/:id) — інші
-    // поля (duration_actions замість archetypes), тож посилання на них іде
-    // окремо від AbilityView.
-    itemLink: (item) => (item.type === 'maneuver' ? `/abilities/maneuvers/${item.id}` : `/abilities/${item.id}`),
-    itemMeta: (item) => (item.type === 'maneuver'
-      ? (item.duration_actions ? `${item.duration_actions} ${item.duration_actions === 1 ? 'дія' : 'дії'}` : '')
-      : (item.archetypes || []).join(', ')),
+    itemLink: (item) => `/abilities/${item.id}`,
+    itemMeta: (item) => (item.archetypes || []).join(', '),
     supportsPrerequisites: true,
-    // Два самостійні списки (вміння/маневри) поруч із Колекціями, той самий
-    // патерн, що й equipment/spellbook/compendium — див. getDomainTabs().
+    // Single browsable list (вміння, маневри — since 72-merge-maneuvers-into-
+    // ability-entries.sql — are just abilities with is_maneuver=true) plus
+    // Колекції, same pattern as spellbook below.
     tabs: [
       { to: '/abilities', label: 'Вміння', end: true },
-      { to: '/abilities/maneuvers', label: 'Маневри' },
       { to: '/abilities/collections', label: 'Колекції' },
     ],
-    // Ability and maneuver are separate endpoints/tables with no shared
-    // form — unlike equipment's weapon/armor/item, there's no local-switch
-    // kind here, every button is a navigation to its own "new" page.
     kindSwitch: [
       { key: 'ability',    label: 'Вміння',    newPath: '/abilities/new' },
-      { key: 'maneuver',   label: 'Маневр',    newPath: '/abilities/maneuvers/new' },
       { key: 'collection', label: 'Колекція',  newPath: '/abilities/collections/new' },
     ],
   },
@@ -130,7 +117,7 @@ export const COLLECTION_DOMAINS = {
     itemMeta: (item) => ENTITY_TYPES[item.entity_type]?.label ?? '',
     supportsPrerequisites: false,
     // Compendium has no "official vs community" concept anywhere in its
-    // schema (unlike equipment/spellbook/maneuvers/abilities) — no
+    // schema (unlike equipment/spellbook/abilities) — no
     // is_canonical column, no /canonical endpoint.
     supportsCanonical: false,
     // Compendium has more than one browsable list (NPCs vs Bestiary vs

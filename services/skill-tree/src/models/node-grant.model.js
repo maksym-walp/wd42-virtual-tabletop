@@ -1,12 +1,12 @@
 const pool = require('../config/db');
 
-// A node_grant links a tree node to a catalog entry (ability / maneuver /
-// spell) or a whole collection (ability or spell collection). `mode`:
+// A node_grant links a tree node to a catalog entry (ability / spell) or a
+// whole collection (ability or spell collection). `mode`:
 //   'unlock' — opening the node makes the entry available to add to a sheet
 //   'grant'  — opening the node adds the entry to the sheet outright
 // item_id is a bare cross-service UUID (abilities.* / spellbook.*), no FK —
 // same convention as nodes.effect / entries.prerequisite_node_ids.
-const VALID_KINDS = ['ability', 'maneuver', 'spell', 'ability_collection', 'spell_collection'];
+const VALID_KINDS = ['ability', 'spell', 'ability_collection', 'spell_collection'];
 const VALID_MODES = ['grant', 'unlock'];
 
 function sanitize(grants) {

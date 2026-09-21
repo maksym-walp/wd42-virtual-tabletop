@@ -23,9 +23,6 @@ import EquipmentForm from './pages/EquipmentForm';
 import ArtifactsCatalog from './pages/ArtifactsCatalog';
 import ArtifactView from './pages/ArtifactView';
 import ArtifactForm from './pages/ArtifactForm';
-import ManeuverCatalog from './pages/ManeuverCatalog';
-import ManeuverView from './pages/ManeuverView';
-import ManeuverForm from './pages/ManeuverForm';
 import AbilityCatalog from './pages/AbilityCatalog';
 import AbilityView from './pages/AbilityView';
 import AbilityForm from './pages/AbilityForm';
@@ -113,16 +110,6 @@ export default function App() {
                   <Route path="/abilities/collections/public/:id" element={<CollectionView domainKey="abilities" publicView />} />
                   <Route path="/abilities/collections/:id" element={<PrivateRoute><CollectionView domainKey="abilities" /></PrivateRoute>} />
                   <Route path="/abilities/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
-                  {/* Маневри — другий вид усередині сервіса "Вміння та маневри" (вкладка в
-                      CatalogTabs), а не окремий сервіс/домен — див.
-                      52-merge-maneuvers-into-abilities.sql. Власні View/Form лишаються
-                      окремо від AbilityView/AbilityForm — інші поля (duration_actions
-                      замість archetypes) і жорстко fighter-архетипний список вузлів дерева
-                      розвитку. */}
-                  <Route path="/abilities/maneuvers" element={<PrivateRoute><ManeuverCatalog /></PrivateRoute>} />
-                  <Route path="/abilities/maneuvers/new" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
-                  <Route path="/abilities/maneuvers/:id" element={<PrivateRoute><ManeuverView /></PrivateRoute>} />
-                  <Route path="/abilities/maneuvers/:id/edit" element={<PrivateRoute><ManeuverForm /></PrivateRoute>} />
                   <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
                   <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
                   <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />

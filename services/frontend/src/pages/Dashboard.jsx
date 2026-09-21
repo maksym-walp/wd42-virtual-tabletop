@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Gem, BookOpen, Star, Zap, Swords, Users } from 'lucide-react';
+import { ChevronDown, Gem, BookOpen, Star, Swords, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 import characterApi from '../api/characterSheet';
@@ -10,7 +10,6 @@ import { ARCHETYPES, RACES } from '../constants/characterSheet';
 import ArtifactCard from '../components/ArtifactCard';
 import SpellCard from '../components/SpellCard';
 import AbilityCard from '../components/AbilityCard';
-import ManeuverCard from '../components/ManeuverCard';
 import DiceStatsGrid from '../components/DiceStatsGrid';
 import Card from '../components/ui/Card';
 import PageHeader from '../components/ui/PageHeader';
@@ -19,7 +18,6 @@ const RECENT_TYPE_META = {
   artifact:  { label: 'Артефакт',    icon: Gem },
   spell:     { label: 'Заклинання',  icon: BookOpen },
   ability:   { label: 'Вміння',      icon: Star },
-  maneuver:  { label: 'Маневр',      icon: Zap },
   equipment: { label: 'Спорядження', icon: Swords },
   character: { label: 'Персонаж',    icon: Users },
 };
@@ -33,7 +31,6 @@ export default function Dashboard() {
   const [communityArtifacts, setCommunityArtifacts] = useState([]);
   const [communitySpells, setCommunitySpells] = useState([]);
   const [communityAbilities, setCommunityAbilities] = useState([]);
-  const [communityManeuvers, setCommunityManeuvers] = useState([]);
   const [diceStats, setDiceStats] = useState(null);
 
   useEffect(() => {
@@ -48,8 +45,6 @@ export default function Dashboard() {
       .then(({ data }) => setCommunitySpells(data.spells ?? [])).catch(() => {});
     api.get('/api/abilities/?scope=community&limit=8')
       .then(({ data }) => setCommunityAbilities(data.abilities ?? [])).catch(() => {});
-    api.get('/api/abilities/maneuvers?scope=community&limit=8')
-      .then(({ data }) => setCommunityManeuvers(data.maneuvers ?? [])).catch(() => {});
     diceApi.stats().then(setDiceStats).catch(() => {});
   }, []);
 
@@ -77,15 +72,10 @@ export default function Dashboard() {
         ))}
       </Section>
 
-      <Section title="Творіння спільноти · Вміння та Маневри">
-        {[
-          ...communityAbilities.map((a) => (
-            <div key={`ability-${a.id}`} className="w-56 shrink-0"><AbilityCard ability={a} /></div>
-          )),
-          ...communityManeuvers.map((m) => (
-            <div key={`maneuver-${m.id}`} className="w-56 shrink-0"><ManeuverCard maneuver={m} /></div>
-          )),
-        ]}
+      <Section title="Творіння спільноти · Вміння">
+        {communityAbilities.map((a) => (
+          <div key={a.id} className="w-56 shrink-0"><AbilityCard ability={a} /></div>
+        ))}
       </Section>
 
       {diceStats && diceStats.total_rolls > 0 && (

@@ -6,7 +6,6 @@ import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
-import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
@@ -72,7 +71,6 @@ export default function CharacterSheet({ publicView = false }) {
   const [saving, setSaving]     = useState(false);
   const [allSpells, setAllSpells] = useState([]);
   const [allEquipment, setAllEquipment] = useState([]);
-  const [allManeuvers, setAllManeuvers] = useState([]);
   const [allAbilities, setAllAbilities] = useState([]);
   const [allAbilityCollections, setAllAbilityCollections] = useState([]);
   const [allSpellCollections, setAllSpellCollections] = useState([]);
@@ -103,12 +101,11 @@ export default function CharacterSheet({ publicView = false }) {
       fetchSheet,
       publicView ? noop : (spellbookApi?.getAll?.() ?? noop),
       publicView ? noop : (equipmentApi?.getAll?.() ?? noop),
-      publicView ? noop : (maneuversApi?.getAll?.() ?? noop),
       publicView ? noop : (abilitiesApi?.getAll?.() ?? noop),
       publicView ? noop : abilityCollectionsApi.getAll().catch(() => []),
       publicView ? noop : spellCollectionsApi.getAll().catch(() => []),
     ])
-      .then(([sheet, spells, equipmentCatalog, maneuverCatalog, abilityCatalog, abilityCollections, spellCollections]) => {
+      .then(([sheet, spells, equipmentCatalog, abilityCatalog, abilityCollections, spellCollections]) => {
         setData(sheet);
         recordView({
           type: 'character', id, name: sheet.character.name,
@@ -119,7 +116,6 @@ export default function CharacterSheet({ publicView = false }) {
         // четвертий вид поруч зі зброєю/обладунком/предметами), тож єдиний
         // equipmentApi.getAll() накриває все, без окремого мержу.
         setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
-        setAllManeuvers(Array.isArray(maneuverCatalog) ? maneuverCatalog : []);
         setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
         setAllAbilityCollections(Array.isArray(abilityCollections) ? abilityCollections : []);
         setAllSpellCollections(Array.isArray(spellCollections) ? spellCollections : []);
@@ -205,7 +201,7 @@ export default function CharacterSheet({ publicView = false }) {
     }
     // A "видавати автоматично" link added catalog entries, and any unlock
     // changed remaining experience — pull a fresh sheet to stay consistent.
-    const grantedAnything = granted && (granted.abilities?.length || granted.maneuvers?.length || granted.spells?.length);
+    const grantedAnything = granted && (granted.abilities?.length || granted.spells?.length);
     if (progress || grantedAnything) {
       try {
         const fresh = await characterApi.getSheet(id);
@@ -213,7 +209,6 @@ export default function CharacterSheet({ publicView = false }) {
           ...prev,
           tree: fresh.tree,
           abilities: fresh.abilities,
-          maneuvers: fresh.maneuvers,
           spells: fresh.spells,
           experience: fresh.experience,
         } : prev));
@@ -257,14 +252,6 @@ export default function CharacterSheet({ publicView = false }) {
     await characterApi.removeEquipment(id, equipmentId);
     setData(prev => ({ ...prev, equipment: prev.equipment.filter(e => e.equipment_id !== equipmentId) }));
   };
-  const addManeuver    = async (maneuverId) => {
-    const maneuver = await characterApi.addManeuver(id, maneuverId);
-    if (maneuver) setData(prev => ({ ...prev, maneuvers: [...prev.maneuvers, maneuver] }));
-  };
-  const removeManeuver = async (maneuverId) => {
-    await characterApi.removeManeuver(id, maneuverId);
-    setData(prev => ({ ...prev, maneuvers: prev.maneuvers.filter(m => m.maneuver_id !== maneuverId) }));
-  };
   const addAbility    = async (abilityId) => {
     const ability = await characterApi.addAbility(id, abilityId);
     if (ability) setData(prev => ({ ...prev, abilities: [...prev.abilities, ability] }));
@@ -290,7 +277,7 @@ export default function CharacterSheet({ publicView = false }) {
   if (error)   return <div className="px-4 py-16 text-center text-danger">{error}</div>;
   if (!data)   return null;
 
-  const { character: c, skills, spells, equipment, maneuvers, abilities, rituals, is_owner, is_gm } = data;
+  const { character: c, skills, spells, equipment, abilities, rituals, is_owner, is_gm } = data;
   const archetype = ARCHETYPES[c.archetype];
   const race      = RACES[c.race];
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
@@ -394,8 +381,10 @@ export default function CharacterSheet({ publicView = false }) {
   const heroicLeft     = heroicTotal - c.heroic_actions_used;
   const gameInspirationDie = INSPIRATION_DIE[charLevels.charisma];
 
+  // Fighter has no archetype-specific tab of its own — its abilities
+  // (including maneuver-capable ones, is_maneuver=true) show on the general
+  // AbilitiesTab like every other archetype's.
   const ARCHETYPE_TABS = {
-    fighter:     { key: 'maneuvers', label: 'Маневри' },
     spellcaster: { key: 'rituals',   label: 'Ритуали' },
     rogue:       { key: 'luck',      label: 'Вдача' },
   };
@@ -613,14 +602,6 @@ export default function CharacterSheet({ publicView = false }) {
             unlockedNodeIds={unlockedNodeIds}
           />
         )}
-        {tab === 'maneuvers' && (
-          <ManeuversTab
-            maneuvers={maneuvers} allManeuvers={allManeuvers} is_owner={is_owner}
-            onAdd={addManeuver}
-            onRemove={removeManeuver}
-            unlockedNodeIds={unlockedNodeIds}
-          />
-        )}
         {tab === 'abilities' && (
           <AbilitiesTab
             abilities={abilities} allAbilities={allAbilities} archetype={c.archetype} is_owner={is_owner}
@@ -660,7 +641,6 @@ export default function CharacterSheet({ publicView = false }) {
             onExperienceChange={(v) => patchCharacter({ experience_points: v })}
             catalog={{
               abilities: allAbilities,
-              maneuvers: allManeuvers,
               spells: allSpells,
               abilityCollections: allAbilityCollections,
               spellCollections: allSpellCollections,
@@ -1769,85 +1749,8 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
   );
 }
 
-// ── ManeuversTab (fighter) ──────────────────────────────────────────────────
-
-function ManeuversTab({ maneuvers, allManeuvers, is_owner, onAdd, onRemove, unlockedNodeIds }) {
-  const [search, setSearch]         = useState('');
-  const [scope, setScope]           = useState('');
-  const [showPicker, setShowPicker] = useState(false);
-
-  const knownIds    = new Set(maneuvers.map(m => m.maneuver_id));
-  const filteredAll = allManeuvers.filter(m =>
-    !knownIds.has(m.id) &&
-    matchesScope(m, scope) &&
-    m.name?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div>
-      {is_owner && (
-        <div className="mb-5 flex items-center justify-between">
-          <button className="min-h-9 rounded border border-border px-4 py-1.5 text-sm text-accent" onClick={() => setShowPicker(!showPicker)}>
-            {showPicker ? '✕ Закрити' : '+ Додати маневр'}
-          </button>
-          <Link to="/abilities/maneuvers" className="text-sm text-accent">Увесь каталог →</Link>
-        </div>
-      )}
-
-      {showPicker && (
-        <div className="mb-4 rounded-md border border-border bg-bg p-3">
-          <input className={`${inputClass} mb-2 text-sm`} placeholder="Пошук..." value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <ScopeFilter scope={scope} onChange={setScope} size="sm" className="mb-2" />
-          <div className="max-h-[220px] overflow-y-auto">
-            {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних маневрів</p>}
-            {filteredAll.map(m => {
-              const met = prereqMet(m, unlockedNodeIds);
-              return (
-                <div key={m.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                  <div className="flex flex-col">
-                    <span>{m.name} <em className="text-xs text-text-dim">{m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</em>{m.is_canonical && <CanonBadge className="ml-1.5" />}</span>
-                    {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(m)}</span>}
-                  </div>
-                  <button
-                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={!met}
-                    onClick={() => { onAdd(m.id); setShowPicker(false); }}
-                  >+</button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {maneuvers.length === 0 && !showPicker && <p className="text-sm text-text-dim">Маневрів ще немає</p>}
-      {maneuvers.map(entry => {
-        const m = entry.maneuver || allManeuvers.find(x => x.id === entry.maneuver_id);
-        const met = !m || prereqMet(m, unlockedNodeIds);
-        return (
-          <div key={entry.maneuver_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
-            <Link to={m ? `/abilities/maneuvers/${m.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
-              <span className="text-sm text-text">
-                {m?.name ?? '(невідоме)'}
-                {m && <span className="text-xs text-text-dim"> — {m.duration_actions} {m.duration_actions === 1 ? 'дія' : 'дії'}</span>}
-              </span>
-              {m?.description && <span className="text-xs text-text-dim">{m.description}</span>}
-              {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
-            </Link>
-            {is_owner && (
-              <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={() => onRemove(entry.maneuver_id)}>✕</button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── AbilitiesTab (вміння, all archetypes) ───────────────────────────────────
-// Same reference-table pattern as maneuvers/equipment, but the picker is
+// Same reference-table pattern as equipment, but the picker is
 // scoped to catalog entries whose `archetypes` checkboxes include this
 // character's archetype, enforcing the per-archetype restriction set when
 // the ability was created.

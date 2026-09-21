@@ -172,3 +172,79 @@ describe('AbilityController.remove', () => {
     await expect(AbilityController.remove(req, res)).rejects.toBe(err);
   });
 });
+
+describe('AbilityController.export', () => {
+  it('strips image and system/prerequisite fields before responding with a bare array', async () => {
+    AbilityModel.findAll.mockResolvedValue([{
+      id: 'a1', name: 'Удар', image_url: '/uploads/abilities/a1.png',
+      created_at: '2026-01-01', updated_at: '2026-01-02',
+      is_owner: true, owner_username: 'gm', is_canonical: true,
+      prerequisite_node_ids: ['n1'], prerequisite_logic: 'and',
+      prerequisite_nodes: [{ id: 'n1', title: 'Node' }],
+    }]);
+    const req = mockReq({ query: { scope: 'canonical' } });
+    const res = mockRes();
+
+    await AbilityController.export(req, res);
+
+    expect(res.json).toHaveBeenCalledWith([{ id: 'a1', name: 'Удар' }]);
+  });
+
+  it('forwards the same filters as the regular ability list', async () => {
+    AbilityModel.findAll.mockResolvedValue([]);
+    const req = mockReq({ query: { search: 'удар', sort: 'name', archetype: 'warrior', scope: 'user', limit: 5 } });
+
+    await AbilityController.export(req, mockRes());
+
+    expect(AbilityModel.findAll).toHaveBeenCalledWith(
+      'user-1', { search: 'удар', sort: 'name', archetype: 'warrior', scope: 'user', limit: 5 }, false
+    );
+  });
+
+  it('exports exactly one record, wrapped in an array, when ?id= is given', async () => {
+    AbilityModel.findById.mockResolvedValue({ id: 'a1', name: 'Удар', image_url: '/x.png' });
+    const req = mockReq({ query: { id: 'a1' } });
+    const res = mockRes();
+
+    await AbilityController.export(req, res);
+
+    expect(AbilityModel.findById).toHaveBeenCalledWith('a1', 'user-1', false);
+    expect(AbilityModel.findAll).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith([{ id: 'a1', name: 'Удар' }]);
+  });
+
+  it('exports an empty array when ?id= matches nothing visible to the user', async () => {
+    AbilityModel.findById.mockResolvedValue(null);
+    const req = mockReq({ query: { id: 'ghost' } });
+    const res = mockRes();
+
+    await AbilityController.export(req, res);
+
+    expect(res.json).toHaveBeenCalledWith([]);
+  });
+});
+
+describe('AbilityController.import', () => {
+  it('rejects a non-array body without touching the model', async () => {
+    const req = mockReq({ body: { not: 'an array' } });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(AbilityModel.bulkImport).not.toHaveBeenCalled();
+  });
+
+  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
+    AbilityModel.bulkImport.mockResolvedValue(2);
+    const body = [{ name: 'A' }, { name: 'B' }];
+    const req = mockReq({ body });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(AbilityModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+  });
+});

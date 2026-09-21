@@ -14,12 +14,10 @@ async function applyGrants(client, characterId, nodeId) {
   );
 
   const abilityIds = new Set();
-  const maneuverIds = new Set();
   const spellIds = new Set();
 
   for (const g of grants) {
     if (g.item_kind === 'ability') abilityIds.add(g.item_id);
-    else if (g.item_kind === 'maneuver') maneuverIds.add(g.item_id);
     else if (g.item_kind === 'spell') spellIds.add(g.item_id);
     else if (g.item_kind === 'ability_collection') {
       const { rows } = await client.query(
@@ -27,8 +25,7 @@ async function applyGrants(client, characterId, nodeId) {
         [g.item_id]
       );
       for (const it of rows) {
-        if (it.item_kind === 'maneuver') maneuverIds.add(it.item_id);
-        else abilityIds.add(it.item_id);
+        abilityIds.add(it.item_id);
       }
     } else if (g.item_kind === 'spell_collection') {
       const { rows } = await client.query(
@@ -39,7 +36,7 @@ async function applyGrants(client, characterId, nodeId) {
     }
   }
 
-  const granted = { abilities: [], maneuvers: [], spells: [] };
+  const granted = { abilities: [], spells: [] };
 
   for (const id of abilityIds) {
     const { rows } = await client.query(
@@ -48,14 +45,6 @@ async function applyGrants(client, characterId, nodeId) {
       [characterId, id]
     );
     if (rows[0]) granted.abilities.push(rows[0]);
-  }
-  for (const id of maneuverIds) {
-    const { rows } = await client.query(
-      `INSERT INTO character_sheet.maneuvers (character_id, maneuver_id) VALUES ($1, $2)
-       ON CONFLICT (character_id, maneuver_id) DO NOTHING RETURNING *`,
-      [characterId, id]
-    );
-    if (rows[0]) granted.maneuvers.push(rows[0]);
   }
   for (const id of spellIds) {
     const { rows } = await client.query(
@@ -134,7 +123,7 @@ const TreeProgressModel = {
       const progress = rows[0] || null;
       const granted = progress
         ? await applyGrants(client, characterId, nodeId)
-        : { abilities: [], maneuvers: [], spells: [] };
+        : { abilities: [], spells: [] };
       await client.query('COMMIT');
       return { progress, granted };
     } catch (err) {

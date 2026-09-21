@@ -39,7 +39,7 @@ describe('TreeProgressModel.unlock', () => {
     const result = await TreeProgressModel.unlock('c1', 'n1');
 
     expect(result.progress).toEqual({ id: 'p1', node_id: 'n1' });
-    expect(result.granted).toEqual({ abilities: [], maneuvers: [], spells: [] });
+    expect(result.granted).toEqual({ abilities: [], spells: [] });
     const seq = client.query.mock.calls.map(([sql]) => sql);
     expect(seq[0]).toBe('BEGIN');
     expect(seq[seq.length - 1]).toBe('COMMIT');

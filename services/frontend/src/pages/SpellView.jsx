@@ -103,7 +103,14 @@ export default function SpellView() {
           <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} />
           <SheetStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
           {spell.range_desc && <SheetStat label="Дальність" value={spell.range_desc} />}
-          {spell.lore_creator && <SheetStat label="Творець" value={spell.lore_creator} />}
+          {spell.lore_creator && (
+            <SheetStat
+              label="Творець"
+              value={spell.lore_creator_npc_id
+                ? <Link to={`/compendium/entries/${spell.lore_creator_npc_id}`} className="text-accent hover:underline">{spell.lore_creator}</Link>
+                : spell.lore_creator}
+            />
+          )}
         </div>
 
         {spell.components?.length > 0 && (

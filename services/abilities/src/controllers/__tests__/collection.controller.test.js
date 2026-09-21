@@ -216,7 +216,7 @@ describe('CollectionController.addItem', () => {
     expect(CollectionModel.addItem).not.toHaveBeenCalled();
   });
 
-  it('returns 404 when the collection or item is not found (works for both an ability id and a maneuver id)', async () => {
+  it('returns 404 when the collection or item is not found', async () => {
     CollectionModel.addItem.mockResolvedValue(null);
     const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'a1' } });
     const res = mockRes();
@@ -225,7 +225,7 @@ describe('CollectionController.addItem', () => {
 
     expect(CollectionModel.addItem).toHaveBeenCalledWith('c1', 'user-1', 'a1', false);
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію, вміння або маневр не знайдено' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію або вміння не знайдено' });
   });
 
   it('returns 404 when the collection was found but the item was not (add returns null)', async () => {
@@ -238,18 +238,18 @@ describe('CollectionController.addItem', () => {
     await CollectionController.addItem(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію, вміння або маневр не знайдено' });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Колекцію або вміння не знайдено' });
   });
 
-  it('returns 201 with the added item on success, regardless of which kind it resolved to', async () => {
-    CollectionModel.addItem.mockResolvedValue({ collection_id: 'c1', item_id: 'm1', item_kind: 'maneuver' });
-    const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'm1' } });
+  it('returns 201 with the added item on success', async () => {
+    CollectionModel.addItem.mockResolvedValue({ collection_id: 'c1', ability_id: 'a1' });
+    const req = mockReq({ params: { id: 'c1' }, body: { item_id: 'a1' } });
     const res = mockRes();
 
     await CollectionController.addItem(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', item_id: 'm1', item_kind: 'maneuver' } });
+    expect(res.json).toHaveBeenCalledWith({ item: { collection_id: 'c1', ability_id: 'a1' } });
   });
 
   it('rethrows unexpected model errors instead of swallowing them', async () => {

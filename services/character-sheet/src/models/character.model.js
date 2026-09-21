@@ -3,7 +3,7 @@ const { deleteWithTrash } = require('../utils/trash');
 
 const CHILD_TABLES = [
   'skills', 'known_spells', 'tree_progress', 'equipment',
-  'maneuvers', 'ritual_trackers', 'abilities',
+  'ritual_trackers', 'abilities',
 ];
 
 const ALL_SKILLS = [

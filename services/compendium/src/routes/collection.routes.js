@@ -5,7 +5,7 @@ const CollectionController = require('../controllers/collection.controller');
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Unauthenticated share link — mirrors equipment/spellbook/maneuvers collections.
+// Unauthenticated share link — mirrors equipment/spellbook/abilities collections.
 router.get('/public/:id', wrap(CollectionController.getPublic));
 
 router.use(requireAuth);

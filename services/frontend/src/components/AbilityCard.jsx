@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { formatDuration } from '../constants/abilities';
 import { useTheme } from '../context/ThemeContext';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
@@ -28,7 +29,7 @@ export default function AbilityCard({ ability }) {
       {/* Same stat-cell treatment as the spell/equipment cards' rows, in
           place of the old loose colored badges — one cell per archetype so
           the per-archetype color-coding still reads at a glance. */}
-      <StatGrid className={COLS_CLASS[archetypes.length] || COLS_CLASS[1]}>
+      <StatGrid className={COLS_CLASS[archetypes.length] || COLS_CLASS[1]} topMargin={Boolean(ability.image_url)}>
         {archetypes.length > 0 ? (
           archetypes.map((a) => (
             <StatBox
@@ -44,6 +45,15 @@ export default function AbilityCard({ ability }) {
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{ability.name}</h3>
       <AuthorBadge username={ability.owner_username} variant="inline" className="px-3.5 pb-1" />
+
+      {ability.is_maneuver && (
+        <div className="flex items-center gap-1.5 px-3.5 pb-1">
+          <span className="rounded border border-gold/60 bg-gold/10 px-1.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide text-gold">
+            Маневр
+          </span>
+          <span className="text-xs text-text-dim">{formatDuration(ability.duration_value, ability.duration_unit)}</span>
+        </div>
+      )}
 
       {!ability.image_url && ability.description && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{ability.description}</p>

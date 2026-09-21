@@ -1,7 +1,7 @@
 const createRelationController = require('./relation.controller');
 const EntryEquipmentModel = require('../models/entry-equipment.model');
 const EntrySpellModel = require('../models/entry-spell.model');
-const EntryManeuverModel = require('../models/entry-maneuver.model');
+const EntryAbilityModel = require('../models/entry-ability.model');
 const { isVisibleToUser, isEquipmentVisibleToUser } = require('../models/catalog.model');
 
 const EquipmentRelationController = createRelationController({
@@ -24,14 +24,14 @@ const SpellRelationController = createRelationController({
   notFoundMessage: 'Заклинання не знайдено',
 });
 
-const ManeuverRelationController = createRelationController({
-  RelationModel: EntryManeuverModel,
-  checkVisible: (id, userId) => isVisibleToUser('abilities.maneuvers', id, userId),
-  bodyField: 'maneuver_id',
-  paramField: 'maneuverId',
-  listKey: 'maneuvers',
-  itemKey: 'maneuver',
-  notFoundMessage: 'Маневр не знайдено',
+const AbilityRelationController = createRelationController({
+  RelationModel: EntryAbilityModel,
+  checkVisible: (id, userId) => isVisibleToUser('abilities.entries', id, userId),
+  bodyField: 'ability_id',
+  paramField: 'abilityId',
+  listKey: 'abilities',
+  itemKey: 'ability',
+  notFoundMessage: 'Вміння не знайдено',
 });
 
-module.exports = { EquipmentRelationController, SpellRelationController, ManeuverRelationController };
+module.exports = { EquipmentRelationController, SpellRelationController, AbilityRelationController };

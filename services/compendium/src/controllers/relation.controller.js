@@ -2,7 +2,7 @@ const EntryModel = require('../models/entry.model');
 const { canWrite, isAdmin } = require('./access');
 
 // Builds a controller for one entry -> external-catalog relation (equipment/spells/
-// maneuvers). All three share the same shape — differing only in the model, the id
+// abilities). All three share the same shape — differing only in the model, the id
 // field name, and how visibility of the external id is checked — so the controller
 // is parameterized rather than copied three times (mirrors equipment's
 // createCatalogController pattern in services/equipment/src/controllers/catalog.controller.js).

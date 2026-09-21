@@ -17,7 +17,7 @@ const PublicProfileModel = {
   },
 
   async getPublicActivity(userId) {
-    const [characters, equipment, spells, abilities, maneuvers, collections] = await Promise.all([
+    const [characters, equipment, spells, abilities, collections] = await Promise.all([
       pool.query(
         `SELECT id, name, archetype, race, is_public, created_at
            FROM character_sheet.characters
@@ -68,19 +68,8 @@ const PublicProfileModel = {
           ORDER BY name ASC`,
         [userId]
       ),
-      pool.query(
-        `SELECT *, true AS is_owner
-           FROM abilities.maneuvers
-          WHERE user_id = $1 AND is_public = true
-          ORDER BY name ASC`,
-        [userId]
-      ),
       // Public collections across domains, tagged with their domain so the
-      // frontend can link each to the right collections view. Maneuver
-      // collections have no arm of their own — since
-      // 52-merge-maneuvers-into-abilities.sql they're just rows in
-      // abilities.collections, same as ability collections, so the
-      // 'abilities' arm already covers both.
+      // frontend can link each to the right collections view.
       pool.query(
         `SELECT id, name, description, is_public, created_at, 'equipment' AS domain
            FROM equipment.collections WHERE user_id = $1 AND is_public = true
@@ -100,7 +89,6 @@ const PublicProfileModel = {
       equipment: equipment.rows,
       spells: spells.rows,
       abilities: abilities.rows,
-      maneuvers: maneuvers.rows,
       collections: collections.rows,
     };
   },

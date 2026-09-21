@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 
 // Shared "Тип" row across every catalog domain's creation forms (equipment's
-// weapon/armor/item/artifact/collection, abilities' ability/maneuver/
-// collection, spellbook's spell/tradition/collection, compendium's npc/
+// weapon/armor/item/artifact/collection, abilities' ability/collection,
+// spellbook's spell/tradition/collection, compendium's npc/
 // creature/species/collection) — one click reaches any sibling kind, even
 // though each domain's kinds live on their own page with their own field set.
 // `kinds` comes from the calling domain (COLLECTION_DOMAINS[key].kindSwitch);

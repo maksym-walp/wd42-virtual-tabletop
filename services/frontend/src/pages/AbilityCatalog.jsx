@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
@@ -10,6 +10,8 @@ import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import { pluralizeUk } from '../utils/pluralize';
+import { downloadJsonFile } from '../utils/downloadJson';
+import { buildAbilitiesImportTemplate } from '../utils/abilitiesImportTemplate';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import FilterAccordion from '../components/ui/FilterAccordion';
@@ -32,26 +34,61 @@ export default function AbilityCatalog() {
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const [archetype, setArchetype] = useState('');
   const [scope, setScope] = useState('');
+  const [isManeuver, setIsManeuver] = useState('');
   const [abilities, setAbilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useViewMode('abilities');
 
-  useEffect(() => {
+  const fetchAbilities = useCallback(() => {
     const params = new URLSearchParams();
     if (archetype) params.set('archetype', archetype);
     if (search) params.set('search', search);
     if (scope) params.set('scope', scope);
+    if (isManeuver) params.set('is_maneuver', isManeuver);
 
     setLoading(true);
-    api.get(`/api/abilities/?${params}`)
+    return api.get(`/api/abilities/?${params}`)
       .then(({ data }) => setAbilities(data.abilities))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [archetype, search, scope]);
+  }, [archetype, search, scope, isManeuver]);
 
-  const activeFilterCount = (scope ? 1 : 0) + (archetype ? 1 : 0);
+  useEffect(() => { fetchAbilities(); }, [fetchAbilities]);
+
+  const handleExport = async () => {
+    const params = new URLSearchParams();
+    if (archetype) params.set('archetype', archetype);
+    if (search) params.set('search', search);
+    if (scope) params.set('scope', scope);
+    if (isManeuver) params.set('is_maneuver', isManeuver);
+
+    try {
+      const { data } = await api.get(`/api/abilities/export?${params}`);
+      downloadJsonFile(data, 'abilities_export.json');
+    } catch {
+      alert('Не вдалося експортувати вміння');
+    }
+  };
+
+  const handleTemplate = () => buildAbilitiesImportTemplate();
+
+  const handleImport = async (data) => {
+    if (!Array.isArray(data)) {
+      alert('Файл має містити масив вмінь');
+      return;
+    }
+    try {
+      const { data: result } = await api.post('/api/abilities/import', data);
+      alert(`Імпортовано записів: ${result.imported}`);
+      fetchAbilities();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати вміння');
+    }
+  };
+
+  const activeFilterCount = (scope ? 1 : 0) + (archetype ? 1 : 0) + (isManeuver ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -65,8 +102,7 @@ export default function AbilityCatalog() {
           {abilities.length} {pluralizeUk(abilities.length, ['вміння', 'вміння', 'вмінь'])}
         </p>
         <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
-          {/* Бекенд для вмінь поки не має /export і /import — кнопки лише візуальні (неактивні без пропсів). */}
-          <ExportImportActions />
+          <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
           <Button to="/abilities/new" className="whitespace-nowrap">+ Нове вміння</Button>
         </div>
       </div>
@@ -111,6 +147,27 @@ export default function AbilityCatalog() {
                   : { borderColor: 'var(--color-border)', color: 'var(--color-text-dim)' }}
               >
                 {ARCHETYPES[a].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Маневр</span>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { value: '', label: 'Усі' },
+              { value: 'true', label: 'Лише маневри' },
+              { value: 'false', label: 'Без маневрів' },
+            ].map((o) => (
+              <button
+                key={o.value}
+                onClick={() => setIsManeuver(o.value)}
+                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  isManeuver === o.value ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+                }`}
+              >
+                {o.label}
               </button>
             ))}
           </div>

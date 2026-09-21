@@ -5,7 +5,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
 import spellbookApi from '../api/spellbook';
-import maneuversApi from '../api/maneuvers';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -41,18 +40,17 @@ export default function SkillTree() {
 
   // Catalogs offered by the node form's "видає / робить доступним" picker.
   const [grantCatalogs, setGrantCatalogs] = useState({
-    abilities: [], maneuvers: [], spells: [], abilityCollections: [], spellCollections: [],
+    abilities: [], spells: [], abilityCollections: [], spellCollections: [],
   });
   useEffect(() => {
     if (!isGM) return;
     Promise.all([
       abilitiesApi.getAll().catch(() => []),
-      maneuversApi.getAll().catch(() => []),
       spellbookApi.getAll().catch(() => []),
       createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
       createCollectionsApi('/api/spellbook/collections/').getAll().catch(() => []),
-    ]).then(([abilities, maneuvers, spells, abilityCollections, spellCollections]) => {
-      setGrantCatalogs({ abilities, maneuvers, spells, abilityCollections, spellCollections });
+    ]).then(([abilities, spells, abilityCollections, spellCollections]) => {
+      setGrantCatalogs({ abilities, spells, abilityCollections, spellCollections });
     });
   }, [isGM]);
 
@@ -973,13 +971,13 @@ function TtBadge({ children }) {
 }
 // ── Node detail panel (view mode / non-GM click) ────────────────────
 const GRANT_KIND_LABEL = {
-  ability: 'вміння', maneuver: 'маневр', spell: 'заклинання',
+  ability: 'вміння', spell: 'заклинання',
   ability_collection: 'колекція вмінь', spell_collection: 'колекція заклинань',
 };
 
 function grantName(grant, cat = {}) {
   const pools = {
-    ability: cat.abilities, maneuver: cat.maneuvers, spell: cat.spells,
+    ability: cat.abilities, spell: cat.spells,
     ability_collection: cat.abilityCollections, spell_collection: cat.spellCollections,
   };
   return (pools[grant.item_kind] || []).find((x) => x.id === grant.item_id)?.name || '—';
@@ -1275,7 +1273,7 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
         />
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння, заклинання, маневри</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння, заклинання</span>
           <p className="text-xs text-text-dim">
             «🎁 Видавати» — відкриття вузла одразу додає запис у лист персонажа.
             «🔓 Доступним» — лише дозволяє додати його вручну.

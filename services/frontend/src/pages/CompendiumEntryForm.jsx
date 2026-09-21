@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import equipmentApi from '../api/equipment';
 import spellbookApi from '../api/spellbook';
-import maneuversApi from '../api/maneuvers';
+import abilitiesApi from '../api/abilities';
 import { ATTRIBUTE_LABELS, ENTITY_TYPES } from '../constants/compendium';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
@@ -40,7 +40,7 @@ export default function CompendiumEntryForm() {
 
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
-  const [maneuvers, setManeuvers] = useState([]);
+  const [abilities, setAbilities] = useState([]);
 
   useEffect(() => { compendiumApi.listSpecies().then(setSpecies).catch(() => {}); }, []);
 
@@ -71,7 +71,7 @@ export default function CompendiumEntryForm() {
     if (!isEdit) return;
     compendiumApi.listEntryEquipment(id).then(setEquipment).catch(() => {});
     compendiumApi.listEntrySpells(id).then(setSpells).catch(() => {});
-    compendiumApi.listEntryManeuvers(id).then(setManeuvers).catch(() => {});
+    compendiumApi.listEntryAbilities(id).then(setAbilities).catch(() => {});
   };
 
   useEffect(reloadRelations, [id, isEdit]);
@@ -214,7 +214,7 @@ export default function CompendiumEntryForm() {
         )}
 
         {isEdit && (
-          <FormSection title="Спорядження, заклинання, маневри">
+          <FormSection title="Спорядження, заклинання, вміння">
             <div className="flex flex-col gap-5">
               <CatalogAttachPicker
                 label="Спорядження" addLabel="Додати предмет"
@@ -234,18 +234,18 @@ export default function CompendiumEntryForm() {
                 itemMeta={(item) => item.spell_kind || ''}
               />
               <CatalogAttachPicker
-                label="Маневри" addLabel="Додати маневр"
-                catalogApi={maneuversApi} attached={maneuvers} attachedIdField="maneuver_id"
-                onAdd={(itemId) => compendiumApi.addEntryManeuver(id, itemId).then(reloadRelations)}
-                onRemove={(itemId) => compendiumApi.removeEntryManeuver(id, itemId).then(reloadRelations)}
-                itemLink={(item) => `/abilities/maneuvers/${item.id}`}
-                itemMeta={(item) => (item.duration_actions ? `${item.duration_actions} дії` : '')}
+                label="Вміння" addLabel="Додати вміння"
+                catalogApi={abilitiesApi} attached={abilities} attachedIdField="ability_id"
+                onAdd={(itemId) => compendiumApi.addEntryAbility(id, itemId).then(reloadRelations)}
+                onRemove={(itemId) => compendiumApi.removeEntryAbility(id, itemId).then(reloadRelations)}
+                itemLink={(item) => `/abilities/${item.id}`}
+                itemMeta={(item) => (item.archetypes || []).join(', ')}
               />
             </div>
           </FormSection>
         )}
         {!isEdit && (
-          <p className="text-sm text-text-dim">Збережи запис, щоб додати спорядження, заклинання й маневри.</p>
+          <p className="text-sm text-text-dim">Збережи запис, щоб додати спорядження, заклинання й вміння.</p>
         )}
 
         <FormSection title="Налаштування">

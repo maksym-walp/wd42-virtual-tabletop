@@ -1,10 +1,9 @@
 const pool = require('../config/db');
 
 // sourceTable is always a fixed literal from our own code
-// ('abilities.entries' | 'abilities.maneuvers' | 'spellbook.spells'), never user input.
+// ('abilities.entries' | 'spellbook.spells'), never user input.
 const KIND_BY_TABLE = {
   'abilities.entries': 'ability',
-  'abilities.maneuvers': 'maneuver',
   'spellbook.spells': 'spell',
 };
 

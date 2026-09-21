@@ -3,7 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
+import compendiumApi from '../api/compendium';
 import { ARCHETYPES } from '../constants/characterSheet';
+import { DURATION_UNITS } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
@@ -11,12 +13,15 @@ import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
+import AuthorField from '../components/AuthorField';
 
 const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
   name: '', archetypes: [], description: '', is_public: true,
+  is_maneuver: false, duration_value: '', duration_unit: 'instant',
+  lore_creator: '', lore_creator_npc_id: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '',
   collectionIds: [],
@@ -37,8 +42,14 @@ export default function AbilityForm() {
   const initialCollectionIds = useRef([]);
   const membershipInitialized = useRef(false);
 
+  const [npcs, setNpcs] = useState([]);
+
   useEffect(() => {
     skillTreeApi.getNodes().then(setNodes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    compendiumApi.listEntries('npc').then(setNpcs).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -57,6 +68,11 @@ export default function AbilityForm() {
           ...f,
           name: a.name, archetypes: a.archetypes || [],
           description: a.description || '', is_public: a.is_public,
+          is_maneuver: a.is_maneuver || false,
+          duration_value: a.duration_value ?? '',
+          duration_unit: a.duration_unit || 'instant',
+          lore_creator: a.lore_creator || '',
+          lore_creator_npc_id: a.lore_creator_npc_id ?? null,
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
           image_url: a.image_url || '',
@@ -104,7 +120,11 @@ export default function AbilityForm() {
     setError('');
     try {
       const { collectionIds, ...rest } = form;
-      const payload = { ...rest, image_url: form.image_url || null };
+      const payload = {
+        ...rest,
+        duration_value: form.duration_value === '' ? null : Number(form.duration_value),
+        image_url: form.image_url || null,
+      };
       if (isEdit) {
         await api.put(`/api/abilities/${id}`, payload);
         await reconcileCollections(id);
@@ -159,6 +179,31 @@ export default function AbilityForm() {
             </div>
           </Field>
 
+          <label className="mb-4 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+            <input
+              type="checkbox" checked={form.is_maneuver}
+              onChange={(e) => setForm((f) => ({ ...f, is_maneuver: e.target.checked }))}
+              className="h-5 w-5 accent-accent"
+            />
+            Може бути використано як маневр (дія в бою)
+          </label>
+
+          <Field label="Тривалість" className="mb-4">
+            <div className="flex gap-2">
+              {form.duration_unit !== 'instant' && form.duration_unit !== 'permanent' && (
+                <input
+                  type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={form.duration_value}
+                  onChange={set('duration_value')}
+                />
+              )}
+              <select className={`${inputClass} min-w-0 flex-1`} value={form.duration_unit} onChange={set('duration_unit')}>
+                {Object.entries(DURATION_UNITS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+          </Field>
+
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
@@ -172,6 +217,17 @@ export default function AbilityForm() {
             value={form.description} onChange={set('description')}
             rows={4}
             placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
+          />
+        </FormSection>
+
+        <FormSection title="Автор">
+          <AuthorField
+            name={form.lore_creator}
+            npcId={form.lore_creator_npc_id}
+            onChange={({ name, npc_id }) => setForm((f) => ({ ...f, lore_creator: name, lore_creator_npc_id: npc_id }))}
+            npcs={npcs}
+            label="Творець"
+            hint="Необов'язкове лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне"
           />
         </FormSection>
 

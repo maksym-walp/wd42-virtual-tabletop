@@ -60,7 +60,6 @@ describe('ProfileController.getPublicByUsername', () => {
       equipment: [],
       spells: [],
       abilities: [],
-      maneuvers: [],
       collections: [],
     };
     PublicProfileModel.getPublicActivity.mockResolvedValue(activity);

@@ -21,7 +21,7 @@ export default function CompendiumEntryView() {
   const [subspecies, setSubspecies] = useState(null);
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
-  const [maneuvers, setManeuvers] = useState([]);
+  const [abilities, setAbilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
@@ -37,7 +37,7 @@ export default function CompendiumEntryView() {
         if (e.subspecies_id) compendiumApi.getSubspecies(e.subspecies_id).then(setSubspecies).catch(() => {});
         compendiumApi.listEntryEquipment(id).then(setEquipment).catch(() => {});
         compendiumApi.listEntrySpells(id).then(setSpells).catch(() => {});
-        compendiumApi.listEntryManeuvers(id).then(setManeuvers).catch(() => {});
+        compendiumApi.listEntryAbilities(id).then(setAbilities).catch(() => {});
       })
       .catch(() => { if (!cancelled) navigate('/compendium', { replace: true }); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -214,12 +214,12 @@ export default function CompendiumEntryView() {
           </Section>
         )}
 
-        {maneuvers.length > 0 && (
-          <Section title="Маневри">
+        {abilities.length > 0 && (
+          <Section title="Вміння">
             <ul className="flex flex-col gap-1.5">
-              {maneuvers.map((m) => (
-                <li key={m.maneuver_id} className="text-sm text-text">
-                  {m.maneuver ? <Link to={`/abilities/maneuvers/${m.maneuver.id}`} className="text-accent hover:underline">{m.maneuver.name}</Link> : '(невідомо)'}
+              {abilities.map((a) => (
+                <li key={a.ability_id} className="text-sm text-text">
+                  {a.ability ? <Link to={`/abilities/${a.ability.id}`} className="text-accent hover:underline">{a.ability.name}</Link> : '(невідомо)'}
                 </li>
               ))}
             </ul>

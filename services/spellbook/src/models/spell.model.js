@@ -25,6 +25,31 @@ const traditionsSelect = (alias) => `COALESCE(
 // "Зробити канонічним" action (s.is_canonical) regardless of owner.
 const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR s.is_canonical)";
 
+// Колонки, які пише bulkImport — той самий набір полів, що create/update
+// пишуть сьогодні (плюс lore_creator_npc_id із задачі 1), за винятком
+// image_url (немає сенсу тягнути чужий шлях на диску) і
+// prerequisite_node_ids/prerequisite_logic/is_canonical (навмисно відсутні —
+// див. коментар над bulkImport).
+const IMPORT_COLUMNS = [
+  'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
+  'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
+  'duration_value', 'duration_unit', 'range_desc', 'components', 'is_public',
+];
+
+function normalizeImportField(column, record) {
+  switch (column) {
+    case 'is_public': return record.is_public ?? false;
+    case 'nature': return record.nature ?? [];
+    case 'spell_kind': return record.spell_kind ?? 'utility';
+    case 'ritual': return record.ritual ?? 'impossible';
+    case 'duration_unit': return record.duration_unit ?? 'instant';
+    case 'energy_cost': return record.energy_cost ?? 0;
+    case 'action_time': return record.action_time ?? 1;
+    case 'components': return JSON.stringify(record.components ?? []);
+    default: return record[column] ?? null;
+  }
+}
+
 const SpellModel = {
   async findAll(userId, { nature, spellKind, ritual, search, sort, scope, limit, traditionId } = {}, isAdmin = false) {
     const params = [userId];
@@ -106,7 +131,7 @@ const SpellModel = {
       duration_value, duration_unit, range_desc,
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
-      lore_creator,
+      lore_creator, lore_creator_npc_id,
     } = data;
 
     const { rows } = await pool.query(
@@ -114,8 +139,8 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
-          image_url, lore_creator)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18)
+          image_url, lore_creator, lore_creator_npc_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19)
        RETURNING *`,
       [
         userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -124,7 +149,7 @@ const SpellModel = {
         duration_value ?? null, duration_unit ?? 'instant',
         range_desc ?? null, JSON.stringify(components ?? []), is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
-        image_url ?? null, lore_creator ?? null,
+        image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
       ]
     );
     return rows[0];
@@ -137,7 +162,7 @@ const SpellModel = {
       duration_value, duration_unit, range_desc,
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
-      lore_creator,
+      lore_creator, lore_creator_npc_id,
     } = data;
 
     const { rows } = await pool.query(
@@ -148,8 +173,8 @@ const SpellModel = {
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14::jsonb, is_public=$15,
            prerequisite_node_ids=$16, prerequisite_logic=$17,
-           image_url=$18, lore_creator=$19, updated_at=NOW()
-       WHERE id=$1 AND (user_id=$2 OR $20 = true)
+           image_url=$18, lore_creator=$19, lore_creator_npc_id=$20, updated_at=NOW()
+       WHERE id=$1 AND (user_id=$2 OR $21 = true)
        RETURNING *`,
       [
         id, userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -158,7 +183,7 @@ const SpellModel = {
         duration_value ?? null, duration_unit, range_desc ?? null,
         JSON.stringify(components ?? []), is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
-        image_url ?? null, lore_creator ?? null, isAdmin,
+        image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
       ]
     );
     return rows[0] || null;
@@ -186,6 +211,37 @@ const SpellModel = {
       [id, isCanonical]
     );
     return rows[0] || null;
+  },
+
+  // Import зі /export: один multi-row INSERT (на відміну від equipment — тут
+  // лише одна таблиця, а не чотири за видом), user_id примусово стає
+  // імпортером. prerequisite_node_ids/prerequisite_logic та is_canonical
+  // навмисно НЕ входять до списку колонок — новий рядок отримує їхні
+  // значення за замовчуванням із таблиці, а не чужий skill-tree/canonical
+  // статус з експорту. Рядки без name пропускаються.
+  async bulkImport(userId, records) {
+    const rows = (records || []).filter((record) => record && record.name);
+    if (!rows.length) return 0;
+
+    const values = [];
+    const tuples = rows.map((record) => {
+      const start = values.length;
+      values.push(
+        userId,
+        ...IMPORT_COLUMNS.slice(1).map((column) => normalizeImportField(column, record))
+      );
+      const placeholders = IMPORT_COLUMNS.map((column, idx) => {
+        const paramIdx = start + idx + 1;
+        return column === 'components' ? `$${paramIdx}::jsonb` : `$${paramIdx}`;
+      });
+      return `(${placeholders.join(', ')})`;
+    });
+
+    const { rowCount } = await pool.query(
+      `INSERT INTO spellbook.spells (${IMPORT_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')}`,
+      values
+    );
+    return rowCount;
   },
 };
 

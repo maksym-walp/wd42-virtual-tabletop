@@ -79,7 +79,7 @@ const compendiumApi = {
     return data.entry;
   },
 
-  // Cross-service relations: equipment loadout, known spells, known maneuvers.
+  // Cross-service relations: equipment loadout, known spells, known abilities.
   async listEntryEquipment(entryId) {
     const { data } = await api.get(`${BASE}/entries/${entryId}/equipment`);
     return data.equipment;
@@ -104,16 +104,16 @@ const compendiumApi = {
     await api.delete(`${BASE}/entries/${entryId}/spells/${spellId}`);
   },
 
-  async listEntryManeuvers(entryId) {
-    const { data } = await api.get(`${BASE}/entries/${entryId}/maneuvers`);
-    return data.maneuvers;
+  async listEntryAbilities(entryId) {
+    const { data } = await api.get(`${BASE}/entries/${entryId}/abilities`);
+    return data.abilities;
   },
-  async addEntryManeuver(entryId, maneuverId) {
-    const { data } = await api.post(`${BASE}/entries/${entryId}/maneuvers`, { maneuver_id: maneuverId });
-    return data.maneuver;
+  async addEntryAbility(entryId, abilityId) {
+    const { data } = await api.post(`${BASE}/entries/${entryId}/abilities`, { ability_id: abilityId });
+    return data.ability;
   },
-  async removeEntryManeuver(entryId, maneuverId) {
-    await api.delete(`${BASE}/entries/${entryId}/maneuvers/${maneuverId}`);
+  async removeEntryAbility(entryId, abilityId) {
+    await api.delete(`${BASE}/entries/${entryId}/abilities/${abilityId}`);
   },
 };
 

@@ -1,4 +1,4 @@
-// Source filter shared by every catalog (equipment/abilities/maneuvers/spells and
+// Source filter shared by every catalog (equipment/abilities/spells and
 // their collections) and by the character-sheet add-item pickers:
 //   ''          → all sources
 //   'canonical' → authored by an admin ("канонічні")

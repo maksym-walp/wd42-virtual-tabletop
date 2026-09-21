@@ -29,21 +29,20 @@ describe('PublicProfileModel.getPublicActivity', () => {
     pool.query.mockResolvedValue({ rows: [] });
     await PublicProfileModel.getPublicActivity('u1');
 
-    // 6 aggregation queries: characters, equipment, spells, abilities, maneuvers, collections
-    expect(pool.query).toHaveBeenCalledTimes(6);
+    // 5 aggregation queries: characters, equipment, spells, abilities, collections
+    expect(pool.query).toHaveBeenCalledTimes(5);
     for (const [sql, params] of pool.query.mock.calls) {
       expect(sql).toMatch(/is_public = true/);
       expect(params).toEqual(['u1']);
     }
   });
 
-  it('returns the six named collections keyed by domain', async () => {
+  it('returns the five named collections keyed by domain', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [{ id: 'c1' }] })            // characters
       .mockResolvedValueOnce({ rows: [{ id: 'e1' }] })            // equipment
       .mockResolvedValueOnce({ rows: [{ id: 's1' }] })            // spells
       .mockResolvedValueOnce({ rows: [{ id: 'a1' }] })            // abilities
-      .mockResolvedValueOnce({ rows: [{ id: 'm1' }] })            // maneuvers
       .mockResolvedValueOnce({ rows: [{ id: 'col1', domain: 'equipment' }] }); // collections
 
     const result = await PublicProfileModel.getPublicActivity('u1');
@@ -53,7 +52,6 @@ describe('PublicProfileModel.getPublicActivity', () => {
       equipment: [{ id: 'e1' }],
       spells: [{ id: 's1' }],
       abilities: [{ id: 'a1' }],
-      maneuvers: [{ id: 'm1' }],
       collections: [{ id: 'col1', domain: 'equipment' }],
     });
   });

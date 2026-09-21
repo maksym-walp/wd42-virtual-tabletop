@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { formatDuration } from '../constants/abilities';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
@@ -82,6 +83,11 @@ export default function AbilityView() {
               {ARCHETYPES[a]?.label ?? a}
             </span>
           ))}
+          {ability.is_maneuver && (
+            <span className="rounded border border-gold/60 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-gold">
+              Маневр · {formatDuration(ability.duration_value, ability.duration_unit)}
+            </span>
+          )}
           <span className={`text-xs italic ${ability.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
             {ability.is_canonical ? 'канонічне' : 'спільнота'}
           </span>
@@ -94,6 +100,16 @@ export default function AbilityView() {
         {ability.description && (
           <Section title="Опис">
             <p className="text-[0.95rem] leading-relaxed text-text">{ability.description}</p>
+          </Section>
+        )}
+
+        {ability.lore_creator && (
+          <Section title="Творець">
+            <p className="text-[0.95rem] text-text">
+              {ability.lore_creator_npc_id
+                ? <Link to={`/compendium/entries/${ability.lore_creator_npc_id}`} className="text-accent hover:underline">{ability.lore_creator}</Link>
+                : ability.lore_creator}
+            </p>
           </Section>
         )}
 
