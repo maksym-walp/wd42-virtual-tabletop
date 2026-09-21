@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
-import { ENTITY_TYPES, ATTRIBUTE_LABELS } from '../constants/compendium';
+import chronologyApi from '../api/chronology';
+import { ENTITY_TYPES, ATTRIBUTE_LABELS, GENDER_OPTIONS } from '../constants/compendium';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import RollButton from '../components/RollButton';
@@ -19,6 +20,10 @@ export default function CompendiumEntryView() {
   const [entry, setEntry] = useState(null);
   const [species, setSpecies] = useState(null);
   const [subspecies, setSubspecies] = useState(null);
+  const [race, setRace] = useState(null);
+  const [people, setPeople] = useState(null);
+  const [birthCalendar, setBirthCalendar] = useState(null);
+  const [birthMonth, setBirthMonth] = useState(null);
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
   const [abilities, setAbilities] = useState([]);
@@ -35,6 +40,16 @@ export default function CompendiumEntryView() {
         recordView({ type: 'compendium-entry', id, name: e.name, href: `/compendium/entries/${id}`, image_url: e.image_url });
         if (e.species_id) compendiumApi.getSpecies(e.species_id).then(setSpecies).catch(() => {});
         if (e.subspecies_id) compendiumApi.getSubspecies(e.subspecies_id).then(setSubspecies).catch(() => {});
+        if (e.race_id) compendiumApi.getRace(e.race_id).then(setRace).catch(() => {});
+        if (e.people_id) compendiumApi.getPeople(e.people_id).then(setPeople).catch(() => {});
+        if (e.birth_calendar_id) {
+          chronologyApi.getOne(e.birth_calendar_id).then(setBirthCalendar).catch(() => {});
+          if (e.birth_month_id) {
+            chronologyApi.listMonths(e.birth_calendar_id)
+              .then((months) => setBirthMonth(months.find((m) => m.id === e.birth_month_id) || null))
+              .catch(() => {});
+          }
+        }
         compendiumApi.listEntryEquipment(id).then(setEquipment).catch(() => {});
         compendiumApi.listEntrySpells(id).then(setSpells).catch(() => {});
         compendiumApi.listEntryAbilities(id).then(setAbilities).catch(() => {});
@@ -98,6 +113,8 @@ export default function CompendiumEntryView() {
           </span>
           {species && <Link to={`/compendium/species/${species.id}`} className="text-xs text-text-dim hover:text-accent">{species.name}</Link>}
           {subspecies && <span className="text-xs text-text-dim">· {subspecies.name}</span>}
+          {race && <Link to={`/compendium/races/${race.id}`} className="text-xs text-text-dim hover:text-accent">{race.name}</Link>}
+          {people && <span className="text-xs text-text-dim">· {people.name}</span>}
           {entry.is_public && <span className="ml-auto text-xs italic text-text-dim">публічний</span>}
         </div>
 
@@ -188,6 +205,29 @@ export default function CompendiumEntryView() {
               </div>
             </Section>
           )
+        )}
+
+        {isNpc && (entry.age != null || entry.gender || entry.birth_calendar_id) && (
+          <Section title="Біографія">
+            <div className="flex flex-col gap-2 text-sm text-text">
+              {entry.age != null && <p><span className="text-text-dim">Вік:</span> {entry.age}</p>}
+              {entry.gender && <p><span className="text-text-dim">Стать:</span> {GENDER_OPTIONS[entry.gender] || entry.gender}</p>}
+              {entry.birth_calendar_id && (
+                <p>
+                  <span className="text-text-dim">Дата народження:</span>{' '}
+                  {[entry.birth_day, birthMonth?.name, entry.birth_year].filter((v) => v != null && v !== '').join(' ')}
+                  {birthCalendar && <span className="text-text-dim"> ({birthCalendar.name})</span>}
+                </p>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {isNpc && entry.private_notes && (
+          <Section title="Приватні нотатки">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Бачиш лише ти та майстри гри</p>
+            <p className="mt-2 text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={entry.private_notes} /></p>
+          </Section>
         )}
 
         {equipment.length > 0 && (

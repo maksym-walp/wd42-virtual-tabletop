@@ -13,6 +13,10 @@ import { inputClass } from '../ui/Field';
 // factored since all three are being authored fresh together here.
 export default function CatalogAttachPicker({
   label, addLabel, catalogApi, attached, attachedIdField, onAdd, onRemove, itemLink, itemMeta, rollFormula,
+  // Name of the joined-item field on each attached row, when it isn't one
+  // of the original three (equipment/spell/ability) — e.g. faction leaders'
+  // rows carry their NPC under `npc`.
+  itemField,
 }) {
   const [catalog, setCatalog] = useState([]);
   const [search, setSearch] = useState('');
@@ -76,7 +80,7 @@ export default function CatalogAttachPicker({
         <p className="text-sm text-text-dim">Немає</p>
       ) : (
         attached.map((entry) => {
-          const item = entry.equipment || entry.spell || entry.ability;
+          const item = itemField ? entry[itemField] : (entry.equipment || entry.spell || entry.ability);
           const externalId = entry[attachedIdField];
           return (
             <div key={externalId} className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2.5">

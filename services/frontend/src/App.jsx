@@ -49,9 +49,14 @@ import LocationDetail from './pages/LocationDetail';
 import CompendiumEntries from './pages/CompendiumEntries';
 import CompendiumEntryForm from './pages/CompendiumEntryForm';
 import CompendiumEntryView from './pages/CompendiumEntryView';
-import CompendiumSpeciesList from './pages/CompendiumSpeciesList';
+import CompendiumTaxonomyList from './pages/CompendiumTaxonomyList';
 import CompendiumSpeciesDetail from './pages/CompendiumSpeciesDetail';
 import CompendiumSpeciesForm from './pages/CompendiumSpeciesForm';
+import CompendiumRaceDetail from './pages/CompendiumRaceDetail';
+import CompendiumRaceForm from './pages/CompendiumRaceForm';
+import CompendiumFactionList from './pages/CompendiumFactionList';
+import CompendiumFactionDetail from './pages/CompendiumFactionDetail';
+import CompendiumFactionForm from './pages/CompendiumFactionForm';
 import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
@@ -131,12 +136,21 @@ export default function App() {
 
                   <Route path="/compendium" element={<PrivateRoute><CompendiumEntries entityType="npc" title="НІПи" newLabel="Новий НІП" /></PrivateRoute>} />
                   <Route path="/compendium/bestiary" element={<PrivateRoute><CompendiumEntries entityType="creature" title="Бестіарій" newLabel="Нова істота" /></PrivateRoute>} />
-                  <Route path="/compendium/species" element={<PrivateRoute><CompendiumSpeciesList /></PrivateRoute>} />
+                  <Route path="/compendium/taxonomy" element={<PrivateRoute><CompendiumTaxonomyList /></PrivateRoute>} />
                   <Route path="/compendium/species/new" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
                   <Route path="/compendium/species/:id" element={<PrivateRoute><CompendiumSpeciesDetail /></PrivateRoute>} />
                   <Route path="/compendium/species/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
                   <Route path="/compendium/subspecies/new" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
                   <Route path="/compendium/subspecies/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
+                  <Route path="/compendium/races/new" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
+                  <Route path="/compendium/races/:id" element={<PrivateRoute><CompendiumRaceDetail /></PrivateRoute>} />
+                  <Route path="/compendium/races/:id/edit" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
+                  <Route path="/compendium/peoples/new" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
+                  <Route path="/compendium/peoples/:id/edit" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
+                  <Route path="/compendium/factions" element={<PrivateRoute><CompendiumFactionList /></PrivateRoute>} />
+                  <Route path="/compendium/factions/new" element={<PrivateRoute><CompendiumFactionForm /></PrivateRoute>} />
+                  <Route path="/compendium/factions/:id" element={<PrivateRoute><CompendiumFactionDetail /></PrivateRoute>} />
+                  <Route path="/compendium/factions/:id/edit" element={<PrivateRoute><CompendiumFactionForm /></PrivateRoute>} />
                   <Route path="/compendium/collections" element={<PrivateRoute><CollectionsList domainKey="compendium" /></PrivateRoute>} />
                   <Route path="/compendium/collections/new" element={<PrivateRoute><CollectionForm domainKey="compendium" /></PrivateRoute>} />
                   <Route path="/compendium/collections/public/:id" element={<CollectionView domainKey="compendium" publicView />} />

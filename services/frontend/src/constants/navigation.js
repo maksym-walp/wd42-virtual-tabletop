@@ -12,7 +12,7 @@ export const NAV_MAIN_ITEMS = [
 export const NAV_MORE_ITEMS = [
   { to: '/skill-tree', label: 'Дерево',    icon: TreePine },
   { to: '/maps',       label: 'Мапи',        icon: Map },
-  { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
+  { to: '/compendium', label: 'Компендіум', icon: Skull },
   { to: '/campaigns',  label: 'Кампанії',  icon: Castle },
   { to: '/chronology', label: 'Хронологія', icon: CalendarDays },
 ];
@@ -31,7 +31,7 @@ export const MOBILE_MORE_NAV_ITEMS = [
   { to: '/campaigns',  label: 'Кампанії',    icon: Castle },
   { to: '/maps',       label: 'Мапи',        icon: Map },
   { to: '/chronology', label: 'Хронологія',  icon: CalendarDays },
-  { to: '/compendium', label: 'НІПи та істоти', icon: Skull },
+  { to: '/compendium', label: 'Компендіум', icon: Skull },
   { to: '/skill-tree', label: 'Дерево',      icon: TreePine },
   { to: '/spellbook',  label: 'Заклинання',  icon: BookOpen },
   { to: '/abilities',  label: 'Вміння', icon: Star },

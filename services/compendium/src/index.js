@@ -4,6 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const speciesRoutes = require('./routes/species.routes');
 const subspeciesRoutes = require('./routes/subspecies.routes');
+const raceRoutes = require('./routes/race.routes');
+const peopleRoutes = require('./routes/people.routes');
+const factionRoutes = require('./routes/faction.routes');
 const entryRoutes = require('./routes/entry.routes');
 const collectionRoutes = require('./routes/collection.routes');
 
@@ -19,6 +22,9 @@ app.use(express.json());
 
 app.use('/species', speciesRoutes);
 app.use('/subspecies', subspeciesRoutes);
+app.use('/races', raceRoutes);
+app.use('/peoples', peopleRoutes);
+app.use('/factions', factionRoutes);
 app.use('/entries', entryRoutes);
 app.use('/collections', collectionRoutes);
 

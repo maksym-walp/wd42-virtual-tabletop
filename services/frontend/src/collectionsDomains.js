@@ -107,7 +107,7 @@ export const COLLECTION_DOMAINS = {
     ],
   },
   compendium: {
-    title: 'НІПи та істоти',
+    title: 'Компендіум',
     basePath: '/compendium',
     itemLabel: 'записів',
     collectionsApi: createCollectionsApi('/api/compendium/collections/'),
@@ -120,22 +120,29 @@ export const COLLECTION_DOMAINS = {
     // schema (unlike equipment/spellbook/abilities) — no
     // is_canonical column, no /canonical endpoint.
     supportsCanonical: false,
-    // Compendium has more than one browsable list (NPCs vs Bestiary vs
-    // Species) alongside Колекції, so it needs an explicit tab set instead
-    // of the [catalog, Колекції] pair getDomainTabs() derives by default.
+    // Compendium has more than one browsable list (NPCs vs Bestiary vs the
+    // merged Народи та види taxonomy vs Фракції) alongside Колекції, so it
+    // needs an explicit tab set instead of the [catalog, Колекції] pair
+    // getDomainTabs() derives by default. Види (species) and Раси та народи
+    // (races) browse as one merged, filterable list — see
+    // CompendiumTaxonomyList.jsx — even though they stay two separate
+    // catalogs on the backend.
     tabs: [
       { to: '/compendium', label: 'НІПи', end: true },
       { to: '/compendium/bestiary', label: 'Бестіарій' },
-      { to: '/compendium/species', label: 'Види' },
+      { to: '/compendium/taxonomy', label: 'Народи та види' },
+      { to: '/compendium/factions', label: 'Фракції' },
       { to: '/compendium/collections', label: 'Колекції' },
     ],
     // NPC and creature share one form/table (CompendiumEntryForm, entity_type
-    // column) and so can switch in place — species and collection each live
-    // on their own page, so switching to them is always a navigation.
+    // column) and so can switch in place — species/race/faction/collection
+    // each live on their own page, so switching to them is always a navigation.
     kindSwitch: [
       { key: 'npc',        label: 'НІП',       newPath: '/compendium/entries/new?type=npc' },
       { key: 'creature',   label: 'Істота',    newPath: '/compendium/entries/new?type=creature' },
       { key: 'species',    label: 'Вид',       newPath: '/compendium/species/new' },
+      { key: 'race',       label: 'Раса',      newPath: '/compendium/races/new' },
+      { key: 'faction',    label: 'Фракція',   newPath: '/compendium/factions/new' },
       { key: 'collection', label: 'Колекція',  newPath: '/compendium/collections/new' },
     ],
   },

@@ -48,6 +48,94 @@ const compendiumApi = {
     await api.delete(`${BASE}/subspecies/${id}`);
   },
 
+  // Races
+  async listRaces() {
+    const { data } = await api.get(`${BASE}/races`);
+    return data.races;
+  },
+  async getRace(id) {
+    const { data } = await api.get(`${BASE}/races/${id}`);
+    return data.race;
+  },
+  async createRace(payload) {
+    const { data } = await api.post(`${BASE}/races`, payload);
+    return data.race;
+  },
+  async updateRace(id, payload) {
+    const { data } = await api.patch(`${BASE}/races/${id}`, payload);
+    return data.race;
+  },
+  async removeRace(id) {
+    await api.delete(`${BASE}/races/${id}`);
+  },
+
+  // Peoples
+  async listPeoples(raceId) {
+    const qs = raceId ? `?race_id=${raceId}` : '';
+    const { data } = await api.get(`${BASE}/peoples${qs}`);
+    return data.peoples;
+  },
+  async getPeople(id) {
+    const { data } = await api.get(`${BASE}/peoples/${id}`);
+    return data.people;
+  },
+  async createPeople(payload) {
+    const { data } = await api.post(`${BASE}/peoples`, payload);
+    return data.people;
+  },
+  async updatePeople(id, payload) {
+    const { data } = await api.patch(`${BASE}/peoples/${id}`, payload);
+    return data.people;
+  },
+  async removePeople(id) {
+    await api.delete(`${BASE}/peoples/${id}`);
+  },
+
+  // Factions
+  async listFactions() {
+    const { data } = await api.get(`${BASE}/factions`);
+    return data.factions;
+  },
+  async getFaction(id) {
+    const { data } = await api.get(`${BASE}/factions/${id}`);
+    return data.faction;
+  },
+  async createFaction(payload) {
+    const { data } = await api.post(`${BASE}/factions`, payload);
+    return data.faction;
+  },
+  async updateFaction(id, payload) {
+    const { data } = await api.patch(`${BASE}/factions/${id}`, payload);
+    return data.faction;
+  },
+  async removeFaction(id) {
+    await api.delete(`${BASE}/factions/${id}`);
+  },
+
+  async listFactionLeaders(factionId) {
+    const { data } = await api.get(`${BASE}/factions/${factionId}/leaders`);
+    return data.leaders;
+  },
+  async addFactionLeader(factionId, npcEntryId) {
+    const { data } = await api.post(`${BASE}/factions/${factionId}/leaders`, { npc_entry_id: npcEntryId });
+    return data.leader;
+  },
+  async removeFactionLeader(factionId, npcEntryId) {
+    await api.delete(`${BASE}/factions/${factionId}/leaders/${npcEntryId}`);
+  },
+
+  async listFactionMembers(factionId) {
+    const { data } = await api.get(`${BASE}/factions/${factionId}/members`);
+    return data.members;
+  },
+  async addFactionMember(factionId, memberType, memberId) {
+    const { data } = await api.post(`${BASE}/factions/${factionId}/members`, { member_type: memberType, member_id: memberId });
+    return data.member;
+  },
+  async removeFactionMember(factionId, memberType, memberId) {
+    await api.delete(`${BASE}/factions/${factionId}/members/${memberType}/${memberId}`);
+  },
+
   // Entries (NPC/Creature, STI via entity_type) — each carries a computed
   // `skills` array (dice rank per attribute-derived skill).
   async listEntries(entityType) {

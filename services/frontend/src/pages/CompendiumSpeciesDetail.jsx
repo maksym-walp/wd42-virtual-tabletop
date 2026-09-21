@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
+import SmartTextReader from '../components/SmartTextReader';
 
 export default function CompendiumSpeciesDetail() {
   const { id } = useParams();
@@ -20,7 +21,7 @@ export default function CompendiumSpeciesDetail() {
     setLoading(true);
     Promise.all([compendiumApi.getSpecies(id), compendiumApi.listSubspecies(id)])
       .then(([s, sub]) => { if (!cancelled) { setSpecies(s); setSubspecies(sub); } })
-      .catch(() => { if (!cancelled) navigate('/compendium/species', { replace: true }); })
+      .catch(() => { if (!cancelled) navigate('/compendium/taxonomy', { replace: true }); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [id]);
@@ -30,7 +31,7 @@ export default function CompendiumSpeciesDetail() {
     setDeleting(true);
     try {
       await compendiumApi.removeSpecies(id);
-      navigate('/compendium/species');
+      navigate('/compendium/taxonomy');
     } catch {
       setDeleting(false);
     }
@@ -50,8 +51,8 @@ export default function CompendiumSpeciesDetail() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/compendium/species" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> Види
+      <Link to="/compendium/taxonomy" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+        <ArrowLeft size={15} /> Народи та види
       </Link>
 
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-accent)' }}>
@@ -66,7 +67,9 @@ export default function CompendiumSpeciesDetail() {
         </div>
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{species.name}</h1>
-        {species.description && <p className="px-5 pb-3 text-sm text-text-muted">{species.description}</p>}
+        {species.description && (
+          <p className="px-5 pb-3 text-sm text-text-muted"><SmartTextReader text={species.description} /></p>
+        )}
 
         <div className="border-t border-border">
           <div className="flex items-center justify-between bg-bg px-5 py-2">

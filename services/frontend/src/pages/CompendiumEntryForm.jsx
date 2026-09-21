@@ -5,23 +5,26 @@ import compendiumApi from '../api/compendium';
 import equipmentApi from '../api/equipment';
 import spellbookApi from '../api/spellbook';
 import abilitiesApi from '../api/abilities';
-import { ATTRIBUTE_LABELS, ENTITY_TYPES } from '../constants/compendium';
+import { ATTRIBUTE_LABELS, ENTITY_TYPES, GENDER_OPTIONS, HEALTH_DICE } from '../constants/compendium';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CatalogAttachPicker from '../components/compendium/CatalogAttachPicker';
+import BirthDatePicker from '../components/compendium/BirthDatePicker';
 import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.compendium;
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
 const EMPTY = {
-  name: '', entity_type: 'npc', species_id: '', subspecies_id: '',
+  name: '', entity_type: 'npc', species_id: '', subspecies_id: '', race_id: '', people_id: '',
   description: '', history: '', motivation: '', backstory: '', faction: '', image_url: '',
   dexterity: 3, body: 3, intelligence: 3, wisdom: 3, charisma: 3,
   is_public: false,
+  age: '', gender: '', birth_calendar_id: '', birth_year: '', birth_month_id: '', birth_day: '',
+  health_die_override: '', private_notes: '',
 };
 
 export default function CompendiumEntryForm() {
@@ -34,6 +37,8 @@ export default function CompendiumEntryForm() {
   const [form, setForm] = useState({ ...EMPTY, entity_type: presetType });
   const [species, setSpecies] = useState([]);
   const [subspecies, setSubspecies] = useState([]);
+  const [races, setRaces] = useState([]);
+  const [peoples, setPeoples] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,11 +48,17 @@ export default function CompendiumEntryForm() {
   const [abilities, setAbilities] = useState([]);
 
   useEffect(() => { compendiumApi.listSpecies().then(setSpecies).catch(() => {}); }, []);
+  useEffect(() => { compendiumApi.listRaces().then(setRaces).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!form.species_id) { setSubspecies([]); return; }
     compendiumApi.listSubspecies(form.species_id).then(setSubspecies).catch(() => {});
   }, [form.species_id]);
+
+  useEffect(() => {
+    if (!form.race_id) { setPeoples([]); return; }
+    compendiumApi.listPeoples(form.race_id).then(setPeoples).catch(() => {});
+  }, [form.race_id]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -56,11 +67,16 @@ export default function CompendiumEntryForm() {
         setForm({
           name: e.name, entity_type: e.entity_type,
           species_id: e.species_id || '', subspecies_id: e.subspecies_id || '',
+          race_id: e.race_id || '', people_id: e.people_id || '',
           description: e.description || '', history: e.history || '',
           motivation: e.motivation || '', backstory: e.backstory || '', faction: e.faction || '',
           image_url: e.image_url || '',
           dexterity: e.dexterity, body: e.body, intelligence: e.intelligence, wisdom: e.wisdom, charisma: e.charisma,
           is_public: e.is_public,
+          age: e.age ?? '', gender: e.gender || '',
+          birth_calendar_id: e.birth_calendar_id || '', birth_year: e.birth_year ?? '',
+          birth_month_id: e.birth_month_id || '', birth_day: e.birth_day ?? '',
+          health_die_override: e.health_die_override || '', private_notes: e.private_notes || '',
         });
       })
       .catch(() => navigate('/compendium'))
@@ -79,6 +95,27 @@ export default function CompendiumEntryForm() {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const setAttr = (key) => (e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }));
 
+  // "Вид/раса" and "Підвид/народ" are one field each in the UI, backed by
+  // two different catalogs (species/subspecies vs race/people) under the
+  // hood — the value is prefixed to tell them apart, and picking either
+  // clears the other catalog's fields so only one stays set on the entry.
+  const taxonomyValue = form.species_id ? `species:${form.species_id}` : (form.race_id ? `race:${form.race_id}` : '');
+  const handleTaxonomyChange = (e) => {
+    const v = e.target.value;
+    if (!v) { setForm((f) => ({ ...f, species_id: '', subspecies_id: '', race_id: '', people_id: '' })); return; }
+    const [kind, rawId] = v.split(':');
+    setForm((f) => (kind === 'species'
+      ? { ...f, species_id: rawId, subspecies_id: '', race_id: '', people_id: '' }
+      : { ...f, race_id: rawId, people_id: '', species_id: '', subspecies_id: '' }));
+  };
+  const subKind = form.species_id ? 'species' : (form.race_id ? 'race' : null);
+  const subOptions = subKind === 'species' ? subspecies : (subKind === 'race' ? peoples : []);
+  const subValue = subKind === 'species' ? form.subspecies_id : (subKind === 'race' ? form.people_id : '');
+  const handleSubChange = (e) => {
+    const v = e.target.value;
+    setForm((f) => (subKind === 'species' ? { ...f, subspecies_id: v } : { ...f, people_id: v }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) { setError('Вкажи назву'); return; }
@@ -89,8 +126,18 @@ export default function CompendiumEntryForm() {
         ...form,
         species_id: form.species_id || null,
         subspecies_id: form.subspecies_id || null,
+        race_id: form.race_id || null,
+        people_id: form.people_id || null,
         image_url: form.image_url || null,
         ...Object.fromEntries(ATTRIBUTE_KEYS.map((k) => [k, Number(form[k])])),
+        age: form.age === '' ? null : Number(form.age),
+        gender: form.gender || null,
+        birth_calendar_id: form.birth_calendar_id || null,
+        birth_year: form.birth_year === '' ? null : Number(form.birth_year),
+        birth_month_id: form.birth_month_id || null,
+        birth_day: form.birth_day === '' ? null : Number(form.birth_day),
+        health_die_override: form.health_die_override || null,
+        private_notes: form.private_notes || null,
       };
       if (isEdit) {
         await compendiumApi.updateEntry(id, payload);
@@ -114,7 +161,7 @@ export default function CompendiumEntryForm() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
       <Link to={backTo} className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
-        <ArrowLeft size={15} /> НІПи та істоти
+        <ArrowLeft size={15} /> {isEdit ? form.name : (isNpc ? 'НІПи' : 'Бестіарій')}
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
@@ -139,22 +186,25 @@ export default function CompendiumEntryForm() {
           </Field>
 
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Вид">
-              <select
-                className={inputClass} value={form.species_id}
-                onChange={(e) => setForm((f) => ({ ...f, species_id: e.target.value, subspecies_id: '' }))}
-              >
+            <Field label="Вид/раса">
+              <select className={inputClass} value={taxonomyValue} onChange={handleTaxonomyChange}>
                 <option value="">Не обрано</option>
-                {species.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {species.length > 0 && (
+                  <optgroup label="Види">
+                    {species.map((s) => <option key={`species:${s.id}`} value={`species:${s.id}`}>{s.name}</option>)}
+                  </optgroup>
+                )}
+                {races.length > 0 && (
+                  <optgroup label="Раси">
+                    {races.map((r) => <option key={`race:${r.id}`} value={`race:${r.id}`}>{r.name}</option>)}
+                  </optgroup>
+                )}
               </select>
             </Field>
-            <Field label="Підвид">
-              <select
-                className={inputClass} value={form.subspecies_id} onChange={set('subspecies_id')}
-                disabled={!form.species_id}
-              >
+            <Field label="Підвид/народ">
+              <select className={inputClass} value={subValue} onChange={handleSubChange} disabled={!subKind}>
                 <option value="">Не обрано</option>
-                {subspecies.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {subOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
             </Field>
           </div>
@@ -177,9 +227,20 @@ export default function CompendiumEntryForm() {
               </Field>
             ))}
           </div>
+          {isNpc && (
+            <Field
+              label="Кубик здоров'я" className="mt-4"
+              hint="За замовчуванням береться з обраного виду/раси (або d6, якщо не обрано) — тут можна задати власний."
+            >
+              <select className={inputClass} value={form.health_die_override} onChange={set('health_die_override')}>
+                <option value="">Успадкувати від виду/раси</option>
+                {HEALTH_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </Field>
+          )}
         </FormSection>
 
-        {isNpc ? (
+        {isNpc && (
           <FormSection title="Опис">
             <SmartTextarea
               label="Опис" value={form.description} onChange={set('description')} rows={4}
@@ -200,7 +261,36 @@ export default function CompendiumEntryForm() {
               />
             </Field>
           </FormSection>
-        ) : (
+        )}
+
+        {isNpc && (
+          <FormSection title="Біографія">
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Вік">
+                <input type="number" min={0} className={inputClass} value={form.age} onChange={set('age')} />
+              </Field>
+              <Field label="Стать">
+                <select className={inputClass} value={form.gender} onChange={set('gender')}>
+                  <option value="">Не вказано</option>
+                  {Object.entries(GENDER_OPTIONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </Field>
+            </div>
+            <Field label="Дата народження">
+              <BirthDatePicker
+                value={{
+                  calendarId: form.birth_calendar_id, year: form.birth_year,
+                  monthId: form.birth_month_id, day: form.birth_day,
+                }}
+                onChange={(v) => setForm((f) => ({
+                  ...f, birth_calendar_id: v.calendarId, birth_year: v.year, birth_month_id: v.monthId, birth_day: v.day,
+                }))}
+              />
+            </Field>
+          </FormSection>
+        )}
+
+        {!isNpc && (
           <FormSection title="Опис">
             <SmartTextarea
               label="Опис" value={form.description} onChange={set('description')} rows={4}
@@ -246,6 +336,16 @@ export default function CompendiumEntryForm() {
         )}
         {!isEdit && (
           <p className="text-sm text-text-dim">Збережи запис, щоб додати спорядження, заклинання й вміння.</p>
+        )}
+
+        {isNpc && (
+          <FormSection title="Приватні нотатки">
+            <SmartTextarea
+              label="Нотатки" value={form.private_notes} onChange={set('private_notes')} rows={4}
+              hint="Бачить лише творець запису та майстри гри — інші гравці цей текст не побачать, навіть якщо запис публічний."
+              placeholder="Таємні мотиви, GM-нотатки для сюжету..."
+            />
+          </FormSection>
         )}
 
         <FormSection title="Налаштування">

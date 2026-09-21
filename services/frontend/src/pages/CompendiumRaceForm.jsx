@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
-import { HEALTH_DICE } from '../constants/compendium';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -11,61 +10,66 @@ import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.compendium;
 
-const EMPTY = { name: '', description: '', is_public: false, health_die: 'd6' };
+const EMPTY = { name: '', description: '', origin: '', is_public: false };
 
-// Same shape for species and subspecies (subspecies just adds a required
-// species_id) — one form, not two near-identical copies.
-export default function CompendiumSpeciesForm({ isSubspecies = false }) {
+// Same shape for race and people (people just adds a required race_id and
+// an origin field) — one form, not two near-identical copies. Mirrors
+// CompendiumSpeciesForm.jsx, minus health_die (races/peoples don't carry one).
+export default function CompendiumRaceForm({ isPeople = false }) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const presetSpeciesId = searchParams.get('species_id') || '';
+  const presetRaceId = searchParams.get('race_id') || '';
 
   const [form, setForm] = useState(EMPTY);
-  const [speciesId, setSpeciesId] = useState(presetSpeciesId);
-  const [speciesOptions, setSpeciesOptions] = useState([]);
+  const [raceId, setRaceId] = useState(presetRaceId);
+  const [raceOptions, setRaceOptions] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isSubspecies) compendiumApi.listSpecies().then(setSpeciesOptions).catch(() => {});
-  }, [isSubspecies]);
+    if (isPeople) compendiumApi.listRaces().then(setRaceOptions).catch(() => {});
+  }, [isPeople]);
 
   useEffect(() => {
     if (!isEdit) return;
-    const load = isSubspecies ? compendiumApi.getSubspecies(id) : compendiumApi.getSpecies(id);
+    const load = isPeople ? compendiumApi.getPeople(id) : compendiumApi.getRace(id);
     load
-      .then((s) => {
-        setForm({ name: s.name, description: s.description || '', is_public: s.is_public, health_die: s.health_die || 'd6' });
-        if (isSubspecies) setSpeciesId(s.species_id);
+      .then((r) => {
+        setForm({ name: r.name, description: r.description || '', origin: r.origin || '', is_public: r.is_public });
+        if (isPeople) setRaceId(r.race_id);
       })
       .catch(() => navigate('/compendium/taxonomy'))
       .finally(() => setLoading(false));
-  }, [id, isEdit, isSubspecies]);
+  }, [id, isEdit, isPeople]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setError(isSubspecies ? 'Вкажи назву підвиду' : 'Вкажи назву виду'); return; }
-    if (isSubspecies && !speciesId) { setError('Обери вид'); return; }
+    if (!form.name.trim()) { setError(isPeople ? 'Вкажи назву народу' : 'Вкажи назву раси'); return; }
+    if (isPeople && !raceId) { setError('Обери расу'); return; }
     setSaving(true);
     setError('');
     try {
-      if (isSubspecies) {
+      if (isPeople) {
+        const payload = { name: form.name, description: form.description, origin: form.origin, is_public: form.is_public };
         if (isEdit) {
-          await compendiumApi.updateSubspecies(id, form);
-          navigate(`/compendium/species/${speciesId}`);
+          await compendiumApi.updatePeople(id, payload);
+          navigate(`/compendium/races/${raceId}`);
         } else {
-          await compendiumApi.createSubspecies({ ...form, species_id: speciesId });
-          navigate(`/compendium/species/${speciesId}`);
+          await compendiumApi.createPeople({ ...payload, race_id: raceId });
+          navigate(`/compendium/races/${raceId}`);
         }
-      } else if (isEdit) {
-        await compendiumApi.updateSpecies(id, form);
-        navigate(`/compendium/species/${id}`);
       } else {
-        const created = await compendiumApi.createSpecies(form);
-        navigate(`/compendium/species/${created.id}`);
+        const payload = { name: form.name, description: form.description, is_public: form.is_public };
+        if (isEdit) {
+          await compendiumApi.updateRace(id, payload);
+          navigate(`/compendium/races/${id}`);
+        } else {
+          const created = await compendiumApi.createRace(payload);
+          navigate(`/compendium/races/${created.id}`);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -76,7 +80,7 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
-  const backTo = isSubspecies && speciesId ? `/compendium/species/${speciesId}` : '/compendium/taxonomy';
+  const backTo = isPeople && raceId ? `/compendium/races/${raceId}` : '/compendium/taxonomy';
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
@@ -85,21 +89,21 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
       </Link>
 
       <h1 className="mb-6 font-display text-2xl text-accent">
-        {isEdit ? 'Редагування' : 'Новий'} {isSubspecies ? 'підвид' : 'вид'}
+        {isEdit ? 'Редагування' : 'Новий'} {isPeople ? 'народ' : 'раса'}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <FormSection title="Загальне">
-          {!isSubspecies && (
+          {!isPeople && (
             <Field label="Тип" className="mb-4">
-              <KindSwitch kinds={domain.kindSwitch} active="species" />
+              <KindSwitch kinds={domain.kindSwitch} active="race" />
             </Field>
           )}
-          {isSubspecies && (
-            <Field label="Вид" className="mb-4">
-              <select className={inputClass} value={speciesId} onChange={(e) => setSpeciesId(e.target.value)} required>
-                <option value="">Обери вид</option>
-                {speciesOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {isPeople && (
+            <Field label="Раса" className="mb-4">
+              <select className={inputClass} value={raceId} onChange={(e) => setRaceId(e.target.value)} required>
+                <option value="">Обери расу</option>
+                {raceOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </Field>
           )}
@@ -111,18 +115,17 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
             />
           </Field>
           <SmartTextarea
-            label="Опис" className="mb-4" rows={4} value={form.description}
+            label="Опис" className={isPeople ? 'mb-4' : ''} rows={4} value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder="Загальні риси, культура, середовище проживання..."
           />
-          <Field label="Кубик здоров'я" hint="Використовується для розрахунку здоровʼя записів цього виду/підвиду.">
-            <select
-              className={inputClass} value={form.health_die}
-              onChange={(e) => setForm((f) => ({ ...f, health_die: e.target.value }))}
-            >
-              {HEALTH_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </Field>
+          {isPeople && (
+            <SmartTextarea
+              label="Походження народу" hint="Звідки походить цей народ, його історія в межах раси."
+              rows={3} value={form.origin}
+              onChange={(e) => setForm((f) => ({ ...f, origin: e.target.value }))}
+            />
+          )}
         </FormSection>
 
         <FormSection title="Налаштування">

@@ -21,3 +21,12 @@ export const ATTRIBUTE_LABELS = {
 // Health die rank a species/subspecies is authored with — matches
 // services/compendium/src/constants/health-dice.js HEALTH_DICE.
 export const HEALTH_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+
+// NPC-only gender field — fixed list, matches the backend CHECK constraint
+// on compendium_entries.gender (74-compendium-races.sql/75-compendium-factions.sql).
+export const GENDER_OPTIONS = {
+  male: 'Чоловіча',
+  female: 'Жіноча',
+  other: 'Інша',
+  unspecified: 'Не вказано',
+};
