@@ -8,6 +8,7 @@ import compendiumApi from '../api/compendium';
 import { eventDateRangeLabel, eventPlaceLabel, eventSortKey } from '../utils/chronologyEvent';
 import CatalogTabs from '../components/CatalogTabs';
 import EventForm from '../components/chronology/EventForm';
+import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Sheet from '../components/ui/Sheet';
@@ -231,7 +232,7 @@ function EventList({ events, months, calendar, locationsById, charactersById, ca
                 {eventDateRangeLabel(e, months, calendar.current_era_name, calendar.previous_era_name)}
                 {place && ` · ${place}`}
               </p>
-              {e.description && <p className="mt-1 text-xs text-text-dim">{e.description}</p>}
+              {e.description && <SmartTextReader text={e.description} className="mt-1 text-xs text-text-dim" />}
               {e.participant_ids?.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {e.participant_ids.map((pid) => (

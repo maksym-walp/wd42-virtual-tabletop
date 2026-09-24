@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { formatDuration } from '../constants/abilities';
 import { useTheme } from '../context/ThemeContext';
+import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
 
@@ -55,8 +56,10 @@ export default function AbilityCard({ ability }) {
         </div>
       )}
 
-      {!ability.image_url && ability.description && (
-        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{ability.description}</p>
+      {!ability.image_url && (ability.narrative_desc || ability.mechanical_desc) && (
+        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
+          {htmlToPreviewText(ability.narrative_desc || ability.mechanical_desc)}
+        </p>
       )}
     </Link>
   );

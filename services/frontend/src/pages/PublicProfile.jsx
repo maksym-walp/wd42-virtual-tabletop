@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState';
 import SpellCard from '../components/SpellCard';
 import AbilityCard from '../components/AbilityCard';
 import EquipmentCard from '../components/EquipmentCard';
+import { htmlToPreviewText } from '../utils/richText';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK, RACES } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 
@@ -157,7 +158,7 @@ function PublicCollectionCard({ collection: col }) {
         <h2 className="font-display text-lg text-text">{col.name}</h2>
         <Badge className="shrink-0 border border-border text-text-dim">{COLLECTION_LABELS[col.domain] ?? col.domain}</Badge>
       </div>
-      {col.description && <p className="text-sm text-text-dim line-clamp-3">{col.description}</p>}
+      {col.description && <p className="text-sm text-text-dim line-clamp-3">{htmlToPreviewText(col.description)}</p>}
       <Link
         to={`/${col.domain}/collections/public/${col.id}`}
         className="mt-auto inline-flex items-center gap-1 text-sm text-accent"

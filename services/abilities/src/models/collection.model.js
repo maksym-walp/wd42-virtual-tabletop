@@ -5,7 +5,7 @@ const { deleteWithTrash } = require('../utils/trash');
 // не окрема таблиця), тож звʼязка — пряма FK на abilities.entries.
 const itemsSelect = `COALESCE(
     (SELECT jsonb_agg(jsonb_build_object(
-        'id', a.id, 'name', a.name, 'description', a.description,
+        'id', a.id, 'name', a.name, 'mechanical_desc', a.mechanical_desc, 'narrative_desc', a.narrative_desc,
         'type', 'ability',
         'archetypes', a.archetypes,
         'is_maneuver', a.is_maneuver, 'duration_value', a.duration_value, 'duration_unit', a.duration_unit,

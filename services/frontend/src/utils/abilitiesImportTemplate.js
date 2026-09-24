@@ -16,7 +16,8 @@ export function buildAbilitiesImportTemplate() {
 // Поля:
 //   name                  — обов'язкове, рядок
 //   archetypes            — обов'язкове, масив з: fighter (Бійці), spellcaster (Чаклуни), rogue (Пройдисвіти) — хоча б один
-//   description           — рядок або null
+//   mechanical_desc       — рядок або null — що відбувається механічно
+//   narrative_desc        — рядок або null — як це виглядає у світі гри
 //   is_public             — true / false
 //   is_maneuver           — true / false — чи може використовуватись як маневр / дія в бою
 //   duration_value        — число або null (має сенс лише коли duration_unit не "instant"/"permanent")
@@ -30,7 +31,8 @@ export function buildAbilitiesImportTemplate() {
   {
     "name": "Приклад: Стрімкий випад",
     "archetypes": ["fighter", "rogue"],
-    "description": "Різкий випад уперед, що дозволяє атакувати ще раз цього ж ходу.",
+    "mechanical_desc": "Різкий випад уперед, що дозволяє атакувати ще раз цього ж ходу.",
+    "narrative_desc": null,
     "is_public": true,
     "is_maneuver": true,
     "duration_value": 2,

@@ -26,6 +26,8 @@ import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import IntInput from '../components/ui/IntInput';
 import SmartTextReader from '../components/SmartTextReader';
+import SmartTextarea from '../components/ui/SmartTextarea';
+import { htmlToPreviewText } from '../utils/richText';
 import RollButton from '../components/RollButton';
 import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
@@ -1482,14 +1484,10 @@ function SpellDetailModal({ spell, spellId, onClose }) {
             <ModalStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
           </div>
           {spell.narrative_desc && (
-            <p className="mb-3 text-sm italic leading-relaxed text-text-dim">
-              <SmartTextReader text={spell.narrative_desc} />
-            </p>
+            <SmartTextReader text={spell.narrative_desc} className="mb-3 text-sm italic leading-relaxed text-text-dim" />
           )}
           {spell.mechanical_desc && (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">
-              <SmartTextReader text={spell.mechanical_desc} />
-            </p>
+            <SmartTextReader text={spell.mechanical_desc} className="text-sm leading-relaxed text-text-muted" />
           )}
         </div>
       </div>
@@ -1814,7 +1812,9 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
           <div key={entry.ability_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
             <Link to={a ? `/abilities/${a.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
               <span className="text-sm text-text">{a?.name ?? '(невідоме)'}</span>
-              {a?.description && <span className="text-xs text-text-dim">{a.description}</span>}
+              {(a?.narrative_desc || a?.mechanical_desc) && (
+                <span className="text-xs text-text-dim">{htmlToPreviewText(a.narrative_desc || a.mechanical_desc)}</span>
+              )}
               {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
             </Link>
             {is_owner && (
@@ -2009,21 +2009,33 @@ function NotesTab({ c, is_owner, patchCharacter }) {
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_1fr]">
       <div>
         <label className="mb-1 block text-xs text-text-dim">Передісторія</label>
-        <textarea className={`${inputClass} w-full resize-y`} rows={10}
-          value={c.backstory ?? ''}
-          onChange={e => patchCharacter({ backstory: e.target.value })}
-          placeholder="Розкажіть про минуле персонажа..."
-          disabled={!is_owner}
-        />
+        {is_owner ? (
+          <SmartTextarea
+            rows={10}
+            value={c.backstory ?? ''}
+            onChange={e => patchCharacter({ backstory: e.target.value })}
+            placeholder="Розкажіть про минуле персонажа..."
+          />
+        ) : c.backstory ? (
+          <SmartTextReader text={c.backstory} className="text-sm text-text" />
+        ) : (
+          <p className="text-sm text-text-dim">Передісторії ще немає.</p>
+        )}
       </div>
       <div>
         <label className="mb-1 block text-xs text-text-dim">Нотатки гравця</label>
-        <textarea className={`${inputClass} w-full resize-y`} rows={10}
-          value={c.notes ?? ''}
-          onChange={e => patchCharacter({ notes: e.target.value })}
-          placeholder="Квести, контакти, важливі деталі..."
-          disabled={!is_owner}
-        />
+        {is_owner ? (
+          <SmartTextarea
+            rows={10}
+            value={c.notes ?? ''}
+            onChange={e => patchCharacter({ notes: e.target.value })}
+            placeholder="Квести, контакти, важливі деталі..."
+          />
+        ) : c.notes ? (
+          <SmartTextReader text={c.notes} className="text-sm text-text" />
+        ) : (
+          <p className="text-sm text-text-dim">Нотаток ще немає.</p>
+        )}
       </div>
     </div>
   );

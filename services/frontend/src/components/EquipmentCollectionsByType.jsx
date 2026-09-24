@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
-import DiceFormulaText from './DiceFormulaText';
+import { htmlToPreviewText } from '../utils/richText';
 
 // Equipment's Колекції tab groups collections by which type-table their
 // items belong to (see EquipmentCatalog.jsx / /equipment/weapon|armor|items|
@@ -80,7 +80,7 @@ function CollectionsScrollRow({ label, collections, basePath }) {
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
               {!c.image_url && c.description && (
                 <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
-                  <DiceFormulaText text={c.description} />
+                  {htmlToPreviewText(c.description)}
                 </p>
               )}
             </Link>

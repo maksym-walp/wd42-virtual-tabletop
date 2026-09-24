@@ -10,7 +10,7 @@ import CatalogTabs from '../components/CatalogTabs';
 import FilterAccordion from '../components/ui/FilterAccordion';
 import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EquipmentCollectionsByType from '../components/EquipmentCollectionsByType';
-import DiceFormulaText from '../components/DiceFormulaText';
+import { htmlToPreviewText } from '../utils/richText';
 import { pluralizeUk } from '../utils/pluralize';
 
 export default function CollectionsList({ domainKey }) {
@@ -94,7 +94,7 @@ export default function CollectionsList({ domainKey }) {
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{c.name}</h3>
               {!c.image_url && c.description && (
                 <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
-                  <DiceFormulaText text={c.description} />
+                  {htmlToPreviewText(c.description)}
                 </p>
               )}
             </Link>

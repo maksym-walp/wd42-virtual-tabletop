@@ -107,8 +107,7 @@ export default function LocationVersionFields({ value, onChange, isBase = false 
         onChange={(e) => set({ description: e.target.value })}
       />
 
-      <textarea
-        className={`${inputClass} resize-y`}
+      <SmartTextarea
         rows={2}
         placeholder="Нотатка майстра (лише для вас)"
         value={value.gm_note || ''}

@@ -130,7 +130,7 @@ export default function EquipmentView() {
 
         {item.description && (
           <Section title="Опис">
-            <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={item.description} /></p>
+            <SmartTextReader text={item.description} className="text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 

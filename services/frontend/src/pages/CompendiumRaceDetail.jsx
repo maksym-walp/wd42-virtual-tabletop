@@ -5,6 +5,7 @@ import compendiumApi from '../api/compendium';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
+import { htmlToPreviewText } from '../utils/richText';
 
 // Mirrors CompendiumSpeciesDetail.jsx, minus health_die, plus each people's
 // origin field.
@@ -67,7 +68,7 @@ export default function CompendiumRaceDetail() {
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{race.name}</h1>
         {race.description && (
-          <p className="px-5 pb-3 text-sm text-text-muted"><SmartTextReader text={race.description} /></p>
+          <SmartTextReader text={race.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}
 
         <div className="border-t border-border">
@@ -83,7 +84,7 @@ export default function CompendiumRaceDetail() {
               <div key={p.id} className="flex items-center justify-between border-b border-bg py-2 last:border-0">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm text-text">{p.name}</span>
-                  {p.description && <span className="text-xs text-text-dim">{p.description}</span>}
+                  {p.description && <span className="text-xs text-text-dim">{htmlToPreviewText(p.description)}</span>}
                   {p.origin && <span className="text-xs italic text-text-dim">Походження: {p.origin}</span>}
                 </div>
                 {(p.is_owner || isAdmin) && (

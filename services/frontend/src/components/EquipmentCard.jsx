@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ARMOR_WEIGHTS, weaponModifierLabel } from '../constants/equipment';
+import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
 
@@ -34,7 +35,7 @@ export default function EquipmentCard({ item }) {
       )}
 
       {!thumbnail && item.description && (
-        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{item.description}</p>
+        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(item.description)}</p>
       )}
     </Link>
   );

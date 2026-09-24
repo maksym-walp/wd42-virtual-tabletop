@@ -101,15 +101,13 @@ export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin,
           )}
 
           {version?.description && (
-            <div className="whitespace-pre-wrap text-sm leading-relaxed text-text">
-              <SmartTextReader text={version.description} />
-            </div>
+            <SmartTextReader text={version.description} className="text-sm leading-relaxed text-text" />
           )}
 
           {isGm && version?.gm_note && (
             <div className="rounded-lg border border-gold/50 bg-gold/10 p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gold">Нотатка майстра</p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{version.gm_note}</p>
+              <SmartTextReader text={version.gm_note} className="text-sm leading-relaxed text-text" />
             </div>
           )}
 

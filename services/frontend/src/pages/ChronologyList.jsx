@@ -6,6 +6,7 @@ import chronologyApi from '../api/chronology';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import SmartTextReader from '../components/SmartTextReader';
 import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
 import Field, { inputClass } from '../components/ui/Field';
@@ -90,7 +91,7 @@ function CalendarCard({ calendar: c, canManage, onClick, onManage }) {
           )}
         </div>
       </div>
-      {c.description && <p className="text-sm text-text-dim">{c.description}</p>}
+      {c.description && <SmartTextReader text={c.description} className="text-sm text-text-dim" />}
     </Card>
   );
 }

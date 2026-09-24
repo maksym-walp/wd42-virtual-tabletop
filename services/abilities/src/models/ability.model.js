@@ -79,18 +79,18 @@ const AbilityModel = {
 
   async create(userId, data) {
     const {
-      name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
+      name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
-         (user_id, name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
+         (user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
           is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
       [
-        userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
+        userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null,
       ]
     );
@@ -99,20 +99,20 @@ const AbilityModel = {
 
   async update(id, userId, data, isAdmin = false) {
     const {
-      name, archetypes, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
+      name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id,
     } = data;
 
     const { rows } = await pool.query(
       `UPDATE abilities.entries
-       SET name=$3, archetypes=$4, description=$5, is_public=$6,
-           prerequisite_node_ids=$7, prerequisite_logic=$8, image_url=$9,
-           is_maneuver=$10, duration_value=$11, duration_unit=$12,
-           lore_creator=$13, lore_creator_npc_id=$14, updated_at=NOW()
-       WHERE id=$1 AND (user_id=$2 OR $15 = true)
+       SET name=$3, archetypes=$4, mechanical_desc=$5, narrative_desc=$6, is_public=$7,
+           prerequisite_node_ids=$8, prerequisite_logic=$9, image_url=$10,
+           is_maneuver=$11, duration_value=$12, duration_unit=$13,
+           lore_creator=$14, lore_creator_npc_id=$15, updated_at=NOW()
+       WHERE id=$1 AND (user_id=$2 OR $16 = true)
        RETURNING *`,
       [
-        id, userId, name, archetypes ?? [], description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
+        id, userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
       ]
     );
@@ -155,7 +155,7 @@ const AbilityModel = {
     if (!valid.length) return 0;
 
     const columns = [
-      'user_id', 'name', 'archetypes', 'description', 'is_public',
+      'user_id', 'name', 'archetypes', 'mechanical_desc', 'narrative_desc', 'is_public',
       'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id',
     ];
 
@@ -166,7 +166,8 @@ const AbilityModel = {
         userId,
         record.name,
         record.archetypes ?? [],
-        record.description ?? null,
+        record.mechanical_desc ?? null,
+        record.narrative_desc ?? null,
         record.is_public ?? false,
         record.is_maneuver ?? false,
         record.duration_value ?? null,

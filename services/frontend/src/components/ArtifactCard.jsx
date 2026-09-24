@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { RARITIES } from '../constants/artifacts';
+import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 
 export default function ArtifactCard({ artifact }) {
@@ -39,7 +40,7 @@ export default function ArtifactCard({ artifact }) {
       )}
 
       {!artifact.image_url && artifact.description && (
-        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{artifact.description}</p>
+        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(artifact.description)}</p>
       )}
     </Link>
   );

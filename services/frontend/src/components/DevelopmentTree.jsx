@@ -8,6 +8,7 @@ import {
   computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y,
 } from '../utils/skillTreeLayout';
 import Sheet from './ui/Sheet';
+import SmartTextReader from './SmartTextReader';
 
 const TREE_NODE_R = 22;
 const TREE_ARROW_GAP = 5;
@@ -395,7 +396,7 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
     >
       {node.is_root && <span className="mb-2 block text-xs text-gold">★ Кореневий вузол</span>}
 
-      {node.description && <p className="mb-1 text-sm leading-relaxed text-text-muted">{node.description}</p>}
+      {node.description && <SmartTextReader text={node.description} className="mb-1 text-sm leading-relaxed text-text-muted" />}
 
       {effectLines.length > 0 && (
         <div className="mt-2 rounded-md border border-border bg-bg p-3">

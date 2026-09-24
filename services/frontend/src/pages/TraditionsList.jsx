@@ -9,6 +9,7 @@ import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import CatalogTabs from '../components/CatalogTabs';
+import { htmlToPreviewText } from '../utils/richText';
 
 export default function TraditionsList() {
   const { user } = useAuth();
@@ -101,7 +102,7 @@ export default function TraditionsList() {
                 <p className="px-3.5 pb-1 text-xs italic text-text-dim">Засновники: {t.founders}</p>
               )}
               {t.description && (
-                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{t.description}</p>
+                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(t.description)}</p>
               )}
             </div>
           ))}

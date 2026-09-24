@@ -6,6 +6,7 @@ import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
+import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 
 export default function ArtifactView() {
@@ -96,7 +97,7 @@ export default function ArtifactView() {
 
         {artifact.description && (
           <Section title="Опис">
-            <p className="text-[0.95rem] leading-relaxed text-text">{artifact.description}</p>
+            <SmartTextReader text={artifact.description} className="text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 

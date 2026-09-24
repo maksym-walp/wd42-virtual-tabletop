@@ -170,16 +170,16 @@ export default function CompendiumEntryView() {
             <Section title="Опис">
               <div className="flex flex-col gap-3">
                 {entry.description && (
-                  <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={entry.description} /></p>
+                  <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
                 )}
                 {entry.motivation && (
                   <Subfield label="Мотивація">
-                    <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={entry.motivation} /></p>
+                    <SmartTextReader text={entry.motivation} className="text-[0.95rem] leading-relaxed text-text" />
                   </Subfield>
                 )}
                 {entry.backstory && (
                   <Subfield label="Передісторія">
-                    <p className="text-[0.95rem] italic leading-relaxed text-text-dim"><SmartTextReader text={entry.backstory} /></p>
+                    <SmartTextReader text={entry.backstory} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
                   </Subfield>
                 )}
                 {entry.faction && (
@@ -195,11 +195,11 @@ export default function CompendiumEntryView() {
             <Section title="Опис">
               <div className="flex flex-col gap-3">
                 {entry.description && (
-                  <p className="text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={entry.description} /></p>
+                  <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
                 )}
                 {entry.history && (
                   <Subfield label="Походження">
-                    <p className="text-[0.95rem] italic leading-relaxed text-text-dim"><SmartTextReader text={entry.history} /></p>
+                    <SmartTextReader text={entry.history} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
                   </Subfield>
                 )}
               </div>
@@ -226,7 +226,7 @@ export default function CompendiumEntryView() {
         {isNpc && entry.private_notes && (
           <Section title="Приватні нотатки">
             <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Бачиш лише ти та майстри гри</p>
-            <p className="mt-2 text-[0.95rem] leading-relaxed text-text"><SmartTextReader text={entry.private_notes} /></p>
+            <SmartTextReader text={entry.private_notes} className="mt-2 text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 

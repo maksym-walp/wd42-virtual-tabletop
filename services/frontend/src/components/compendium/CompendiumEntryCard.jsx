@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ENTITY_TYPES } from '../../constants/compendium';
+import { htmlToPreviewText } from '../../utils/richText';
 
 export default function CompendiumEntryCard({ entry }) {
   const type = ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc;
@@ -25,7 +26,7 @@ export default function CompendiumEntryCard({ entry }) {
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{entry.name}</h3>
 
       {!entry.image_url && entry.description && (
-        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{entry.description}</p>
+        <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(entry.description)}</p>
       )}
     </Link>
   );

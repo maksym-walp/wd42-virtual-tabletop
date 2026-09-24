@@ -155,3 +155,29 @@
 .leaflet-bar a:hover {
   background: var(--color-surface-hover);
 }
+
+/* SmartTextarea (editable) / SmartTextReader (read-only) — shared TipTap
+   content styling. Browser UA paragraph margins collapse to a tighter,
+   app-consistent rhythm; everything else (color, size, line-height) is left
+   to whatever className the caller passes to EditorContent/SmartTextReader. */
+.ProseMirror p {
+  margin: 0 0 0.5em;
+}
+.ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+.ProseMirror a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ProseMirror:focus {
+  outline: none;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-dim);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

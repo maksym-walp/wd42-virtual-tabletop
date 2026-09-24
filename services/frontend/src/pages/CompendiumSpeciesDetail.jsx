@@ -5,6 +5,7 @@ import compendiumApi from '../api/compendium';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
+import { htmlToPreviewText } from '../utils/richText';
 
 export default function CompendiumSpeciesDetail() {
   const { id } = useParams();
@@ -68,7 +69,7 @@ export default function CompendiumSpeciesDetail() {
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{species.name}</h1>
         {species.description && (
-          <p className="px-5 pb-3 text-sm text-text-muted"><SmartTextReader text={species.description} /></p>
+          <SmartTextReader text={species.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}
 
         <div className="border-t border-border">
@@ -86,7 +87,7 @@ export default function CompendiumSpeciesDetail() {
                   <span className="text-sm text-text">
                     {sub.name} <span className="text-xs text-text-dim">({sub.health_die || 'd6'})</span>
                   </span>
-                  {sub.description && <span className="text-xs text-text-dim">{sub.description}</span>}
+                  {sub.description && <span className="text-xs text-text-dim">{htmlToPreviewText(sub.description)}</span>}
                 </div>
                 {(sub.is_owner || isAdmin) && (
                   <div className="flex items-center gap-2">

@@ -11,6 +11,7 @@ import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
 import CatalogTabs from '../components/CatalogTabs';
 import EventForm from '../components/chronology/EventForm';
+import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
@@ -489,7 +490,7 @@ function DayEventsSheet({
                       <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">Кампанія</span>
                     )}
                   </div>
-                  {e.description && <p className="mt-1 text-xs text-text-dim">{e.description}</p>}
+                  {e.description && <SmartTextReader text={e.description} className="mt-1 text-xs text-text-dim" />}
                   {eventPlaceLabel(e, locationsById) && (
                     <p className="mt-1 flex items-center gap-1 text-xs text-text-dim">
                       <MapPin size={11} /> {eventPlaceLabel(e, locationsById)}

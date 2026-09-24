@@ -8,6 +8,7 @@ import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import AuthorBadge from '../components/AuthorBadge';
+import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -97,9 +98,15 @@ export default function AbilityView() {
         <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{ability.name}</h1>
         <AuthorBadge username={ability.owner_username} size="sm" className="px-5 pb-2" />
 
-        {ability.description && (
-          <Section title="Опис">
-            <p className="text-[0.95rem] leading-relaxed text-text">{ability.description}</p>
+        {ability.mechanical_desc && (
+          <Section title="Механічний опис">
+            <SmartTextReader text={ability.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
+          </Section>
+        )}
+
+        {ability.narrative_desc && (
+          <Section title="Наративний опис">
+            <SmartTextReader text={ability.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
           </Section>
         )}
 

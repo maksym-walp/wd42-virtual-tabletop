@@ -7,6 +7,7 @@ import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ImageUploadField from '../components/ui/ImageUploadField';
+import SmartTextarea from '../components/ui/SmartTextarea';
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
@@ -239,14 +240,11 @@ export default function ChronologyBuilder() {
               maxLength={200}
             />
           </Field>
-          <Field label="Опис" className="mb-4">
-            <textarea
-              rows={3}
-              className={`${inputClass} resize-y`}
-              value={settings.description}
-              onChange={(e) => setSettings((s) => ({ ...s, description: e.target.value }))}
-            />
-          </Field>
+          <SmartTextarea
+            label="Опис" className="mb-4" rows={3}
+            value={settings.description}
+            onChange={(e) => setSettings((s) => ({ ...s, description: e.target.value }))}
+          />
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Назва поточної ери">
               <input

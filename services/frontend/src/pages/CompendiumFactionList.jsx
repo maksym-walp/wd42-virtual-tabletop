@@ -8,6 +8,7 @@ import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
+import { htmlToPreviewText } from '../utils/richText';
 
 export default function CompendiumFactionList() {
   const [factions, setFactions] = useState([]);
@@ -68,7 +69,7 @@ export default function CompendiumFactionList() {
               )}
               <div className="min-w-0">
                 <h3 className="truncate font-display text-lg text-accent">{f.name}</h3>
-                {f.description && <p className="line-clamp-2 text-sm italic leading-snug text-text-dim">{f.description}</p>}
+                {f.description && <p className="line-clamp-2 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(f.description)}</p>}
               </div>
             </Link>
           ))}

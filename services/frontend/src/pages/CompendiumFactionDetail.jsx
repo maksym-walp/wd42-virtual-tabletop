@@ -69,7 +69,7 @@ export default function CompendiumFactionDetail() {
           </div>
         </div>
         {faction.description && (
-          <p className="px-5 pb-3 pt-3 text-sm text-text-muted"><SmartTextReader text={faction.description} /></p>
+          <SmartTextReader text={faction.description} className="px-5 pb-3 pt-3 text-sm text-text-muted" />
         )}
 
         <div className="border-t border-border">

@@ -8,7 +8,7 @@ const EntryAbilityModel = {
               CASE WHEN ae.id IS NULL THEN NULL ELSE jsonb_build_object(
                 'id', ae.id, 'name', ae.name, 'is_maneuver', ae.is_maneuver,
                 'duration_value', ae.duration_value, 'duration_unit', ae.duration_unit,
-                'description', ae.description, 'is_public', ae.is_public
+                'mechanical_desc', ae.mechanical_desc, 'narrative_desc', ae.narrative_desc, 'is_public', ae.is_public
               ) END AS ability
        FROM compendium.compendium_abilities ca
        LEFT JOIN abilities.entries ae ON ae.id = ca.ability_id

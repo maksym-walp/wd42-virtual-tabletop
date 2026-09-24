@@ -12,7 +12,7 @@ const AbilityModel = {
     const { rows } = await pool.query(
       `SELECT ca.*,
               CASE WHEN ae.id IS NULL THEN NULL ELSE jsonb_build_object(
-                'id', ae.id, 'name', ae.name, 'description', ae.description,
+                'id', ae.id, 'name', ae.name, 'mechanical_desc', ae.mechanical_desc, 'narrative_desc', ae.narrative_desc,
                 'archetypes', ae.archetypes, 'is_public', ae.is_public,
                 'prerequisite_node_ids', ae.prerequisite_node_ids,
                 'prerequisite_logic', ae.prerequisite_logic,

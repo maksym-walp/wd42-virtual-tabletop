@@ -132,17 +132,13 @@ export default function SpellView() {
 
         {spell.mechanical_desc && (
           <Section title="Механічний опис">
-            <p className="text-[0.95rem] leading-relaxed text-text">
-              <SmartTextReader text={spell.mechanical_desc} />
-            </p>
+            <SmartTextReader text={spell.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 
         {spell.narrative_desc && (
           <Section title="Наративний опис">
-            <p className="text-[0.95rem] italic leading-relaxed text-text-dim">
-              <SmartTextReader text={spell.narrative_desc} />
-            </p>
+            <SmartTextReader text={spell.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
           </Section>
         )}
 

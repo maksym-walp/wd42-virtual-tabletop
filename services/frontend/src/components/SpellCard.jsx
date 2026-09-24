@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { natureLabels, SPELL_KINDS } from '../constants/spellbook';
-import DiceFormulaText from './DiceFormulaText';
+import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
 
@@ -35,7 +35,7 @@ export default function SpellCard({ spell }) {
       {/* Narrative preview */}
       {!spell.image_url && spell.narrative_desc && (
         <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">
-          <DiceFormulaText text={spell.narrative_desc} />
+          {htmlToPreviewText(spell.narrative_desc)}
         </p>
       )}
     </Link>

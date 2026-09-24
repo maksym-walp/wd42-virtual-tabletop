@@ -8,6 +8,7 @@ import { ARCHETYPES } from '../constants/characterSheet';
 import { DURATION_UNITS } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
@@ -19,7 +20,7 @@ const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
-  name: '', archetypes: [], description: '', is_public: true,
+  name: '', archetypes: [], mechanical_desc: '', narrative_desc: '', is_public: true,
   is_maneuver: false, duration_value: '', duration_unit: 'instant',
   lore_creator: '', lore_creator_npc_id: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
@@ -67,7 +68,7 @@ export default function AbilityForm() {
         setForm((f) => ({
           ...f,
           name: a.name, archetypes: a.archetypes || [],
-          description: a.description || '', is_public: a.is_public,
+          mechanical_desc: a.mechanical_desc || '', narrative_desc: a.narrative_desc || '', is_public: a.is_public,
           is_maneuver: a.is_maneuver || false,
           duration_value: a.duration_value ?? '',
           duration_unit: a.duration_unit || 'instant',
@@ -211,12 +212,18 @@ export default function AbilityForm() {
           />
         </FormSection>
 
-        <FormSection title="Опис">
-          <textarea
-            className={`${inputClass} resize-y`}
-            value={form.description} onChange={set('description')}
+        <FormSection title="Описи">
+          <SmartTextarea
+            label="Механічний опис" className="mb-4"
+            value={form.mechanical_desc} onChange={set('mechanical_desc')}
             rows={4}
             placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
+          />
+          <SmartTextarea
+            label="Наративний опис"
+            value={form.narrative_desc} onChange={set('narrative_desc')}
+            rows={3}
+            placeholder="Як це виглядає та відчувається у світі гри..."
           />
         </FormSection>
 

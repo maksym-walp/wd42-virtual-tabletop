@@ -21,6 +21,8 @@ import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
+import SmartTextarea from '../components/ui/SmartTextarea';
+import SmartTextReader from '../components/SmartTextReader';
 
 const NODE_R = 24;
 const NODE_ICON_SIZE = NODE_R * 1.3; // uploaded-image icon size — stays inside the circle (half-diagonal < NODE_R)
@@ -925,7 +927,7 @@ function Tooltip({ tooltip, nodes, edges }) {
       style={{ ...style, pointerEvents: 'none' }}
     >
       <p className="mb-1 font-display text-sm text-accent">{node.title}</p>
-      {node.description && <p className="text-xs leading-relaxed text-text-dim">{node.description}</p>}
+      {node.description && <SmartTextReader text={node.description} className="text-xs leading-relaxed text-text-dim" />}
       {node.effect?.length > 0 && (
         <div className="mt-2">
           <TtLabel>Ефект</TtLabel>
@@ -1010,7 +1012,7 @@ function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onD
         </div>
       </div>
 
-      {node.description && <p className="mb-1 text-sm leading-relaxed text-text-muted">{node.description}</p>}
+      {node.description && <SmartTextReader text={node.description} className="mb-1 text-sm leading-relaxed text-text-muted" />}
 
       {node.effect?.length > 0 && (
         <InfoBlock label="Ефект">
@@ -1256,10 +1258,7 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
           />
         </label>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Опис</span>
-          <textarea rows={2} className={`${inputClass} resize-y`} value={form.description || ''} onChange={set('description')} />
-        </label>
+        <SmartTextarea label="Опис" rows={2} value={form.description || ''} onChange={set('description')} />
 
         <ArrayListField
           label="Ефект (текстовий опис)"

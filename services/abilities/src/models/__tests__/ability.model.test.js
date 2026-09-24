@@ -108,13 +108,13 @@ describe('AbilityModel.delete', () => {
 describe('AbilityModel.create', () => {
   it('inserts is_maneuver/duration_value/duration_unit alongside the existing fields', async () => {
     await AbilityModel.create('u1', {
-      name: 'Розсічення', archetypes: ['warrior'], description: 'опис', is_public: true,
+      name: 'Розсічення', archetypes: ['warrior'], mechanical_desc: 'опис', is_public: true,
       prerequisite_node_ids: ['n1'], prerequisite_logic: 'and', image_url: 'img.png',
       is_maneuver: true, duration_value: 3, duration_unit: 'action',
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null]);
+    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null]);
   });
 
   it('inserts lore_creator/lore_creator_npc_id when provided', async () => {
@@ -123,28 +123,28 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', [], null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1']);
+    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1']);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.create('u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Вміння', [], null, false, [], 'or', null, false, null, 'instant', null, null]);
+    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null]);
   });
 });
 
 describe('AbilityModel.update', () => {
   it('updates is_maneuver/duration_value/duration_unit alongside the existing fields', async () => {
     await AbilityModel.update('a1', 'u1', {
-      name: 'Розсічення', archetypes: ['warrior'], description: 'опис', is_public: true,
+      name: 'Розсічення', archetypes: ['warrior'], mechanical_desc: 'опис', is_public: true,
       prerequisite_node_ids: ['n1'], prerequisite_logic: 'and', image_url: 'img.png',
       is_maneuver: true, duration_value: 3, duration_unit: 'action',
     }, true);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/is_maneuver=\$10, duration_value=\$11, duration_unit=\$12/);
-    expect(sql).toMatch(/lore_creator=\$13, lore_creator_npc_id=\$14/);
-    expect(sql).toMatch(/\$15 = true/);
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true]);
+    expect(sql).toMatch(/is_maneuver=\$11, duration_value=\$12, duration_unit=\$13/);
+    expect(sql).toMatch(/lore_creator=\$14, lore_creator_npc_id=\$15/);
+    expect(sql).toMatch(/\$16 = true/);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true]);
   });
 
   it('updates lore_creator/lore_creator_npc_id when provided', async () => {
@@ -152,13 +152,13 @@ describe('AbilityModel.update', () => {
       name: 'Розсічення', lore_creator: 'Легендарний коваль', lore_creator_npc_id: 'npc-1',
     });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false]);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.update('a1', 'u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, false, [], 'or', null, false, null, 'instant', null, null, false]);
+    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false]);
   });
 });
 
@@ -166,7 +166,7 @@ describe('AbilityModel.bulkImport', () => {
   it('inserts one multi-row INSERT for the whole batch, forcing user_id to the importer', async () => {
     pool.query.mockResolvedValue({ rowCount: 2 });
     const records = [
-      { name: 'Удар', archetypes: ['warrior'], description: 'опис', is_public: true, is_maneuver: true, duration_value: 2, duration_unit: 'action', lore_creator: 'Коваль', lore_creator_npc_id: 'npc-1' },
+      { name: 'Удар', archetypes: ['warrior'], mechanical_desc: 'опис', is_public: true, is_maneuver: true, duration_value: 2, duration_unit: 'action', lore_creator: 'Коваль', lore_creator_npc_id: 'npc-1' },
       { name: 'Ривок' },
     ];
 
@@ -174,19 +174,19 @@ describe('AbilityModel.bulkImport', () => {
 
     expect(result).toBe(2);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, description, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10\), \(\$11, \$12, \$13, \$14, \$15, \$16, \$17, \$18, \$19, \$20\)/);
+    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11\), \(\$12, \$13, \$14, \$15, \$16, \$17, \$18, \$19, \$20, \$21, \$22\)/);
     expect(sql).not.toMatch(/prerequisite_node_ids/);
     expect(sql).not.toMatch(/prerequisite_logic/);
     expect(sql).not.toMatch(/is_canonical/);
     expect(sql).not.toMatch(/image_url/);
     expect(params).toEqual([
-      'importer-1', 'Удар', ['warrior'], 'опис', true, true, 2, 'action', 'Коваль', 'npc-1',
-      'importer-1', 'Ривок', [], null, false, false, null, 'instant', null, null,
+      'importer-1', 'Удар', ['warrior'], 'опис', null, true, true, 2, 'action', 'Коваль', 'npc-1',
+      'importer-1', 'Ривок', [], null, null, false, false, null, 'instant', null, null,
     ]);
   });
 
   it('skips records without a name and returns 0 without querying when none are valid', async () => {
-    const result = await AbilityModel.bulkImport('importer-1', [{ description: 'no name' }, null, { name: '' }]);
+    const result = await AbilityModel.bulkImport('importer-1', [{ mechanical_desc: 'no name' }, null, { name: '' }]);
 
     expect(result).toBe(0);
     expect(pool.query).not.toHaveBeenCalled();
@@ -194,12 +194,12 @@ describe('AbilityModel.bulkImport', () => {
 
   it('filters out invalid records but still imports the valid ones', async () => {
     pool.query.mockResolvedValue({ rowCount: 1 });
-    const records = [{ description: 'no name' }, { name: 'Валідне' }];
+    const records = [{ mechanical_desc: 'no name' }, { name: 'Валідне' }];
 
     const result = await AbilityModel.bulkImport('importer-1', records);
 
     expect(result).toBe(1);
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['importer-1', 'Валідне', [], null, false, false, null, 'instant', null, null]);
+    expect(params).toEqual(['importer-1', 'Валідне', [], null, null, false, false, null, 'instant', null, null]);
   });
 });

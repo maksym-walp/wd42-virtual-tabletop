@@ -4,6 +4,7 @@ import { totalDaysSinceEpoch } from '../../utils/chronologyMath';
 import Button from '../ui/Button';
 import Field, { inputClass } from '../ui/Field';
 import MultiSelectDropdown from '../ui/MultiSelectDropdown';
+import SmartTextarea from '../ui/SmartTextarea';
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
@@ -96,9 +97,7 @@ export default function EventForm({
       <Field label="Назва">
         <input autoFocus className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} />
       </Field>
-      <Field label="Опис">
-        <textarea rows={2} className={`${inputClass} resize-y`} value={description} onChange={(e) => setDescription(e.target.value)} />
-      </Field>
+      <SmartTextarea label="Опис" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Field label="Рік">

@@ -9,6 +9,7 @@ import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ViewToggle from '../components/ui/ViewToggle';
+import { htmlToPreviewText } from '../utils/richText';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
 
@@ -124,7 +125,7 @@ export default function CompendiumTaxonomyList() {
               </div>
               <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{t.name}</h3>
               {t.description && (
-                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{t.description}</p>
+                <p className="line-clamp-2 px-3.5 pb-3 text-sm italic leading-snug text-text-dim">{htmlToPreviewText(t.description)}</p>
               )}
             </Link>
           ))}

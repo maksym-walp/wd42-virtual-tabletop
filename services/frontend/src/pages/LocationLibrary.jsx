@@ -15,6 +15,7 @@ import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import ExportImportActions from '../components/ExportImportActions';
 import LocationEditor from '../components/map/LocationEditor';
+import { htmlToPreviewText } from '../utils/richText';
 import MarkerIcon from '../components/map/MarkerIcon';
 import MapsTabs from '../components/map/MapsTabs';
 
@@ -129,7 +130,7 @@ export default function LocationLibrary() {
                         ))}
                       </span>
                     )}
-                    {base?.description && <p className="mt-2 line-clamp-2 text-sm text-text-dim">{base.description}</p>}
+                    {base?.description && <p className="mt-2 line-clamp-2 text-sm text-text-dim">{htmlToPreviewText(base.description)}</p>}
                     {loc.versions?.length > 1 && (
                       <p className="mt-1 text-xs text-text-dim">{loc.versions.length} хронологічні версії</p>
                     )}

@@ -13,6 +13,8 @@ import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
 import Lightbox from '../components/ui/Lightbox';
 import Sheet from '../components/ui/Sheet';
+import SmartTextarea from '../components/ui/SmartTextarea';
+import SmartTextReader from '../components/SmartTextReader';
 import CombatTab from './CampaignCombat';
 
 const TABS = [
@@ -129,7 +131,7 @@ function CampaignAbout({ campaign }) {
       <p className="mb-4 text-sm text-text">{campaign.gm_username}</p>
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Опис кампанії</p>
       {campaign.description ? (
-        <p className="whitespace-pre-wrap text-sm text-text">{campaign.description}</p>
+        <SmartTextReader text={campaign.description} className="text-sm text-text" />
       ) : (
         <p className="text-sm text-text-dim">Опису ще немає.</p>
       )}
@@ -173,14 +175,18 @@ function NotesCarousel({ campaign, isGm, onChange }) {
       <div className="flex gap-4 overflow-x-auto pb-2">
         <Card className="w-[85vw] max-w-sm shrink-0">
           <label className="mb-1 block text-xs text-text-dim">Спільні нотатки</label>
-          <textarea
-            className={`${inputClass} w-full resize-y`}
-            rows={10}
-            value={sharedNotes}
-            onChange={(e) => { setSharedNotes(e.target.value); if (isGm) saveShared(e.target.value); }}
-            placeholder="Нотатки, які бачать усі учасники кампанії..."
-            disabled={!isGm}
-          />
+          {isGm ? (
+            <SmartTextarea
+              rows={10}
+              value={sharedNotes}
+              onChange={(e) => { setSharedNotes(e.target.value); saveShared(e.target.value); }}
+              placeholder="Нотатки, які бачать усі учасники кампанії..."
+            />
+          ) : sharedNotes ? (
+            <SmartTextReader text={sharedNotes} className="text-sm text-text" />
+          ) : (
+            <p className="text-sm text-text-dim">Нотаток ще немає.</p>
+          )}
         </Card>
 
         <Card className="w-[85vw] max-w-sm shrink-0">
@@ -190,8 +196,7 @@ function NotesCarousel({ campaign, isGm, onChange }) {
         {isGm && (
           <Card className="w-[85vw] max-w-sm shrink-0">
             <label className="mb-1 block text-xs text-text-dim">Нотатки майстра (лише для вас)</label>
-            <textarea
-              className={`${inputClass} w-full resize-y`}
+            <SmartTextarea
               rows={10}
               value={gmNotes}
               onChange={(e) => { setGmNotes(e.target.value); saveGm(e.target.value); }}
@@ -333,9 +338,7 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
           <Field label="Дата сесії (необовʼязково)">
             <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Field label="Опис / нотатки">
-            <textarea className={`${inputClass} resize-y`} rows={6} value={content} onChange={(e) => setContent(e.target.value)} />
-          </Field>
+          <SmartTextarea label="Опис / нотатки" rows={6} value={content} onChange={(e) => setContent(e.target.value)} />
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex items-center justify-between gap-2">
             {!isNew && (
@@ -351,7 +354,11 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
       ) : (
         <div>
           {session.session_date && <p className="mb-2 text-xs text-text-dim">{session.session_date}</p>}
-          <p className="whitespace-pre-wrap text-sm text-text">{session.content || 'Без опису.'}</p>
+          {session.content ? (
+            <SmartTextReader text={session.content} className="text-sm text-text" />
+          ) : (
+            <p className="text-sm text-text-dim">Без опису.</p>
+          )}
         </div>
       )}
     </Sheet>
@@ -869,15 +876,12 @@ function CampaignDetailsCard({ campaign, onChange }) {
             maxLength={200}
           />
         </Field>
-        <Field label="Опис">
-          <textarea
-            className={`${inputClass} resize-y`}
-            rows={5}
-            value={description}
-            onChange={(e) => { setDescription(e.target.value); saveDescription(e.target.value); }}
-            placeholder="Коротко про що кампанія, сеттінг, тон гри..."
-          />
-        </Field>
+        <SmartTextarea
+          label="Опис" rows={5}
+          value={description}
+          onChange={(e) => { setDescription(e.target.value); saveDescription(e.target.value); }}
+          placeholder="Коротко про що кампанія, сеттінг, тон гри..."
+        />
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
     </Card>

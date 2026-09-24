@@ -139,7 +139,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
 
         <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{collection.name}</h1>
         {collection.description && (
-          <p className="px-5 pb-3 text-sm text-text-muted"><SmartTextReader text={collection.description} /></p>
+          <SmartTextReader text={collection.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}
 
         {(collection.prerequisite_node_ids || []).length > 0 && (

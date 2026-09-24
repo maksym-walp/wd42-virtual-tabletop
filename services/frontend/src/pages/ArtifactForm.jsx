@@ -6,6 +6,7 @@ import { RARITIES } from '../constants/artifacts';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
+import SmartTextarea from '../components/ui/SmartTextarea';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
@@ -163,8 +164,7 @@ export default function ArtifactForm() {
         </FormSection>
 
         <FormSection title="Опис">
-          <textarea
-            className={`${inputClass} resize-y`}
+          <SmartTextarea
             value={form.description} onChange={set('description')}
             rows={4}
             placeholder="Що це за артефакт, як виглядає, які має властивості..."
