@@ -142,6 +142,19 @@ const AbilityModel = {
     return rows[0] || null;
   },
 
+  // Admin only — reassign owner by username; EXISTS guards against a typo'd
+  // username silently no-oping instead of erroring.
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE abilities.entries
+       SET user_id = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
+
   // Bulk import previously exported abilities: a single table, so no kind
   // grouping like equipment's union — one multi-row INSERT for the whole
   // batch. Rows with no name are skipped (name is required). user_id is

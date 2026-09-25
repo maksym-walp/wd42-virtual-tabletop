@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
 
 export default function SpellView() {
@@ -41,14 +42,19 @@ export default function SpellView() {
     }
   };
 
-  const handleMarkCanonical = async () => {
+  const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`/api/spellbook/${id}/canonical`, { is_canonical: true });
+      const { data } = await api.patch(`/api/spellbook/${id}/canonical`, { is_canonical: isCanonical });
       setSpell(data.spell);
     } finally {
       setSettingCanonical(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    const { data } = await api.patch(`/api/spellbook/${id}/owner`, { owner_username: ownerUsername });
+    setSpell(data.spell);
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -155,11 +161,17 @@ export default function SpellView() {
           </Section>
         )}
 
-        {canManageCanonical && !spell.is_canonical && (
+        {canManageCanonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            <Button variant="ghost" onClick={() => handleSetCanonical(!spell.is_canonical)} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : spell.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
             </Button>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
           </div>
         )}
 

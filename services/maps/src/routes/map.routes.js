@@ -15,6 +15,7 @@ router.get('/', wrap(MapController.list));
 router.post('/', wrap(MapController.create));
 router.get('/:id', wrap(MapController.getOne));
 router.patch('/:id', wrap(MapController.update));
+router.patch('/:id/owner', wrap(MapController.setOwner));
 router.delete('/:id', wrap(MapController.remove));
 
 // Lenses (image layers of a map)

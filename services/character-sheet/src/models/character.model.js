@@ -223,6 +223,109 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
+  // Admin-only — reassigns the character to another registered user.
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE character_sheet.characters
+       SET user_id = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
+
+  // Copies a character for a new race/archetype combination. skills and
+  // equipment aren't archetype-specific, so they always carry over; tree_progress/
+  // known_spells/abilities/ritual_trackers are only reachable through the skill
+  // tree (applyGrants in tree-progress.model.js, plus the archetype-tab ritual
+  // trackers), so they only carry over when the archetype is unchanged — a real
+  // archetype change intentionally leaves the duplicate's tree untouched rather
+  // than auto-unlocking roots the way create() does.
+  async duplicate(sourceId, { name, archetype, race }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: [source] } = await client.query(
+        `SELECT * FROM character_sheet.characters WHERE id = $1`,
+        [sourceId]
+      );
+      if (!source) { await client.query('ROLLBACK'); return null; }
+
+      const newArchetype = archetype ?? source.archetype;
+      const newRace = race ?? source.race;
+      const sameArchetype = newArchetype === source.archetype;
+
+      const { rows: [copy] } = await client.query(
+        `INSERT INTO character_sheet.characters
+           (user_id, name, archetype, race, is_public, backstory, notes,
+            current_hp, current_magic, heroic_actions_used, death_scale,
+            health_dice_values, conditions, experience_points, money,
+            spell_bonus, temp_hp, defense_bonus, inspiration_used,
+            narrative_inspiration_die, luck_current, luck_max,
+            rogue_inspiration_die, rogue_inspiration_given_to, image_url)
+         SELECT user_id, $2, $3, $4, is_public, backstory, notes,
+                current_hp, current_magic, heroic_actions_used, death_scale,
+                health_dice_values, conditions, experience_points, money,
+                spell_bonus, temp_hp, defense_bonus, inspiration_used,
+                narrative_inspiration_die, luck_current, luck_max,
+                rogue_inspiration_die, rogue_inspiration_given_to, image_url
+         FROM character_sheet.characters WHERE id = $1
+         RETURNING *`,
+        [sourceId, name ?? source.name, newArchetype, newRace]
+      );
+
+      await client.query(
+        `INSERT INTO character_sheet.skills (character_id, skill_key, value, base_value, progress_marks)
+         SELECT $2, skill_key, value, base_value, progress_marks
+         FROM character_sheet.skills WHERE character_id = $1`,
+        [sourceId, copy.id]
+      );
+      await client.query(
+        `INSERT INTO character_sheet.equipment (character_id, equipment_id, mastery_count, mastered, is_equipped)
+         SELECT $2, equipment_id, mastery_count, mastered, is_equipped
+         FROM character_sheet.equipment WHERE character_id = $1`,
+        [sourceId, copy.id]
+      );
+
+      if (sameArchetype) {
+        await client.query(
+          `INSERT INTO character_sheet.tree_progress (character_id, node_id, unlocked_at)
+           SELECT $2, node_id, unlocked_at
+           FROM character_sheet.tree_progress WHERE character_id = $1`,
+          [sourceId, copy.id]
+        );
+        await client.query(
+          `INSERT INTO character_sheet.known_spells (character_id, spell_id, mastered, cast_count)
+           SELECT $2, spell_id, mastered, cast_count
+           FROM character_sheet.known_spells WHERE character_id = $1`,
+          [sourceId, copy.id]
+        );
+        await client.query(
+          `INSERT INTO character_sheet.abilities (character_id, ability_id)
+           SELECT $2, ability_id
+           FROM character_sheet.abilities WHERE character_id = $1`,
+          [sourceId, copy.id]
+        );
+        await client.query(
+          `INSERT INTO character_sheet.ritual_trackers (character_id, name, rounds, participants)
+           SELECT $2, name, rounds, participants
+           FROM character_sheet.ritual_trackers WHERE character_id = $1`,
+          [sourceId, copy.id]
+        );
+      }
+
+      await client.query('COMMIT');
+      return copy;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
   async delete(id, deletedBy = null) {
     const record = await deleteWithTrash(pool, {
       schemaName: 'character_sheet',

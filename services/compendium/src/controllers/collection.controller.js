@@ -51,6 +51,17 @@ const CollectionController = {
     if (!removed) return res.status(404).json({ message: 'Не знайдено' });
     res.json({ message: 'Видалено' });
   },
+
+  async setOwner(req, res) {
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { owner_username: ownerUsername } = req.body;
+    if (!ownerUsername) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+
+    const collection = await CollectionModel.setOwner(req.params.id, ownerUsername);
+    if (!collection) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ collection });
+  },
 };
 
 module.exports = CollectionController;

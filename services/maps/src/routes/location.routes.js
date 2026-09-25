@@ -18,6 +18,7 @@ router.post('/import', wrap(LocationController.import));
 
 router.get('/:id', wrap(LocationController.getOne));
 router.patch('/:id', wrap(LocationController.update));
+router.patch('/:id/owner', wrap(LocationController.setOwner));
 router.delete('/:id', wrap(LocationController.remove));
 
 // Chronological versions of a location's lore.

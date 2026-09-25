@@ -45,6 +45,15 @@ const CollectionController = {
     res.json({ collection });
   },
 
+  // Admin only (route-gated) — reassign a collection's owner without changing anything else.
+  async setOwner(req, res) {
+    const { owner_username } = req.body;
+    if (!owner_username) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+    const collection = await CollectionModel.setOwner(req.params.id, owner_username);
+    if (!collection) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ collection });
+  },
+
   async addItem(req, res) {
     const { spell_id } = req.body;
     if (!spell_id) return res.status(400).json({ message: 'spell_id є обовʼязковим' });

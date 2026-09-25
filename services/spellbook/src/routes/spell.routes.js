@@ -1,6 +1,6 @@
 const express = require('express');
 const SpellController = require('../controllers/spell.controller');
-const { requireAuth, requireCanonicalManager } = require('../middleware/auth.middleware');
+const { requireAuth, requireCanonicalManager, requireAdminOwner } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -15,5 +15,6 @@ router.get('/:id',     requireAuth, wrap(SpellController.getOne));
 router.put('/:id',     requireAuth, wrap(SpellController.update));
 router.delete('/:id',  requireAuth, wrap(SpellController.remove));
 router.patch('/:id/canonical', requireCanonicalManager, wrap(SpellController.setCanonical));
+router.patch('/:id/owner', requireAdminOwner, wrap(SpellController.setOwner));
 
 module.exports = router;

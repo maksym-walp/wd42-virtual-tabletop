@@ -15,11 +15,15 @@ import TimelineSlider from '../components/map/TimelineSlider';
 import LensVersionsSheet from '../components/map/LensVersionsSheet';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { inputClass } from '../components/ui/Field';
+import { useAuth } from '../context/AuthContext';
 
 export default function MapView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedLocationId = searchParams.get('location');
   // Opened from a campaign: no timeline slider — the view is pinned to the
@@ -203,6 +207,10 @@ export default function MapView() {
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалось змінити видимість');
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    setMap(await mapsApi.setMapOwner(id, ownerUsername));
   };
 
   const handleDelete = async () => {
@@ -409,6 +417,11 @@ export default function MapView() {
             )}
           </div>
         </div>
+        {isAdmin && (
+          <div className="mt-2 flex justify-end">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
+          </div>
+        )}
         {error && map && <p className="mt-2 text-sm text-danger">{error}</p>}
       </div>
 

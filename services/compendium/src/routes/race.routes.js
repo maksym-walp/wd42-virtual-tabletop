@@ -11,6 +11,7 @@ router.get('/', wrap(RaceController.list));
 router.post('/', wrap(RaceController.create));
 router.get('/:id', wrap(RaceController.getOne));
 router.patch('/:id', wrap(RaceController.update));
+router.patch('/:id/owner', wrap(RaceController.setOwner));
 router.delete('/:id', wrap(RaceController.remove));
 
 module.exports = router;

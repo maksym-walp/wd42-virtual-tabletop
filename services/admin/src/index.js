@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const configRoutes = require('./routes/config.routes');
+const userRoutes = require('./routes/user.routes');
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(cors({
 app.use(express.json());
 
 app.use('/configs', configRoutes);
+app.use('/users', userRoutes);
 
 app.use((err, req, res, next) => {
   const status = err.statusCode || 500;

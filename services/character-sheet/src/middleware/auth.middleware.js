@@ -22,4 +22,15 @@ function requireGameMaster(req, res, next) {
   });
 }
 
-module.exports = { requireAuth, requireGameMaster };
+// Strictly admin — unlike authorizeCharacterWrite (owner/campaign GM/admin),
+// reassigning a character's owner is an admin-only action.
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden: admin only' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAuth, requireGameMaster, requireAdmin };

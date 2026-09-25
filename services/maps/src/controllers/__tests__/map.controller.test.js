@@ -114,3 +114,36 @@ describe('MapController.update / remove', () => {
     expect(MapModel.remove).not.toHaveBeenCalled();
   });
 });
+
+describe('MapController.setOwner', () => {
+  it('403 for the map owner (not admin)', async () => {
+    const res = mockRes();
+    await MapController.setOwner(mockReq({ params: { id: 'm1' }, body: { owner_username: 'newowner' }, user: GM }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(MapModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('400 without owner_username', async () => {
+    const res = mockRes();
+    await MapController.setOwner(mockReq({ params: { id: 'm1' }, body: {}, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(MapModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('404 when the map or the username does not exist', async () => {
+    MapModel.setOwner.mockResolvedValue(null);
+    const res = mockRes();
+    await MapController.setOwner(mockReq({ params: { id: 'm1' }, body: { owner_username: 'ghost' }, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('200 for an admin, reassigning the owner', async () => {
+    MapModel.setOwner.mockResolvedValue({ ...ownPrivate, created_by: 'u2' });
+    const res = mockRes();
+    await MapController.setOwner(mockReq({ params: { id: 'm1' }, body: { owner_username: '  newowner  ' }, user: ADMIN }), res);
+    expect(MapModel.setOwner).toHaveBeenCalledWith('m1', 'newowner');
+    // is_owner is true here because the caller is admin (isAdmin short-circuits withOwner),
+    // not because they're u2 — matches the existing withOwner semantics.
+    expect(res.json).toHaveBeenCalledWith({ map: { ...ownPrivate, created_by: 'u2', is_owner: true } });
+  });
+});

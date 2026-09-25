@@ -213,6 +213,19 @@ const SpellModel = {
     return rows[0] || null;
   },
 
+  // Admin only — reassign owner by username; EXISTS guards against a typo'd
+  // username silently no-oping instead of erroring.
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE spellbook.spells
+       SET user_id = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
+
   // Import зі /export: один multi-row INSERT (на відміну від equipment — тут
   // лише одна таблиця, а не чотири за видом), user_id примусово стає
   // імпортером. prerequisite_node_ids/prerequisite_logic та is_canonical

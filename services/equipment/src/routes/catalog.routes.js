@@ -1,6 +1,6 @@
 const express = require('express');
 const { createCatalogController, UnionController, getWeaponOptionsHandler } = require('../controllers/catalog.controller');
-const { requireAuth, requireCanonicalManager } = require('../middleware/auth.middleware');
+const { requireAuth, requireCanonicalManager, requireAdminOwner } = require('../middleware/auth.middleware');
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -21,6 +21,7 @@ function createCatalogRouter(kind) {
   router.put('/:id',     requireAuth, wrap(controller.update));
   router.delete('/:id',  requireAuth, wrap(controller.remove));
   router.patch('/:id/canonical', requireCanonicalManager, wrap(controller.setCanonical));
+  router.patch('/:id/owner', requireAdminOwner, wrap(controller.setOwner));
 
   return router;
 }

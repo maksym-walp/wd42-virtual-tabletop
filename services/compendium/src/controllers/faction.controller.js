@@ -69,6 +69,17 @@ const FactionController = {
     res.status(204).send();
   },
 
+  async setOwner(req, res) {
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { owner_username: ownerUsername } = req.body;
+    if (!ownerUsername) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+
+    const faction = await FactionModel.setOwner(req.params.id, ownerUsername);
+    if (!faction) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ faction });
+  },
+
   async listLeaders(req, res) {
     const faction = await FactionModel.findById(req.params.id, req.user.sub);
     if (!faction) return res.status(404).json({ message: 'Фракцію не знайдено' });

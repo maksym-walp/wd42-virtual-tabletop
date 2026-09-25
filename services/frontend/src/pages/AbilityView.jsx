@@ -8,6 +8,7 @@ import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import AuthorBadge from '../components/AuthorBadge';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -45,14 +46,19 @@ export default function AbilityView() {
     }
   };
 
-  const handleMarkCanonical = async () => {
+  const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`/api/abilities/${id}/canonical`, { is_canonical: true });
+      const { data } = await api.patch(`/api/abilities/${id}/canonical`, { is_canonical: isCanonical });
       setAbility(data.ability);
     } finally {
       setSettingCanonical(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    const { data } = await api.patch(`/api/abilities/${id}/owner`, { owner_username: ownerUsername });
+    setAbility(data.ability);
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -133,11 +139,17 @@ export default function AbilityView() {
           </Section>
         )}
 
-        {canManageCanonical && !ability.is_canonical && (
+        {canManageCanonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            <Button variant="ghost" onClick={() => handleSetCanonical(!ability.is_canonical)} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : ability.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
             </Button>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
           </div>
         )}
 

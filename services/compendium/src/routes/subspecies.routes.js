@@ -11,6 +11,7 @@ router.get('/', wrap(SubspeciesController.list));
 router.post('/', wrap(SubspeciesController.create));
 router.get('/:id', wrap(SubspeciesController.getOne));
 router.patch('/:id', wrap(SubspeciesController.update));
+router.patch('/:id/owner', wrap(SubspeciesController.setOwner));
 router.delete('/:id', wrap(SubspeciesController.remove));
 
 module.exports = router;

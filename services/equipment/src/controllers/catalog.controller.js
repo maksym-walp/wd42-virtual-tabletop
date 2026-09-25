@@ -47,6 +47,15 @@ function createCatalogController(kind) {
       if (!item) return res.status(404).json({ message: notFound });
       res.json({ item });
     },
+
+    // Admin only (route-gated) — reassign an entry's owner without changing anything else.
+    async setOwner(req, res) {
+      const { owner_username } = req.body;
+      if (!owner_username) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+      const item = await Model.setOwner(req.params.id, owner_username);
+      if (!item) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+      res.json({ item });
+    },
   };
 }
 

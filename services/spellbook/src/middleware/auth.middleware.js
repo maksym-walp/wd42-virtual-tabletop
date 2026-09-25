@@ -23,4 +23,14 @@ function requireCanonicalManager(req, res, next) {
   });
 }
 
-module.exports = { requireAuth, requireCanonicalManager };
+// Strictly admin — unlike requireCanonicalManager, game_master is NOT enough here.
+function requireAdminOwner(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden: admin only' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAuth, requireCanonicalManager, requireAdminOwner };

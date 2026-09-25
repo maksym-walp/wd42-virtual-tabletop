@@ -168,6 +168,17 @@ const EntryController = {
     const entry = await EntryModel.updateRolledHealth(existing.id, rolledHealth ?? null);
     res.json({ entry: decorateEntry(entry) });
   },
+
+  async setOwner(req, res) {
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { owner_username: ownerUsername } = req.body;
+    if (!ownerUsername) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+
+    const entry = await EntryModel.setOwner(req.params.id, ownerUsername);
+    if (!entry) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ entry: decorateEntry(entry) });
+  },
 };
 
 module.exports = EntryController;

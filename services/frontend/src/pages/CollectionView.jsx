@@ -5,6 +5,7 @@ import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import CollectionItemPicker from '../components/CollectionItemPicker';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
 
@@ -82,13 +83,17 @@ export default function CollectionView({ domainKey, publicView = false }) {
     setCollection(await load());
   };
 
-  const handleMarkCanonical = async () => {
+  const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
-      setCollection(await domain.collectionsApi.setCanonical(id, true));
+      setCollection(await domain.collectionsApi.setCanonical(id, isCanonical));
     } finally {
       setSettingCanonical(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    setCollection(await domain.collectionsApi.setOwner(id, ownerUsername));
   };
 
   const copyShareLink = () => {
@@ -184,11 +189,17 @@ export default function CollectionView({ domainKey, publicView = false }) {
           </div>
         </div>
 
-        {!publicView && domain.supportsCanonical !== false && canManageCanonical && !collection.is_canonical && (
+        {!publicView && domain.supportsCanonical !== false && canManageCanonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            <Button variant="ghost" onClick={() => handleSetCanonical(!collection.is_canonical)} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : collection.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
             </Button>
+          </div>
+        )}
+
+        {!publicView && isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
           </div>
         )}
 

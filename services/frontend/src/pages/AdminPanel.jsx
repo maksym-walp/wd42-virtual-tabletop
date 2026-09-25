@@ -48,12 +48,20 @@ export default function AdminPanel() {
   const [configs, setConfigs] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [users, setUsers] = useState(null);
+  const [usersError, setUsersError] = useState('');
 
   useEffect(() => {
     adminApi.listConfigs()
       .then((cs) => setConfigs(cs.map((c) => ({ ...c, value: withRowIds(c.value) }))))
       .catch(() => setError('Не вдалося завантажити конфіги'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    adminApi.listUsers()
+      .then(setUsers)
+      .catch(() => setUsersError('Не вдалося завантажити користувачів'));
   }, []);
 
   const updateLocal = (key, value) => {
@@ -66,7 +74,9 @@ export default function AdminPanel() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <PageHeader title="Адмін панель" subtitle="Конфіги сайту" />
+      <PageHeader title="Адмін панель" subtitle="Користувачі та конфіги сайту" />
+
+      <UsersTable users={users} error={usersError} />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
@@ -82,6 +92,61 @@ export default function AdminPanel() {
               onSaved={(saved) => handleSaved(config.key, saved)}
             />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ROLE_LABELS = {
+  admin: 'Адмін',
+  game_master: 'Ведучий',
+  user: 'Гравець',
+};
+
+function UsersTable({ users, error }) {
+  return (
+    <div className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border bg-bg px-4 py-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-dim">
+          Зареєстровані користувачі{users ? ` (${users.length})` : ''}
+        </span>
+      </div>
+
+      {error ? (
+        <p className="p-4 text-sm text-danger">{error}</p>
+      ) : !users ? (
+        <p className="p-4 text-sm text-text-dim">Завантаження...</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-text-dim">
+                <th className="px-4 py-2 font-semibold">Користувач</th>
+                <th className="px-4 py-2 font-semibold">Email</th>
+                <th className="px-4 py-2 font-semibold">Роль</th>
+                <th className="px-4 py-2 font-semibold">Статус</th>
+                <th className="px-4 py-2 font-semibold">Реєстрація</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className="border-t border-border/60">
+                  <td className="px-4 py-2 font-medium text-text">{u.username}</td>
+                  <td className="px-4 py-2 text-text-muted">{u.email}</td>
+                  <td className="px-4 py-2 text-text-muted">{ROLE_LABELS[u.role] || u.role}</td>
+                  <td className="px-4 py-2">
+                    <span className={u.is_active ? 'text-sage' : 'text-danger'}>
+                      {u.is_active ? 'активний' : 'вимкнений'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-text-dim">
+                    {new Date(u.created_at).toLocaleDateString('uk-UA')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

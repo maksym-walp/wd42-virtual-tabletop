@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 
 const TYPE_LABELS = { npc: 'НІП', character: 'Персонаж' };
@@ -42,6 +43,10 @@ export default function CompendiumFactionDetail() {
     } catch {
       setDeleting(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    setFaction(await compendiumApi.setFactionOwner(id, ownerUsername));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -104,6 +109,12 @@ export default function CompendiumFactionDetail() {
             ))}
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
+          </div>
+        )}
 
         {canManage && (
           <div className="flex gap-3 border-t border-border px-5 py-4">

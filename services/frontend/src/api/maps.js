@@ -30,6 +30,11 @@ const mapsApi = {
     await api.delete(`${BASE}/${id}`);
   },
 
+  async setMapOwner(id, ownerUsername) {
+    const { data } = await api.patch(`${BASE}/${id}/owner`, { owner_username: ownerUsername });
+    return data.map;
+  },
+
   // Image layers ("lenses"). Each lens carries a `versions` array
   // ([{ id, year, image_url }], oldest year first, the timeless year=null
   // version last) — its image changes over the years.
@@ -124,6 +129,11 @@ const mapsApi = {
 
   async removeLocation(locationId) {
     await api.delete(`${BASE}/locations/${locationId}`);
+  },
+
+  async setLocationOwner(locationId, ownerUsername) {
+    const { data } = await api.patch(`${BASE}/locations/${locationId}/owner`, { owner_username: ownerUsername });
+    return data.location;
   },
 
   // Whole location library as a JSON array (base + versions), ready to feed

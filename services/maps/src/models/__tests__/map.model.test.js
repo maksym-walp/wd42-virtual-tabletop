@@ -49,6 +49,24 @@ describe('MapModel.update', () => {
   });
 });
 
+describe('MapModel.setOwner', () => {
+  it('reassigns created_by by username and updated_at', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'm1', created_by: 'u2' }] });
+    const map = await MapModel.setOwner('m1', 'newowner');
+    expect(map).toEqual({ id: 'm1', created_by: 'u2' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE maps\.maps/);
+    expect(sql).toMatch(/created_by = \(SELECT id FROM auth\.users WHERE username = \$2\)/);
+    expect(sql).toMatch(/updated_at = NOW\(\)/);
+    expect(params).toEqual(['m1', 'newowner']);
+  });
+
+  it('null when the map or the username does not exist', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await MapModel.setOwner('m1', 'ghost')).toBeNull();
+  });
+});
+
 describe('MapModel.remove', () => {
   it('reports true/false from rowCount', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 1 });

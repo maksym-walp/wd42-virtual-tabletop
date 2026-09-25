@@ -7,6 +7,7 @@ import { resolveLocationVersion } from '../constants/maps';
 import Badge from '../components/ui/Badge';
 import MarkerIcon from '../components/map/MarkerIcon';
 import SmartTextReader from '../components/SmartTextReader';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 
 // Standalone, read-only location page — locations previously had no URL of
 // their own (only reachable via a map's ?location= query param, see
@@ -18,6 +19,7 @@ export default function LocationDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const isGm = user?.role === 'admin' || user?.role === 'game_master';
+  const isAdmin = user?.role === 'admin';
 
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,10 @@ export default function LocationDetail() {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [id]);
+
+  const handleSetOwner = async (ownerUsername) => {
+    setLocation(await mapsApi.setLocationOwner(id, ownerUsername));
+  };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -80,6 +86,12 @@ export default function LocationDetail() {
               <p className="flex items-center gap-1 text-xs text-text-dim">
                 <Clock size={12} /> Показано останню відому версію лору цієї локації.
               </p>
+            )}
+
+            {isAdmin && (
+              <div className="border-t border-border pt-3">
+                <ChangeOwnerControl onSubmit={handleSetOwner} />
+              </div>
             )}
           </div>
         </div>

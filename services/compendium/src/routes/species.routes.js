@@ -11,6 +11,7 @@ router.get('/', wrap(SpeciesController.list));
 router.post('/', wrap(SpeciesController.create));
 router.get('/:id', wrap(SpeciesController.getOne));
 router.patch('/:id', wrap(SpeciesController.update));
+router.patch('/:id/owner', wrap(SpeciesController.setOwner));
 router.delete('/:id', wrap(SpeciesController.remove));
 
 module.exports = router;

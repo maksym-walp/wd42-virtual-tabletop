@@ -88,6 +88,20 @@ const LocationModel = {
     return rowCount > 0;
   },
 
+  // Reassigns ownership to the user with the given username. Null if the
+  // location or the username doesn't exist. Only the base row's owner
+  // changes — version history is untouched.
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE maps.locations
+       SET created_by = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
+
   // Bulk import of previously exported locations. Each record becomes a new
   // location (own id, created_by forced to the importer) plus its versions.
   // image_url is dropped on every version — images from a foreign export don't

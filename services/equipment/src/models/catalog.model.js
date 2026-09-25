@@ -315,6 +315,19 @@ function createCatalogModel(kind) {
       );
       return rows[0] ? { ...rows[0], type: kind } : null;
     },
+
+    // Admin only — reassign owner by username; EXISTS guards against a typo'd
+    // username silently no-oping instead of erroring.
+    async setOwner(id, ownerUsername) {
+      const { rows } = await pool.query(
+        `UPDATE ${table}
+         SET user_id = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+         WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+         RETURNING *`,
+        [id, ownerUsername]
+      );
+      return rows[0] ? { ...rows[0], type: kind } : null;
+    },
   };
 }
 

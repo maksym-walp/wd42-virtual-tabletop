@@ -12,6 +12,7 @@ router.get('/', wrap(EntryController.list));
 router.post('/', wrap(EntryController.create));
 router.get('/:id', wrap(EntryController.getOne));
 router.patch('/:id', wrap(EntryController.update));
+router.patch('/:id/owner', wrap(EntryController.setOwner));
 router.delete('/:id', wrap(EntryController.remove));
 router.patch('/:id/health', wrap(EntryController.updateHealth));
 

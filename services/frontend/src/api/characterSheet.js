@@ -38,6 +38,21 @@ const characterApi = {
     await api.delete(`${BASE}/${id}`);
   },
 
+  // Admin-only — reassigns the character to another registered user.
+  async setOwner(id, ownerUsername) {
+    const { data } = await api.patch(`${BASE}/${id}/owner`, { owner_username: ownerUsername });
+    return data.character;
+  },
+
+  // Copies the character, optionally with a new race/archetype. See
+  // CharacterModel.duplicate (backend) for what carries over — tree progress/
+  // known spells/abilities/ritual trackers only come along when the archetype
+  // is unchanged.
+  async duplicate(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/duplicate`, payload);
+    return data.character;
+  },
+
   // Skills
   async patchSkill(characterId, skillKey, payload) {
     const { data } = await api.patch(`${BASE}/${characterId}/skills/${skillKey}`, payload);

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdmin } = require('../middleware/auth.middleware');
 const CharacterController = require('../controllers/character.controller');
 const SkillController = require('../controllers/skill.controller');
 const SpellController = require('../controllers/spell.controller');
@@ -24,6 +24,8 @@ router.post('/',      wrap(CharacterController.create));
 router.get('/:id',    wrap(CharacterController.getSheet));
 router.put('/:id',    wrap(CharacterController.update));
 router.delete('/:id', wrap(CharacterController.remove));
+router.patch('/:id/owner', requireAdmin, wrap(CharacterController.setOwner));
+router.post('/:id/duplicate', wrap(CharacterController.duplicate));
 
 // Skills
 router.get('/:id/skills',         wrap(SkillController.getAll));

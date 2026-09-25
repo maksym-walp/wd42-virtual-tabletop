@@ -103,6 +103,27 @@ const CharacterController = {
     if (!deleted) return res.status(404).json({ message: 'Персонажа не знайдено' });
     res.json({ message: 'Видалено' });
   },
+
+  // Admin-only (route-gated) — reassigns the character to another user.
+  async setOwner(req, res) {
+    const { owner_username } = req.body;
+    if (!owner_username) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+
+    const character = await CharacterModel.setOwner(req.params.id, owner_username);
+    if (!character) return res.status(404).json({ message: 'Персонажа не знайдено або користувача з таким іменем не існує' });
+    res.json({ character });
+  },
+
+  // Owner/campaign-GM/admin — duplicates the character, optionally with a new
+  // race/archetype (see CharacterModel.duplicate for what carries over).
+  async duplicate(req, res) {
+    if (!await authorizeCharacterWrite(req, res)) return;
+
+    const { name, archetype, race } = req.body;
+    const character = await CharacterModel.duplicate(req.params.id, { name, archetype, race });
+    if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
+    res.status(201).json({ character });
+  },
 };
 
 module.exports = CharacterController;

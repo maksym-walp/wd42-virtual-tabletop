@@ -11,6 +11,7 @@ router.get('/', wrap(PeopleController.list));
 router.post('/', wrap(PeopleController.create));
 router.get('/:id', wrap(PeopleController.getOne));
 router.patch('/:id', wrap(PeopleController.update));
+router.patch('/:id/owner', wrap(PeopleController.setOwner));
 router.delete('/:id', wrap(PeopleController.remove));
 
 module.exports = router;

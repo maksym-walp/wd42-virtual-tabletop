@@ -1,6 +1,6 @@
 const express = require('express');
 const CollectionController = require('../controllers/collection.controller');
-const { requireAuth, requireCanonicalManager } = require('../middleware/auth.middleware');
+const { requireAuth, requireCanonicalManager, requireAdminOwner } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -14,6 +14,7 @@ router.get('/:id', requireAuth, wrap(CollectionController.getOne));
 router.put('/:id', requireAuth, wrap(CollectionController.update));
 router.delete('/:id', requireAuth, wrap(CollectionController.remove));
 router.patch('/:id/canonical', requireCanonicalManager, wrap(CollectionController.setCanonical));
+router.patch('/:id/owner', requireAdminOwner, wrap(CollectionController.setOwner));
 
 router.post('/:id/items',           requireAuth, wrap(CollectionController.addItem));
 router.delete('/:id/items/:itemId', requireAuth, wrap(CollectionController.removeItem));

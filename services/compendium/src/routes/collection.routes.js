@@ -14,6 +14,7 @@ router.get('/', wrap(CollectionController.list));
 router.post('/', wrap(CollectionController.create));
 router.get('/:id', wrap(CollectionController.getOne));
 router.put('/:id', wrap(CollectionController.update));
+router.patch('/:id/owner', wrap(CollectionController.setOwner));
 router.delete('/:id', wrap(CollectionController.remove));
 
 router.post('/:id/items', wrap(CollectionController.addItem));

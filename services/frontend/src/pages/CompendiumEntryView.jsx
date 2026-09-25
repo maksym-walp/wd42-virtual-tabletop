@@ -6,6 +6,7 @@ import chronologyApi from '../api/chronology';
 import { ENTITY_TYPES, ATTRIBUTE_LABELS, GENDER_OPTIONS } from '../constants/compendium';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import RollButton from '../components/RollButton';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
@@ -82,6 +83,10 @@ export default function CompendiumEntryView() {
     } catch {
       setDeleting(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    setEntry(await compendiumApi.setEntryOwner(id, ownerUsername));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -264,6 +269,12 @@ export default function CompendiumEntryView() {
               ))}
             </ul>
           </Section>
+        )}
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
+          </div>
         )}
 
         {(entry.is_owner || isAdmin) && (

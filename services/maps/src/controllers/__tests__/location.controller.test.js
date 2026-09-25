@@ -228,3 +228,36 @@ describe('LocationController.update / remove', () => {
     expect(res.status).toHaveBeenCalledWith(204);
   });
 });
+
+describe('LocationController.setOwner', () => {
+  const ADMIN = { sub: 'a-1', role: 'admin' };
+
+  it('403 for the location owner (not admin)', async () => {
+    const res = mockRes();
+    await LocationController.setOwner(mockReq({ params: { id: 'loc1' }, body: { owner_username: 'newowner' }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(LocationModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('400 without owner_username', async () => {
+    const res = mockRes();
+    await LocationController.setOwner(mockReq({ params: { id: 'loc1' }, body: {}, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(LocationModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('404 when the location or the username does not exist', async () => {
+    LocationModel.setOwner.mockResolvedValue(null);
+    const res = mockRes();
+    await LocationController.setOwner(mockReq({ params: { id: 'loc1' }, body: { owner_username: 'ghost' }, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('200 for an admin, reassigning the owner', async () => {
+    LocationModel.setOwner.mockResolvedValue({ ...baseLocation, created_by: 'u2' });
+    const res = mockRes();
+    await LocationController.setOwner(mockReq({ params: { id: 'loc1' }, body: { owner_username: '  newowner  ' }, user: ADMIN }), res);
+    expect(LocationModel.setOwner).toHaveBeenCalledWith('loc1', 'newowner');
+    expect(res.json).toHaveBeenCalledWith({ location: { ...baseLocation, created_by: 'u2' } });
+  });
+});

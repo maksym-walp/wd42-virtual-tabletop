@@ -62,3 +62,21 @@ describe('SpeciesModel.remove', () => {
     expect(await SpeciesModel.remove('gone')).toBe(false);
   });
 });
+
+describe('SpeciesModel.setOwner', () => {
+  it('looks up the target user by username and reassigns created_by', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 's1', created_by: 'u2' }] });
+    const result = await SpeciesModel.setOwner('s1', 'newowner');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE compendium\.species/);
+    expect(sql).toMatch(/created_by = \(SELECT id FROM auth\.users WHERE username = \$2\)/);
+    expect(sql).toMatch(/updated_at = NOW\(\)/);
+    expect(params).toEqual(['s1', 'newowner']);
+    expect(result).toEqual({ id: 's1', created_by: 'u2' });
+  });
+
+  it('returns null when the record or target user does not exist', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await SpeciesModel.setOwner('s1', 'ghost')).toBe(null);
+  });
+});

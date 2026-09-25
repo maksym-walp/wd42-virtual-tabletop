@@ -125,6 +125,24 @@ describe('LocationModel.bulkImport', () => {
   });
 });
 
+describe('LocationModel.setOwner', () => {
+  it('reassigns created_by by username and updated_at', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'loc1', created_by: 'u2' }] });
+    const location = await LocationModel.setOwner('loc1', 'newowner');
+    expect(location).toEqual({ id: 'loc1', created_by: 'u2' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE maps\.locations/);
+    expect(sql).toMatch(/created_by = \(SELECT id FROM auth\.users WHERE username = \$2\)/);
+    expect(sql).toMatch(/updated_at = NOW\(\)/);
+    expect(params).toEqual(['loc1', 'newowner']);
+  });
+
+  it('null when the location or the username does not exist', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await LocationModel.setOwner('loc1', 'ghost')).toBeNull();
+  });
+});
+
 describe('LocationModel.remove', () => {
   it('reports true/false from rowCount', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 1 });

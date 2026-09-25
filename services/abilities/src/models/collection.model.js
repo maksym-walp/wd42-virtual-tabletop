@@ -119,6 +119,19 @@ const CollectionModel = {
     return rows[0] || null;
   },
 
+  // Admin only — reassign owner by username; EXISTS guards against a typo'd
+  // username silently no-oping instead of erroring.
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE abilities.collections
+       SET user_id = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
+
   // Only the collection owner (or admin) can add items, and only items they
   // can see (own or public, or anything if admin).
   async addItem(collectionId, userId, itemId, isAdmin = false) {

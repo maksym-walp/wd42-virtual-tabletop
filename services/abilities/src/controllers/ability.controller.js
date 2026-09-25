@@ -57,6 +57,15 @@ const AbilityController = {
     res.json({ ability });
   },
 
+  // Admin only (route-gated) — reassign an ability's owner without changing anything else.
+  async setOwner(req, res) {
+    const { owner_username } = req.body;
+    if (!owner_username) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+    const ability = await AbilityModel.setOwner(req.params.id, owner_username);
+    if (!ability) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ ability });
+  },
+
   // Той самий набір фільтрів, що й list, плюс ?id= для експорту рівно
   // одного запису — той самий результат, що дав би /:id, лише обгорнутий у
   // масив з одним елементом.

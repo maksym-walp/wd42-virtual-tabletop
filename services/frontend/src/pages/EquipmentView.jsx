@@ -9,6 +9,7 @@ import { downloadJsonFile } from '../utils/downloadJson';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
 
 export default function EquipmentView() {
@@ -62,14 +63,19 @@ export default function EquipmentView() {
     }
   };
 
-  const handleMarkCanonical = async () => {
+  const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
-      const { data } = await api.patch(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}/canonical`, { is_canonical: true });
+      const { data } = await api.patch(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}/canonical`, { is_canonical: isCanonical });
       setItem(data.item);
     } finally {
       setSettingCanonical(false);
     }
+  };
+
+  const handleSetOwner = async (ownerUsername) => {
+    const { data } = await api.patch(`${EQUIPMENT_ENDPOINTS[item.type]}/${id}/owner`, { owner_username: ownerUsername });
+    setItem(data.item);
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -146,11 +152,17 @@ export default function EquipmentView() {
           </Section>
         )}
 
-        {canManageCanonical && !item.is_canonical && (
+        {canManageCanonical && (
           <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={handleMarkCanonical} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : 'Зробити канонічним'}
+            <Button variant="ghost" onClick={() => handleSetCanonical(!item.is_canonical)} disabled={settingCanonical}>
+              {settingCanonical ? 'Позначення...' : item.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
             </Button>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetOwner} />
           </div>
         )}
 

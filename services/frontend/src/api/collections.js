@@ -35,6 +35,10 @@ export function createCollectionsApi(base) {
       const { data } = await api.patch(`${base}${id}/canonical`, { is_canonical: isCanonical });
       return data.collection;
     },
+    async setOwner(id, ownerUsername) {
+      const { data } = await api.patch(`${base}${id}/owner`, { owner_username: ownerUsername });
+      return data.collection;
+    },
     async addItem(collectionId, itemIdField, itemId) {
       const { data } = await api.post(`${base}${collectionId}/items`, { [itemIdField]: itemId });
       return data.item;

@@ -115,6 +115,17 @@ const EntryModel = {
     const { rowCount } = await pool.query(`DELETE FROM compendium.compendium_entries WHERE id = $1`, [id]);
     return rowCount > 0;
   },
+
+  async setOwner(id, ownerUsername) {
+    const { rows } = await pool.query(
+      `UPDATE compendium.compendium_entries
+       SET created_by = (SELECT id FROM auth.users WHERE username = $2), updated_at = NOW()
+       WHERE id = $1 AND EXISTS (SELECT 1 FROM auth.users WHERE username = $2)
+       RETURNING *`,
+      [id, ownerUsername]
+    );
+    return rows[0] || null;
+  },
 };
 
 module.exports = EntryModel;

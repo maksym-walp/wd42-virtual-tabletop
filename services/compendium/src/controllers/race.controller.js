@@ -54,6 +54,17 @@ const RaceController = {
     await RaceModel.remove(existing.id);
     res.status(204).send();
   },
+
+  async setOwner(req, res) {
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { owner_username: ownerUsername } = req.body;
+    if (!ownerUsername) return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+
+    const race = await RaceModel.setOwner(req.params.id, ownerUsername);
+    if (!race) return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    res.json({ race });
+  },
 };
 
 module.exports = RaceController;

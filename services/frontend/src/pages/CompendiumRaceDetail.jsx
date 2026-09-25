@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
+import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import { htmlToPreviewText } from '../utils/richText';
 
@@ -44,6 +45,15 @@ export default function CompendiumRaceDetail() {
     if (!confirm('Видалити цей народ?')) return;
     await compendiumApi.removePeople(peopleId);
     setPeoples((list) => list.filter((p) => p.id !== peopleId));
+  };
+
+  const handleSetRaceOwner = async (ownerUsername) => {
+    setRace(await compendiumApi.setRaceOwner(id, ownerUsername));
+  };
+
+  const handleSetPeopleOwner = async (peopleId, ownerUsername) => {
+    const updated = await compendiumApi.setPeopleOwner(peopleId, ownerUsername);
+    setPeoples((list) => list.map((p) => (p.id === peopleId ? updated : p)));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -87,16 +97,27 @@ export default function CompendiumRaceDetail() {
                   {p.description && <span className="text-xs text-text-dim">{htmlToPreviewText(p.description)}</span>}
                   {p.origin && <span className="text-xs italic text-text-dim">Походження: {p.origin}</span>}
                 </div>
-                {(p.is_owner || isAdmin) && (
-                  <div className="flex items-center gap-2">
-                    <Link to={`/compendium/peoples/${p.id}/edit`} className="text-xs text-accent">Редагувати</Link>
-                    <button type="button" className="px-2 text-sm text-danger" onClick={() => handleDeletePeople(p.id)}>✕</button>
-                  </div>
-                )}
+                <div className="flex flex-col items-end gap-1.5">
+                  {(p.is_owner || isAdmin) && (
+                    <div className="flex items-center gap-2">
+                      <Link to={`/compendium/peoples/${p.id}/edit`} className="text-xs text-accent">Редагувати</Link>
+                      <button type="button" className="px-2 text-sm text-danger" onClick={() => handleDeletePeople(p.id)}>✕</button>
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <ChangeOwnerControl onSubmit={(username) => handleSetPeopleOwner(p.id, username)} />
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="flex gap-3 border-t border-border px-5 py-4">
+            <ChangeOwnerControl onSubmit={handleSetRaceOwner} />
+          </div>
+        )}
 
         {canManage && (
           <div className="flex gap-3 border-t border-border px-5 py-4">

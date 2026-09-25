@@ -220,6 +220,22 @@ const LocationController = {
     await LocationModel.remove(existing.id);
     res.status(204).send();
   },
+
+  // Admin-only: reassign the location's owner without changing anything else.
+  async setOwner(req, res) {
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const { owner_username } = req.body;
+    if (!owner_username || !owner_username.trim()) {
+      return res.status(400).json({ message: 'owner_username є обовʼязковим' });
+    }
+
+    const updated = await LocationModel.setOwner(req.params.id, owner_username.trim());
+    if (!updated) {
+      return res.status(404).json({ message: 'Запис не знайдено або користувача з таким іменем не існує' });
+    }
+    res.json({ location: updated });
+  },
 };
 
 module.exports = LocationController;

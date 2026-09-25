@@ -131,3 +131,35 @@ describe('SpeciesController.update / remove', () => {
     expect(SpeciesModel.update).not.toHaveBeenCalled();
   });
 });
+
+describe('SpeciesController.setOwner', () => {
+  it('403 for a game master (admin-only)', async () => {
+    const res = mockRes();
+    await SpeciesController.setOwner(mockReq({ params: { id: 's1' }, body: { owner_username: 'newowner' }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(SpeciesModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('400 when owner_username missing', async () => {
+    const res = mockRes();
+    await SpeciesController.setOwner(mockReq({ params: { id: 's1' }, body: {}, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(SpeciesModel.setOwner).not.toHaveBeenCalled();
+  });
+
+  it('404 when record or target user not found', async () => {
+    SpeciesModel.setOwner.mockResolvedValue(null);
+    const res = mockRes();
+    await SpeciesController.setOwner(mockReq({ params: { id: 's1' }, body: { owner_username: 'ghost' }, user: ADMIN }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('200 for admin reassigning ownership', async () => {
+    const reassigned = { ...species, created_by: 'u2' };
+    SpeciesModel.setOwner.mockResolvedValue(reassigned);
+    const res = mockRes();
+    await SpeciesController.setOwner(mockReq({ params: { id: 's1' }, body: { owner_username: 'newowner' }, user: ADMIN }), res);
+    expect(SpeciesModel.setOwner).toHaveBeenCalledWith('s1', 'newowner');
+    expect(res.json).toHaveBeenCalledWith({ species: reassigned });
+  });
+});
