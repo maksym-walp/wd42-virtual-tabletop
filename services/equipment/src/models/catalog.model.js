@@ -66,10 +66,15 @@ const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false)
 const usedInSpellsSelect = `COALESCE(
     (SELECT jsonb_agg(jsonb_build_object('id', sp.id, 'name', sp.name) ORDER BY sp.name)
      FROM spellbook.spells sp
-     WHERE EXISTS (
+     WHERE (EXISTS (
        SELECT 1 FROM jsonb_array_elements(sp.components) c
        WHERE (c->>'item_id')::uuid = i.id
-     ) AND (sp.user_id = $2 OR sp.is_public = true)),
+     ) OR EXISTS (
+       -- компоненти вищих рівнів заклинання (spellbook.spells.levels)
+       SELECT 1 FROM jsonb_array_elements(sp.levels) lv,
+                     jsonb_array_elements(COALESCE(lv->'components', '[]'::jsonb)) c
+       WHERE (c->>'item_id')::uuid = i.id
+     )) AND (sp.user_id = $2 OR sp.is_public = true)),
     '[]'::jsonb
   ) AS used_in_spells`;
 

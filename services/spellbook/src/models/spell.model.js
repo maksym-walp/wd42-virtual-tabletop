@@ -25,6 +25,56 @@ const traditionsSelect = (alias) => `COALESCE(
 // "Зробити канонічним" action (s.is_canonical) regardless of owner.
 const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR s.is_canonical)";
 
+// Видимість заклинання під псевдонімом alias для користувача $userParam —
+// той самий принцип, що в findById: адмін бачить усе.
+const visibleExpr = (alias, userParam, isAdmin) => (isAdmin
+  ? 'TRUE'
+  : `(${alias}.user_id = ${userParam} OR ${alias}.is_public = true)`);
+
+// «Потрібно вивчити» (батьківське) і «Похідні заклинання» — лише видимі
+// запитувачу. derived_spells.is_owner потрібен формі: відчепити/прив'язати
+// можна лише власні похідні.
+const lineageSelect = (userParam, isAdmin) => `
+  (SELECT jsonb_build_object('id', p.id, 'name', p.name)
+     FROM spellbook.spells p
+     WHERE p.id = s.parent_spell_id AND ${visibleExpr('p', userParam, isAdmin)}) AS parent_spell,
+  COALESCE(
+    (SELECT jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'is_owner', c.user_id = ${userParam}) ORDER BY c.name)
+     FROM spellbook.spells c
+     WHERE c.parent_spell_id = s.id AND ${visibleExpr('c', userParam, isAdmin)}),
+    '[]'::jsonb
+  ) AS derived_spells`;
+
+const COMPLEXITIES = ['primitive', 'simple', 'medium', 'complex', 'extreme'];
+
+const normalizeComplexity = (value) => (COMPLEXITIES.includes(value) ? value : null);
+
+// Рівні заклинання — хронологічні версії. Рівень 1 — це колонки самого
+// рядка spells; рівні 2..N лежать у spells.levels (JSONB) як повні знімки
+// полів, що можуть змінюватися між версіями. Білий список полів + ті самі
+// дефолти, що й для рівня 1 у create — щоб у JSONB не потрапляло сміття з
+// тіла запиту чи імпортованого файлу.
+function normalizeLevels(levels) {
+  if (!Array.isArray(levels)) return [];
+  return levels
+    .filter((level) => level && typeof level === 'object')
+    .map((level) => ({
+      complexity: normalizeComplexity(level.complexity),
+      spell_kind: level.spell_kind ?? 'utility',
+      energy_cost: Number(level.energy_cost) || 0,
+      action_time: Number(level.action_time) || 1,
+      ritual: level.ritual ?? 'impossible',
+      duration_value: level.duration_value === '' || level.duration_value == null ? null : Number(level.duration_value),
+      duration_unit: level.duration_unit ?? 'instant',
+      range_desc: level.range_desc || null,
+      components: Array.isArray(level.components) ? level.components : [],
+      mechanical_desc: level.mechanical_desc || null,
+      narrative_desc: level.narrative_desc || null,
+      lore_creator: level.lore_creator || null,
+      lore_creator_npc_id: level.lore_creator_npc_id || null,
+    }));
+}
+
 // Колонки, які пише bulkImport — той самий набір полів, що create/update
 // пишуть сьогодні (плюс lore_creator_npc_id із задачі 1), за винятком
 // image_url (немає сенсу тягнути чужий шлях на диску) і
@@ -34,7 +84,10 @@ const IMPORT_COLUMNS = [
   'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
   'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
   'duration_value', 'duration_unit', 'range_desc', 'components', 'is_public',
+  'complexity', 'levels',
 ];
+
+const JSONB_IMPORT_COLUMNS = ['components', 'levels'];
 
 function normalizeImportField(column, record) {
   switch (column) {
@@ -46,12 +99,16 @@ function normalizeImportField(column, record) {
     case 'energy_cost': return record.energy_cost ?? 0;
     case 'action_time': return record.action_time ?? 1;
     case 'components': return JSON.stringify(record.components ?? []);
+    case 'complexity': return normalizeComplexity(record.complexity);
+    // lore_creator_npc_id усередині рівнів лишається як є — так само, як і
+    // на рівні 1 (IMPORT_COLUMNS його теж переносить).
+    case 'levels': return JSON.stringify(normalizeLevels(record.levels));
     default: return record[column] ?? null;
   }
 }
 
 const SpellModel = {
-  async findAll(userId, { nature, spellKind, ritual, search, sort, scope, limit, traditionId } = {}, isAdmin = false) {
+  async findAll(userId, { nature, spellKind, ritual, complexity, search, sort, scope, limit, traditionId } = {}, isAdmin = false) {
     const params = [userId];
     // scope=community = public entries authored by other, non-canonical users
     // (used by the Dashboard's "Творіння спільноти" rail) — replaces the
@@ -78,6 +135,13 @@ const SpellModel = {
     if (ritual) {
       params.push(ritual);
       conditions.push(`s.ritual = $${params.length}`);
+    }
+    // Складність може відрізнятися між рівнями — заклинання підходить, якщо
+    // хоч один його рівень має обрану складність.
+    if (complexity) {
+      const complexityArr = Array.isArray(complexity) ? complexity : [complexity];
+      params.push(complexityArr);
+      conditions.push(`(s.complexity = ANY($${params.length}::text[]) OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.levels) lv WHERE lv->>'complexity' = ANY($${params.length}::text[])))`);
     }
     if (traditionId) {
       const traditionArr = Array.isArray(traditionId) ? traditionId : [traditionId];
@@ -114,7 +178,7 @@ const SpellModel = {
     const visibility = isAdmin ? 'TRUE' : '(s.user_id = $2 OR s.is_public = true)';
     const { rows } = await pool.query(
       `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')},
-              ${traditionsSelect('s')},
+              ${traditionsSelect('s')}, ${lineageSelect('$2', isAdmin)},
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM spellbook.spells s
        LEFT JOIN auth.users cu ON cu.id = s.user_id
@@ -131,7 +195,7 @@ const SpellModel = {
       duration_value, duration_unit, range_desc,
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
-      lore_creator, lore_creator_npc_id,
+      lore_creator, lore_creator_npc_id, complexity, levels, parent_spell_id,
     } = data;
 
     const { rows } = await pool.query(
@@ -139,8 +203,8 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
-          image_url, lore_creator, lore_creator_npc_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19)
+          image_url, lore_creator, lore_creator_npc_id, complexity, levels, parent_spell_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22)
        RETURNING *`,
       [
         userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -150,6 +214,8 @@ const SpellModel = {
         range_desc ?? null, JSON.stringify(components ?? []), is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
+        normalizeComplexity(complexity), JSON.stringify(normalizeLevels(levels)),
+        parent_spell_id || null,
       ]
     );
     return rows[0];
@@ -162,7 +228,7 @@ const SpellModel = {
       duration_value, duration_unit, range_desc,
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
-      lore_creator, lore_creator_npc_id,
+      lore_creator, lore_creator_npc_id, complexity, levels, parent_spell_id,
     } = data;
 
     const { rows } = await pool.query(
@@ -173,7 +239,8 @@ const SpellModel = {
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14::jsonb, is_public=$15,
            prerequisite_node_ids=$16, prerequisite_logic=$17,
-           image_url=$18, lore_creator=$19, lore_creator_npc_id=$20, updated_at=NOW()
+           image_url=$18, lore_creator=$19, lore_creator_npc_id=$20,
+           complexity=$22, levels=$23::jsonb, parent_spell_id=$24, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $21 = true)
        RETURNING *`,
       [
@@ -184,9 +251,108 @@ const SpellModel = {
         JSON.stringify(components ?? []), is_public ?? false,
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
+        normalizeComplexity(complexity), JSON.stringify(normalizeLevels(levels)),
+        parent_spell_id || null,
       ]
     );
     return rows[0] || null;
+  },
+
+  // Перевірка «Потрібно вивчити»/«Похідних» ДО запису: повертає текст
+  // помилки або null. spellId — null для ще не створеного заклинання.
+  // Дерево лишається деревом: батько не може бути самим заклинанням чи
+  // його нащадком, похідне — самим заклинанням, новим батьком чи його
+  // предком (інакше утворився б цикл).
+  async validateLineage(spellId, userId, { parentId, derivedIds }, isAdmin = false) {
+    const derived = Array.isArray(derivedIds) ? derivedIds : [];
+    if (parentId) {
+      if (parentId === spellId || derived.includes(parentId)) {
+        return 'Заклинання не може бути одночасно батьківським і похідним';
+      }
+      const { rows: parentRows } = await pool.query(
+        `SELECT 1 FROM spellbook.spells s WHERE s.id = $1 AND ${visibleExpr('s', '$2', isAdmin)}`,
+        [parentId, userId]
+      );
+      if (!parentRows.length) return 'Батьківське заклинання не знайдено';
+      if (spellId) {
+        const { rows } = await pool.query(
+          `WITH RECURSIVE down AS (
+             SELECT id FROM spellbook.spells WHERE parent_spell_id = $1
+             UNION
+             SELECT c.id FROM spellbook.spells c JOIN down ON c.parent_spell_id = down.id
+           ) SELECT 1 FROM down WHERE id = $2`,
+          [spellId, parentId]
+        );
+        if (rows.length) return 'Не можна обрати похідне заклинання як батьківське';
+      }
+    }
+    if (derived.length) {
+      if (spellId && derived.includes(spellId)) return 'Заклинання не може бути похідним від себе';
+      if (parentId) {
+        const { rows } = await pool.query(
+          `WITH RECURSIVE up AS (
+             SELECT id, parent_spell_id FROM spellbook.spells WHERE id = $1
+             UNION
+             SELECT p.id, p.parent_spell_id FROM spellbook.spells p JOIN up ON p.id = up.parent_spell_id
+           ) SELECT 1 FROM up WHERE id = ANY($2::uuid[])`,
+          [parentId, derived]
+        );
+        if (rows.length) return 'Не можна обрати предка заклинання як похідне';
+      }
+    }
+    return null;
+  },
+
+  // Синхронізує «Похідні заклинання»: похідні — це ті, чий parent_spell_id
+  // вказує сюди, тож змінюються рядки САМИХ похідних, і лише ті, якими
+  // запитувач володіє (або адмін). Чужі похідні не чіпаються.
+  async setDerived(spellId, userId, derivedIds, isAdmin = false) {
+    const ids = Array.isArray(derivedIds) ? derivedIds.filter((d) => d && d !== spellId) : [];
+    await pool.query(
+      `UPDATE spellbook.spells SET parent_spell_id = NULL, updated_at = NOW()
+       WHERE parent_spell_id = $1 AND NOT (id = ANY($2::uuid[])) AND (user_id = $3 OR $4 = true)`,
+      [spellId, ids, userId, isAdmin]
+    );
+    if (!ids.length) return;
+    await pool.query(
+      `UPDATE spellbook.spells SET parent_spell_id = $1, updated_at = NOW()
+       WHERE id = ANY($2::uuid[]) AND parent_spell_id IS DISTINCT FROM $1 AND (user_id = $3 OR $4 = true)`,
+      [spellId, ids, userId, isAdmin]
+    );
+  },
+
+  // Усе дерево, до якого належить заклинання: піднімаємось до кореня
+  // (лише видимими предками), далі спускаємось від кореня всіма видимими
+  // нащадками. Плоский список — дерево будує фронтенд за parent_spell_id.
+  async findTree(id, userId, isAdmin = false) {
+    const { rows } = await pool.query(
+      `WITH RECURSIVE up AS (
+         SELECT s.id, s.parent_spell_id FROM spellbook.spells s
+         WHERE s.id = $1 AND ${visibleExpr('s', '$2', isAdmin)}
+         UNION
+         SELECT s.id, s.parent_spell_id FROM spellbook.spells s
+         JOIN up ON s.id = up.parent_spell_id
+         WHERE ${visibleExpr('s', '$2', isAdmin)}
+       ),
+       root AS (
+         SELECT u.id FROM up u WHERE NOT EXISTS (SELECT 1 FROM up u2 WHERE u2.id = u.parent_spell_id)
+       ),
+       down AS (
+         SELECT s.id, s.name, s.parent_spell_id, s.complexity, s.levels, 0 AS depth
+         FROM spellbook.spells s WHERE s.id IN (SELECT id FROM root)
+         UNION ALL
+         SELECT s.id, s.name, s.parent_spell_id, s.complexity, s.levels, down.depth + 1
+         FROM spellbook.spells s
+         JOIN down ON s.parent_spell_id = down.id
+         WHERE ${visibleExpr('s', '$2', isAdmin)} AND down.depth < 50
+       )
+       SELECT id, name, complexity, 1 + jsonb_array_length(levels) AS level_count,
+              CASE WHEN depth = 0 THEN NULL ELSE parent_spell_id END AS parent_spell_id
+       FROM down
+       ORDER BY depth, name`,
+      [id, userId]
+    );
+    return rows;
   },
 
   async delete(id, userId, isAdmin = false) {
@@ -245,7 +411,7 @@ const SpellModel = {
       );
       const placeholders = IMPORT_COLUMNS.map((column, idx) => {
         const paramIdx = start + idx + 1;
-        return column === 'components' ? `$${paramIdx}::jsonb` : `$${paramIdx}`;
+        return JSONB_IMPORT_COLUMNS.includes(column) ? `$${paramIdx}::jsonb` : `$${paramIdx}`;
       });
       return `(${placeholders.join(', ')})`;
     });
@@ -259,3 +425,4 @@ const SpellModel = {
 };
 
 module.exports = SpellModel;
+module.exports.normalizeLevels = normalizeLevels;

@@ -8,7 +8,7 @@ import CatalogTabs from '../components/CatalogTabs';
 import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
 import { pluralizeUk } from '../utils/pluralize';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildSpellbookImportTemplate } from '../utils/spellbookImportTemplate';
@@ -25,6 +25,8 @@ const SPELL_TABLE_COLUMNS = [
   { key: 'name', label: 'Назва', render: (s) => s.name },
   { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
   { key: 'spell_kind', label: 'Вид', render: (s) => SPELL_KINDS[s.spell_kind]?.label ?? s.spell_kind },
+  { key: 'complexity', label: 'Складність', render: (s) => SPELL_COMPLEXITIES[s.complexity]?.label ?? '—' },
+  { key: 'levels', label: 'Рівні', render: (s) => 1 + (s.levels || []).length },
   { key: 'energy_cost', label: 'Енергія', render: (s) => s.energy_cost },
   { key: 'action_time', label: 'Дії', render: (s) => `${s.action_time}/3` },
   { key: 'ritual', label: 'Ритуал', render: (s) => RITUAL_TYPES[s.ritual]?.label ?? s.ritual },
@@ -45,7 +47,7 @@ export default function Spellbook() {
   const [viewMode, setViewMode] = useViewMode('spellbook');
   const [traditions, setTraditions] = useState([]);
   const [filter, setFilter] = useState({
-    nature: [], spell_kind: '', ritual: '', tradition: [], search: '', sort: 'name', scope: '',
+    nature: [], spell_kind: '', complexity: [], ritual: '', tradition: [], search: '', sort: 'name', scope: '',
   });
 
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function Spellbook() {
     const params = new URLSearchParams();
     filter.nature.forEach((n) => params.append('nature', n));
     if (filter.spell_kind) params.set('spell_kind', filter.spell_kind);
+    filter.complexity.forEach((c) => params.append('complexity', c));
     if (filter.ritual)     params.set('ritual', filter.ritual);
     filter.tradition.forEach((t) => params.append('tradition', t));
     if (filter.search)     params.set('search', filter.search);
@@ -110,6 +113,7 @@ export default function Spellbook() {
 
   const activeFilterCount = ['spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length
     + (filter.nature.length > 0 ? 1 : 0)
+    + (filter.complexity.length > 0 ? 1 : 0)
     + (filter.tradition.length > 0 ? 1 : 0);
 
   return (
@@ -171,6 +175,20 @@ export default function Spellbook() {
             </FilterPill>
             {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
               <FilterPill key={key} active={filter.spell_kind === key} onClick={() => toggle('spell_kind', key)}>
+                {label}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Складність</span>
+          <div className="flex flex-wrap gap-1.5">
+            <FilterPill active={filter.complexity.length === 0} onClick={() => setFilter((f) => ({ ...f, complexity: [] }))}>
+              Усі
+            </FilterPill>
+            {Object.entries(SPELL_COMPLEXITIES).map(([key, { label }]) => (
+              <FilterPill key={key} active={filter.complexity.includes(key)} onClick={() => toggleMulti('complexity', key)}>
                 {label}
               </FilterPill>
             ))}

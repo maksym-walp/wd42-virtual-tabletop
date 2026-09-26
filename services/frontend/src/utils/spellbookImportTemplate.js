@@ -1,10 +1,11 @@
-import { NATURE_TYPES, SPELL_KINDS, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
 
 // Шаблон для POST /api/spellbook/import — з коментарями (JSONC), той самий
 // прийом, що й у equipmentImportTemplate.js. Заклинання не мають
 // адміном-налаштовуваних переліків, тому параметрів функція не приймає.
 export function buildSpellbookImportTemplate() {
   const natureList = Object.entries(NATURE_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
+  const complexityList = Object.entries(SPELL_COMPLEXITIES).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const spellKindList = Object.entries(SPELL_KINDS).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const ritualList = Object.entries(RITUAL_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const durationUnitList = Object.entries(DURATION_UNITS).map(([k, v]) => `${k} (${v})`).join(', ');
@@ -21,6 +22,7 @@ export function buildSpellbookImportTemplate() {
 //   name                  — обов'язкове, рядок
 //   nature                — масив з: ${natureList}
 //   spell_kind            — один з: ${spellKindList}
+//   complexity            — один з: ${complexityList}, або null
 //   mechanical_desc       — рядок або null — що відбувається механічно
 //   narrative_desc        — рядок або null — як це виглядає у світі гри
 //   lore_creator          — рядок або null — вільний текст, ім'я лорного автора заклинання
@@ -39,12 +41,18 @@ export function buildSpellbookImportTemplate() {
 //                             quantity — число
 //                             unit     — рядок, напр. одна з: ${unitList} (або довільна своя)
 //   is_public             — true / false
+//   levels                — масив рівнів 2..N (хронологічні версії; поля вище — це рівень 1).
+//                           Кожен рівень — об'єкт з тими самими полями: complexity, spell_kind,
+//                           energy_cost, action_time, ritual, duration_value, duration_unit,
+//                           range_desc, components, mechanical_desc, narrative_desc,
+//                           lore_creator, lore_creator_npc_id. Порожній масив — лише один рівень.
 //
 [
   {
     "name": "Приклад: Вогняна стріла",
     "nature": ["elemental"],
     "spell_kind": "ranged",
+    "complexity": "simple",
     "mechanical_desc": "Заклинач кидає d8 вогняної шкоди по цілі в межах дальності.",
     "narrative_desc": "Невеличка стріла полум'я зривається з пальців чаклуна.",
     "lore_creator": "Архімаг Ельдран Сірий",
@@ -58,7 +66,24 @@ export function buildSpellbookImportTemplate() {
     "components": [
       { "item_id": null, "name": "Дрібка сірки", "quantity": 1, "unit": "щіпки" }
     ],
-    "is_public": true
+    "is_public": true,
+    "levels": [
+      {
+        "complexity": "medium",
+        "spell_kind": "ranged",
+        "energy_cost": 5,
+        "action_time": 2,
+        "ritual": "impossible",
+        "duration_value": null,
+        "duration_unit": "instant",
+        "range_desc": "20 метрів",
+        "components": [],
+        "mechanical_desc": "Заклинач кидає 2d8 вогняної шкоди по цілі в межах дальності.",
+        "narrative_desc": "Стріла розгоряється до сліпучо-білого полум'я.",
+        "lore_creator": "Архімаг Ельдран Сірий",
+        "lore_creator_npc_id": null
+      }
+    ]
   }
 ]
 `;

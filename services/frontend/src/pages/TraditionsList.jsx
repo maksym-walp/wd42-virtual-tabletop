@@ -74,7 +74,7 @@ export default function TraditionsList() {
           {traditions.map((t) => (
             <div
               key={t.id}
-              className="block overflow-hidden rounded-lg border border-border bg-surface"
+              className="relative block overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:bg-surface-hover"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
               <div className="flex items-center gap-1.5 border-b border-border px-3.5 py-2">
@@ -82,7 +82,7 @@ export default function TraditionsList() {
                   {(t.spells || []).length} заклинань
                 </span>
                 {canManageTraditions && (
-                  <div className="ml-auto flex items-center gap-3">
+                  <div className="relative z-10 ml-auto flex items-center gap-3">
                     <Link to={`/spellbook/traditions/${t.id}/edit`} className="text-[0.7rem] font-semibold text-accent">
                       Редагувати
                     </Link>
@@ -97,7 +97,10 @@ export default function TraditionsList() {
                   </div>
                 )}
               </div>
-              <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{t.name}</h3>
+              {/* Stretched link: after: overlay covers the whole card; edit/delete sit above it (z-10). */}
+              <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">
+                <Link to={`/spellbook/traditions/${t.id}`} className="after:absolute after:inset-0">{t.name}</Link>
+              </h3>
               {t.founders && (
                 <p className="px-3.5 pb-1 text-xs italic text-text-dim">Засновники: {t.founders}</p>
               )}

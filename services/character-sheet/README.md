@@ -25,8 +25,8 @@
 | PUT | `/:id/skills` | власник/campaign-GM | `{ updates: [{ skill_key, value?, progress_marks?, base_value? }] }` (`base_value` — лише майстер створення) | `{ skills }` |
 | PATCH | `/:id/skills/:key` | власник/campaign-GM | `{ value?, progress_marks?, base_value? }` — значення клампуються (`value` 0–12, `progress_marks` 0–4) | `{ skill }` |
 | GET | `/:id/spells` | лише логін | — | `{ spells }` |
-| POST | `/:id/spells` | власник/campaign-GM | `{ spell_id }` | `201 { spell }` |
-| PATCH | `/:id/spells/:spellId` | власник/campaign-GM | `{ mastered?, cast_count? }` | `{ spell }` |
+| POST | `/:id/spells` | власник/campaign-GM | `{ spell_id, level? }` | `201 { spell }` / `400` якщо `level` не ціле від 1 до кількості рівнів заклинання |
+| PATCH | `/:id/spells/:spellId` | власник/campaign-GM | `{ mastered?, cast_count?, level? }` | `{ spell }` / `400` на некоректний `level` |
 | DELETE | `/:id/spells/:spellId` | власник/campaign-GM | — | `{ message }` |
 | GET | `/:id/tree` | лише логін | — | `{ progress }` |
 | POST | `/:id/tree/:nodeId` | власник/campaign-GM | — | `201 { progress, granted: { abilities, maneuvers, spells } }` (перевіряє передумови ребер і, коли пункти обов'язкові, `cost <= remaining` — інакше `403`; `granted` — записи, додані «видавати автоматично»-прив'язками вузла, з розгортанням колекцій) / `200` якщо вже відкрито |
@@ -69,7 +69,7 @@
 |---|---|
 | `characters` | Основний запис персонажа: `user_id`, `name`, `archetype` (fighter/spellcaster/rogue), `race`, вітали (`current_hp`, `current_magic`, `death_scale`...), `experience_points` (єдиний гаманець досвіду, раніше `dev_points`), `is_public`, гроші, натхнення, портрет тощо |
 | `skills` | 20 фіксованих навичок на персонажа (`value` 0–12, `base_value` 0–12 — знімок після створення, `progress_marks` 0–4), унікальні за `(character_id, skill_key)` |
-| `known_spells` | Прогрес по заклинанню (`spell_id` → `spellbook.spells`): `mastered`, `cast_count` |
+| `known_spells` | Прогрес по заклинанню (`spell_id` → `spellbook.spells`): `mastered`, `cast_count`, `level` (яким рівнем заклинання оволодів персонаж; 1 = базовий, N = `spells.levels[N-2]`) |
 | `tree_progress` | Відкриті вузли дерева навичок (`node_id` → `skill_tree.nodes`), унікальні за `(character_id, node_id)` |
 | `equipment` | Прив'язане спорядження (`equipment_id` → `equipment.items`/`equipment.weapons`/`equipment.armor`/`equipment.artifacts`), `mastery_count`/`mastered` |
 | `maneuvers` | Прив'язані маневри бійця (`maneuver_id` → `maneuvers.entries`) |

@@ -49,10 +49,10 @@ export default function TraditionForm() {
     try {
       if (isEdit) {
         await traditionsApi.update(id, form);
-        navigate('/spellbook/traditions');
+        navigate(`/spellbook/traditions/${id}`);
       } else {
-        await traditionsApi.create(form);
-        navigate('/spellbook/traditions');
+        const created = await traditionsApi.create(form);
+        navigate(`/spellbook/traditions/${created.id}`);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -105,7 +105,7 @@ export default function TraditionForm() {
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 flex justify-end gap-3 border-t border-border bg-surface px-4 py-3 md:static md:border-0 md:bg-transparent md:px-0 md:py-0">
-          <Button type="button" variant="ghost" to="/spellbook/traditions">
+          <Button type="button" variant="ghost" to={isEdit ? `/spellbook/traditions/${id}` : '/spellbook/traditions'}>
             Скасувати
           </Button>
           <Button type="submit" disabled={saving}>

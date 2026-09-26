@@ -8,6 +8,15 @@ beforeEach(() => {
   pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
 });
 
+describe('SpellProgressModel.patch level', () => {
+  it('passes level as $5 and null when omitted', async () => {
+    await SpellProgressModel.patch('c1', 's1', { level: 2 });
+    expect(pool.query.mock.calls[0][1][4]).toBe(2);
+    await SpellProgressModel.patch('c1', 's1', { mastered: true });
+    expect(pool.query.mock.calls[1][1][4]).toBeNull();
+  });
+});
+
 describe('SpellProgressModel.patch auto-mastery rule', () => {
   it('does not force mastery below 3 casts', async () => {
     await SpellProgressModel.patch('c1', 's1', { cast_count: 2 });

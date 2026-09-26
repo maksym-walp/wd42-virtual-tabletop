@@ -240,3 +240,60 @@ describe('SpellController.import', () => {
     expect(res.json).toHaveBeenCalledWith({ imported: 2 });
   });
 });
+
+describe('SpellController lineage (Потрібно вивчити / Похідні)', () => {
+  it('create 400s with the validation message and writes nothing', async () => {
+    SpellModel.validateLineage.mockResolvedValueOnce('Батьківське заклинання не знайдено');
+    const req = mockReq({ body: { name: 'X', parent_spell_id: 'p1' } });
+    const res = mockRes();
+
+    await SpellController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(SpellModel.create).not.toHaveBeenCalled();
+  });
+
+  it('create syncs derived spells onto the new id when derived_spell_ids is given', async () => {
+    SpellModel.create.mockResolvedValueOnce({ id: 'new' });
+    const req = mockReq({ body: { name: 'X', derived_spell_ids: ['d1'] } });
+    const res = mockRes();
+
+    await SpellController.create(req, res);
+
+    expect(SpellModel.validateLineage).toHaveBeenCalledWith(null, 'user-1', { parentId: undefined, derivedIds: ['d1'] }, false);
+    expect(SpellModel.setDerived).toHaveBeenCalledWith('new', 'user-1', ['d1'], false);
+  });
+
+  it('update leaves derived spells alone when derived_spell_ids is omitted', async () => {
+    SpellModel.update.mockResolvedValueOnce({ id: 's1' });
+    const req = mockReq({ params: { id: 's1' }, body: { name: 'X' } });
+    const res = mockRes();
+
+    await SpellController.update(req, res);
+
+    expect(SpellModel.setDerived).not.toHaveBeenCalled();
+  });
+
+  it('update 400s on a lineage cycle before touching the spell', async () => {
+    SpellModel.validateLineage.mockResolvedValueOnce('Не можна обрати похідне заклинання як батьківське');
+    const req = mockReq({ params: { id: 's1' }, body: { name: 'X', parent_spell_id: 'child' } });
+    const res = mockRes();
+
+    await SpellController.update(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(SpellModel.update).not.toHaveBeenCalled();
+  });
+
+  it('tree 404s when nothing is visible, otherwise returns the nodes', async () => {
+    SpellModel.findTree.mockResolvedValueOnce([]);
+    const res404 = mockRes();
+    await SpellController.tree(mockReq({ params: { id: 's1' } }), res404);
+    expect(res404.status).toHaveBeenCalledWith(404);
+
+    SpellModel.findTree.mockResolvedValueOnce([{ id: 's1', parent_spell_id: null }]);
+    const res = mockRes();
+    await SpellController.tree(mockReq({ params: { id: 's1' } }), res);
+    expect(res.json).toHaveBeenCalledWith({ nodes: [{ id: 's1', parent_spell_id: null }] });
+  });
+});

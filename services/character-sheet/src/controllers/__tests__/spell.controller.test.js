@@ -86,15 +86,40 @@ describe('SpellController.add', () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
     checkPrerequisites.mockResolvedValue({ met: true, missing: [] });
+    SpellProgressModel.levelCount.mockResolvedValue(1);
     SpellProgressModel.add.mockResolvedValue({ id: 'link-1', spell_id: 's1' });
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1' } });
     const res = mockRes();
 
     await SpellController.add(req, res);
 
-    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1');
+    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', 1);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ spell: { id: 'link-1', spell_id: 's1' } });
+  });
+});
+
+describe('SpellController.add level', () => {
+  beforeEach(() => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    isVisibleToUser.mockResolvedValue(true);
+    checkPrerequisites.mockResolvedValue({ met: true, missing: [] });
+    SpellProgressModel.levelCount.mockResolvedValue(3);
+  });
+
+  it('adds the spell at the chosen level', async () => {
+    const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', level: 3 } });
+    const res = mockRes();
+    await SpellController.add(req, res);
+    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', 3);
+  });
+
+  it.each([0, 4, 1.5, '2'])('400s for an out-of-range or non-integer level (%p)', async (level) => {
+    const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', level } });
+    const res = mockRes();
+    await SpellController.add(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(SpellProgressModel.add).not.toHaveBeenCalled();
   });
 });
 

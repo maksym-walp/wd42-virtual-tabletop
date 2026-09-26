@@ -70,8 +70,8 @@ const characterApi = {
     return data.spells;
   },
 
-  async addSpell(characterId, spellId) {
-    const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId });
+  async addSpell(characterId, spellId, level = 1) {
+    const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId, level });
     return data.spell;
   },
 

@@ -10,6 +10,7 @@ const SpellModel = require('../models/spell.model');
 const EXPORT_OMIT_FIELDS = [
   'image_url', 'created_at', 'updated_at', 'is_owner', 'owner_username',
   'is_canonical', 'prerequisite_node_ids', 'prerequisite_logic', 'prerequisite_nodes', 'traditions',
+  'parent_spell_id', 'parent_spell', 'derived_spells',
 ];
 
 function sanitizeForExport(row) {
@@ -20,8 +21,8 @@ function sanitizeForExport(row) {
 
 const SpellController = {
   async list(req, res) {
-    const { nature, spell_kind, ritual, search, sort, scope, limit, tradition } = req.query;
-    const spells = await SpellModel.findAll(req.user.sub, { nature, spellKind: spell_kind, ritual, search, sort, scope, limit, traditionId: tradition }, req.user.role === 'admin');
+    const { nature, spell_kind, ritual, complexity, search, sort, scope, limit, tradition } = req.query;
+    const spells = await SpellModel.findAll(req.user.sub, { nature, spellKind: spell_kind, ritual, complexity, search, sort, scope, limit, traditionId: tradition }, req.user.role === 'admin');
     res.json({ spells });
   },
 
@@ -33,14 +34,31 @@ const SpellController = {
 
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
+    const isAdmin = req.user.role === 'admin';
+    const { parent_spell_id: parentId, derived_spell_ids: derivedIds } = req.body;
+    const lineageError = await SpellModel.validateLineage(null, req.user.sub, { parentId, derivedIds }, isAdmin);
+    if (lineageError) return res.status(400).json({ message: lineageError });
     const spell = await SpellModel.create(req.user.sub, req.body);
+    if (Array.isArray(derivedIds)) await SpellModel.setDerived(spell.id, req.user.sub, derivedIds, isAdmin);
     res.status(201).json({ spell });
   },
 
   async update(req, res) {
-    const spell = await SpellModel.update(req.params.id, req.user.sub, req.body, req.user.role === 'admin');
+    const isAdmin = req.user.role === 'admin';
+    const { parent_spell_id: parentId, derived_spell_ids: derivedIds } = req.body;
+    const lineageError = await SpellModel.validateLineage(req.params.id, req.user.sub, { parentId, derivedIds }, isAdmin);
+    if (lineageError) return res.status(400).json({ message: lineageError });
+    const spell = await SpellModel.update(req.params.id, req.user.sub, req.body, isAdmin);
     if (!spell) return res.status(404).json({ message: 'Заклинання не знайдено або недостатньо прав' });
+    // derived_spell_ids відсутній — похідні не змінюються.
+    if (Array.isArray(derivedIds)) await SpellModel.setDerived(spell.id, req.user.sub, derivedIds, isAdmin);
     res.json({ spell });
+  },
+
+  async tree(req, res) {
+    const nodes = await SpellModel.findTree(req.params.id, req.user.sub, req.user.role === 'admin');
+    if (!nodes.length) return res.status(404).json({ message: 'Заклинання не знайдено' });
+    res.json({ nodes });
   },
 
   async remove(req, res) {
@@ -76,10 +94,10 @@ const SpellController = {
       const spell = await SpellModel.findById(req.query.id, req.user.sub, isAdmin);
       items = spell ? [spell] : [];
     } else {
-      const { nature, spell_kind, ritual, search, sort, scope, limit, tradition } = req.query;
+      const { nature, spell_kind, ritual, complexity, search, sort, scope, limit, tradition } = req.query;
       items = await SpellModel.findAll(
         req.user.sub,
-        { nature, spellKind: spell_kind, ritual, search, sort, scope, limit, traditionId: tradition },
+        { nature, spellKind: spell_kind, ritual, complexity, search, sort, scope, limit, traditionId: tradition },
         isAdmin
       );
     }

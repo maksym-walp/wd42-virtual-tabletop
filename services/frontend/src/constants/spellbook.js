@@ -56,3 +56,39 @@ export function formatDuration(value, unit) {
   if (!unit || unit === 'instant' || unit === 'permanent') return DURATION_UNITS[unit] || '—';
   return `${value ?? '?'} ${DURATION_UNITS[unit]}`;
 }
+
+export const SPELL_COMPLEXITIES = {
+  primitive: { label: 'Примітивне' },
+  simple:    { label: 'Просте' },
+  medium:    { label: 'Середнє' },
+  complex:   { label: 'Комплексне' },
+  extreme:   { label: 'Надзвичайно складне' },
+};
+
+// Поля, що можуть відрізнятися між рівнями заклинання (хронологічними
+// версіями). Рівень 1 — колонки самого заклинання, рівні 2..N лежать у
+// spell.levels як повні знімки саме цих полів (див. normalizeLevels у
+// services/spellbook/src/models/spell.model.js).
+export const LEVEL_FIELDS = [
+  'complexity', 'spell_kind', 'energy_cost', 'action_time', 'ritual',
+  'duration_value', 'duration_unit', 'range_desc', 'components',
+  'mechanical_desc', 'narrative_desc', 'lore_creator', 'lore_creator_npc_id',
+];
+
+export function pickLevelFields(source) {
+  return Object.fromEntries(LEVEL_FIELDS.map((f) => [f, source[f]]));
+}
+
+// Усі рівні заклинання одним масивом: [рівень 1 (з колонок), ...spell.levels].
+export function spellLevels(spell) {
+  return [pickLevelFields(spell), ...(spell.levels || [])];
+}
+
+// Заклинання з полями конкретного рівня (1-based) поверх спільних — для
+// місць, що показують те, чим персонаж уже оволодів. Рівень поза межами
+// обрізається до найближчого наявного.
+export function spellAtLevel(spell, level = 1) {
+  const levels = spellLevels(spell);
+  const idx = Math.min(Math.max(level, 1), levels.length) - 1;
+  return { ...spell, ...levels[idx] };
+}

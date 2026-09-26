@@ -9,7 +9,7 @@ import equipmentApi from '../api/equipment';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
-import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels } from '../constants/spellbook';
+import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, spellAtLevel } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
@@ -218,9 +218,9 @@ export default function CharacterSheet({ publicView = false }) {
     }
   };
 
-  const addSpell    = async (spellId) => {
+  const addSpell    = async (spellId, level = 1) => {
     if (spells.length >= maxKnownSpells) return;
-    const entry = await characterApi.addSpell(id, spellId);
+    const entry = await characterApi.addSpell(id, spellId, level);
     if (entry) setData(prev => ({ ...prev, spells: [...prev.spells, entry] }));
   };
   const patchSpell  = async (spellId, patch) => {
@@ -1253,6 +1253,9 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   const [spellSearch, setSpellSearch] = useState('');
   const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
+  // Заклинання з кількома рівнями додається лише після вибору рівня, яким
+  // персонаж уже оволодів — тут id заклинання, для якого відкрито вибір.
+  const [levelPickFor, setLevelPickFor] = useState(null);
   const [editingMaxSpells, setEditingMaxSpells] = useState(false);
   const [maxSpellsDraft, setMaxSpellsDraft] = useState(maxKnownSpells);
 
@@ -1356,17 +1359,37 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних заклинань</p>}
               {filteredAll.map(s => {
                 const met = prereqMet(s, unlockedNodeIds);
+                const levelCount = 1 + (s.levels?.length ?? 0);
+                const add = (level) => { onAddSpell(s.id, level); setShowPicker(false); setLevelPickFor(null); };
                 return (
-                  <div key={s.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                    <div className="flex flex-col">
-                      <span>{s.name} <em className="text-xs text-text-dim">{natureLabels(s.nature)}</em>{s.is_canonical && <CanonBadge className="ml-1.5" />}</span>
-                      {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
+                  <div key={s.id} className="border-b border-bg py-1.5 text-sm text-text-muted">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span>
+                          {s.name} <em className="text-xs text-text-dim">{natureLabels(s.nature)}</em>
+                          {levelCount > 1 && <em className="ml-1 text-xs text-text-dim">· рівнів: {levelCount}</em>}
+                          {s.is_canonical && <CanonBadge className="ml-1.5" />}
+                        </span>
+                        {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
+                      </div>
+                      <button
+                        className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => (levelCount > 1 ? setLevelPickFor(levelPickFor === s.id ? null : s.id) : add(1))}
+                        disabled={atMaxSpells || !met}
+                      >{levelPickFor === s.id ? '✕' : '+'}</button>
                     </div>
-                    <button
-                      className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => { onAddSpell(s.id); setShowPicker(false); }}
-                      disabled={atMaxSpells || !met}
-                    >+</button>
+                    {levelPickFor === s.id && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-text-dim">Яким рівнем оволодів персонаж?</span>
+                        {Array.from({ length: levelCount }, (_, i) => (
+                          <button
+                            key={i}
+                            className="min-h-8 rounded border border-accent/60 px-2.5 py-1 text-xs font-semibold text-accent"
+                            onClick={() => add(i + 1)}
+                          >Рівень {i + 1}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1415,20 +1438,35 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   );
 }
 
-function SpellEntry({ entry, spell, is_owner, met = true, onPatch, onRemove }) {
+function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, onRemove }) {
   const [showModal, setShowModal] = useState(false);
+  const levelCount = 1 + (baseSpell?.levels?.length ?? 0);
+  // Показуємо поля того рівня, яким персонаж оволодів.
+  const spell = baseSpell && spellAtLevel(baseSpell, entry.level ?? 1);
   return (
     <>
       <div className="flex cursor-pointer items-center justify-between border-b border-bg py-2" onClick={() => setShowModal(true)}>
         <div className="flex flex-1 flex-col gap-0.5">
           <span className="text-sm text-text">{spell?.name ?? '(невідоме)'}</span>
           <span className="text-xs text-text-dim">
-            {[spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
+            {[levelCount > 1 && `рів. ${entry.level ?? 1}/${levelCount}`, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
           {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
         </div>
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {is_owner && levelCount > 1 && (
+            <select
+              className="min-h-9 rounded border border-border bg-bg px-1.5 text-xs text-text"
+              value={entry.level ?? 1}
+              onChange={e => onPatch({ level: Number(e.target.value) })}
+              title="Рівень, яким оволодів персонаж"
+            >
+              {Array.from({ length: levelCount }, (_, i) => (
+                <option key={i} value={i + 1}>Рів. {i + 1}</option>
+              ))}
+            </select>
+          )}
           <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
             <input
               type="checkbox"

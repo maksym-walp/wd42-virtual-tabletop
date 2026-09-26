@@ -12,6 +12,7 @@ router.post('/',       requireAuth, wrap(SpellController.create));
 router.get('/export',  requireAuth, wrap(SpellController.export));
 router.post('/import', requireCanonicalManager, wrap(SpellController.import));
 router.get('/:id',     requireAuth, wrap(SpellController.getOne));
+router.get('/:id/tree', requireAuth, wrap(SpellController.tree));
 router.put('/:id',     requireAuth, wrap(SpellController.update));
 router.delete('/:id',  requireAuth, wrap(SpellController.remove));
 router.patch('/:id/canonical', requireCanonicalManager, wrap(SpellController.setCanonical));

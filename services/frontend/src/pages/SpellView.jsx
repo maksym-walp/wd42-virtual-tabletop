@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, formatDuration } from '../constants/spellbook';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, formatDuration, spellLevels } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import SpellTree from '../components/SpellTree';
 import { useAuth } from '../context/AuthContext';
 
 export default function SpellView() {
@@ -19,15 +20,21 @@ export default function SpellView() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
+  const [activeLevel, setActiveLevel] = useState(0);
+  const [treeNodes, setTreeNodes] = useState([]);
 
   useEffect(() => {
     api.get(`/api/spellbook/${id}`)
       .then(({ data }) => {
         setSpell(data.spell);
+        setActiveLevel(0);
         recordView({ type: 'spell', id, name: data.spell.name, href: `/spellbook/${id}`, image_url: data.spell.image_url });
       })
       .catch(() => navigate('/spellbook', { replace: true }))
       .finally(() => setLoading(false));
+    api.get(`/api/spellbook/${id}/tree`)
+      .then(({ data }) => setTreeNodes(data.nodes ?? []))
+      .catch(() => setTreeNodes([]));
   }, [id]);
 
   const handleDelete = async () => {
@@ -62,8 +69,12 @@ export default function SpellView() {
 
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
-  const ritual = RITUAL_TYPES[spell.ritual];
-  const kind = SPELL_KINDS[spell.spell_kind];
+  const levels = spellLevels(spell);
+  // Поля рівня (механіка, описи, компоненти) — з обраного рівня; решта — зі spell.
+  const level = levels[Math.min(activeLevel, levels.length - 1)];
+  const ritual = RITUAL_TYPES[level.ritual];
+  const kind = SPELL_KINDS[level.spell_kind];
+  const complexity = SPELL_COMPLEXITIES[level.complexity];
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -102,27 +113,50 @@ export default function SpellView() {
         <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{spell.name}</h1>
         <AuthorBadge username={spell.owner_username} size="sm" className="px-5 pb-2" />
 
+        {levels.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 px-5 pb-2 pt-1">
+            {levels.map((_, i) => (
+              <button
+                key={i} type="button"
+                onClick={() => setActiveLevel(i)}
+                className={`rounded border px-3 py-1 text-xs font-semibold transition-colors ${
+                  activeLevel === i ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
+                }`}
+              >
+                Рівень {i + 1}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Stats grid */}
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-          <SheetStat label="Магічна енергія" value={spell.energy_cost} />
-          <SheetStat label="Час виконання" value={`${spell.action_time} ${spell.action_time === 1 ? 'дія' : 'дії'}`} />
-          <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} />
-          <SheetStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
-          {spell.range_desc && <SheetStat label="Дальність" value={spell.range_desc} />}
-          {spell.lore_creator && (
+          {complexity && <SheetStat label="Складність" value={complexity.label} />}
+          <SheetStat label="Магічна енергія" value={level.energy_cost} />
+          <SheetStat label="Час виконання" value={`${level.action_time} ${level.action_time === 1 ? 'дія' : 'дії'}`} />
+          {ritual && <SheetStat label="Ритуал" value={`${ritual.symbol} ${ritual.label}`} />}
+          <SheetStat label="Тривалість" value={formatDuration(level.duration_value, level.duration_unit)} />
+          {level.range_desc && <SheetStat label="Дальність" value={level.range_desc} />}
+          {spell.parent_spell && (
+            <SheetStat
+              label="Потрібно вивчити"
+              value={<Link to={`/spellbook/${spell.parent_spell.id}`} className="text-accent hover:underline">{spell.parent_spell.name}</Link>}
+            />
+          )}
+          {level.lore_creator && (
             <SheetStat
               label="Творець"
-              value={spell.lore_creator_npc_id
-                ? <Link to={`/compendium/entries/${spell.lore_creator_npc_id}`} className="text-accent hover:underline">{spell.lore_creator}</Link>
-                : spell.lore_creator}
+              value={level.lore_creator_npc_id
+                ? <Link to={`/compendium/entries/${level.lore_creator_npc_id}`} className="text-accent hover:underline">{level.lore_creator}</Link>
+                : level.lore_creator}
             />
           )}
         </div>
 
-        {spell.components?.length > 0 && (
+        {level.components?.length > 0 && (
           <Section title="Компоненти">
             <ul className="flex flex-col gap-1.5">
-              {spell.components.map((c, i) => {
+              {level.components.map((c, i) => {
                 const label = [c.name, c.quantity ? `×${c.quantity}` : null, c.unit || null].filter(Boolean).join(' ');
                 return (
                   <li key={i} className="text-sm text-text">
@@ -136,15 +170,22 @@ export default function SpellView() {
           </Section>
         )}
 
-        {spell.mechanical_desc && (
+        {level.mechanical_desc && (
           <Section title="Механічний опис">
-            <SmartTextReader text={spell.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
+            <SmartTextReader text={level.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 
-        {spell.narrative_desc && (
+        {level.narrative_desc && (
           <Section title="Наративний опис">
-            <SmartTextReader text={spell.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+            <SmartTextReader text={level.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+          </Section>
+        )}
+
+        {/* Лише коли заклинання справді має батька чи похідних. */}
+        {treeNodes.length > 1 && (
+          <Section title="Дерево заклинань">
+            <SpellTree nodes={treeNodes} currentId={spell.id} />
           </Section>
         )}
 
