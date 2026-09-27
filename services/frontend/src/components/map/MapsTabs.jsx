@@ -8,6 +8,6 @@ const TABS = [
   { to: '/maps/locations', label: 'Локації' },
 ];
 
-export default function MapsTabs() {
-  return <CatalogTabs tabs={TABS} />;
+export default function MapsTabs({ sidebar = false }) {
+  return <CatalogTabs tabs={TABS} sidebar={sidebar} />;
 }

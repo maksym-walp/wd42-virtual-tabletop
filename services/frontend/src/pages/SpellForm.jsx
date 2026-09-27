@@ -5,11 +5,10 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
-import spellbookApi from '../api/spellbook';
 import compendiumApi from '../api/compendium';
 import {
   NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_KINDS, SPELL_COMPLEXITIES, pickLevelFields,
+  ACTION_OPTIONS, SPELL_KINDS, SPELL_COMPLEXITIES, FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFormFields, spellForms, spellFormMode,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +21,6 @@ import CollectionMembershipPicker from '../components/CollectionMembershipPicker
 import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
 import AuthorField from '../components/AuthorField';
-import SpellPickerField from '../components/SpellPickerField';
 
 const domain = COLLECTION_DOMAINS.spellbook;
 
@@ -36,37 +34,45 @@ const EMPTY = {
   image_url: '',
   collectionIds: [],
   traditionIds: [],
-  // «Потрібно вивчити» — одне батьківське заклинання; «Похідні» — ті, чий
-  // parent_spell_id вказує сюди (сервер змінює лише власні похідні).
-  parent_spell_id: null,
-  derivedIds: [],
-  // Рівні 2..N — повні знімки LEVEL_FIELDS; рівень 1 — це поля вище.
-  levels: [],
+  // Додаткові форми — { kind, id, name } + повні знімки FORM_FIELDS;
+  // основна форма — це поля вище (main_form_name — її назва, лише для
+  // заклинань з альтернативними формами).
+  main_form_name: '',
+  forms: [],
 };
 
-// Серверний рівень → стан форми (ті самі перетворення, що й для рівня 1
+// Ключ форми в UI: 'main' — основна, рівневі — за kind, альтернативні — id.
+const formKey = (f) => (f.kind === 'alternative' ? f.id : f.kind);
+
+// Серверна форма → стан редактора (ті самі перетворення, що й для основної
 // при завантаженні: '' замість null для інпутів, рядки компонентів з key).
-function levelToForm(level) {
+function formToState(src) {
   return {
-    ...level,
-    complexity: level.complexity ?? '',
-    mechanical_desc: level.mechanical_desc || '',
-    narrative_desc: level.narrative_desc || '',
-    lore_creator: level.lore_creator || '',
-    lore_creator_npc_id: level.lore_creator_npc_id ?? null,
-    duration_value: level.duration_value ?? '',
-    range_desc: level.range_desc || '',
-    components: (level.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
+    ...src,
+    complexity: src.complexity ?? '',
+    mechanical_desc: src.mechanical_desc || '',
+    narrative_desc: src.narrative_desc || '',
+    lore_creator: src.lore_creator || '',
+    lore_creator_npc_id: src.lore_creator_npc_id ?? null,
+    duration_value: src.duration_value ?? '',
+    range_desc: src.range_desc || '',
+    components: (src.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
   };
 }
 
-// Новий рівень починається як копія попереднього — зазвичай наступна версія
-// заклинання відрізняється лише кількома полями. Рядки компонентів
-// отримують нові key, щоб рівні не ділили стан рядка.
-function copyLevel(level) {
+// Нова форма починається як копія основної — зазвичай форми відрізняються
+// лише кількома полями. Рядки компонентів отримують нові key, щоб форми не
+// ділили стан рядка. Альтернативна отримує uuid одразу: сервер його
+// зберігає, і на нього посилається лист персонажа.
+function newForm(kind, source) {
   return {
-    ...pickLevelFields(level),
-    components: level.components.map((c) => ({ ...c, key: emptyComponentRow().key })),
+    ...pickFormFields(source),
+    kind,
+    // randomUUID є лише в безпечному контексті (https/localhost); інакше
+    // тимчасовий ключ — сервер замінить його справжнім uuid при збереженні.
+    id: kind === 'alternative' ? (crypto.randomUUID?.() ?? `tmp-${Date.now()}-${Math.random()}`) : kind,
+    name: kind === 'alternative' ? 'Нова форма' : null,
+    components: source.components.map((c) => ({ ...c, key: emptyComponentRow().key })),
   };
 }
 
@@ -91,12 +97,11 @@ export default function SpellForm() {
   const [traditions, setTraditions] = useState([]);
   const initialTraditionIds = useRef([]);
   const [npcs, setNpcs] = useState([]);
-  const [allSpells, setAllSpells] = useState([]);
-  // Похідні, які вже прив'язані на момент завантаження (з назвами — навіть
-  // якщо їх немає в allSpells) і які не можна відчепити (чужі).
-  const [loadedDerived, setLoadedDerived] = useState([]);
-  // 0 = рівень 1 (поля самого form), i > 0 = form.levels[i - 1].
-  const [activeLevel, setActiveLevel] = useState(0);
+  // formKey активної форми; 'main' — поля самого form.
+  const [activeForm, setActiveForm] = useState('main');
+  // Тип додаткових форм: 'alternative' (основна + альтернативні) або
+  // 'tiered' (примітивна / повноцінна / довершена). Разом — не можна.
+  const [formMode, setFormMode] = useState('alternative');
 
   useEffect(() => {
     skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
@@ -112,10 +117,6 @@ export default function SpellForm() {
 
   useEffect(() => {
     traditionsApi.getAll().then(setTraditions).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    spellbookApi.getAll().then(setAllSpells).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -149,11 +150,10 @@ export default function SpellForm() {
           prerequisite_logic: s.prerequisite_logic || 'or',
           image_url: s.image_url || '',
           traditionIds,
-          levels: (s.levels || []).map(levelToForm),
-          parent_spell_id: s.parent_spell_id ?? null,
-          derivedIds: (s.derived_spells || []).map((d) => d.id),
+          main_form_name: s.main_form_name || '',
+          forms: (s.forms || []).map(formToState),
         }));
-        setLoadedDerived(s.derived_spells || []);
+        setFormMode(spellFormMode(s));
       })
       .catch(() => navigate('/spellbook'))
       .finally(() => setLoading(false));
@@ -169,25 +169,38 @@ export default function SpellForm() {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  // Поля, що відрізняються між рівнями, читаються й пишуться через активний рівень.
-  const current = activeLevel === 0 ? form : form.levels[activeLevel - 1];
-  const patchLevel = (patch) => setForm((f) => (activeLevel === 0
+  // Поля, що відрізняються між формами, читаються й пишуться через активну форму.
+  const allForms = spellForms(form);
+  const activeEntry = allForms.find((f) => f.key === activeForm) ?? allForms.find((f) => f.key === 'main');
+  const current = activeEntry.key === 'main' ? form : form.forms.find((f) => formKey(f) === activeEntry.key);
+  const patchForm = (patch) => setForm((f) => (activeEntry.key === 'main'
     ? { ...f, ...patch }
-    : { ...f, levels: f.levels.map((l, i) => (i === activeLevel - 1 ? { ...l, ...patch } : l)) }));
-  const setL = (field) => (e) => patchLevel({ [field]: e.target.value });
-  const setLNum = (field) => (e) => patchLevel({ [field]: Number(e.target.value) });
+    : { ...f, forms: f.forms.map((x) => (formKey(x) === activeEntry.key ? { ...x, ...patch } : x)) }));
+  const setL = (field) => (e) => patchForm({ [field]: e.target.value });
+  const setLNum = (field) => (e) => patchForm({ [field]: Number(e.target.value) });
 
-  const addLevel = () => {
-    const last = form.levels.length ? form.levels[form.levels.length - 1] : form;
-    setForm((f) => ({ ...f, levels: [...f.levels, copyLevel(last)] }));
-    setActiveLevel(form.levels.length + 1);
+  const addForm = (kind) => {
+    const created = newForm(kind, form);
+    setForm((f) => ({ ...f, forms: [...f.forms, created] }));
+    setActiveForm(formKey(created));
   };
 
-  const removeActiveLevel = () => {
-    if (activeLevel === 0) return;
-    if (!confirm(`Видалити рівень ${activeLevel + 1}?`)) return;
-    setForm((f) => ({ ...f, levels: f.levels.filter((_, i) => i !== activeLevel - 1) }));
-    setActiveLevel((lvl) => lvl - 1);
+  const removeActiveForm = () => {
+    if (activeEntry.key === 'main') return;
+    if (!confirm(`Видалити «${activeEntry.label}»?`)) return;
+    setForm((f) => ({ ...f, forms: f.forms.filter((x) => formKey(x) !== activeEntry.key) }));
+    setActiveForm('main');
+  };
+  const hasForm = (kind) => form.forms.some((f) => f.kind === kind);
+
+  const changeFormMode = (mode) => {
+    if (mode === formMode) return;
+    const keep = (f) => (mode === 'tiered' ? f.kind !== 'alternative' : f.kind === 'alternative');
+    const dropped = form.forms.filter((f) => !keep(f));
+    if (dropped.length && !confirm(`Змінити тип форм? Буде видалено форм: ${dropped.length}.`)) return;
+    setForm((f) => ({ ...f, forms: f.forms.filter(keep) }));
+    setFormMode(mode);
+    setActiveForm('main');
   };
 
   const reconcileCollections = async (itemId) => {
@@ -222,8 +235,8 @@ export default function SpellForm() {
       // that isn't already linked to an equipment item gets created first,
       // always public — never as the author's private item.
       // Рівні часто повторюють ті самі компоненти, тож один і той самий
-      // новий предмет (за назвою) створюється лише раз на всі рівні.
-      const allComponents = [form, ...form.levels].flatMap((l) => l.components);
+      // новий предмет (за назвою) створюється лише раз на всі форми.
+      const allComponents = [form, ...form.forms].flatMap((l) => l.components);
       const namesToCreate = [...new Set(
         allComponents
           .filter((c) => c.createAsNew && !c.item_id && c.name.trim())
@@ -234,10 +247,10 @@ export default function SpellForm() {
       );
       const createdIds = Object.fromEntries(created);
 
-      const serializeLevel = (level) => ({
-        ...pickLevelFields(level),
-        complexity: level.complexity || null,
-        components: level.components
+      const serializeForm = (src) => ({
+        ...pickFormFields(src),
+        complexity: src.complexity || null,
+        components: src.components
           .filter((c) => c.name.trim() !== '')
           .map((c) => ({
             item_id: c.item_id ?? (c.createAsNew ? createdIds[c.name.trim().toLowerCase()] : null) ?? null,
@@ -245,18 +258,16 @@ export default function SpellForm() {
             quantity: c.quantity || 1,
             unit: c.unit || '',
           })),
-        duration_value: level.duration_value === '' ? null : Number(level.duration_value),
-        energy_cost: Number(level.energy_cost),
-        action_time: Number(level.action_time),
+        duration_value: src.duration_value === '' ? null : Number(src.duration_value),
+        energy_cost: Number(src.energy_cost),
+        action_time: Number(src.action_time),
       });
 
-      const { collectionIds, traditionIds, levels, derivedIds, ...rest } = form;
+      const { collectionIds, traditionIds, forms, ...rest } = form;
       const payload = {
         ...rest,
-        parent_spell_id: form.parent_spell_id || null,
-        derived_spell_ids: derivedIds,
-        ...serializeLevel(form),
-        levels: levels.map(serializeLevel),
+        ...serializeForm(form),
+        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id, name: f.name })),
         image_url: form.image_url || null,
       };
       if (isEdit) {
@@ -285,19 +296,6 @@ export default function SpellForm() {
     ...f,
     traditionIds: f.traditionIds.includes(tid) ? f.traditionIds.filter((x) => x !== tid) : [...f.traditionIds, tid],
   }));
-
-  const isAdmin = user?.role === 'admin';
-  const spellNameById = new Map(allSpells.map((sp) => [sp.id, sp.name]));
-  const parentOptions = allSpells.filter((sp) => sp.id !== id && !form.derivedIds.includes(sp.id));
-  const lockedDerivedIds = isAdmin ? [] : loadedDerived.filter((d) => !d.is_owner).map((d) => d.id);
-  // Похідним можна зробити лише власне заклинання (сервер пише рядок похідного).
-  const derivedOptions = [
-    ...allSpells.filter((sp) => (sp.is_owner || isAdmin) && sp.id !== id && sp.id !== form.parent_spell_id),
-    ...loadedDerived.filter((d) => !allSpells.some((sp) => sp.id === d.id)),
-  ];
-  const describeCurrentParent = (sp) => (sp.parent_spell_id && sp.parent_spell_id !== id
-    ? `зараз походить від «${spellNameById.get(sp.parent_spell_id) ?? '…'}»`
-    : null);
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -368,43 +366,91 @@ export default function SpellForm() {
           />
         </FormSection>
 
-        {/* — Рівні — */}
-        <FormSection title="Рівні">
+        {/* — Форми — */}
+        <FormSection title="Форми">
           <p className="mb-3 text-xs text-text-dim">
-            Рівні — різні версії розвитку одного заклинання. Механіка й описи нижче редагуються для обраного рівня;
-            новий рівень починається як копія попереднього.
+            Спершу обери тип форм — разом їх поєднувати не можна. Механіка й описи нижче редагуються для обраної
+            форми; нова форма починається як копія основної.
           </p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {[form, ...form.levels].map((_, i) => (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {[
+              ['alternative', 'Основна + альтернативні'],
+              ['tiered', 'Рівневі: примітивна · повноцінна · довершена'],
+            ].map(([mode, label]) => (
               <button
-                key={i} type="button"
-                onClick={() => setActiveLevel(i)}
+                key={mode} type="button"
+                onClick={() => changeFormMode(mode)}
                 className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeLevel === i ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
+                  formMode === mode ? 'border-gold bg-gold/10 text-gold' : 'border-border text-text-dim'
                 }`}
               >
-                Рівень {i + 1}
+                {label}
               </button>
             ))}
-            <Button type="button" variant="ghost" size="sm" onClick={addLevel}>
-              <Plus size={14} /> Додати рівень
-            </Button>
-            {activeLevel > 0 && (
-              <Button type="button" variant="danger" size="sm" onClick={removeActiveLevel}>
-                <Trash2 size={14} /> Видалити рівень {activeLevel + 1}
+          </div>
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {allForms.map((f) => (
+              <button
+                key={f.key} type="button"
+                onClick={() => setActiveForm(f.key)}
+                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeEntry.key === f.key ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {formMode === 'tiered' && !hasForm('primitive') && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('primitive')}>
+                <Plus size={14} /> {FORM_TIERS.primitive.label}
+              </Button>
+            )}
+            {formMode === 'tiered' && !hasForm('perfected') && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('perfected')}>
+                <Plus size={14} /> {FORM_TIERS.perfected.label}
+              </Button>
+            )}
+            {formMode === 'alternative' && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('alternative')}>
+                <Plus size={14} /> Альтернативна форма
+              </Button>
+            )}
+            {activeEntry.key !== 'main' && (
+              <Button type="button" variant="danger" size="sm" onClick={removeActiveForm}>
+                <Trash2 size={14} /> Видалити «{activeEntry.label}»
               </Button>
             )}
           </div>
+          {activeEntry.key === 'main' && formMode === 'alternative' && (
+            <Field label="Назва форми" className="mt-4">
+              <input
+                type="text" className={inputClass} value={form.main_form_name}
+                onChange={set('main_form_name')}
+                maxLength={100} placeholder={DEFAULT_MAIN_FORM_NAME}
+              />
+            </Field>
+          )}
+          {activeEntry.kind === 'alternative' && (
+            <Field label="Назва форми" className="mt-4">
+              <input
+                type="text" className={inputClass} value={current.name}
+                onChange={(e) => patchForm({ name: e.target.value })}
+                maxLength={100} placeholder="напр. Крижана форма"
+              />
+            </Field>
+          )}
         </FormSection>
 
         {/* — Механіка — */}
-        <FormSection title={form.levels.length ? `Механіка · Рівень ${activeLevel + 1}` : 'Механіка'}>
+        <FormSection title={form.forms.length ? `Механіка · ${activeEntry.label}` : 'Механіка'}>
           <Field label="Складність" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(SPELL_COMPLEXITIES).map(([key, { label }]) => (
                 <button
                   key={key} type="button"
-                  onClick={() => patchLevel({ complexity: current.complexity === key ? '' : key })}
+                  onClick={() => patchForm({ complexity: current.complexity === key ? '' : key })}
                   className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
                     current.complexity === key
                       ? 'border-gold bg-gold/10 text-gold'
@@ -422,7 +468,7 @@ export default function SpellForm() {
               {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
                 <button
                   key={key} type="button"
-                  onClick={() => patchLevel({ spell_kind: key })}
+                  onClick={() => patchForm({ spell_kind: key })}
                   className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
                     current.spell_kind === key
                       ? 'border-gold bg-gold/10 text-gold'
@@ -479,60 +525,39 @@ export default function SpellForm() {
 
           <Field label="Компоненти">
             <SpellComponentsField
-              key={activeLevel}
+              key={activeEntry.key}
               components={current.components}
-              onChange={(next) => patchLevel({ components: next })}
+              onChange={(next) => patchForm({ components: next })}
               equipmentItems={equipmentItems}
             />
           </Field>
         </FormSection>
 
         {/* — Описи — */}
-        <FormSection title={form.levels.length ? `Описи · Рівень ${activeLevel + 1}` : 'Описи'}>
+        <FormSection title={form.forms.length ? `Описи · ${activeEntry.label}` : 'Описи'}>
           <SmartTextarea
-            key={`${activeLevel}-mech`}
+            key={`${activeEntry.key}-mech`}
             label="Механічний опис" className="mb-4"
             value={current.mechanical_desc} onChange={setL('mechanical_desc')}
             rows={4}
             placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
           />
           <SmartTextarea
-            key={`${activeLevel}-narr`}
+            key={`${activeEntry.key}-narr`}
             label="Наративний опис" className="mb-4"
             value={current.narrative_desc} onChange={setL('narrative_desc')}
             rows={3}
             placeholder="Як це виглядає та відчувається у світі гри..."
           />
           <AuthorField
-            key={activeLevel}
+            key={activeEntry.key}
             name={current.lore_creator}
             npcId={current.lore_creator_npc_id}
-            onChange={({ name, npc_id }) => patchLevel({ lore_creator: name, lore_creator_npc_id: npc_id })}
+            onChange={({ name, npc_id }) => patchForm({ lore_creator: name, lore_creator_npc_id: npc_id })}
             npcs={npcs}
             label="Творець"
             hint="Лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне (напр. ім'я архімага, що винайшов це заклинання)"
           />
-        </FormSection>
-
-        {/* — Дерево заклинань — */}
-        <FormSection title="Дерево заклинань">
-          <PickerBlock label="Потрібно вивчити" hint="Заклинання, з якого походить це (не більше одного)" className="mb-4">
-            <SpellPickerField
-              single
-              options={parentOptions}
-              value={form.parent_spell_id ? [form.parent_spell_id] : []}
-              onChange={(ids) => setForm((f) => ({ ...f, parent_spell_id: ids[0] ?? null }))}
-            />
-          </PickerBlock>
-          <PickerBlock label="Похідні заклинання" hint="Можна обрати декілька; лише власні заклинання">
-            <SpellPickerField
-              options={derivedOptions}
-              value={form.derivedIds}
-              lockedIds={lockedDerivedIds}
-              onChange={(ids) => setForm((f) => ({ ...f, derivedIds: ids }))}
-              describe={describeCurrentParent}
-            />
-          </PickerBlock>
         </FormSection>
 
         {/* — Вимоги дерева розвитку — */}
@@ -578,18 +603,6 @@ export default function SpellForm() {
           </Button>
         </div>
       </form>
-    </div>
-  );
-}
-
-// Як Field, але <div> замість <label>: усередині кілька кнопок (чіпи з
-// «прибрати», підказки), і клік по тексту label активував би першу з них.
-function PickerBlock({ label, hint, className = '', children }) {
-  return (
-    <div className={`flex flex-col gap-1.5 ${className}`}>
-      <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">{label}</span>
-      {children}
-      {hint && <span className="text-xs text-text-dim">{hint}</span>}
     </div>
   );
 }

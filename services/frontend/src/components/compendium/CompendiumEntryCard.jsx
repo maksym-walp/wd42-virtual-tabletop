@@ -2,11 +2,12 @@ import { Link } from 'react-router-dom';
 import { ENTITY_TYPES } from '../../constants/compendium';
 import { htmlToPreviewText } from '../../utils/richText';
 
-export default function CompendiumEntryCard({ entry }) {
+export default function CompendiumEntryCard({ entry, ...rest }) {
   const type = ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc;
 
   return (
     <Link
+      {...rest}
       to={`/compendium/entries/${entry.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-accent)' }}

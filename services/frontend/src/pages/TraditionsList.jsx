@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import traditionsApi from '../api/traditions';
 import { getDomainTabs } from '../collectionsDomains';
-import { pluralizeUk } from '../utils/pluralize';
-import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import CatalogTabs from '../components/CatalogTabs';
 import { htmlToPreviewText } from '../utils/richText';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarActions, SidebarSearch, SidebarViewCount, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, SimplePreview } from '../components/catalog/previews';
 
 export default function TraditionsList() {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export default function TraditionsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const [hovered, bindPreview] = useHoverPreview();
 
   useEffect(() => {
     setLoading(true);
@@ -39,29 +42,32 @@ export default function TraditionsList() {
     }
   };
 
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('spellbook')} />
+      {canManageTraditions && <SidebarActions newHref="/spellbook/traditions/new" newLabel="Нова традиція" />}
+      <SidebarSearch value={search} onChange={setSearch} />
+      <SidebarViewCount count={traditions.length} forms={['традиція', 'традиції', 'традицій']} />
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('spellbook')} />
-
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">
-          {traditions.length} {pluralizeUk(traditions.length, ['традиція', 'традиції', 'традицій'])}
-        </p>
-        {canManageTraditions && (
-          <Button to="/spellbook/traditions/new" className="hidden whitespace-nowrap md:inline-flex">+ Нова традиція</Button>
-        )}
-      </div>
-
-      <div className="relative mb-5">
-        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-        <input
-          className={`${inputClass} pl-10`}
-          placeholder="Пошук за назвою..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={
+        <CatalogPreview item={hovered}>
+          {hovered && (
+            <SimplePreview
+              href={`/spellbook/traditions/${hovered.id}`}
+              badges={['Традиція', `${(hovered.spells || []).length} заклинань`]}
+              title={hovered.name}
+              subtitle={hovered.founders ? `Засновники: ${hovered.founders}` : null}
+              description={hovered.description}
+            />
+          )}
+        </CatalogPreview>
+      }
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : traditions.length === 0 ? (
@@ -70,10 +76,11 @@ export default function TraditionsList() {
           action={canManageTraditions ? <Button to="/spellbook/traditions/new">Створити першу</Button> : null}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={CATALOG_GRID}>
           {traditions.map((t) => (
             <div
               key={t.id}
+              {...bindPreview(t)}
               className="relative block overflow-hidden rounded-lg border border-border bg-surface transition-colors hover:bg-surface-hover"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
@@ -112,15 +119,7 @@ export default function TraditionsList() {
         </div>
       )}
 
-      {canManageTraditions && (
-        <Link
-          to="/spellbook/traditions/new"
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-          aria-label="Нова традиція"
-        >
-          <Plus size={26} />
-        </Link>
-      )}
-    </div>
+      {canManageTraditions && <MobileFab to="/spellbook/traditions/new" label="Нова традиція" />}
+    </CatalogLayout>
   );
 }

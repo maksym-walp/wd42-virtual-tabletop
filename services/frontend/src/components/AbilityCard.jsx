@@ -10,13 +10,14 @@ import { StatGrid, StatBox } from './StatGrid';
 // needs the full class name present in source to keep it.
 const COLS_CLASS = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
 
-export default function AbilityCard({ ability }) {
+export default function AbilityCard({ ability, ...rest }) {
   const { theme } = useTheme();
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const archetypes = ability.archetypes ?? [];
 
   return (
     <Link
+      {...rest}
       to={`/abilities/${ability.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-gold)' }}

@@ -70,8 +70,9 @@ const characterApi = {
     return data.spells;
   },
 
-  async addSpell(characterId, spellId, level = 1) {
-    const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId, level });
+  // progress — { form_tier?, primary_form?, mastered_forms? } (див. character-sheet README).
+  async addSpell(characterId, spellId, progress = {}) {
+    const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId, ...progress });
     return data.spell;
   },
 

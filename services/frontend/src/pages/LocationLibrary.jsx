@@ -3,7 +3,6 @@ import { Plus } from 'lucide-react';
 import mapsApi from '../api/maps';
 import { useAuth } from '../context/AuthContext';
 import useViewMode from '../hooks/useViewMode';
-import { pluralizeUk } from '../utils/pluralize';
 import { resolveLocationVersion } from '../constants/maps';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildLocationImportTemplate } from '../utils/locationImportTemplate';
@@ -11,13 +10,17 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import ExportImportActions from '../components/ExportImportActions';
 import LocationEditor from '../components/map/LocationEditor';
 import { htmlToPreviewText } from '../utils/richText';
 import MarkerIcon from '../components/map/MarkerIcon';
 import MapsTabs from '../components/map/MapsTabs';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarViewCount,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, SimplePreview } from '../components/catalog/previews';
 
 function snippet(text, n = 90) {
   if (!text) return '—';
@@ -38,6 +41,7 @@ const LOCATION_COLUMNS = [
 // The user's own reusable location library — create/edit lore entities without
 // attaching them to a map yet. Cards or table view.
 export default function LocationLibrary() {
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
   const { user } = useAuth();
   const canCreate = user?.role === 'game_master' || user?.role === 'admin';
   const [mode, setMode] = useViewMode('locations');
@@ -76,31 +80,48 @@ export default function LocationLibrary() {
     }
   };
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <MapsTabs />
+  const hoveredBase = hovered && baseVersion(hovered);
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={mode} onChange={setMode} />
+  const sidebar = (
+    <>
+      <MapsTabs sidebar />
+
+      {/* Створення відкриває редактор на місці (не окрема сторінка), тож
+          кнопка видима й на мобільному — FAB тут немає. */}
+      {canCreate && (
+        <div className="flex items-center gap-2">
+          <Button className="flex-1" onClick={() => setEditing({})}>
+            <Plus size={15} /> Створити локацію
+          </Button>
+          <ExportImportActions
+            onExport={handleExport}
+            onImport={handleImport}
+            onTemplate={buildLocationImportTemplate}
+          />
         </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {locations.length} {pluralizeUk(locations.length, ['локація', 'локації', 'локацій'])}
-        </p>
-        {canCreate && (
-          <div className="col-start-3 flex items-center justify-end gap-2">
-            <ExportImportActions
-              onExport={handleExport}
-              onImport={handleImport}
-              onTemplate={buildLocationImportTemplate}
-            />
-            <Button size="sm" onClick={() => setEditing({})}>
-              <Plus size={15} /> Створити локацію
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
 
+      <SidebarViewCount view={mode} onViewChange={setMode} count={locations.length} forms={['локація', 'локації', 'локацій']} />
+    </>
+  );
+
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={
+        <CatalogPreview item={hovered}>
+          {hovered && (
+            <SimplePreview
+              image={hoveredBase?.image_url}
+              badges={hovered.types}
+              title={hovered.name}
+              subtitle={hovered.versions?.length > 1 ? `${hovered.versions.length} хронологічні версії` : null}
+              description={hoveredBase?.description}
+            />
+          )}
+        </CatalogPreview>
+      }
+    >
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
@@ -114,7 +135,7 @@ export default function LocationLibrary() {
           {locations.map((loc) => {
             const base = baseVersion(loc);
             return (
-              <Card key={loc.id} className="cursor-pointer hover:border-accent/50" onClick={() => openEdit(loc)}>
+              <Card key={loc.id} className="cursor-pointer hover:border-accent/50" onClick={() => openEdit(loc)} {...bindPreview(loc)}>
                 <div className="flex items-start gap-3">
                   {base?.image_url && (
                     <img src={base.image_url} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded border border-border object-cover" />
@@ -141,7 +162,7 @@ export default function LocationLibrary() {
           })}
         </div>
       ) : (
-        <DataTable items={locations} columns={LOCATION_COLUMNS} getKey={(loc) => loc.id} onRowClick={openEdit} />
+        <DataTable items={locations} columns={LOCATION_COLUMNS} getKey={(loc) => loc.id} onRowClick={openEdit} onRowHover={setHovered} />
       )}
 
       {editing && (
@@ -151,6 +172,6 @@ export default function LocationLibrary() {
           onSaved={() => { setEditing(null); setLoading(true); load(); }}
         />
       )}
-    </div>
+    </CatalogLayout>
   );
 }

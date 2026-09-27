@@ -31,18 +31,19 @@ function classify(collections) {
   return buckets;
 }
 
-export default function EquipmentCollectionsByType({ collections, basePath }) {
+// bindPreview — необов'язковий, для прев'ю в бічній панелі каталогу (useHoverPreview).
+export default function EquipmentCollectionsByType({ collections, basePath, bindPreview }) {
   const buckets = classify(collections);
   return (
     <div className="flex flex-col gap-5">
       {SECTIONS.map(({ key, label }) => (
-        <CollectionsScrollRow key={key} label={label} collections={buckets[key]} basePath={basePath} />
+        <CollectionsScrollRow key={key} label={label} collections={buckets[key]} basePath={basePath} bindPreview={bindPreview} />
       ))}
     </div>
   );
 }
 
-function CollectionsScrollRow({ label, collections, basePath }) {
+function CollectionsScrollRow({ label, collections, basePath, bindPreview }) {
   const [open, setOpen] = useState(true);
   if (collections.length === 0) return null;
 
@@ -64,6 +65,7 @@ function CollectionsScrollRow({ label, collections, basePath }) {
             <Link
               key={c.id}
               to={`${basePath}/collections/${c.id}`}
+              {...bindPreview?.(c)}
               className="block w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-surface"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >

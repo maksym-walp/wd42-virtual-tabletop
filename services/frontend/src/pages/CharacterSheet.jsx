@@ -9,7 +9,7 @@ import equipmentApi from '../api/equipment';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
-import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, spellAtLevel } from '../constants/spellbook';
+import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellVariantForms, spellForCharacter } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
@@ -218,9 +218,9 @@ export default function CharacterSheet({ publicView = false }) {
     }
   };
 
-  const addSpell    = async (spellId, level = 1) => {
+  const addSpell    = async (spellId, progress = {}) => {
     if (spells.length >= maxKnownSpells) return;
-    const entry = await characterApi.addSpell(id, spellId, level);
+    const entry = await characterApi.addSpell(id, spellId, progress);
     if (entry) setData(prev => ({ ...prev, spells: [...prev.spells, entry] }));
   };
   const patchSpell  = async (spellId, patch) => {
@@ -1253,9 +1253,9 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   const [spellSearch, setSpellSearch] = useState('');
   const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
-  // Заклинання з кількома рівнями додається лише після вибору рівня, яким
-  // персонаж уже оволодів — тут id заклинання, для якого відкрито вибір.
-  const [levelPickFor, setLevelPickFor] = useState(null);
+  // Заклинання з рівневими формами додається лише після вибору форми, до
+  // якої персонаж уже дійшов — тут id заклинання, для якого відкрито вибір.
+  const [tierPickFor, setTierPickFor] = useState(null);
   const [editingMaxSpells, setEditingMaxSpells] = useState(false);
   const [maxSpellsDraft, setMaxSpellsDraft] = useState(maxKnownSpells);
 
@@ -1359,34 +1359,34 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних заклинань</p>}
               {filteredAll.map(s => {
                 const met = prereqMet(s, unlockedNodeIds);
-                const levelCount = 1 + (s.levels?.length ?? 0);
-                const add = (level) => { onAddSpell(s.id, level); setShowPicker(false); setLevelPickFor(null); };
+                const tiers = spellTiers(s);
+                const add = (progress) => { onAddSpell(s.id, progress); setShowPicker(false); setTierPickFor(null); };
                 return (
                   <div key={s.id} className="border-b border-bg py-1.5 text-sm text-text-muted">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span>
                           {s.name} <em className="text-xs text-text-dim">{natureLabels(s.nature)}</em>
-                          {levelCount > 1 && <em className="ml-1 text-xs text-text-dim">· рівнів: {levelCount}</em>}
+                          {tiers.length > 0 && <em className="ml-1 text-xs text-text-dim">· рівневі форми</em>}
                           {s.is_canonical && <CanonBadge className="ml-1.5" />}
                         </span>
                         {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
                       </div>
                       <button
                         className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        onClick={() => (levelCount > 1 ? setLevelPickFor(levelPickFor === s.id ? null : s.id) : add(1))}
+                        onClick={() => (tiers.length ? setTierPickFor(tierPickFor === s.id ? null : s.id) : add({}))}
                         disabled={atMaxSpells || !met}
-                      >{levelPickFor === s.id ? '✕' : '+'}</button>
+                      >{tierPickFor === s.id ? '✕' : '+'}</button>
                     </div>
-                    {levelPickFor === s.id && (
+                    {tierPickFor === s.id && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-text-dim">Яким рівнем оволодів персонаж?</span>
-                        {Array.from({ length: levelCount }, (_, i) => (
+                        <span className="text-xs text-text-dim">Яку форму вже освоїв персонаж?</span>
+                        {tiers.map(t => (
                           <button
-                            key={i}
+                            key={t}
                             className="min-h-8 rounded border border-accent/60 px-2.5 py-1 text-xs font-semibold text-accent"
-                            onClick={() => add(i + 1)}
-                          >Рівень {i + 1}</button>
+                            onClick={() => add({ form_tier: t })}
+                          >{FORM_TIERS[t].label}</button>
                         ))}
                       </div>
                     )}
@@ -1440,32 +1440,51 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
 
 function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, onRemove }) {
   const [showModal, setShowModal] = useState(false);
-  const levelCount = 1 + (baseSpell?.levels?.length ?? 0);
-  // Показуємо поля того рівня, яким персонаж оволодів.
-  const spell = baseSpell && spellAtLevel(baseSpell, entry.level ?? 1);
+  const [showForms, setShowForms] = useState(false);
+  const tiers = baseSpell ? spellTiers(baseSpell) : [];
+  const variants = baseSpell ? spellVariantForms(baseSpell) : [];
+  const masteredForms = entry.mastered_forms ?? ['main'];
+  const primaryForm = variants.some(f => f.key === entry.primary_form) ? entry.primary_form : 'main';
+  // Показуємо поля форми, якою персонаж користується (див. spellForCharacter).
+  const spell = baseSpell && spellForCharacter(baseSpell, entry);
+
+  const setPrimary = (key) => onPatch({
+    primary_form: key,
+    // Основною обирають освоєну форму — позначаємо її освоєною разом.
+    mastered_forms: masteredForms.includes(key) ? masteredForms : [...masteredForms, key],
+  });
+  const toggleMastered = (key) => onPatch({
+    mastered_forms: masteredForms.includes(key) ? masteredForms.filter(k => k !== key) : [...masteredForms, key],
+  });
+
   return (
     <>
       <div className="flex cursor-pointer items-center justify-between border-b border-bg py-2" onClick={() => setShowModal(true)}>
         <div className="flex flex-1 flex-col gap-0.5">
           <span className="text-sm text-text">{spell?.name ?? '(невідоме)'}</span>
           <span className="text-xs text-text-dim">
-            {[levelCount > 1 && `рів. ${entry.level ?? 1}/${levelCount}`, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
+            {[(tiers.length > 0 || variants.length > 1) && spell?.form_label, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
           {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
         </div>
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-          {is_owner && levelCount > 1 && (
+          {is_owner && tiers.length > 0 && (
             <select
               className="min-h-9 rounded border border-border bg-bg px-1.5 text-xs text-text"
-              value={entry.level ?? 1}
-              onChange={e => onPatch({ level: Number(e.target.value) })}
-              title="Рівень, яким оволодів персонаж"
+              value={entry.form_tier ?? 'full'}
+              onChange={e => onPatch({ form_tier: e.target.value })}
+              title="Рівнева форма, яку освоїв персонаж"
             >
-              {Array.from({ length: levelCount }, (_, i) => (
-                <option key={i} value={i + 1}>Рів. {i + 1}</option>
-              ))}
+              {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
             </select>
+          )}
+          {variants.length > 1 && (
+            <button
+              className={`min-h-9 rounded border px-2 text-xs ${showForms ? 'border-accent text-accent' : 'border-border text-text-dim'}`}
+              onClick={() => setShowForms(o => !o)}
+              title="Альтернативні форми"
+            >Форми {showForms ? '▴' : '▾'}</button>
           )}
           <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
             <input
@@ -1484,6 +1503,35 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
           {is_owner && <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={onRemove}>✕</button>}
         </div>
       </div>
+      {showForms && variants.length > 1 && (
+        <div className="mb-2 rounded-md border border-border bg-bg px-3 py-2">
+          <div className="mb-1 grid grid-cols-[1fr_auto_auto] gap-x-4 text-[0.65rem] uppercase tracking-wide text-text-dim">
+            <span>Форма</span><span>основна</span><span>освоєно</span>
+          </div>
+          {variants.map(f => (
+            <div key={f.key} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-border/50 py-1.5 text-sm text-text">
+              <span>{f.label}</span>
+              <input
+                type="radio"
+                name={`primary-form-${entry.spell_id}`}
+                className="h-5 w-5 justify-self-center accent-accent"
+                checked={primaryForm === f.key}
+                disabled={!is_owner}
+                onChange={() => is_owner && setPrimary(f.key)}
+                aria-label={`Основна форма: ${f.label}`}
+              />
+              <input
+                type="checkbox"
+                className="h-5 w-5 justify-self-center accent-sage"
+                checked={masteredForms.includes(f.key)}
+                disabled={!is_owner}
+                onChange={() => is_owner && toggleMastered(f.key)}
+                aria-label={`Освоєно: ${f.label}`}
+              />
+            </div>
+          ))}
+        </div>
+      )}
       {showModal && spell && (
         <SpellDetailModal spell={spell} spellId={entry.spell_id} onClose={() => setShowModal(false)} />
       )}
@@ -1507,6 +1555,7 @@ function SpellDetailModal({ spell, spellId, onClose }) {
           <div className="flex items-center gap-2">
             <span className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-text-dim">{type.label}</span>
             <span className="font-display text-base font-bold text-gold">{spell.name}</span>
+            {spell.form_label && <span className="text-xs italic text-text-dim">{spell.form_label}</span>}
           </div>
           <div className="flex items-center gap-2">
             <a href={`/spellbook/${spellId}`} target="_blank" rel="noreferrer"

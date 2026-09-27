@@ -7,8 +7,12 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { inputClass } from '../components/ui/Field';
-import { pluralizeUk } from '../utils/pluralize';
 import MapsTabs from '../components/map/MapsTabs';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarViewCount,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, SimplePreview } from '../components/catalog/previews';
 
 export default function MapList() {
   const { user } = useAuth();
@@ -23,6 +27,7 @@ export default function MapList() {
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hovered, bindPreview] = useHoverPreview();
 
   useEffect(() => {
     let alive = true;
@@ -46,19 +51,35 @@ export default function MapList() {
     }
   };
 
+  const sidebar = (
+    <>
+      <MapsTabs sidebar />
+      {canCreate && !creating && (
+        <Button onClick={() => setCreating(true)}>
+          <Plus size={15} /> Створити мапу
+        </Button>
+      )}
+      <SidebarViewCount count={maps.length} forms={['мапа', 'мапи', 'мап']} />
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <MapsTabs />
-
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-text-dim">{maps.length} {pluralizeUk(maps.length, ['мапа', 'мапи', 'мап'])}</p>
-        {canCreate && !creating && (
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus size={15} /> Створити мапу
-          </Button>
-        )}
-      </div>
-
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={
+        <CatalogPreview item={hovered}>
+          {hovered && (
+            <SimplePreview
+              href={`/maps/${hovered.id}`}
+              image={hovered.thumbnail_url || hovered.image_url}
+              badges={[hovered.is_public ? 'Публічна' : 'Приватна', hovered.is_owner ? 'ваша мапа' : null]}
+              title={hovered.name}
+              description={hovered.description}
+            />
+          )}
+        </CatalogPreview>
+      }
+    >
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {creating && (
@@ -98,7 +119,7 @@ export default function MapList() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {maps.map((m) => (
-            <Link key={m.id} to={`/maps/${m.id}`} className="block">
+            <Link key={m.id} to={`/maps/${m.id}`} className="block" {...bindPreview(m)}>
               <Card className="cursor-pointer hover:border-accent/50">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="flex items-center gap-2 font-display text-base text-text">
@@ -114,6 +135,6 @@ export default function MapList() {
           ))}
         </div>
       )}
-    </div>
+    </CatalogLayout>
   );
 }

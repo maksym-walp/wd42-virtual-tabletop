@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import CompendiumEntryCard from '../components/compendium/CompendiumEntryCard';
-import { pluralizeUk } from '../utils/pluralize';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
-import FilterAccordion from '../components/ui/FilterAccordion';
-import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarActions, SidebarSearch, SidebarViewCount, SidebarFilters, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, CompendiumEntryPreview } from '../components/catalog/previews';
 
 // Shared by the "НІПи" (/compendium) and "Бестіарій" (/compendium/bestiary)
 // tabs — same list shape, filtered server-side by entity_type.
@@ -27,6 +26,7 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
   const [subspeciesId, setSubspeciesId] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useViewMode(`compendium-${entityType}`);
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
 
   useEffect(() => {
     compendiumApi.listSpecies().then(setSpecies).catch(() => {});
@@ -68,35 +68,20 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
     { key: 'health', label: "Здоров'я", render: (entry) => entry.health?.formula ?? '—' },
   ];
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('compendium')} />
+  const newHref = `/compendium/entries/new?type=${entityType}`;
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={view} onChange={setView} />
-        </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {filtered.length} {pluralizeUk(filtered.length, ['запис', 'записи', 'записів'])}
-        </p>
-        <Button to={`/compendium/entries/new?type=${entityType}`} className="col-start-3 hidden justify-self-end whitespace-nowrap md:inline-flex">+ {newLabel}</Button>
-      </div>
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('compendium')} />
 
-      <div className="mb-3 flex gap-2.5">
-        <div className="relative flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-          <input
-            className={`${inputClass} pl-10`}
-            placeholder="Пошук за назвою..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-      </div>
+      <SidebarActions newHref={newHref} newLabel={newLabel} />
 
-      <FilterAccordion open={filtersOpen}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SidebarSearch value={search} onChange={setSearch} />
+
+      <SidebarViewCount view={view} onViewChange={setView} count={filtered.length} forms={['запис', 'записи', 'записів']} />
+
+      <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
+        <div className="flex flex-col gap-4">
           <div>
             <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Вид</span>
             <select className={inputClass} value={speciesId} onChange={(e) => handleSpeciesFilter(e.target.value)}>
@@ -112,28 +97,36 @@ export default function CompendiumEntries({ entityType, title, newLabel }) {
             </select>
           </div>
         </div>
-      </FilterAccordion>
+      
+      </SidebarFilters>
+    </>
+  );
 
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={
+        <CatalogPreview item={hovered}>
+          {hovered && <CompendiumEntryPreview entry={hovered} speciesName={speciesNameById[hovered.species_id]} />}
+        </CatalogPreview>
+      }
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : filtered.length === 0 ? (
-        <EmptyState title="Нічого не знайдено" action={<Button to={`/compendium/entries/new?type=${entityType}`}>Створити перший</Button>} />
+        <EmptyState title="Нічого не знайдено" action={<Button to={newHref}>Створити перший</Button>} />
       ) : showCards ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((entry) => <CompendiumEntryCard key={entry.id} entry={entry} />)}
+        <div className={CATALOG_GRID}>
+          {filtered.map((entry) => <CompendiumEntryCard key={entry.id} entry={entry} {...bindPreview(entry)} />)}
         </div>
       ) : (
-        <DataTable items={filtered} columns={columns} getKey={(e) => e.id} getHref={(e) => `/compendium/entries/${e.id}`} />
+        <DataTable
+          items={filtered} columns={columns} getKey={(e) => e.id} getHref={(e) => `/compendium/entries/${e.id}`}
+          onRowHover={setHovered}
+        />
       )}
 
-      <Link
-        to={`/compendium/entries/new?type=${entityType}`}
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label={newLabel}
-      >
-        <Plus size={26} />
-      </Link>
-    </div>
+      <MobileFab to={newHref} label={newLabel} />
+    </CatalogLayout>
   );
 }
-

@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import traditionsApi from '../api/traditions';
 import SpellCard from '../components/SpellCard';
@@ -8,25 +6,27 @@ import CatalogTabs from '../components/CatalogTabs';
 import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels } from '../constants/spellbook';
-import { pluralizeUk } from '../utils/pluralize';
+import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels, spellForms } from '../constants/spellbook';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildSpellbookImportTemplate } from '../utils/spellbookImportTemplate';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
-import FilterAccordion from '../components/ui/FilterAccordion';
-import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarSection, SidebarActions, SidebarSearch, SidebarViewCount, SidebarFilters, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import SortSelect from '../components/catalog/SortSelect';
+import { CatalogPreview, SpellPreview } from '../components/catalog/previews';
 
 const SPELL_TABLE_COLUMNS = [
   { key: 'name', label: 'Назва', render: (s) => s.name },
   { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
   { key: 'spell_kind', label: 'Вид', render: (s) => SPELL_KINDS[s.spell_kind]?.label ?? s.spell_kind },
   { key: 'complexity', label: 'Складність', render: (s) => SPELL_COMPLEXITIES[s.complexity]?.label ?? '—' },
-  { key: 'levels', label: 'Рівні', render: (s) => 1 + (s.levels || []).length },
+  { key: 'forms', label: 'Форми', render: (s) => spellForms(s).length },
   { key: 'energy_cost', label: 'Енергія', render: (s) => s.energy_cost },
   { key: 'action_time', label: 'Дії', render: (s) => `${s.action_time}/3` },
   { key: 'ritual', label: 'Ритуал', render: (s) => RITUAL_TYPES[s.ritual]?.label ?? s.ritual },
@@ -111,48 +111,37 @@ export default function Spellbook() {
       [field]: f[field].includes(key) ? f[field].filter((v) => v !== key) : [...f[field], key],
     }));
 
-  const activeFilterCount = ['spell_kind', 'ritual', 'scope'].filter((k) => filter[k]).length
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
+
+  // Джерело й сортування тепер окремо від меню фільтрів — у лічильнику
+  // активних фільтрів їх немає.
+  const activeFilterCount = ['spell_kind', 'ritual'].filter((k) => filter[k]).length
     + (filter.nature.length > 0 ? 1 : 0)
     + (filter.complexity.length > 0 ? 1 : 0)
     + (filter.tradition.length > 0 ? 1 : 0);
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('spellbook')} />
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('spellbook')} />
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
-        </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {spells.length} {pluralizeUk(spells.length, ['заклинання', 'заклинання', 'заклинань'])}
-        </p>
-        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
-          <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
-          <Button to="/spellbook/new" className="whitespace-nowrap">+ Нове заклинання</Button>
-        </div>
-      </div>
+      <SidebarActions newHref="/spellbook/new" newLabel="Нове заклинання">
+        <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
+      </SidebarActions>
 
-      {/* Search — always visible, prominent */}
-      <div className="mb-3 flex gap-2.5">
-        <div className="relative flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-          <input
-            className={`${inputClass} pl-10`}
-            placeholder="Пошук за назвою..."
-            value={filter.search}
-            onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
-          />
-        </div>
-        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-      </div>
+      <SidebarSearch value={filter.search} onChange={(v) => setFilter((f) => ({ ...f, search: v }))} />
 
-      <FilterAccordion open={filtersOpen}>
-        <div>
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
-          <ScopeFilter scope={filter.scope} onChange={(v) => setFilter((f) => ({ ...f, scope: v }))} />
-        </div>
+      <SidebarViewCount
+        view={viewMode} onViewChange={setViewMode}
+        count={spells.length} forms={['заклинання', 'заклинання', 'заклинань']}
+      />
 
+      <SidebarSection label="Джерело">
+        <ScopeFilter scope={filter.scope} onChange={(v) => setFilter((f) => ({ ...f, scope: v }))} />
+      </SidebarSection>
+
+      <SortSelect options={SORT_OPTIONS} value={filter.sort} onChange={(v) => setFilter((f) => ({ ...f, sort: v }))} />
+
+      <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
         <div>
           <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Природа</span>
           <div className="flex flex-wrap gap-1.5">
@@ -222,21 +211,15 @@ export default function Spellbook() {
             <option value="required">Необхідний</option>
           </select>
         </label>
+      </SidebarFilters>
+    </>
+  );
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Сортування</span>
-          <select
-            className={inputClass}
-            value={filter.sort}
-            onChange={(e) => setFilter((f) => ({ ...f, sort: e.target.value }))}
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-      </FilterAccordion>
-
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={<CatalogPreview item={hovered}>{hovered && <SpellPreview spell={hovered} />}</CatalogPreview>}
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : spells.length === 0 ? (
@@ -247,22 +230,16 @@ export default function Spellbook() {
           columns={SPELL_TABLE_COLUMNS}
           getKey={(s) => s.id}
           getHref={(s) => `/spellbook/${s.id}`}
+          onRowHover={setHovered}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {spells.map((spell) => <SpellCard key={spell.id} spell={spell} />)}
+        <div className={CATALOG_GRID}>
+          {spells.map((spell) => <SpellCard key={spell.id} spell={spell} {...bindPreview(spell)} />)}
         </div>
       )}
 
-      {/* Floating action button — mobile only */}
-      <Link
-        to="/spellbook/new"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label="Нове заклинання"
-      >
-        <Plus size={26} />
-      </Link>
-    </div>
+      <MobileFab to="/spellbook/new" label="Нове заклинання" />
+    </CatalogLayout>
   );
 }
 

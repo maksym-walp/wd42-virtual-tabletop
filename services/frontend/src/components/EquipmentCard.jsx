@@ -4,13 +4,14 @@ import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
 
-export default function EquipmentCard({ item }) {
+export default function EquipmentCard({ item, ...rest }) {
   // Каталог показує мініатюру (400px webp) замість оригіналу — менше даних
   // на список карток; старі записи без thumbnail_url падають на оригінал.
   const thumbnail = item.thumbnail_url || item.image_url;
 
   return (
     <Link
+      {...rest}
       to={`/equipment/${item.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-accent)' }}

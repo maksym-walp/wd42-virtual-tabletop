@@ -41,11 +41,16 @@ export function buildSpellbookImportTemplate() {
 //                             quantity — число
 //                             unit     — рядок, напр. одна з: ${unitList} (або довільна своя)
 //   is_public             — true / false
-//   levels                — масив рівнів 2..N (хронологічні версії; поля вище — це рівень 1).
-//                           Кожен рівень — об'єкт з тими самими полями: complexity, spell_kind,
-//                           energy_cost, action_time, ritual, duration_value, duration_unit,
-//                           range_desc, components, mechanical_desc, narrative_desc,
-//                           lore_creator, lore_creator_npc_id. Порожній масив — лише один рівень.
+//   forms                 — масив додаткових форм (поля вище — це основна форма). Кожна форма — об'єкт
+//                           з kind: "primitive" (Примітивна) / "perfected" (Довершена) — рівневі, не більше
+//                           однієї кожного виду (тоді основна вважається Повноцінною) — або "alternative"
+//                           (альтернативна, потрібне ще "name"), та тими самими полями: complexity, spell_kind,
+//                           energy_cost, action_time, ritual, duration_value, duration_unit, range_desc,
+//                           components, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id.
+//                           Порожній масив — лише основна форма. Рівневі й альтернативні форми в одному
+//                           заклинанні не поєднуються: якщо є обидва типи, альтернативні буде відкинуто.
+//   main_form_name        — рядок або null — назва основної форми (лише для заклинань з альтернативними
+//                           формами; null — «Основна форма»)
 //
 [
   {
@@ -67,8 +72,9 @@ export function buildSpellbookImportTemplate() {
       { "item_id": null, "name": "Дрібка сірки", "quantity": 1, "unit": "щіпки" }
     ],
     "is_public": true,
-    "levels": [
+    "forms": [
       {
+        "kind": "perfected",
         "complexity": "medium",
         "spell_kind": "ranged",
         "energy_cost": 5,

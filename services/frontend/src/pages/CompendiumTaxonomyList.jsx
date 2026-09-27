@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
-import { pluralizeUk } from '../utils/pluralize';
-import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import { htmlToPreviewText } from '../utils/richText';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarSection, SidebarActions, SidebarSearch, SidebarViewCount, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, SimplePreview } from '../components/catalog/previews';
 
 const KIND_LABELS = { species: 'Вид', race: 'Раса' };
 const KIND_FILTERS = [
@@ -41,6 +42,7 @@ export default function CompendiumTaxonomyList() {
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('');
   const [view, setView] = useViewMode('compendium-taxonomy');
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
 
   useEffect(() => {
     setLoading(true);
@@ -61,34 +63,21 @@ export default function CompendiumTaxonomyList() {
   );
   const showCards = view === 'cards';
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('compendium')} />
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('compendium')} />
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={view} onChange={setView} />
-        </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {filtered.length} {pluralizeUk(filtered.length, ['запис', 'записи', 'записів'])}
-        </p>
-        <div className="col-start-3 hidden justify-self-end gap-2 md:flex">
-          <Button to="/compendium/species/new" variant="ghost" className="whitespace-nowrap">+ Вид</Button>
-          <Button to="/compendium/races/new" className="whitespace-nowrap">+ Раса</Button>
-        </div>
-      </div>
+      <SidebarActions>
+        <Button to="/compendium/species/new" variant="ghost" className="flex-1 whitespace-nowrap">+ Вид</Button>
+        <Button to="/compendium/races/new" className="flex-1 whitespace-nowrap">+ Раса</Button>
+      </SidebarActions>
 
-      <div className="mb-5 flex flex-wrap gap-2.5">
-        <div className="relative flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-          <input
-            className={`${inputClass} pl-10`}
-            placeholder="Пошук за назвою..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-1.5">
+      <SidebarSearch value={search} onChange={setSearch} />
+
+      <SidebarViewCount view={view} onViewChange={setView} count={filtered.length} forms={['запис', 'записи', 'записів']} />
+
+      <SidebarSection label="Тип">
+        <div className="flex flex-wrap gap-1.5">
           {KIND_FILTERS.map((f) => (
             <button
               key={f.key || 'all'}
@@ -102,18 +91,39 @@ export default function CompendiumTaxonomyList() {
             </button>
           ))}
         </div>
-      </div>
+      </SidebarSection>
+    </>
+  );
 
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={
+        <CatalogPreview item={hovered}>
+          {hovered && (
+            <SimplePreview
+              href={hovered.href}
+              image={hovered.image_url}
+              badges={[KIND_LABELS[hovered.kind], hovered.kind === 'species' ? `Здоров'я ${hovered.health_die || 'd6'}` : null]}
+              title={hovered.name}
+              subtitle={hovered.origin}
+              description={hovered.description}
+            />
+          )}
+        </CatalogPreview>
+      }
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : filtered.length === 0 ? (
         <EmptyState title="Нічого не знайдено" action={<Button to="/compendium/races/new">Створити расу</Button>} />
       ) : showCards ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={CATALOG_GRID}>
           {filtered.map((t) => (
             <Link
               key={`${t.kind}:${t.id}`}
               to={t.href}
+              {...bindPreview(t)}
               className="block overflow-hidden rounded-lg border border-border bg-surface"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
@@ -131,16 +141,13 @@ export default function CompendiumTaxonomyList() {
           ))}
         </div>
       ) : (
-        <DataTable items={filtered} columns={TAXONOMY_TABLE_COLUMNS} getKey={(t) => `${t.kind}:${t.id}`} getHref={(t) => t.href} />
+        <DataTable
+          items={filtered} columns={TAXONOMY_TABLE_COLUMNS} getKey={(t) => `${t.kind}:${t.id}`} getHref={(t) => t.href}
+          onRowHover={setHovered}
+        />
       )}
 
-      <Link
-        to="/compendium/races/new"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label="Новий запис"
-      >
-        <Plus size={26} />
-      </Link>
-    </div>
+      <MobileFab to="/compendium/races/new" label="Новий запис" />
+    </CatalogLayout>
   );
 }

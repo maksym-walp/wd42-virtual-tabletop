@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import AbilityCard from '../components/AbilityCard';
 import CatalogTabs from '../components/CatalogTabs';
@@ -9,17 +7,17 @@ import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
-import { pluralizeUk } from '../utils/pluralize';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildAbilitiesImportTemplate } from '../utils/abilitiesImportTemplate';
-import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
-import FilterAccordion from '../components/ui/FilterAccordion';
-import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarSection, SidebarActions, SidebarSearch, SidebarViewCount, SidebarFilters, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import { CatalogPreview, AbilityPreview } from '../components/catalog/previews';
 
 const ARCHETYPE_TABS = ['fighter', 'spellcaster', 'rogue'];
 
@@ -40,6 +38,7 @@ export default function AbilityCatalog() {
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [view, setView] = useViewMode('abilities');
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
 
   const fetchAbilities = useCallback(() => {
     const params = new URLSearchParams();
@@ -88,43 +87,26 @@ export default function AbilityCatalog() {
     }
   };
 
-  const activeFilterCount = (scope ? 1 : 0) + (archetype ? 1 : 0) + (isManeuver ? 1 : 0);
+  const activeFilterCount = (archetype ? 1 : 0) + (isManeuver ? 1 : 0);
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('abilities')} />
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('abilities')} />
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={view} onChange={setView} />
-        </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {abilities.length} {pluralizeUk(abilities.length, ['вміння', 'вміння', 'вмінь'])}
-        </p>
-        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
-          <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
-          <Button to="/abilities/new" className="whitespace-nowrap">+ Нове вміння</Button>
-        </div>
-      </div>
+      <SidebarActions newHref="/abilities/new" newLabel="Нове вміння">
+        <ExportImportActions onExport={handleExport} onImport={handleImport} onTemplate={handleTemplate} />
+      </SidebarActions>
 
-      <div className="mb-3 flex gap-2.5">
-        <div className="relative flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-          <input
-            className={`${inputClass} pl-10`}
-            placeholder="Пошук за назвою..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-      </div>
+      <SidebarSearch value={search} onChange={setSearch} />
 
-      <FilterAccordion open={filtersOpen}>
-        <div>
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
-          <ScopeFilter scope={scope} onChange={setScope} />
-        </div>
+      <SidebarViewCount view={view} onViewChange={setView} count={abilities.length} forms={['вміння', 'вміння', 'вмінь']} />
+
+      <SidebarSection label="Джерело">
+        <ScopeFilter scope={scope} onChange={setScope} />
+      </SidebarSection>
+
+      <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
+        
 
         <div>
           <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Архетип</span>
@@ -172,8 +154,16 @@ export default function AbilityCatalog() {
             ))}
           </div>
         </div>
-      </FilterAccordion>
+      
+      </SidebarFilters>
+    </>
+  );
 
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={<CatalogPreview item={hovered}>{hovered && <AbilityPreview ability={hovered} />}</CatalogPreview>}
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : abilities.length === 0 ? (
@@ -184,20 +174,15 @@ export default function AbilityCatalog() {
           columns={ABILITY_TABLE_COLUMNS}
           getKey={(a) => a.id}
           getHref={(a) => `/abilities/${a.id}`}
+          onRowHover={setHovered}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {abilities.map((a) => <AbilityCard key={a.id} ability={a} />)}
+        <div className={CATALOG_GRID}>
+          {abilities.map((a) => <AbilityCard key={a.id} ability={a} {...bindPreview(a)} />)}
         </div>
       )}
 
-      <Link
-        to="/abilities/new"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label="Нове вміння"
-      >
-        <Plus size={26} />
-      </Link>
-    </div>
+      <MobileFab to="/abilities/new" label="Нове вміння" />
+    </CatalogLayout>
   );
 }

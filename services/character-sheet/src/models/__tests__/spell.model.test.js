@@ -8,12 +8,12 @@ beforeEach(() => {
   pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
 });
 
-describe('SpellProgressModel.patch level', () => {
-  it('passes level as $5 and null when omitted', async () => {
-    await SpellProgressModel.patch('c1', 's1', { level: 2 });
-    expect(pool.query.mock.calls[0][1][4]).toBe(2);
+describe('SpellProgressModel.patch forms', () => {
+  it('passes form_tier/primary_form/mastered_forms as $5-$7 and nulls when omitted', async () => {
+    await SpellProgressModel.patch('c1', 's1', { form_tier: 'full', primary_form: 'alt', mastered_forms: ['alt'] });
+    expect(pool.query.mock.calls[0][1].slice(4)).toEqual(['full', 'alt', ['alt']]);
     await SpellProgressModel.patch('c1', 's1', { mastered: true });
-    expect(pool.query.mock.calls[1][1][4]).toBeNull();
+    expect(pool.query.mock.calls[1][1].slice(4)).toEqual([null, null, null]);
   });
 });
 

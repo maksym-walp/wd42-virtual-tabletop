@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
 import api from '../api/client';
 import ArtifactCard from '../components/ArtifactCard';
 import CatalogTabs from '../components/CatalogTabs';
@@ -8,15 +6,16 @@ import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { RARITIES } from '../constants/artifacts';
-import { pluralizeUk } from '../utils/pluralize';
-import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
-import FilterAccordion from '../components/ui/FilterAccordion';
-import FilterToggleButton from '../components/ui/FilterToggleButton';
 import EmptyState from '../components/ui/EmptyState';
-import ViewToggle from '../components/ui/ViewToggle';
 import DataTable from '../components/ui/DataTable';
 import useViewMode from '../hooks/useViewMode';
+import useHoverPreview from '../hooks/useHoverPreview';
+import CatalogLayout, {
+  SidebarSection, SidebarActions, SidebarSearch, SidebarViewCount, SidebarFilters, MobileFab, CATALOG_GRID,
+} from '../components/catalog/CatalogLayout';
+import SortSelect from '../components/catalog/SortSelect';
+import { CatalogPreview, EquipmentPreview } from '../components/catalog/previews';
 
 const ARTIFACT_TABLE_COLUMNS = [
   { key: 'name', label: 'Назва', sortKey: 'name', render: (a) => a.name },
@@ -35,6 +34,7 @@ export default function ArtifactsCatalog() {
   const [dir, setDir]         = useState('asc');
   const [view, setView]       = useViewMode('artifacts'); // table | cards
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [hovered, bindPreview, setHovered] = useHoverPreview();
 
   useEffect(() => {
     const params = new URLSearchParams({ sort, dir });
@@ -55,45 +55,33 @@ export default function ArtifactsCatalog() {
   };
 
   const showCards = view === 'cards';
-  const activeFilterCount = (scope ? 1 : 0) + (rarity ? 1 : 0);
+  const activeFilterCount = rarity ? 1 : 0;
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <CatalogTabs tabs={getDomainTabs('equipment')} />
+  const sortOptions = ARTIFACT_TABLE_COLUMNS.filter((c) => c.sortKey).map((c) => ({ value: c.sortKey, label: c.label }));
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="col-start-1">
-          <ViewToggle mode={view} onChange={setView} />
-        </div>
-        <p className="col-start-2 hidden justify-self-center text-sm text-text-dim sm:block">
-          {artifacts.length} {pluralizeUk(artifacts.length, ['артефакт', 'артефакти', 'артефактів'])}
-        </p>
-        <div className="col-start-3 hidden items-center justify-self-end gap-2 md:flex">
-          {/* Кнопки лише візуальні тут: підключено тільки в EquipmentCatalog. */}
-          <ExportImportActions />
-          <Button to="/equipment/artifacts/new" className="whitespace-nowrap">+ Новий артефакт</Button>
-        </div>
-      </div>
+  const sidebar = (
+    <>
+      <CatalogTabs sidebar tabs={getDomainTabs('equipment')} />
 
-      <div className="mb-3 flex gap-2.5">
-        <div className="relative flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-dim" />
-          <input
-            className={`${inputClass} pl-10`}
-            placeholder="Пошук за назвою..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <FilterToggleButton open={filtersOpen} onClick={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount} />
-      </div>
+      <SidebarActions newHref="/equipment/artifacts/new" newLabel="Новий артефакт">
+        {/* Кнопки лише візуальні тут: підключено тільки в EquipmentCatalog. */}
+        <ExportImportActions />
+      </SidebarActions>
 
-      <FilterAccordion open={filtersOpen}>
-        <div>
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Джерело</span>
-          <ScopeFilter scope={scope} onChange={setScope} />
-        </div>
+      <SidebarSearch value={search} onChange={setSearch} />
 
+      <SidebarViewCount
+        view={view} onViewChange={setView}
+        count={artifacts.length} forms={['артефакт', 'артефакти', 'артефактів']}
+      />
+
+      <SidebarSection label="Джерело">
+        <ScopeFilter scope={scope} onChange={setScope} />
+      </SidebarSection>
+
+      <SortSelect options={sortOptions} value={sort} onChange={setSort} dir={dir} onDirChange={setDir} />
+
+      <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
         <div>
           <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Рідкість</span>
           <div className="flex flex-wrap gap-1.5">
@@ -118,32 +106,32 @@ export default function ArtifactsCatalog() {
             ))}
           </div>
         </div>
-      </FilterAccordion>
+      </SidebarFilters>
+    </>
+  );
 
+  return (
+    <CatalogLayout
+      sidebar={sidebar}
+      preview={<CatalogPreview item={hovered}>{hovered && <EquipmentPreview item={hovered} artifact />}</CatalogPreview>}
+    >
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : artifacts.length === 0 ? (
         <EmptyState title="Артефактів не знайдено" action={<Button to="/equipment/artifacts/new">Створити перший</Button>} />
       ) : showCards ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {artifacts.map((a) => <ArtifactCard key={a.id} artifact={a} />)}
+        <div className={CATALOG_GRID}>
+          {artifacts.map((a) => <ArtifactCard key={a.id} artifact={a} {...bindPreview(a)} />)}
         </div>
       ) : (
         <DataTable
           items={artifacts} columns={ARTIFACT_TABLE_COLUMNS}
           getKey={(a) => a.id} getHref={(a) => `/equipment/artifacts/${a.id}`}
-          sort={sort} dir={dir} onSort={toggleSort}
+          sort={sort} dir={dir} onSort={toggleSort} onRowHover={setHovered}
         />
       )}
 
-      <Link
-        to="/equipment/artifacts/new"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-lg md:hidden"
-        aria-label="Новий артефакт"
-      >
-        <Plus size={26} />
-      </Link>
-    </div>
+      <MobileFab to="/equipment/artifacts/new" label="Новий артефакт" />
+    </CatalogLayout>
   );
 }
-

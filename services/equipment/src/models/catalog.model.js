@@ -70,8 +70,8 @@ const usedInSpellsSelect = `COALESCE(
        SELECT 1 FROM jsonb_array_elements(sp.components) c
        WHERE (c->>'item_id')::uuid = i.id
      ) OR EXISTS (
-       -- компоненти вищих рівнів заклинання (spellbook.spells.levels)
-       SELECT 1 FROM jsonb_array_elements(sp.levels) lv,
+       -- компоненти додаткових форм заклинання (spellbook.spells.forms)
+       SELECT 1 FROM jsonb_array_elements(sp.forms) lv,
                      jsonb_array_elements(COALESCE(lv->'components', '[]'::jsonb)) c
        WHERE (c->>'item_id')::uuid = i.id
      )) AND (sp.user_id = $2 OR sp.is_public = true)),

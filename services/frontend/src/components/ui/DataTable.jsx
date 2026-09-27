@@ -14,7 +14,9 @@ import { Link } from 'react-router-dom';
 // open an in-place editor (e.g. LocationLibrary's Sheet) — pass `onRowClick`
 // instead and the whole `<tr>` becomes clickable, with the first column
 // styled to read as a link without actually being an anchor.
-export default function DataTable({ items, columns, getHref, getKey, onRowClick, sort, dir, onSort }) {
+//
+// `onRowHover(item)` — для прев'ю запису в бічній панелі каталогу (CatalogLayout).
+export default function DataTable({ items, columns, getHref, getKey, onRowClick, onRowHover, sort, dir, onSort }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
       <table className="w-full min-w-[480px] border-collapse text-sm">
@@ -31,6 +33,7 @@ export default function DataTable({ items, columns, getHref, getKey, onRowClick,
               key={getKey(item)}
               className={`hover:bg-surface-hover ${onRowClick ? 'cursor-pointer' : ''}`}
               onClick={onRowClick ? () => onRowClick(item) : undefined}
+              onMouseEnter={onRowHover ? () => onRowHover(item) : undefined}
             >
               {columns.map((col, i) => (
                 <td key={col.key} className="border-b border-bg px-3 py-2 text-text-muted">

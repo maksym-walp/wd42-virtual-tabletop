@@ -109,7 +109,7 @@ describe('SpellModel.create', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, levels, parent_spell_id\)/);
+    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name\)/);
     expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22\)/);
     expect(params).toEqual([
       'u1', 'Вогняна куля', [], 'utility',
@@ -139,7 +139,7 @@ describe('SpellModel.update', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     }, true);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/image_url=\$18, lore_creator=\$19, lore_creator_npc_id=\$20,\s*complexity=\$22, levels=\$23::jsonb, parent_spell_id=\$24, updated_at=NOW\(\)/);
+    expect(sql).toMatch(/image_url=\$18, lore_creator=\$19, lore_creator_npc_id=\$20,\s*complexity=\$22, forms=\$23::jsonb, main_form_name=\$24, updated_at=NOW\(\)/);
     expect(sql).toMatch(/WHERE id=\$1 AND \(user_id=\$2 OR \$21 = true\)/);
     expect(params[19]).toBe('npc-1'); // lore_creator_npc_id ($20)
     expect(params[20]).toBe(true);    // isAdmin ($21)
@@ -162,12 +162,12 @@ describe('SpellModel.bulkImport', () => {
     ]);
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, levels\)/
+      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, forms, main_form_name\)/
     );
-    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19\)/);
     expect(params).toEqual([
       'importer', 'Вогняна куля', [], 'utility', null, null,
-      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]',
+      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]', null,
     ]);
     expect(imported).toBe(1);
   });
@@ -197,7 +197,7 @@ describe('SpellModel.bulkImport', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb\), \(\$19, \$20, \$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33::jsonb, \$34, \$35, \$36::jsonb\)/
+      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19\), \(\$20, \$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33, \$34::jsonb, \$35, \$36, \$37::jsonb, \$38\)/
     );
     expect(imported).toBe(2);
   });
@@ -219,81 +219,98 @@ describe('SpellModel.bulkImport', () => {
 });
 
 describe('SpellModel.findAll complexity filter', () => {
-  it('matches the base level or any extra level against the selected complexities', async () => {
+  it('matches the main form or any extra form against the selected complexities', async () => {
     await SpellModel.findAll('u1', { complexity: 'simple' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/s\.complexity = ANY\(\$2::text\[\]\)/);
-    expect(sql).toMatch(/jsonb_array_elements\(s\.levels\) lv WHERE lv->>'complexity' = ANY\(\$2::text\[\]\)/);
+    expect(sql).toMatch(/jsonb_array_elements\(s\.forms\) f WHERE f->>'complexity' = ANY\(\$2::text\[\]\)/);
     expect(params).toEqual(['u1', ['simple']]);
   });
 });
 
-describe('SpellModel complexity and levels on write', () => {
-  it('create writes complexity and normalized levels as $20/$21', async () => {
+describe('SpellModel complexity and forms on write', () => {
+  it('create writes complexity and normalized forms as $20/$21', async () => {
     await SpellModel.create('u1', {
       name: 'X', complexity: 'complex',
-      levels: [{ energy_cost: '5', complexity: 'bogus', extra: 'drop me' }],
+      forms: [{ kind: 'primitive', energy_cost: '5', complexity: 'bogus', extra: 'drop me' }],
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/\$20,\$21::jsonb,\$22\)/);
     expect(params[19]).toBe('complex');
-    const levels = JSON.parse(params[20]);
-    expect(levels).toHaveLength(1);
-    expect(levels[0]).toMatchObject({ energy_cost: 5, complexity: null, action_time: 1, components: [] });
-    expect(levels[0]).not.toHaveProperty('extra');
+    const forms = JSON.parse(params[20]);
+    expect(forms).toHaveLength(1);
+    expect(forms[0]).toMatchObject({ kind: 'primitive', id: 'primitive', name: null, energy_cost: 5, complexity: null, action_time: 1, components: [] });
+    expect(forms[0]).not.toHaveProperty('extra');
   });
 
-  it('update writes complexity/levels after the isAdmin param', async () => {
+  it('update writes complexity/forms after the isAdmin param', async () => {
     await SpellModel.update('s1', 'u1', { name: 'X', complexity: 'nope' }, false);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/complexity=\$22, levels=\$23::jsonb/);
+    expect(sql).toMatch(/complexity=\$22, forms=\$23::jsonb/);
     expect(params[20]).toBe(false);
     expect(params[21]).toBeNull();
     expect(params[22]).toBe('[]');
   });
 });
 
-describe('normalizeLevels', () => {
-  it('returns [] for non-array input and drops non-object entries', () => {
-    expect(SpellModel.normalizeLevels(undefined)).toEqual([]);
-    expect(SpellModel.normalizeLevels([null, 'x'])).toEqual([]);
+describe('normalizeForms', () => {
+  it('returns [] for non-array input and drops non-object or unknown-kind entries', () => {
+    expect(SpellModel.normalizeForms(undefined)).toEqual([]);
+    expect(SpellModel.normalizeForms([null, 'x', { kind: 'full' }, {}])).toEqual([]);
+  });
+
+  it('keeps at most one form of each tier kind', () => {
+    const forms = SpellModel.normalizeForms([
+      { kind: 'perfected', energy_cost: 1 }, { kind: 'perfected', energy_cost: 2 }, { kind: 'primitive' },
+    ]);
+    expect(forms.map((f) => f.kind)).toEqual(['perfected', 'primitive']);
+    expect(forms[0].energy_cost).toBe(1);
+  });
+
+  it('keeps a valid alternative id, generates one otherwise, and defaults the name', () => {
+    const id = '11111111-2222-3333-4444-555555555555';
+    const [a, b] = SpellModel.normalizeForms([
+      { kind: 'alternative', id, name: '  Крижана  ' },
+      { kind: 'alternative', id: 'not-a-uuid' },
+    ]);
+    expect(a).toMatchObject({ id, name: 'Крижана' });
+    expect(b.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(b.id).not.toBe('not-a-uuid');
+    expect(b.name).toBe('Альтернативна форма');
   });
 
   it('keeps an explicit duration_value and blanks an empty one', () => {
-    const [a, b] = SpellModel.normalizeLevels([{ duration_value: '3' }, { duration_value: '' }]);
+    const [a, b] = SpellModel.normalizeForms([
+      { kind: 'alternative', duration_value: '3' }, { kind: 'alternative', duration_value: '' },
+    ]);
     expect(a.duration_value).toBe(3);
     expect(b.duration_value).toBeNull();
   });
 });
 
-describe('SpellModel.validateLineage', () => {
-  it('returns null without querying when neither parent nor derived is given', async () => {
-    await expect(SpellModel.validateLineage('s1', 'u1', {})).resolves.toBeNull();
-    expect(pool.query).not.toHaveBeenCalled();
+describe('hasMixedForms', () => {
+  it('is true only when tier and alternative forms are both present', () => {
+    expect(SpellModel.hasMixedForms(undefined)).toBe(false);
+    expect(SpellModel.hasMixedForms([{ kind: 'primitive' }, { kind: 'perfected' }])).toBe(false);
+    expect(SpellModel.hasMixedForms([{ kind: 'alternative' }, { kind: 'alternative' }])).toBe(false);
+    expect(SpellModel.hasMixedForms([{ kind: 'alternative' }, { kind: 'perfected' }])).toBe(true);
+  });
+});
+
+describe('SpellModel main_form_name', () => {
+  it('trims the name on create and blanks an empty one on update', async () => {
+    await SpellModel.create('u1', { name: 'X', main_form_name: '  Вогняна  ' });
+    expect(pool.query.mock.calls[0][1][21]).toBe('Вогняна');
+    await SpellModel.update('s1', 'u1', { name: 'X', main_form_name: '   ' }, false);
+    expect(pool.query.mock.calls[1][1][23]).toBeNull();
   });
 
-  it('rejects a spell as its own parent', async () => {
-    await expect(SpellModel.validateLineage('s1', 'u1', { parentId: 's1' })).resolves.toMatch(/одночасно/);
-  });
-
-  it('rejects a parent the user cannot see', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] });
-    await expect(SpellModel.validateLineage('s1', 'u1', { parentId: 'p1' })).resolves.toMatch(/не знайдено/);
-  });
-
-  it('rejects a descendant chosen as parent', async () => {
-    pool.query
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
-    await expect(SpellModel.validateLineage('s1', 'u1', { parentId: 'p1' })).resolves.toMatch(/похідне заклинання як батьківське/);
-  });
-
-  it('rejects an ancestor chosen as derived', async () => {
-    pool.query
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
-    await expect(SpellModel.validateLineage('s1', 'u1', { parentId: 'p1', derivedIds: ['root'] }))
-      .resolves.toMatch(/предка/);
+  it('bulkImport drops alternative forms from a record that mixes form types', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await SpellModel.bulkImport('importer', [
+      { name: 'X', forms: [{ kind: 'alternative', name: 'A' }, { kind: 'perfected' }] },
+    ]);
+    const [, params] = pool.query.mock.calls[0];
+    expect(JSON.parse(params[17]).map((f) => f.kind)).toEqual(['perfected']);
   });
 });

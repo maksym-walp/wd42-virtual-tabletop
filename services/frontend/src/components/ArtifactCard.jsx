@@ -3,11 +3,12 @@ import { RARITIES } from '../constants/artifacts';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 
-export default function ArtifactCard({ artifact }) {
+export default function ArtifactCard({ artifact, ...rest }) {
   const rarity = RARITIES[artifact.rarity];
 
   return (
     <Link
+      {...rest}
       to={`/equipment/artifacts/${artifact.id}`}
       className="block overflow-hidden rounded-lg border border-border bg-surface"
       style={{ borderLeft: '4px solid var(--color-accent)' }}
