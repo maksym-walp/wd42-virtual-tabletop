@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
+import ShareButton from '../components/ShareButton';
 
 const TYPE_LABELS = { npc: 'НІП', character: 'Персонаж' };
 
@@ -69,7 +70,10 @@ export default function CompendiumFactionDetail() {
             <div className="h-20 w-20 shrink-0 rounded-lg border-2 border-dashed border-border" />
           )}
           <div>
-            <h1 className="font-display text-3xl text-accent">{faction.name}</h1>
+            <div className="flex items-start gap-2">
+              <h1 className="font-display text-3xl text-accent">{faction.name}</h1>
+              <ShareButton className="mt-1" />
+            </div>
             {faction.is_public && <span className="text-xs italic text-text-dim">публічна</span>}
           </div>
         </div>

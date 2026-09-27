@@ -16,6 +16,7 @@ import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
 import Sheet from '../components/ui/Sheet';
+import ShareButton from '../components/ShareButton';
 
 const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 
@@ -239,7 +240,10 @@ export default function ChronologyView() {
         )}
       </div>
 
-      <h1 className="mb-4 font-display text-2xl text-accent">{calendar.name}</h1>
+      <div className="mb-4 flex items-start gap-2">
+        <h1 className="font-display text-2xl text-accent">{calendar.name}</h1>
+        <ShareButton className="mt-0.5" />
+      </div>
 
       <CatalogTabs
         tabs={[

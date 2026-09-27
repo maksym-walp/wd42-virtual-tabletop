@@ -10,6 +10,7 @@ import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import RollButton from '../components/RollButton';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
+import ShareButton from '../components/ShareButton';
 
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
@@ -123,7 +124,10 @@ export default function CompendiumEntryView() {
           {entry.is_public && <span className="ml-auto text-xs italic text-text-dim">публічний</span>}
         </div>
 
-        <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{entry.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+          <h1 className="font-display text-3xl text-accent">{entry.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-5">
           {ATTRIBUTE_KEYS.map((key) => (

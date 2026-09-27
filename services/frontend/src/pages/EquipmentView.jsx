@@ -11,6 +11,7 @@ import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
+import ShareButton from '../components/ShareButton';
 
 export default function EquipmentView() {
   const { id } = useParams();
@@ -116,7 +117,10 @@ export default function EquipmentView() {
           </button>
         </div>
 
-        <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{item.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
+          <h1 className="font-display text-3xl text-accent">{item.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
         <AuthorBadge username={item.owner_username} size="sm" className="px-5 pb-2" />
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">

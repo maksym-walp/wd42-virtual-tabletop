@@ -32,6 +32,7 @@ import RollButton from '../components/RollButton';
 import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
 import { useDice } from '../context/DiceContext';
+import ShareButton from '../components/ShareButton';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
 
@@ -437,6 +438,8 @@ export default function CharacterSheet({ publicView = false }) {
                   <Pencil size={14} />
                 </button>
               )}
+              {/* Публічний персонаж — посилання на публічний лист (його відкриє будь-хто). */}
+              <ShareButton url={c.is_public ? `${window.location.origin}/characters/public/${c.id}` : undefined} />
             </h1>
           )}
           <p className="mt-1 text-sm text-text-dim">

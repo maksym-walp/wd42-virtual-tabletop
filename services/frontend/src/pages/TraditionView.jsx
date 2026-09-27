@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import SmartTextReader from '../components/SmartTextReader';
 import SpellCard from '../components/SpellCard';
+import ShareButton from '../components/ShareButton';
 
 export default function TraditionView() {
   const { id } = useParams();
@@ -68,7 +69,10 @@ export default function TraditionView() {
           <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Магічна традиція</span>
         </div>
 
-        <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{tradition.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+          <h1 className="font-display text-3xl text-accent">{tradition.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
         {tradition.founders && (
           <p className="px-5 pb-3 text-sm italic text-text-dim">Засновники: {tradition.founders}</p>
         )}

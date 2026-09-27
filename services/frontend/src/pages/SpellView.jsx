@@ -10,6 +10,7 @@ import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
+import ShareButton from '../components/ShareButton';
 
 export default function SpellView() {
   const { id } = useParams();
@@ -108,7 +109,10 @@ export default function SpellView() {
             {spell.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
           </div>
 
-          <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{spell.name}</h1>
+          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+            <h1 className="font-display text-3xl text-accent">{spell.name}</h1>
+            <ShareButton className="mt-1" />
+          </div>
           <AuthorBadge username={spell.owner_username} size="sm" className="px-5 pb-2" />
 
           {shown.lore_creator && (

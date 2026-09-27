@@ -18,6 +18,7 @@ import Button from '../components/ui/Button';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { inputClass } from '../components/ui/Field';
 import { useAuth } from '../context/AuthContext';
+import ShareButton from '../components/ShareButton';
 
 export default function MapView() {
   const { id } = useParams();
@@ -373,6 +374,7 @@ export default function MapView() {
             ) : (
               <>
                 <h1 className="m-0 font-display text-xl font-bold text-text">{map.name}</h1>
+                <ShareButton />
                 {isOwner && (
                   <button onClick={() => { setNameDraft(map.name); setEditingName(true); }} aria-label="Перейменувати" className="p-1 text-text-dim hover:text-accent">
                     <Pencil size={15} />

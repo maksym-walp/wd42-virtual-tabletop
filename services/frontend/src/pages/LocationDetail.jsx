@@ -8,6 +8,7 @@ import Badge from '../components/ui/Badge';
 import MarkerIcon from '../components/map/MarkerIcon';
 import SmartTextReader from '../components/SmartTextReader';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import ShareButton from '../components/ShareButton';
 
 // Standalone, read-only location page — locations previously had no URL of
 // their own (only reachable via a map's ?location= query param, see
@@ -63,6 +64,7 @@ export default function LocationDetail() {
           <div className="flex flex-col gap-4 p-5">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-xl text-text">{displayName}</h1>
+              <ShareButton />
               <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
                 <MarkerIcon icon={displayIcon} size={14} />
                 {displayTypes.length ? displayTypes.join(' · ') : 'Локація'}

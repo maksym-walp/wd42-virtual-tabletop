@@ -16,6 +16,7 @@ import Sheet from '../components/ui/Sheet';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import SmartTextReader from '../components/SmartTextReader';
 import CombatTab from './CampaignCombat';
+import ShareButton from '../components/ShareButton';
 
 const TABS = [
   { key: 'home', label: 'Головна' },
@@ -62,7 +63,10 @@ export default function CampaignDetail() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl text-accent">{campaign.name}</h1>
+          <div className="flex items-start gap-2">
+            <h1 className="font-display text-3xl text-accent">{campaign.name}</h1>
+            <ShareButton className="mt-1" />
+          </div>
           {isGm && (
             <p className="mt-1 text-sm text-text-dim">
               Код запрошення: <span className="font-mono text-gold">{campaign.invite_code}</span>

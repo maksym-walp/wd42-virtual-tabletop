@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import { htmlToPreviewText } from '../utils/richText';
+import ShareButton from '../components/ShareButton';
 
 // Mirrors CompendiumSpeciesDetail.jsx, minus health_die, plus each people's
 // origin field.
@@ -76,7 +77,10 @@ export default function CompendiumRaceDetail() {
           {race.is_public && <span className="text-xs italic text-text-dim">публічний</span>}
         </div>
 
-        <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{race.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
+          <h1 className="font-display text-3xl text-accent">{race.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
         {race.description && (
           <SmartTextReader text={race.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}

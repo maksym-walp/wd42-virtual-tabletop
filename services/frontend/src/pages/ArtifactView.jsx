@@ -9,6 +9,7 @@ import AuthorBadge from '../components/AuthorBadge';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
+import ShareButton from '../components/ShareButton';
 
 export default function ArtifactView() {
   const { id } = useParams();
@@ -91,7 +92,10 @@ export default function ArtifactView() {
           {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 
-        <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{artifact.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
+          <h1 className="font-display text-3xl text-accent">{artifact.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
         {artifact.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {artifact.creator}</p>}
         <AuthorBadge username={artifact.owner_username} size="sm" className="px-5 pb-2" />
 

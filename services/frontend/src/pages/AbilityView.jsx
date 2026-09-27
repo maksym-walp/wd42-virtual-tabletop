@@ -12,6 +12,7 @@ import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import ShareButton from '../components/ShareButton';
 
 export default function AbilityView() {
   const { id } = useParams();
@@ -101,7 +102,10 @@ export default function AbilityView() {
           {ability.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
         </div>
 
-        <h1 className="px-5 pb-2 pt-4 font-display text-3xl text-accent">{ability.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+          <h1 className="font-display text-3xl text-accent">{ability.name}</h1>
+          <ShareButton className="mt-1" />
+        </div>
         <AuthorBadge username={ability.owner_username} size="sm" className="px-5 pb-2" />
 
         {ability.mechanical_desc && (

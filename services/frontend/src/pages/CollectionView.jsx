@@ -8,6 +8,7 @@ import CollectionItemPicker from '../components/CollectionItemPicker';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
+import ShareButton from '../components/ShareButton';
 
 export default function CollectionView({ domainKey, publicView = false }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -142,7 +143,10 @@ export default function CollectionView({ domainKey, publicView = false }) {
           {collection.is_public && <span className="text-xs italic text-text-dim">публічна</span>}
         </div>
 
-        <h1 className="px-5 pb-1 pt-4 font-display text-3xl text-accent">{collection.name}</h1>
+        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
+          <h1 className="font-display text-3xl text-accent">{collection.name}</h1>
+          <ShareButton className="mt-1" url={collection.is_public ? shareUrl : undefined} />
+        </div>
         {collection.description && (
           <SmartTextReader text={collection.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}

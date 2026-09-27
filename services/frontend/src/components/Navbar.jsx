@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, ChevronDown, Settings, Sun, Moon, CircleUserRound, Shield } from 'lucide-react';
+import { LogOut, ChevronDown, Settings, Sun, Moon, CircleUserRound, Shield, RefreshCw } from 'lucide-react';
+import refreshApp from '../utils/refreshApp';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { NAV_MAIN_ITEMS, NAV_MORE_ITEMS } from '../constants/navigation';
@@ -131,6 +132,14 @@ export default function Navbar() {
                     >
                       {theme === 'dark' ? <Moon size={16} strokeWidth={1.75} /> : <Sun size={16} strokeWidth={1.75} />}
                       Змінити тему
+                    </button>
+                    <button
+                      type="button"
+                      onClick={refreshApp}
+                      className="flex w-full items-center gap-2.5 border-b border-border px-4 py-2.5 text-left text-sm font-semibold text-text"
+                    >
+                      <RefreshCw size={16} strokeWidth={1.75} />
+                      Оновити застосунок
                     </button>
                     <button
                       type="button"
