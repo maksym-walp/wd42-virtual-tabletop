@@ -361,10 +361,12 @@ export default function CharacterSheet({ publicView = false }) {
   const healthDiceAll  = c.health_dice_values || [];
   const activeDice     = healthDiceAll.slice(0, maxDiceCount - totalCondLevel);
   const maxHp          = activeDice.reduce((s, v) => s + v, 0);
-  const enduranceVal   = skillMap['endurance']?.value ?? 1;
-  const maxMagic       = enduranceVal * archetype.magicMult;
+  const magicSenseVal  = skillMap['magic_sense']?.value ?? 1;
+  const maxMagic       = magicSenseVal * archetype.magicMult;
   const mysticismVal   = skillMap['mysticism']?.value ?? 1;
-  const maxKnownSpells = mysticismVal + (c.spell_bonus ?? 0);
+  // Базовий ліміт чарів: Містицизм × половина множника архетипу.
+  const baseKnownSpells = mysticismVal * (archetype.magicMult / 2);
+  const maxKnownSpells = baseKnownSpells + (c.spell_bonus ?? 0);
 
   const INITIATIVE_DIE  = { 1:'d4',2:'d6',3:'d8',4:'d10',5:'d12',6:'d20' };
   const HEROIC_COUNT    = { 1:0,2:1,3:2,4:3,5:4,6:5 };
@@ -597,7 +599,7 @@ export default function CharacterSheet({ publicView = false }) {
         {tab === 'magic' && (
           <MagicTab
             c={c} maxMagic={maxMagic} archetype={archetype}
-            maxKnownSpells={maxKnownSpells} mysticismVal={mysticismVal}
+            maxKnownSpells={maxKnownSpells} baseKnownSpells={baseKnownSpells} mysticismVal={mysticismVal}
             spells={spells} allSpells={allSpells}
             is_owner={is_owner}
             patchCharacter={patchCharacter}
@@ -1252,7 +1254,7 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
 
 // ── MagicTab ──────────────────────────────────────────────────────────────────
 
-function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, unlockedNodeIds }) {
+function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, unlockedNodeIds }) {
   const [spellSearch, setSpellSearch] = useState('');
   const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
@@ -1278,7 +1280,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
   };
   const saveMaxSpells = () => {
     const desiredMax = Math.max(0, parseInt(maxSpellsDraft, 10) || 0);
-    patchCharacter({ spell_bonus: desiredMax - mysticismVal });
+    patchCharacter({ spell_bonus: desiredMax - baseKnownSpells });
     setEditingMaxSpells(false);
   };
 
@@ -1420,7 +1422,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, mysticismVal, spells
         <Sheet open onClose={() => setEditingMaxSpells(false)} title="Максимум заклинань">
           <div className="flex flex-col gap-4">
             <p className="text-sm text-text-dim">
-              За замовчуванням дорівнює навичці Містицизм ({mysticismVal}). Тут можна вказати інше число.
+              За замовчуванням дорівнює Містицизм × половина множника архетипу ({mysticismVal} × {archetype.magicMult / 2} = {baseKnownSpells}). Тут можна вказати інше число.
             </p>
             <Field label="Максимум відомих заклинань">
               <input

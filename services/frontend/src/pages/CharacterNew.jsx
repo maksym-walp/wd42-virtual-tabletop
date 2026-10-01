@@ -154,7 +154,7 @@ export default function CharacterNew() {
     setError('');
     try {
       const currentHp = healthDice.reduce((s, v) => s + v, 0);
-      const currentMagic = skills.endurance * ARCHETYPES[archetype].magicMult;
+      const currentMagic = skills.magic_sense * ARCHETYPES[archetype].magicMult;
       await characterApi.update(characterId, {
         health_dice_values: healthDice,
         current_hp: currentHp,
@@ -491,7 +491,7 @@ function Step3Vitals({ archetype, skills, healthDice, setHealthDice }) {
   ]);
   const maxDiceCount = PHYSIQUE_HEALTH[physiqueLevel] ?? 6;
   const dieSize = parseInt(a.healthDie.slice(1));
-  const maxMagic = skills.endurance * a.magicMult;
+  const maxMagic = skills.magic_sense * a.magicMult;
   const currentHp = healthDice.reduce((s, v) => s + v, 0);
 
   const roll = () => setHealthDice(rollHealthDice(dieSize, maxDiceCount, healthDice));
@@ -532,7 +532,7 @@ function Step3Vitals({ archetype, skills, healthDice, setHealthDice }) {
 
         <div className="rounded-lg border border-border bg-surface p-4">
           <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-gold">Чари</h3>
-          <p className="mb-3 text-xs italic text-text-dim">Витривалість × множник архетипу (×{a.magicMult})</p>
+          <p className="mb-3 text-xs italic text-text-dim">Чуття магії × множник архетипу (×{a.magicMult})</p>
           <p className="text-center text-3xl font-bold text-gold">{maxMagic} / {maxMagic}</p>
         </div>
       </div>

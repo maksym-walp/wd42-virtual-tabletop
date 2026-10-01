@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, GripVertical } from 'lucide-react';
+import { X, GripVertical, Download, Upload } from 'lucide-react';
 import adminApi from '../api/admin';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -74,9 +74,11 @@ export default function AdminPanel() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <PageHeader title="Адмін панель" subtitle="Користувачі та конфіги сайту" />
+      <PageHeader title="Адмін панель" subtitle="Користувачі, конфіги та резервні копії сайту" />
 
       <UsersTable users={users} error={usersError} />
+
+      <BackupCard />
 
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
@@ -149,6 +151,136 @@ function UsersTable({ users, error }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// Помилка запиту з responseType: 'blob' приходить як Blob із JSON усередині.
+async function errorMessage(err, fallback) {
+  const data = err.response?.data;
+  if (data instanceof Blob) {
+    try { return JSON.parse(await data.text()).message || fallback; } catch { return fallback; }
+  }
+  return data?.message || fallback;
+}
+
+function BackupCard() {
+  const [downloading, setDownloading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+  const fileInput = useRef(null);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setError('');
+    try {
+      const { blob, filename } = await adminApi.downloadBackup();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(await errorMessage(err, 'Не вдалося створити бекап'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const isFullArchive = files.some((f) => f.name.toLowerCase().endsWith('.zip'));
+
+  const handleRestore = async () => {
+    const warning = isFullArchive
+      ? 'Відновити ВСЮ базу даних з архіву? Усі поточні записи на сайті буде замінено вмістом бекапу. Це незворотньо — рекомендуємо спершу завантажити свіжий бекап.'
+      : `Замінити вміст ${files.length} таблиць(і) даними з обраних JSON-файлів? Решта бази не зміниться. Це незворотньо.`;
+    if (!window.confirm(warning)) return;
+
+    setRestoring(true);
+    setError('');
+    setResult(null);
+    try {
+      setResult(await adminApi.restoreBackup(files));
+      setFiles([]);
+      if (fileInput.current) fileInput.current.value = '';
+    } catch (err) {
+      setError(await errorMessage(err, 'Не вдалося відновити бекап'));
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const restoredRows = result?.restored.reduce((sum, t) => sum + t.rows, 0);
+
+  return (
+    <div className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border bg-bg px-4 py-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Резервна копія</span>
+      </div>
+
+      <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-text-muted">
+            Zip-архів з усіма записами бази даних — по JSON-файлу на кожну таблицю.
+            Зображення (медіафайли) до архіву не входять.
+          </p>
+          <div>
+            <Button type="button" size="sm" disabled={downloading} onClick={handleDownload}>
+              <Download size={14} />
+              {downloading ? 'Створення...' : 'Завантажити бекап'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-4">
+          <p className="text-sm text-text-muted">
+            Відновлення: цілий архів (.zip) замінює всю базу; окремі файли
+            <span className="font-mono text-xs"> схема.таблиця.json </span>
+            замінюють лише відповідні таблиці.
+          </p>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip,.json,application/zip,application/json"
+            multiple
+            onChange={(e) => { setFiles([...e.target.files]); setResult(null); setError(''); }}
+            className="text-sm text-text-muted file:mr-3 file:rounded-lg file:border file:border-border file:bg-transparent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-text hover:file:bg-surface-hover"
+          />
+          <div>
+            <Button type="button" size="sm" variant="danger" disabled={restoring || files.length === 0} onClick={handleRestore}>
+              <Upload size={14} />
+              {restoring ? 'Відновлення...' : 'Відновити з бекапу'}
+            </Button>
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
+
+        {result && (
+          <div className="rounded-lg border border-border/60 bg-bg p-3 text-sm">
+            <p className="font-semibold text-sage">
+              {result.mode === 'full' ? 'Базу повністю відновлено' : 'Таблиці відновлено'}:
+              {' '}{result.restored.length} табл., {restoredRows} записів
+            </p>
+            {result.cleared.length > 0 && (
+              <p className="mt-1 text-text-muted">Спорожнено (немає в бекапі): {result.cleared.join(', ')}</p>
+            )}
+            {result.restored.filter((t) => t.ignoredColumns.length).map((t) => (
+              <p key={t.table} className="mt-1 text-text-muted">
+                {t.table}: пропущено колонки, яких уже немає — {t.ignoredColumns.join(', ')}
+              </p>
+            ))}
+            {result.skipped.map((s) => (
+              <p key={s.file} className="mt-1 text-text-muted">Пропущено {s.file}: {s.reason}</p>
+            ))}
+            {result.warnings.map((w) => (
+              <p key={w} className="mt-1 text-accent">{w}</p>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
