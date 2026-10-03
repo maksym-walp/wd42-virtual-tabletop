@@ -13,6 +13,7 @@ import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import MultiSelectDropdown from '../components/ui/MultiSelectDropdown';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 
@@ -20,7 +21,7 @@ const domain = COLLECTION_DOMAINS.equipment;
 
 const EMPTY = {
   name: '', type: 'weapon', damage_die: '', defense_value: '',
-  description: '', is_public: true,
+  description: '', is_public: true, is_canonical: true,
   price: '', image_url: '',
   weapon_type: '', weapon_grip: [], modifier: '',
   armor_weight: '',
@@ -32,6 +33,8 @@ export default function EquipmentForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const { user } = useAuth();
+  const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
   const { weaponTypes, weaponGrips } = useWeaponOptions();
 
   // Coming from a specific type tab (?type=armor from /equipment/armor's
@@ -303,6 +306,17 @@ export default function EquipmentForm() {
             />
             Публічне — видиме всім гравцям
           </label>
+          {/* Лише при створенні — далі канонічність перемикається на сторінці запису. */}
+          {!isEdit && canManageCanonical && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+              <input
+                type="checkbox" checked={form.is_canonical}
+                onChange={(e) => setForm((f) => ({ ...f, is_canonical: e.target.checked }))}
+                className="h-5 w-5 accent-accent"
+              />
+              Канонічне — офіційне спорядження світу
+            </label>
+          )}
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

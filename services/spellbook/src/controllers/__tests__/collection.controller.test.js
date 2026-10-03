@@ -126,7 +126,7 @@ describe('CollectionController.create', () => {
 
     await CollectionController.create(req, res);
 
-    expect(CollectionModel.create).toHaveBeenCalledWith('user-1', { name: 'Fire spells' });
+    expect(CollectionModel.create).toHaveBeenCalledWith('user-1', { name: 'Fire spells', is_canonical: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ collection: { id: 'c1', name: 'Fire spells' } });
   });

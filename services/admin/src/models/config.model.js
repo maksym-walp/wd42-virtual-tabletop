@@ -1,9 +1,8 @@
 const pool = require('../config/db');
 
 // admin.site_configs — key/value(jsonb) сховище конфігів сайту
-// (55-weapon-grip-multi-and-admin-configs.sql). Наразі рівно два рядки
-// (weapon_types, weapon_grips), але модель не знає про конкретні ключі —
-// список дозволених ключів для запису живе в контролері.
+// (55-weapon-grip-multi-and-admin-configs.sql). Модель не знає про
+// конкретні ключі — список дозволених ключів для запису живе в контролері.
 const ConfigModel = {
   async findAll() {
     const { rows } = await pool.query('SELECT key, value, updated_at FROM admin.site_configs ORDER BY key');

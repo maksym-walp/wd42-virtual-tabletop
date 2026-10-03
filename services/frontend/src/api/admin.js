@@ -18,6 +18,11 @@ const adminApi = {
     return data.users;
   },
 
+  async updateUserRole(id, role) {
+    const { data } = await api.patch(`${BASE}/users/${id}/role`, { role });
+    return data.user;
+  },
+
   // Повертає { blob, filename } — ім'я файлу з Content-Disposition бекенда.
   async downloadBackup() {
     const res = await api.get(`${BASE}/backup`, { responseType: 'blob' });

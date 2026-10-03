@@ -8,7 +8,7 @@ import traditionsApi from '../api/traditions';
 import compendiumApi from '../api/compendium';
 import {
   NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_KINDS, SPELL_COMPLEXITIES, FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFormFields, spellForms, spellFormMode,
+  ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFormFields, spellForms, spellFormMode,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +21,7 @@ import CollectionMembershipPicker from '../components/CollectionMembershipPicker
 import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
 import AuthorField from '../components/AuthorField';
+import useSpellKinds from '../hooks/useSpellKinds';
 
 const domain = COLLECTION_DOMAINS.spellbook;
 
@@ -29,7 +30,7 @@ const EMPTY = {
   mechanical_desc: '', narrative_desc: '', lore_creator: '', lore_creator_npc_id: null,
   energy_cost: 0, action_time: 1, ritual: 'impossible',
   duration_value: '', duration_unit: 'instant', range_desc: '',
-  components: [], is_public: true,
+  components: [], is_public: true, is_canonical: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '',
   collectionIds: [],
@@ -81,6 +82,8 @@ export default function SpellForm() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
   const { user } = useAuth();
+  const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
+  const { spellKinds } = useSpellKinds();
   const canManageTraditions = user?.role === 'admin' || user?.role === 'game_master';
   const kinds = domain.kindSwitch.filter((k) => k.key !== 'tradition' || canManageTraditions);
 
@@ -465,7 +468,7 @@ export default function SpellForm() {
 
           <Field label="Вид заклинання" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
+              {spellKinds.map(({ key, label }) => (
                 <button
                   key={key} type="button"
                   onClick={() => patchForm({ spell_kind: key })}
@@ -589,6 +592,17 @@ export default function SpellForm() {
             />
             Публічне — видиме всім гравцям
           </label>
+          {/* Лише при створенні — далі канонічність перемикається на сторінці запису. */}
+          {!isEdit && canManageCanonical && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+              <input
+                type="checkbox" checked={form.is_canonical}
+                onChange={(e) => setForm((f) => ({ ...f, is_canonical: e.target.checked }))}
+                className="h-5 w-5 accent-accent"
+              />
+              Канонічне — офіційне заклинання світу
+            </label>
+          )}
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

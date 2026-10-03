@@ -1,19 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { X, GripVertical, Download, Upload } from 'lucide-react';
 import adminApi from '../api/admin';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
 
-// Наразі рівно два конфіги (список сихронізований із services/admin's
-// ALLOWED_KEYS) — набір типів зброї й особливостей зброї, звідки їх читає
-// equipment-сервіс (useWeaponOptions на боці зброї).
+// Список сихронізований із services/admin's ALLOWED_KEYS — типи й
+// особливості зброї (читає equipment, useWeaponOptions на фронті) та види
+// заклинань (читає spellbook, useSpellKinds на фронті).
 const CONFIG_LABELS = {
   weapon_types: 'Типи зброї',
   weapon_grips: 'Особливості зброї',
+  spell_kinds: 'Види заклинань',
 };
 
-// key — сире значення у записах каталогу зброї (weapon_type/weapon_grip) і
+// key — сире значення у записах (weapon_type/weapon_grip/spell_kind) і
 // в query-параметрах фільтрів, тож лише латинські малі літери, цифри й "_".
 const KEY_PATTERN = /^[a-z0-9_]+$/;
 
@@ -76,7 +78,11 @@ export default function AdminPanel() {
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader title="Адмін панель" subtitle="Користувачі, конфіги та резервні копії сайту" />
 
-      <UsersTable users={users} error={usersError} />
+      <UsersTable
+        users={users}
+        error={usersError}
+        onRoleChanged={(saved) => setUsers((us) => us.map((u) => (u.id === saved.id ? saved : u)))}
+      />
 
       <BackupCard />
 
@@ -106,7 +112,25 @@ const ROLE_LABELS = {
   user: 'Гравець',
 };
 
-function UsersTable({ users, error }) {
+function UsersTable({ users, error, onRoleChanged }) {
+  const { user: me } = useAuth();
+  const [savingId, setSavingId] = useState(null);
+  const [roleError, setRoleError] = useState('');
+
+  const changeRole = async (u, role) => {
+    if (role === u.role) return;
+    if (!window.confirm(`Змінити роль ${u.username}: ${ROLE_LABELS[u.role] || u.role} → ${ROLE_LABELS[role]}?`)) return;
+    setSavingId(u.id);
+    setRoleError('');
+    try {
+      onRoleChanged(await adminApi.updateUserRole(u.id, role));
+    } catch (err) {
+      setRoleError(err.response?.data?.message || 'Не вдалося змінити роль');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <div className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
       <div className="border-b border-border bg-bg px-4 py-2">
@@ -115,6 +139,7 @@ function UsersTable({ users, error }) {
         </span>
       </div>
 
+      {roleError && <p className="px-4 pt-3 text-sm text-danger">{roleError}</p>}
       {error ? (
         <p className="p-4 text-sm text-danger">{error}</p>
       ) : !users ? (
@@ -136,7 +161,21 @@ function UsersTable({ users, error }) {
                 <tr key={u.id} className="border-t border-border/60">
                   <td className="px-4 py-2 font-medium text-text">{u.username}</td>
                   <td className="px-4 py-2 text-text-muted">{u.email}</td>
-                  <td className="px-4 py-2 text-text-muted">{ROLE_LABELS[u.role] || u.role}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {/* Власну роль не змінити — бекенд теж це блокує. */}
+                    {u.id === me?.id ? (ROLE_LABELS[u.role] || u.role) : (
+                      <select
+                        value={u.role}
+                        disabled={savingId === u.id}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        className="rounded-md border border-border bg-bg px-2 py-1 text-sm text-text"
+                      >
+                        {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                          <option key={role} value={role}>{label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
                   <td className="px-4 py-2">
                     <span className={u.is_active ? 'text-sage' : 'text-danger'}>
                       {u.is_active ? 'активний' : 'вимкнений'}

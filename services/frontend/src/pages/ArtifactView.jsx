@@ -6,7 +6,7 @@ import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
-import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import CanonicalSwitch from '../components/CanonicalSwitch';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
@@ -46,7 +46,7 @@ export default function ArtifactView() {
     setSettingCanonical(true);
     try {
       const { data } = await api.patch(`/api/equipment/artifacts/${id}/canonical`, { is_canonical: isCanonical });
-      setArtifact(data.item);
+      setArtifact((prev) => ({ ...prev, is_canonical: data.item.is_canonical }));
     } finally {
       setSettingCanonical(false);
     }
@@ -54,7 +54,9 @@ export default function ArtifactView() {
 
   const handleSetOwner = async (ownerUsername) => {
     const { data } = await api.patch(`/api/equipment/artifacts/${id}/owner`, { owner_username: ownerUsername });
-    setArtifact(data.item);
+    // PATCH /owner повертає голий рядок (без owner_username/is_owner/joins) —
+    // оновлюємо лише власника.
+    setArtifact((prev) => ({ ...prev, user_id: data.item.user_id, owner_username: ownerUsername, is_owner: data.item.user_id === user?.id }));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -97,7 +99,12 @@ export default function ArtifactView() {
           <ShareButton className="mt-1" />
         </div>
         {artifact.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {artifact.creator}</p>}
-        <AuthorBadge username={artifact.owner_username} size="sm" className="px-5 pb-2" />
+        <AuthorBadge
+          username={artifact.owner_username}
+          size="sm"
+          className="px-5 pb-2"
+          onChangeOwner={isAdmin ? handleSetOwner : undefined}
+        />
 
         {artifact.price != null && (
           <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
@@ -111,26 +118,24 @@ export default function ArtifactView() {
           </Section>
         )}
 
-        {canManageCanonical && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={() => handleSetCanonical(!artifact.is_canonical)} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : artifact.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
-            </Button>
-          </div>
-        )}
-
-        {isAdmin && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <ChangeOwnerControl onSubmit={handleSetOwner} />
-          </div>
-        )}
-
-        {(artifact.is_owner || isAdmin) && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" to={`/equipment/artifacts/${id}/edit`}>Редагувати</Button>
-            <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Видалення...' : 'Видалити'}
-            </Button>
+        {(artifact.is_owner || isAdmin || canManageCanonical) && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+            {(artifact.is_owner || isAdmin) && (
+              <>
+                <Button variant="ghost" to={`/equipment/artifacts/${id}/edit`}>Редагувати</Button>
+                <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? 'Видалення...' : 'Видалити'}
+                </Button>
+              </>
+            )}
+            {canManageCanonical && (
+              <CanonicalSwitch
+                className="ml-auto"
+                checked={!!artifact.is_canonical}
+                disabled={settingCanonical}
+                onChange={handleSetCanonical}
+              />
+            )}
           </div>
         )}
       </div>

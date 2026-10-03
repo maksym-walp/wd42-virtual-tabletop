@@ -80,7 +80,7 @@ describe('SpellModel.findAll scope=community', () => {
     await SpellModel.findAll('u1', { scope: 'community' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /WHERE s\.is_public = true AND s\.user_id <> \$1 AND NOT \(COALESCE\(cu\.role IN \('admin', 'game_master'\), false\) OR s\.is_canonical\)/
+      /WHERE s\.is_public = true AND s\.user_id <> \$1 AND NOT s\.is_canonical/
     );
     expect(sql).not.toMatch(/s\.user_id = \$1 OR s\.is_public = true/);
     expect(params).toEqual(['u1']);
@@ -109,8 +109,8 @@ describe('SpellModel.create', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name\)/);
-    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22\)/);
+    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical\)/);
+    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22,\$23\)/);
     expect(params).toEqual([
       'u1', 'Вогняна куля', [], 'utility',
       undefined, undefined,
@@ -119,7 +119,7 @@ describe('SpellModel.create', () => {
       null, '[]', false,
       [], 'or',
       null, 'Стара Мірна', 'npc-1',
-      null, '[]', null,
+      null, '[]', null, false,
     ]);
   });
 
@@ -162,12 +162,12 @@ describe('SpellModel.bulkImport', () => {
     ]);
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, forms, main_form_name\)/
+      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, forms, main_form_name, is_canonical\)/
     );
-    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20\)/);
     expect(params).toEqual([
       'importer', 'Вогняна куля', [], 'utility', null, null,
-      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]', null,
+      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]', null, false,
     ]);
     expect(imported).toBe(1);
   });
@@ -179,13 +179,14 @@ describe('SpellModel.bulkImport', () => {
     expect(params[0]).toBe('importer');
   });
 
-  it('does not include prerequisite_node_ids, prerequisite_logic or is_canonical as columns', async () => {
+  it('does not include prerequisite_node_ids or prerequisite_logic as columns, and takes is_canonical from the importer', async () => {
     pool.query.mockResolvedValue({ rowCount: 1 });
     await SpellModel.bulkImport('importer', [
       { name: 'X', prerequisite_node_ids: ['n1'], prerequisite_logic: 'and', is_canonical: true },
-    ]);
-    const [sql] = pool.query.mock.calls[0];
-    expect(sql).not.toMatch(/prerequisite_node_ids|prerequisite_logic|is_canonical/);
+    ], false);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/prerequisite_node_ids|prerequisite_logic/);
+    expect(params[params.length - 1]).toBe(false);
   });
 
   it('batches multiple records into a single multi-row VALUES list', async () => {
@@ -197,7 +198,7 @@ describe('SpellModel.bulkImport', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19\), \(\$20, \$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33, \$34::jsonb, \$35, \$36, \$37::jsonb, \$38\)/
+      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20\), \(\$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33, \$34, \$35::jsonb, \$36, \$37, \$38::jsonb, \$39, \$40\)/
     );
     expect(imported).toBe(2);
   });
@@ -235,7 +236,7 @@ describe('SpellModel complexity and forms on write', () => {
       forms: [{ kind: 'primitive', energy_cost: '5', complexity: 'bogus', extra: 'drop me' }],
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/\$20,\$21::jsonb,\$22\)/);
+    expect(sql).toMatch(/\$20,\$21::jsonb,\$22,\$23\)/);
     expect(params[19]).toBe('complex');
     const forms = JSON.parse(params[20]);
     expect(forms).toHaveLength(1);

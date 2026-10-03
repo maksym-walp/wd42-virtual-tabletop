@@ -62,7 +62,7 @@ describe('AbilityModel.findAll scope=community', () => {
     await AbilityModel.findAll('u1', { scope: 'community' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /WHERE a\.is_public = true AND a\.user_id <> \$1 AND NOT \(COALESCE\(cu\.role IN \('admin', 'game_master'\), false\) OR a\.is_canonical\)/
+      /WHERE a\.is_public = true AND a\.user_id <> \$1 AND NOT a\.is_canonical/
     );
     expect(sql).not.toMatch(/a\.user_id = \$1 OR a\.is_public = true/);
     expect(params).toEqual(['u1']);
@@ -114,7 +114,7 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null]);
+    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, false]);
   });
 
   it('inserts lore_creator/lore_creator_npc_id when provided', async () => {
@@ -123,13 +123,13 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1']);
+    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.create('u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null]);
+    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false]);
   });
 });
 
@@ -174,14 +174,13 @@ describe('AbilityModel.bulkImport', () => {
 
     expect(result).toBe(2);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11\), \(\$12, \$13, \$14, \$15, \$16, \$17, \$18, \$19, \$20, \$21, \$22\)/);
+    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12\), \(\$13, \$14, \$15, \$16, \$17, \$18, \$19, \$20, \$21, \$22, \$23, \$24\)/);
     expect(sql).not.toMatch(/prerequisite_node_ids/);
     expect(sql).not.toMatch(/prerequisite_logic/);
-    expect(sql).not.toMatch(/is_canonical/);
     expect(sql).not.toMatch(/image_url/);
     expect(params).toEqual([
-      'importer-1', 'Удар', ['warrior'], 'опис', null, true, true, 2, 'action', 'Коваль', 'npc-1',
-      'importer-1', 'Ривок', [], null, null, false, false, null, 'instant', null, null,
+      'importer-1', 'Удар', ['warrior'], 'опис', null, true, true, 2, 'action', 'Коваль', 'npc-1', false,
+      'importer-1', 'Ривок', [], null, null, false, false, null, 'instant', null, null, false,
     ]);
   });
 
@@ -200,6 +199,6 @@ describe('AbilityModel.bulkImport', () => {
 
     expect(result).toBe(1);
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['importer-1', 'Валідне', [], null, null, false, false, null, 'instant', null, null]);
+    expect(params).toEqual(['importer-1', 'Валідне', [], null, null, false, false, null, 'instant', null, null, false]);
   });
 });

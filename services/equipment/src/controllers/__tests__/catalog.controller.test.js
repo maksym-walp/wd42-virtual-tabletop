@@ -88,7 +88,7 @@ describe('create', () => {
 
     await controller.create(mockReq({ body: { name: 'Меч' } }), res);
 
-    expect(Model.create).toHaveBeenCalledWith('user-1', { name: 'Меч' });
+    expect(Model.create).toHaveBeenCalledWith('user-1', { name: 'Меч', is_canonical: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ item: { id: 'w1', name: 'Меч', type: 'weapon' } });
   });
@@ -277,7 +277,7 @@ describe('UnionController.import', () => {
 
     await UnionController.import(mockReq({ body }), res);
 
-    expect(UnionModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(UnionModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ imported: 3 });
   });

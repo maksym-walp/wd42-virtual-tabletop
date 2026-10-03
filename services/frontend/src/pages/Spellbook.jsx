@@ -6,9 +6,10 @@ import CatalogTabs from '../components/CatalogTabs';
 import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels, spellForms } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels, spellForms } from '../constants/spellbook';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildSpellbookImportTemplate } from '../utils/spellbookImportTemplate';
+import useSpellKinds from '../hooks/useSpellKinds';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -21,10 +22,11 @@ import CatalogLayout, {
 import SortSelect from '../components/catalog/SortSelect';
 import { CatalogPreview, SpellPreview } from '../components/catalog/previews';
 
-const SPELL_TABLE_COLUMNS = [
+// Колонки залежать від видів заклинань з адмін-панелі (useSpellKinds).
+const spellTableColumns = (spellKindsMap) => [
   { key: 'name', label: 'Назва', render: (s) => s.name },
   { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
-  { key: 'spell_kind', label: 'Вид', render: (s) => SPELL_KINDS[s.spell_kind]?.label ?? s.spell_kind },
+  { key: 'spell_kind', label: 'Вид', render: (s) => spellKindsMap[s.spell_kind]?.label ?? s.spell_kind },
   { key: 'complexity', label: 'Складність', render: (s) => SPELL_COMPLEXITIES[s.complexity]?.label ?? '—' },
   { key: 'forms', label: 'Форми', render: (s) => spellForms(s).length },
   { key: 'energy_cost', label: 'Енергія', render: (s) => s.energy_cost },
@@ -41,6 +43,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function Spellbook() {
+  const { spellKinds, spellKindsMap } = useSpellKinds();
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -86,7 +89,7 @@ export default function Spellbook() {
     }
   };
 
-  const handleTemplate = () => buildSpellbookImportTemplate();
+  const handleTemplate = () => buildSpellbookImportTemplate(spellKinds);
 
   const handleImport = async (data) => {
     if (!Array.isArray(data)) {
@@ -162,7 +165,7 @@ export default function Spellbook() {
             <FilterPill active={filter.spell_kind === ''} onClick={() => setFilter((f) => ({ ...f, spell_kind: '' }))}>
               Усі
             </FilterPill>
-            {Object.entries(SPELL_KINDS).map(([key, { label }]) => (
+            {spellKinds.map(({ key, label }) => (
               <FilterPill key={key} active={filter.spell_kind === key} onClick={() => toggle('spell_kind', key)}>
                 {label}
               </FilterPill>
@@ -227,7 +230,7 @@ export default function Spellbook() {
       ) : viewMode === 'table' ? (
         <DataTable
           items={spells}
-          columns={SPELL_TABLE_COLUMNS}
+          columns={spellTableColumns(spellKindsMap)}
           getKey={(s) => s.id}
           getHref={(s) => `/spellbook/${s.id}`}
           onRowHover={setHovered}

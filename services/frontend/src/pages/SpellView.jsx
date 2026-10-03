@@ -2,20 +2,22 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, formatDuration, spellForms } from '../constants/spellbook';
+import { NATURE_TYPES, RITUAL_TYPES, SPELL_COMPLEXITIES, formatDuration, spellForms } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
-import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import useSpellKinds from '../hooks/useSpellKinds';
 
 export default function SpellView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { spellKindsMap } = useSpellKinds();
   const [spell, setSpell] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -49,7 +51,7 @@ export default function SpellView() {
     setSettingCanonical(true);
     try {
       const { data } = await api.patch(`/api/spellbook/${id}/canonical`, { is_canonical: isCanonical });
-      setSpell(data.spell);
+      setSpell((prev) => ({ ...prev, is_canonical: data.spell.is_canonical }));
     } finally {
       setSettingCanonical(false);
     }
@@ -57,7 +59,9 @@ export default function SpellView() {
 
   const handleSetOwner = async (ownerUsername) => {
     const { data } = await api.patch(`/api/spellbook/${id}/owner`, { owner_username: ownerUsername });
-    setSpell(data.spell);
+    // PATCH /owner повертає голий рядок (без owner_username/is_owner/joins) —
+    // оновлюємо лише власника.
+    setSpell((prev) => ({ ...prev, user_id: data.spell.user_id, owner_username: ownerUsername, is_owner: data.spell.user_id === user?.id }));
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -69,7 +73,7 @@ export default function SpellView() {
   // Поля форми (механіка, описи, компоненти) — з обраної форми; решта — зі spell.
   const shown = forms.find((f) => f.key === activeForm) ?? forms.find((f) => f.key === 'main');
   const ritual = RITUAL_TYPES[shown.ritual];
-  const kind = SPELL_KINDS[shown.spell_kind];
+  const kind = spellKindsMap[shown.spell_kind];
   const complexity = SPELL_COMPLEXITIES[shown.complexity];
 
   return (
@@ -113,7 +117,12 @@ export default function SpellView() {
             <h1 className="font-display text-3xl text-accent">{spell.name}</h1>
             <ShareButton className="mt-1" />
           </div>
-          <AuthorBadge username={spell.owner_username} size="sm" className="px-5 pb-2" />
+          <AuthorBadge
+            username={spell.owner_username}
+            size="sm"
+            className="px-5 pb-2"
+            onChangeOwner={isAdmin ? handleSetOwner : undefined}
+          />
 
           {shown.lore_creator && (
             <p className="px-5 pb-2 text-sm text-text-dim">
@@ -218,26 +227,24 @@ export default function SpellView() {
             </Section>
           )}
 
-          {canManageCanonical && (
-            <div className="flex gap-3 border-t border-border px-5 py-4">
-              <Button variant="ghost" onClick={() => handleSetCanonical(!spell.is_canonical)} disabled={settingCanonical}>
-                {settingCanonical ? 'Позначення...' : spell.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
-              </Button>
-            </div>
-          )}
-
-          {isAdmin && (
-            <div className="flex gap-3 border-t border-border px-5 py-4">
-              <ChangeOwnerControl onSubmit={handleSetOwner} />
-            </div>
-          )}
-
-          {(spell.is_owner || isAdmin) && (
-            <div className="flex gap-3 border-t border-border px-5 py-4">
-              <Button variant="ghost" to={`/spellbook/${id}/edit`}>Редагувати</Button>
-              <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Видалення...' : 'Видалити'}
-              </Button>
+          {(spell.is_owner || isAdmin || canManageCanonical) && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+              {(spell.is_owner || isAdmin) && (
+                <>
+                  <Button variant="ghost" to={`/spellbook/${id}/edit`}>Редагувати</Button>
+                  <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                    {deleting ? 'Видалення...' : 'Видалити'}
+                  </Button>
+                </>
+              )}
+              {canManageCanonical && (
+                <CanonicalSwitch
+                  className="ml-auto"
+                  checked={!!spell.is_canonical}
+                  disabled={settingCanonical}
+                  onChange={handleSetCanonical}
+                />
+              )}
             </div>
           )}
         </div>

@@ -13,10 +13,12 @@ function requireAuth(req, res, next) {
   }
 }
 
+const CANONICAL_ROLES = ['admin', 'game_master'];
+
 // Can flag someone else's record as canonical without taking ownership of it.
 function requireCanonicalManager(req, res, next) {
   requireAuth(req, res, () => {
-    if (!['admin', 'game_master'].includes(req.user.role)) {
+    if (!CANONICAL_ROLES.includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden: admin or game master only' });
     }
     next();
@@ -33,4 +35,10 @@ function requireAdminOwner(req, res, next) {
   });
 }
 
-module.exports = { requireAuth, requireCanonicalManager, requireAdminOwner };
+// is_canonical for a newly created record: only a GM/admin may set it, and for
+// them it defaults to on (the create form shows a pre-ticked checkbox).
+function canonicalOnCreate(req) {
+  return CANONICAL_ROLES.includes(req.user?.role) && req.body?.is_canonical !== false;
+}
+
+module.exports = { requireAuth, requireCanonicalManager, requireAdminOwner, canonicalOnCreate };

@@ -27,7 +27,7 @@ export default function CharacterList() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    characterApi.list()
+    characterApi.list({ includeGmCampaigns: true })
       .then(setCharacters)
       .catch(() => setError('Не вдалось завантажити персонажів'))
       .finally(() => setLoading(false));
@@ -57,6 +57,27 @@ export default function CharacterList() {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
+  // Не свої — це персонажі гравців з кампаній, де користувач майстер (або,
+  // для адміна, усі чужі персонажі).
+  const myCharacters = characters.filter((c) => c.is_owner);
+  const otherCharacters = characters.filter((c) => !c.is_owner);
+
+  const renderGrid = (list) => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {list.map((c) => (
+        <CharacterCard
+          key={c.id}
+          character={c}
+          isAdmin={isAdmin}
+          onDelete={() => handleDelete(c.id, c.name)}
+          onDuplicate={() => setDuplicating(c)}
+          onSetOwner={(username) => handleSetOwner(c.id, username)}
+          onClick={() => navigate(`/characters/${c.id}`)}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader
@@ -75,21 +96,16 @@ export default function CharacterList() {
         </div>
       )}
 
-      {characters.length === 0 ? (
+      {myCharacters.length === 0 ? (
         <EmptyState title="У вас ще немає персонажів" action={<Button to="/characters/new">Створити першого</Button>} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {characters.map((c) => (
-            <CharacterCard
-              key={c.id}
-              character={c}
-              isAdmin={isAdmin}
-              onDelete={() => handleDelete(c.id, c.name)}
-              onDuplicate={() => setDuplicating(c)}
-              onSetOwner={(username) => handleSetOwner(c.id, username)}
-              onClick={() => navigate(`/characters/${c.id}`)}
-            />
-          ))}
+      ) : renderGrid(myCharacters)}
+
+      {otherCharacters.length > 0 && (
+        <div className="mt-10">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-dim">
+            {isAdmin ? 'Персонажі інших користувачів' : 'Персонажі гравців моїх кампаній'}
+          </h2>
+          {renderGrid(otherCharacters)}
         </div>
       )}
 
@@ -183,6 +199,9 @@ function CharacterCard({ character: c, isAdmin, onDelete, onDuplicate, onSetOwne
   const archetype = ARCHETYPES[c.archetype];
   const race = RACES[c.race];
   const archetypeColor = ARCHETYPE_COLORS[c.archetype];
+  // Майстер кампанії бачить чужого персонажа й може відкрити його лист, але
+  // дублювати/видаляти — лише власник або адмін.
+  const canManage = c.is_owner || isAdmin;
 
   return (
     <Card onClick={onClick} className="cursor-pointer hover:border-accent/50">
@@ -192,8 +211,11 @@ function CharacterCard({ character: c, isAdmin, onDelete, onDuplicate, onSetOwne
           <p className="text-sm text-text-dim">
             {archetype?.label} · {race?.label}
           </p>
-          {isAdmin && c.owner_username && (
+          {(isAdmin || !c.is_owner) && c.owner_username && (
             <p className="text-xs italic text-text-dim">@{c.owner_username}</p>
+          )}
+          {!c.is_owner && c.gm_campaigns?.length > 0 && (
+            <p className="text-xs text-text-dim">Кампанія: {c.gm_campaigns.join(', ')}</p>
           )}
         </div>
         {archetypeColor && (
@@ -224,20 +246,24 @@ function CharacterCard({ character: c, isAdmin, onDelete, onDuplicate, onSetOwne
             Публічне <ExternalLink size={13} />
           </a>
         )}
-        <button
-          onClick={onDuplicate}
-          className="ml-auto inline-flex items-center gap-1 p-1 text-sm text-text-dim hover:text-accent"
-          aria-label="Дублювати персонажа"
-        >
-          <Copy size={15} /> Дублювати
-        </button>
-        <button
-          onClick={onDelete}
-          className="inline-flex items-center gap-1 p-1 text-sm text-danger"
-          aria-label="Видалити персонажа"
-        >
-          <Trash2 size={15} /> Видалити
-        </button>
+        {canManage && (
+          <>
+            <button
+              onClick={onDuplicate}
+              className="ml-auto inline-flex items-center gap-1 p-1 text-sm text-text-dim hover:text-accent"
+              aria-label="Дублювати персонажа"
+            >
+              <Copy size={15} /> Дублювати
+            </button>
+            <button
+              onClick={onDelete}
+              className="inline-flex items-center gap-1 p-1 text-sm text-danger"
+              aria-label="Видалити персонажа"
+            >
+              <Trash2 size={15} /> Видалити
+            </button>
+          </>
+        )}
       </div>
 
       {isAdmin && (

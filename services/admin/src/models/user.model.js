@@ -11,6 +11,16 @@ const UserModel = {
     );
     return rows;
   },
+
+  async updateRole(id, role) {
+    const { rows } = await pool.query(
+      `UPDATE auth.users SET role = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, email, username, role, is_active, created_at`,
+      [id, role]
+    );
+    return rows[0] || null;
+  },
 };
 
 module.exports = UserModel;

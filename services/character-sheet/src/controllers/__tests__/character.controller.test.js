@@ -24,7 +24,7 @@ function mockRes() {
 }
 
 function mockReq(overrides = {}) {
-  return { params: {}, body: {}, user: { sub: 'user-1' }, ...overrides };
+  return { params: {}, body: {}, query: {}, user: { sub: 'user-1' }, ...overrides };
 }
 
 // Wires up every model touched by the Promise.all aggregation with a
@@ -50,7 +50,7 @@ describe('CharacterController.list', () => {
 
     await CharacterController.list(req, res);
 
-    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('u1', false);
+    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('u1', false, { includeGmCampaigns: false });
     expect(res.json).toHaveBeenCalledWith({ characters: [{ id: 'c1' }] });
   });
 
@@ -61,7 +61,16 @@ describe('CharacterController.list', () => {
 
     await CharacterController.list(req, res);
 
-    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('admin-1', true);
+    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('admin-1', true, { includeGmCampaigns: false });
+  });
+
+  it('includes characters from campaigns the user runs when ?include=campaigns', async () => {
+    CharacterModel.findAllByUser.mockResolvedValue([]);
+    const req = mockReq({ user: { sub: 'gm-1', role: 'game_master' }, query: { include: 'campaigns' } });
+
+    await CharacterController.list(req, mockRes());
+
+    expect(CharacterModel.findAllByUser).toHaveBeenCalledWith('gm-1', false, { includeGmCampaigns: true });
   });
 });
 

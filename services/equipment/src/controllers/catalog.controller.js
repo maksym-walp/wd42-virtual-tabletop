@@ -1,4 +1,5 @@
 const { createCatalogModel, UnionModel, getWeaponOptions } = require('../models/catalog.model');
+const { canonicalOnCreate } = require('../middleware/auth.middleware');
 
 // Один набір хендлерів на кожен вид спорядження — таблиці різні, поведінка
 // однакова, тож контролер параметризований видом, а не скопійований тричі.
@@ -21,7 +22,7 @@ function createCatalogController(kind) {
 
     async create(req, res) {
       if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
-      const item = await Model.create(req.user.sub, req.body);
+      const item = await Model.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
       res.status(201).json({ item });
     },
 
@@ -112,7 +113,7 @@ const UnionController = {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив обʼєктів' });
     }
-    const imported = await UnionModel.bulkImport(req.user.sub, req.body);
+    const imported = await UnionModel.bulkImport(req.user.sub, req.body, true);
     res.status(201).json({ imported });
   },
 };

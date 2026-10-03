@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
-import { natureLabels, SPELL_KINDS, SPELL_COMPLEXITIES, spellForms } from '../constants/spellbook';
+import { natureLabels, SPELL_COMPLEXITIES, spellForms } from '../constants/spellbook';
+import useSpellKinds from '../hooks/useSpellKinds';
 import { pluralizeUk } from '../utils/pluralize';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
 
 export default function SpellCard({ spell, ...rest }) {
-  const kind = SPELL_KINDS[spell.spell_kind];
+  const { spellKindsMap } = useSpellKinds();
+  const kind = spellKindsMap[spell.spell_kind];
   const complexity = SPELL_COMPLEXITIES[spell.complexity];
   const formCount = spellForms(spell).length;
 

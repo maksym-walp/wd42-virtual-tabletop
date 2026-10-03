@@ -1,12 +1,12 @@
 const ConfigModel = require('../models/config.model');
 
-// Наразі рівно два конфіги — набір типів зброї (weapon_types) і набір
-// особливостей зброї (weapon_grips). equipment-сервіс читає їх напряму
-// через cross-schema SQL (services/equipment/src/models/catalog.model.js
-// getWeaponOptions), тож цей HTTP API обслуговує лише саму адмін-панель.
-const ALLOWED_KEYS = ['weapon_types', 'weapon_grips'];
+// Набір типів зброї (weapon_types), особливостей зброї (weapon_grips) і
+// видів заклинань (spell_kinds). equipment/spellbook читають їх напряму
+// через cross-schema SQL (equipment's getWeaponOptions, spellbook's
+// getKindOptions), тож цей HTTP API обслуговує лише саму адмін-панель.
+const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds'];
 
-// key стає сирим значенням у записах каталогу зброї (weapon_type/weapon_grip)
+// key стає сирим значенням у записах (weapon_type/weapon_grip/spell_kind)
 // і трапляється у query-параметрах фільтрів — адмін вводить його вручну
 // (фронтенд валідує тим самим патерном), тож дублюємо перевірку тут, а не
 // довіряємо клієнту.

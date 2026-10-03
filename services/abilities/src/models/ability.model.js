@@ -11,9 +11,11 @@ const prereqNodesSelect = (alias) => `COALESCE(
     '[]'::jsonb
   ) AS prerequisite_nodes`;
 
-// Canonical = authored by an admin/game_master, or explicitly flagged via the
-// "Зробити канонічним" action (a.is_canonical) regardless of owner.
-const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR a.is_canonical)";
+// Canonical = the explicit is_canonical flag only (set on create by a GM/admin
+// or via the canonical toggle). It used to also include "author is a
+// GM/admin", which made those records impossible to un-mark — see
+// migration 83.
+const IS_CANONICAL_EXPR = 'a.is_canonical';
 
 const AbilityModel = {
   async findAll(userId, { search, sort, archetype, scope, limit, is_maneuver } = {}, isAdmin = false) {
@@ -80,18 +82,19 @@ const AbilityModel = {
   async create(userId, data) {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id,
+      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
          (user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [
         userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null,
+        is_canonical ?? false,
       ]
     );
     return rows[0];
@@ -158,18 +161,18 @@ const AbilityModel = {
   // Bulk import previously exported abilities: a single table, so no kind
   // grouping like equipment's union — one multi-row INSERT for the whole
   // batch. Rows with no name are skipped (name is required). user_id is
-  // forced to the importer; prerequisite_node_ids/prerequisite_logic,
-  // is_canonical, and image_url are deliberately left off the write-column
-  // list so they take their table defaults instead of trusting the file —
-  // prerequisite node ids belong to a specific user's skill tree and are
-  // meaningless to a different importer.
-  async bulkImport(userId, records) {
+  // forced to the importer; prerequisite_node_ids/prerequisite_logic and
+  // image_url are deliberately left off the write-column list so they take
+  // their table defaults instead of trusting the file — prerequisite node ids
+  // belong to a specific user's skill tree and are meaningless to a different
+  // importer. is_canonical comes from the importer's role, not the file.
+  async bulkImport(userId, records, isCanonical = false) {
     const valid = records.filter((record) => record && record.name);
     if (!valid.length) return 0;
 
     const columns = [
       'user_id', 'name', 'archetypes', 'mechanical_desc', 'narrative_desc', 'is_public',
-      'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id',
+      'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id', 'is_canonical',
     ];
 
     const values = [];
@@ -187,6 +190,7 @@ const AbilityModel = {
         record.duration_unit ?? 'instant',
         record.lore_creator ?? null,
         record.lore_creator_npc_id ?? null,
+        isCanonical,
       );
       return `(${columns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
     });

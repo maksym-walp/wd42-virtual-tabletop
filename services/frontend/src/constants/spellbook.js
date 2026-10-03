@@ -37,6 +37,9 @@ export const DURATION_UNITS = {
   permanent: 'Постійно',
 };
 
+// Початковий набір видів заклинань — актуальний список редагується з
+// адмін-панелі (spell_kinds) і читається через hooks/useSpellKinds.js; ця
+// константа лише показується, доки він не завантажився.
 export const SPELL_KINDS = {
   ranged:    { label: 'Дальнобійне' },
   melee:     { label: 'Ближнє'      },

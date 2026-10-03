@@ -90,7 +90,7 @@ describe('AbilityController.create', () => {
 
     await AbilityController.create(req, res);
 
-    expect(AbilityModel.create).toHaveBeenCalledWith('user-1', { name: 'Ривок' });
+    expect(AbilityModel.create).toHaveBeenCalledWith('user-1', { name: 'Ривок', is_canonical: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ ability: { id: 'a2', name: 'Ривок' } });
   });
@@ -243,7 +243,7 @@ describe('AbilityController.import', () => {
 
     await AbilityController.import(req, res);
 
-    expect(AbilityModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(AbilityModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ imported: 2 });
   });

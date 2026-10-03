@@ -22,8 +22,9 @@ const CollectionModel = {
       conditions.push(`c.name ILIKE $${params.length}`);
     }
     const { rows } = await pool.query(
-      `SELECT c.*, (c.created_by = $1) AS is_owner, ${itemsSelect}
+      `SELECT c.*, (c.created_by = $1) AS is_owner, ou.username AS owner_username, ${itemsSelect}
        FROM compendium.collections c
+       LEFT JOIN auth.users ou ON ou.id = c.created_by
        WHERE ${conditions.join(' AND ')}
        ORDER BY c.name ASC`,
       params
@@ -34,8 +35,9 @@ const CollectionModel = {
   async findById(id, userId, isAdmin = false) {
     const visibility = isAdmin ? 'TRUE' : '(c.created_by = $2 OR c.is_public = true)';
     const { rows } = await pool.query(
-      `SELECT c.*, (c.created_by = $2) AS is_owner, ${itemsSelect}
+      `SELECT c.*, (c.created_by = $2) AS is_owner, ou.username AS owner_username, ${itemsSelect}
        FROM compendium.collections c
+       LEFT JOIN auth.users ou ON ou.id = c.created_by
        WHERE c.id = $1 AND ${visibility}`,
       [id, userId]
     );
@@ -44,8 +46,9 @@ const CollectionModel = {
 
   async findPublicById(id) {
     const { rows } = await pool.query(
-      `SELECT c.*, false AS is_owner, ${itemsSelect}
+      `SELECT c.*, false AS is_owner, ou.username AS owner_username, ${itemsSelect}
        FROM compendium.collections c
+       LEFT JOIN auth.users ou ON ou.id = c.created_by
        WHERE c.id = $1 AND c.is_public = true`,
       [id]
     );

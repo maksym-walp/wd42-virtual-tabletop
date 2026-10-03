@@ -20,9 +20,11 @@ const itemsSelect = `COALESCE(
     '[]'::jsonb
   ) AS items`;
 
-// Canonical = authored by an admin/game_master, or explicitly flagged via the
-// "Зробити канонічним" action (c.is_canonical) regardless of owner.
-const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR c.is_canonical)";
+// Canonical = the explicit is_canonical flag only (set on create by a GM/admin
+// or via the canonical toggle). It used to also include "author is a
+// GM/admin", which made those records impossible to un-mark — see
+// migration 83.
+const IS_CANONICAL_EXPR = 'c.is_canonical';
 
 const CollectionModel = {
   async findAll(userId, { search, scope } = {}, isAdmin = false) {
@@ -36,7 +38,7 @@ const CollectionModel = {
     }
     const { rows } = await pool.query(
       `SELECT c.*, (c.user_id = $1) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical, ${itemsSelect}
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username, ${itemsSelect}
        FROM abilities.collections c
        LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE ${conditions.join(' AND ')}
@@ -50,7 +52,7 @@ const CollectionModel = {
     const visibility = isAdmin ? 'TRUE' : '(c.user_id = $2 OR c.is_public = true)';
     const { rows } = await pool.query(
       `SELECT c.*, (c.user_id = $2) AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical, ${itemsSelect}
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username, ${itemsSelect}
        FROM abilities.collections c
        LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE c.id = $1 AND ${visibility}`,
@@ -62,7 +64,7 @@ const CollectionModel = {
   async findPublicById(id) {
     const { rows } = await pool.query(
       `SELECT c.*, false AS is_owner,
-              ${IS_CANONICAL_EXPR} AS is_canonical, ${itemsSelect}
+              ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username, ${itemsSelect}
        FROM abilities.collections c
        LEFT JOIN auth.users cu ON cu.id = c.user_id
        WHERE c.id = $1 AND c.is_public = true`,
@@ -72,13 +74,13 @@ const CollectionModel = {
   },
 
   async create(userId, data) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical } = data;
     const { rows } = await pool.query(
       `INSERT INTO abilities.collections
-         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null]
+      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, is_canonical ?? false]
     );
     return rows[0];
   },

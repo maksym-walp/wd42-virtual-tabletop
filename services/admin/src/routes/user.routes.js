@@ -9,5 +9,6 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 router.use(requireAuth, requireAdmin);
 
 router.get('/', wrap(UserController.list));
+router.patch('/:id/role', wrap(UserController.updateRole));
 
 module.exports = router;

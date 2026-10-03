@@ -1,4 +1,5 @@
 const SpellModel = require('../models/spell.model');
+const { canonicalOnCreate } = require('../middleware/auth.middleware');
 
 // Поля, яких немає (чи не має бути) в експортованому JSON: image_url лежить
 // на диску конкретного деплою; created_at/updated_at/is_owner/owner_username/
@@ -36,7 +37,7 @@ const SpellController = {
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
     if (SpellModel.hasMixedForms(req.body.forms)) return res.status(400).json({ message: MIXED_FORMS_MESSAGE });
-    const spell = await SpellModel.create(req.user.sub, req.body);
+    const spell = await SpellModel.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
     res.status(201).json({ spell });
   },
 
@@ -90,12 +91,16 @@ const SpellController = {
     res.json(items.map(sanitizeForExport));
   },
 
+  async kinds(req, res) {
+    res.json({ spell_kinds: await SpellModel.getKindOptions() });
+  },
+
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
   async import(req, res) {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив обʼєктів' });
     }
-    const imported = await SpellModel.bulkImport(req.user.sub, req.body);
+    const imported = await SpellModel.bulkImport(req.user.sub, req.body, true);
     res.status(201).json({ imported });
   },
 };

@@ -17,15 +17,30 @@ const ALL_SKILLS = [
 const CharacterModel = {
   // isAdmin lists every user's characters (with owner_username attached so
   // an admin can tell them apart), not just the caller's own.
-  async findAllByUser(userId, isAdmin = false) {
+  // includeGmCampaigns — також персонажі інших гравців з кампаній, де
+  // userId є майстром (вкладка "Персонажі"); gm_campaigns — назви таких
+  // кампаній для кожного персонажа. Решта викликачів (вибір персонажа для
+  // кампанії/фракції) лишаються лише з власними персонажами.
+  async findAllByUser(userId, isAdmin = false, { includeGmCampaigns = false } = {}) {
     const { rows } = await pool.query(
-      `SELECT c.*, ou.username AS owner_username,
-        (SELECT COUNT(*) FROM character_sheet.skills WHERE character_id = c.id) AS skill_count
+      `SELECT c.*, ou.username AS owner_username, (c.user_id = $1) AS is_owner,
+        (SELECT COUNT(*) FROM character_sheet.skills WHERE character_id = c.id) AS skill_count,
+        COALESCE(
+          (SELECT array_agg(cp.name ORDER BY cp.name)
+           FROM campaigns.campaign_characters cc
+           JOIN campaigns.campaigns cp ON cp.id = cc.campaign_id
+           WHERE cc.character_id = c.id AND cp.gm_id = $1),
+          '{}'
+        ) AS gm_campaigns
        FROM character_sheet.characters c
        LEFT JOIN auth.users ou ON ou.id = c.user_id
        WHERE c.user_id = $1 OR $2 = true
+          OR ($3 = true AND EXISTS (
+            SELECT 1 FROM campaigns.campaign_characters cc
+            JOIN campaigns.campaigns cp ON cp.id = cc.campaign_id
+            WHERE cc.character_id = c.id AND cp.gm_id = $1))
        ORDER BY c.created_at DESC`,
-      [userId, isAdmin]
+      [userId, isAdmin, includeGmCampaigns]
     );
     return rows;
   },

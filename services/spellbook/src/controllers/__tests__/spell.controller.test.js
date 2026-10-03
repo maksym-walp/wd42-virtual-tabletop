@@ -96,9 +96,26 @@ describe('SpellController.create', () => {
 
     await SpellController.create(req, res);
 
-    expect(SpellModel.create).toHaveBeenCalledWith('user-1', { name: 'Fireball' });
+    expect(SpellModel.create).toHaveBeenCalledWith('user-1', { name: 'Fireball', is_canonical: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ spell: { id: 's1', name: 'Fireball' } });
+  });
+
+  it('marks a game master\'s spell canonical by default, unless the form unticks it', async () => {
+    SpellModel.create.mockResolvedValue({ id: 's1' });
+    const user = { sub: 'gm-1', role: 'game_master' };
+
+    await SpellController.create(mockReq({ body: { name: 'A' }, user }), mockRes());
+    await SpellController.create(mockReq({ body: { name: 'B', is_canonical: false }, user }), mockRes());
+
+    expect(SpellModel.create).toHaveBeenNthCalledWith(1, 'gm-1', { name: 'A', is_canonical: true });
+    expect(SpellModel.create).toHaveBeenNthCalledWith(2, 'gm-1', { name: 'B', is_canonical: false });
+  });
+
+  it('ignores is_canonical from a regular user', async () => {
+    SpellModel.create.mockResolvedValue({ id: 's1' });
+    await SpellController.create(mockReq({ body: { name: 'A', is_canonical: true } }), mockRes());
+    expect(SpellModel.create).toHaveBeenCalledWith('user-1', { name: 'A', is_canonical: false });
   });
 });
 
@@ -235,7 +252,7 @@ describe('SpellController.import', () => {
 
     await SpellController.import(mockReq({ body }), res);
 
-    expect(SpellModel.bulkImport).toHaveBeenCalledWith('user-1', body);
+    expect(SpellModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ imported: 2 });
   });

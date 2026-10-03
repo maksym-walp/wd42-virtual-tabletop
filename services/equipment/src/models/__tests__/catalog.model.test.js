@@ -124,11 +124,11 @@ describe('findAll dynamic filter builder', () => {
 });
 
 describe('canonical/user split', () => {
-  // Canonical = authored by an admin/game_master, or explicitly flagged via
-  // the "Зробити канонічним" action (i.is_canonical) regardless of owner.
-  const CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR i.is_canonical)";
+  // Canonical = the explicit is_canonical flag only — not the author's role
+  // (that made GM/admin records impossible to un-mark).
+  const CANONICAL_EXPR = 'i.is_canonical';
 
-  it('projects is_canonical from the creator role or explicit flag via an auth.users join in findAll', async () => {
+  it('projects is_canonical from the explicit flag in findAll', async () => {
     await WeaponModel.findAll('u1', {});
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/LEFT JOIN auth\.users cu ON cu\.id = i\.user_id/);
@@ -173,15 +173,15 @@ describe('create / update column sets', () => {
       defense_value: 3, armor_weight: 'heavy',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
-    expect(params).toEqual(['u1', 'Меч', null, false, 40, 'https://x/y.png', 'https://x/y_thumb.webp', null, 'melee', 'one_handed', null]);
+    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(params).toEqual(['u1', false, 'Меч', null, false, 40, 'https://x/y.png', 'https://x/y_thumb.webp', null, 'melee', 'one_handed', null]);
   });
 
   it('defaults is_public to false and every other unset column to NULL', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'i1' }] });
     await ItemModel.create('u1', { name: 'Мотузка' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Мотузка', null, false, null, null, null]);
+    expect(params).toEqual(['u1', false, 'Мотузка', null, false, null, null, null]);
   });
 
   it('updates the armor-only columns, leaving the id/owner/admin params first', async () => {
@@ -240,15 +240,15 @@ describe('update across kinds', () => {
     const client = mockClient();
     client.query
       .mockResolvedValueOnce({ rows: [] })                                                     // BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: 'x1', user_id: 'owner', created_at: 'ts' }] })     // DELETE з equipment.items
+      .mockResolvedValueOnce({ rows: [{ id: 'x1', user_id: 'owner', created_at: 'ts', is_canonical: true }] }) // DELETE з equipment.items
       .mockResolvedValueOnce({ rows: [{ id: 'x1', name: 'Меч' }] })                            // INSERT у equipment.weapons
       .mockResolvedValue({ rows: [] });                                                        // relink + COMMIT
 
     const moved = await WeaponModel.update('x1', 'owner', { name: 'Меч', damage_die: 'd8' });
 
     const insert = client.query.mock.calls.find(([sql]) => /INSERT INTO equipment\.weapons/.test(sql));
-    expect(insert[0]).toMatch(/\(id, user_id, created_at, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
-    expect(insert[1].slice(0, 3)).toEqual(['x1', 'owner', 'ts']);
+    expect(insert[0]).toMatch(/\(id, user_id, created_at, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(insert[1].slice(0, 4)).toEqual(['x1', 'owner', 'ts', true]);
     expect(moved).toEqual({ id: 'x1', name: 'Меч', type: 'weapon' });
   });
 
@@ -366,8 +366,8 @@ describe('UnionModel.bulkImport', () => {
 
     expect(pool.query).toHaveBeenCalledTimes(2);
     const [weaponSql, weaponParams] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.weapons'));
-    expect(weaponSql).toMatch(/INSERT INTO equipment\.weapons \(user_id, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11\)/);
-    expect(weaponParams).toEqual(['importer', 'Меч', null, false, null, null, null, null, 'melee', null, null]);
+    expect(weaponSql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12\)/);
+    expect(weaponParams).toEqual(['importer', false, 'Меч', null, false, null, null, null, null, 'melee', null, null]);
 
     const [armorSql] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.armor'));
     expect(armorSql).toMatch(/INSERT INTO equipment\.armor/);
@@ -385,7 +385,7 @@ describe('UnionModel.bulkImport', () => {
 
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\), \(\$8, \$9, \$10, \$11, \$12, \$13, \$14\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\), \(\$9, \$10, \$11, \$12, \$13, \$14, \$15, \$16\)/);
     expect(imported).toBe(2);
   });
 

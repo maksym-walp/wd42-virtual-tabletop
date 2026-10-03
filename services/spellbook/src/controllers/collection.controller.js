@@ -1,4 +1,5 @@
 const CollectionModel = require('../models/collection.model');
+const { canonicalOnCreate } = require('../middleware/auth.middleware');
 
 const CollectionController = {
   async list(req, res) {
@@ -21,7 +22,7 @@ const CollectionController = {
 
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
-    const collection = await CollectionModel.create(req.user.sub, req.body);
+    const collection = await CollectionModel.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
     res.status(201).json({ collection });
   },
 

@@ -13,7 +13,7 @@ import KindSwitch from '../components/KindSwitch';
 import CollectionItemPicker from '../components/CollectionItemPicker';
 
 const EMPTY = {
-  name: '', description: '', is_public: false, image_url: '',
+  name: '', description: '', is_public: false, is_canonical: true, image_url: '',
   prerequisite_node_ids: [], prerequisite_logic: 'or',
 };
 
@@ -23,6 +23,7 @@ export default function CollectionForm({ domainKey }) {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
   const { user } = useAuth();
+  const canManageCanonical = domain.supportsCanonical !== false && (user?.role === 'admin' || user?.role === 'game_master');
   // Creating a tradition is admin/game_master-only (spellbook's kindSwitch
   // carries a 'tradition' entry regardless of who's looking) — everywhere
   // else this filter is a no-op, since no other domain's kindSwitch has that key.
@@ -166,6 +167,17 @@ export default function CollectionForm({ domainKey }) {
             />
             Публічна — доступна за посиланням будь-кому
           </label>
+          {/* Лише при створенні — далі канонічність перемикається на сторінці запису. */}
+          {!isEdit && canManageCanonical && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+              <input
+                type="checkbox" checked={form.is_canonical}
+                onChange={(e) => setForm((f) => ({ ...f, is_canonical: e.target.checked }))}
+                className="h-5 w-5 accent-accent"
+              />
+              Канонічна — офіційна колекція світу
+            </label>
+          )}
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

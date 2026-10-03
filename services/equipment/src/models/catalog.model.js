@@ -51,10 +51,11 @@ function buildOrderBy(sortExpr, sort, dir) {
   return `${expr} ${direction} NULLS LAST, i.name ASC`;
 }
 
-// Canonical = authored by an admin/game_master, or explicitly flagged via the
-// "Зробити канонічним" action (i.is_canonical) regardless of owner. Constant
-// SQL (no interpolated input), so it is injection-safe.
-const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR i.is_canonical)";
+// Canonical = the explicit is_canonical flag only (set on create by a GM/admin
+// or via the canonical toggle). It used to also include "author is a
+// GM/admin", which made those records impossible to un-mark — see
+// migration 83.
+const IS_CANONICAL_EXPR = 'i.is_canonical';
 
 // Reverse reference into another catalog service's schema — same Postgres
 // instance/connection (see services/character-sheet's equipment CATALOG union
@@ -168,13 +169,13 @@ async function moveKind(targetKind, id, userId, data, isAdmin = false) {
 
     const columns = [...COMMON_COLUMNS, ...target.columns];
     const values = columns.map((column) => normalize(column, data));
-    const placeholders = columns.map((_, idx) => `$${idx + 4}`);
+    const placeholders = columns.map((_, idx) => `$${idx + 5}`);
 
     const { rows } = await client.query(
-      `INSERT INTO ${target.table} (id, user_id, created_at, ${columns.join(', ')})
-       VALUES ($1, $2, $3, ${placeholders.join(', ')})
+      `INSERT INTO ${target.table} (id, user_id, created_at, is_canonical, ${columns.join(', ')})
+       VALUES ($1, $2, $3, $4, ${placeholders.join(', ')})
        RETURNING *`,
-      [id, source.user_id, source.created_at, ...values]
+      [id, source.user_id, source.created_at, source.is_canonical, ...values]
     );
 
     await client.query(
@@ -265,12 +266,12 @@ function createCatalogModel(kind) {
 
     async create(userId, data) {
       const values = writeColumns.map((column) => normalize(column, data));
-      const placeholders = writeColumns.map((_, idx) => `$${idx + 2}`);
+      const placeholders = writeColumns.map((_, idx) => `$${idx + 3}`);
       const { rows } = await pool.query(
-        `INSERT INTO ${table} (user_id, ${writeColumns.join(', ')})
-         VALUES ($1, ${placeholders.join(', ')})
+        `INSERT INTO ${table} (user_id, is_canonical, ${writeColumns.join(', ')})
+         VALUES ($1, $2, ${placeholders.join(', ')})
          RETURNING *`,
-        [userId, ...values]
+        [userId, data.is_canonical ?? false, ...values]
       );
       return { ...rows[0], type: kind };
     },
@@ -404,7 +405,8 @@ const UnionModel = {
   // отримують власні id, user_id примусово стає імпортером, а image_url/
   // thumbnail_url скидаються в NULL, бо зображення з чужого експорту тут не
   // лежать на диску. Рядки з невідомим/відсутнім `type` пропускаються.
-  async bulkImport(userId, records) {
+  // is_canonical — з ролі імпортера, а не з файлу.
+  async bulkImport(userId, records, isCanonical = false) {
     const grouped = new Map();
     for (const record of records) {
       if (!record || !KINDS[record.type]) continue;
@@ -415,13 +417,14 @@ const UnionModel = {
     let imported = 0;
     for (const [kind, rows] of grouped) {
       const { table, columns } = KINDS[kind];
-      const writeColumns = ['user_id', ...COMMON_COLUMNS, ...columns];
+      const writeColumns = ['user_id', 'is_canonical', ...COMMON_COLUMNS, ...columns];
 
       const values = [];
       const tuples = rows.map((row) => {
         const start = values.length;
         values.push(
           userId,
+          isCanonical,
           ...COMMON_COLUMNS.map((column) => (
             column === 'image_url' || column === 'thumbnail_url' ? null : normalize(column, row)
           )),

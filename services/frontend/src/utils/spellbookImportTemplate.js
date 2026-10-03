@@ -1,12 +1,12 @@
-import { NATURE_TYPES, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
+import { NATURE_TYPES, SPELL_COMPLEXITIES, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
 
 // Шаблон для POST /api/spellbook/import — з коментарями (JSONC), той самий
-// прийом, що й у equipmentImportTemplate.js. Заклинання не мають
-// адміном-налаштовуваних переліків, тому параметрів функція не приймає.
-export function buildSpellbookImportTemplate() {
+// прийом, що й у equipmentImportTemplate.js. spellKinds — види заклинань з
+// адмін-панелі (useSpellKinds), [{ key, label }].
+export function buildSpellbookImportTemplate(spellKinds) {
   const natureList = Object.entries(NATURE_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const complexityList = Object.entries(SPELL_COMPLEXITIES).map(([k, v]) => `${k} (${v.label})`).join(', ');
-  const spellKindList = Object.entries(SPELL_KINDS).map(([k, v]) => `${k} (${v.label})`).join(', ');
+  const spellKindList = spellKinds.map((k) => `${k.key} (${k.label})`).join(', ');
   const ritualList = Object.entries(RITUAL_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const durationUnitList = Object.entries(DURATION_UNITS).map(([k, v]) => `${k} (${v})`).join(', ');
   const actionTimeList = ACTION_OPTIONS.map((o) => o.value).join(', ');

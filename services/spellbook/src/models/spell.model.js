@@ -22,9 +22,11 @@ const traditionsSelect = (alias) => `COALESCE(
     '[]'::jsonb
   ) AS traditions`;
 
-// Canonical = authored by an admin/game_master, or explicitly flagged via the
-// "Зробити канонічним" action (s.is_canonical) regardless of owner.
-const IS_CANONICAL_EXPR = "(COALESCE(cu.role IN ('admin', 'game_master'), false) OR s.is_canonical)";
+// Canonical = the explicit is_canonical flag only (set on create by a GM/admin
+// or via the canonical toggle). It used to also include "author is a
+// GM/admin", which made those records impossible to un-mark — see
+// migration 83.
+const IS_CANONICAL_EXPR = 's.is_canonical';
 
 const COMPLEXITIES = ['primitive', 'simple', 'medium', 'complex', 'extreme'];
 
@@ -88,13 +90,13 @@ const normalizeMainFormName = (value) => (typeof value === 'string' && value.tri
 // Колонки, які пише bulkImport — той самий набір полів, що create/update
 // пишуть сьогодні (плюс lore_creator_npc_id із задачі 1), за винятком
 // image_url (немає сенсу тягнути чужий шлях на диску) і
-// prerequisite_node_ids/prerequisite_logic/is_canonical (навмисно відсутні —
-// див. коментар над bulkImport).
+// prerequisite_node_ids/prerequisite_logic (навмисно відсутні — див. коментар
+// над bulkImport). is_canonical береться з ролі імпортера, а не з файлу.
 const IMPORT_COLUMNS = [
   'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
   'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
   'duration_value', 'duration_unit', 'range_desc', 'components', 'is_public',
-  'complexity', 'forms', 'main_form_name',
+  'complexity', 'forms', 'main_form_name', 'is_canonical',
 ];
 
 const JSONB_IMPORT_COLUMNS = ['components', 'forms'];
@@ -209,7 +211,7 @@ const SpellModel = {
       duration_value, duration_unit, range_desc,
       components, is_public,
       prerequisite_node_ids, prerequisite_logic, image_url,
-      lore_creator, lore_creator_npc_id, complexity, forms, main_form_name,
+      lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical,
     } = data;
 
     const { rows } = await pool.query(
@@ -217,8 +219,8 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
-          image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22)
+          image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23)
        RETURNING *`,
       [
         userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -229,7 +231,7 @@ const SpellModel = {
         prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
-        normalizeMainFormName(main_form_name),
+        normalizeMainFormName(main_form_name), is_canonical ?? false,
       ]
     );
     return rows[0];
@@ -311,11 +313,11 @@ const SpellModel = {
 
   // Import зі /export: один multi-row INSERT (на відміну від equipment — тут
   // лише одна таблиця, а не чотири за видом), user_id примусово стає
-  // імпортером. prerequisite_node_ids/prerequisite_logic та is_canonical
-  // навмисно НЕ входять до списку колонок — новий рядок отримує їхні
-  // значення за замовчуванням із таблиці, а не чужий skill-tree/canonical
-  // статус з експорту. Рядки без name пропускаються.
-  async bulkImport(userId, records) {
+  // імпортером. prerequisite_node_ids/prerequisite_logic навмисно НЕ входять
+  // до списку колонок — новий рядок отримує їхні значення за замовчуванням
+  // із таблиці, а не чужий skill-tree з експорту. is_canonical — не з
+  // експорту, а з ролі імпортера (isCanonical). Рядки без name пропускаються.
+  async bulkImport(userId, records, isCanonical = false) {
     const rows = (records || []).filter((record) => record && record.name);
     if (!rows.length) return 0;
 
@@ -324,7 +326,9 @@ const SpellModel = {
       const start = values.length;
       values.push(
         userId,
-        ...IMPORT_COLUMNS.slice(1).map((column) => normalizeImportField(column, record))
+        ...IMPORT_COLUMNS.slice(1).map((column) => (
+          column === 'is_canonical' ? isCanonical : normalizeImportField(column, record)
+        ))
       );
       const placeholders = IMPORT_COLUMNS.map((column, idx) => {
         const paramIdx = start + idx + 1;
@@ -338,6 +342,14 @@ const SpellModel = {
       values
     );
     return rowCount;
+  },
+
+  // Види заклинань (spell_kind) редагуються з адмін-панелі — читаємо їх
+  // напряму з admin.site_configs (cross-schema, як equipment's
+  // getWeaponOptions), а не тримаємо захардкодженими.
+  async getKindOptions() {
+    const { rows } = await pool.query(`SELECT value FROM admin.site_configs WHERE key = 'spell_kinds'`);
+    return rows[0]?.value || [];
   },
 };
 

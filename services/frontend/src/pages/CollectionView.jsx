@@ -5,7 +5,8 @@ import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import CollectionItemPicker from '../components/CollectionItemPicker';
-import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import AuthorBadge from '../components/AuthorBadge';
+import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
 import ShareButton from '../components/ShareButton';
@@ -87,14 +88,19 @@ export default function CollectionView({ domainKey, publicView = false }) {
   const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
-      setCollection(await domain.collectionsApi.setCanonical(id, isCanonical));
+      // PATCH /canonical повертає голий рядок (без items/is_owner) — беремо лише прапорець.
+      const saved = await domain.collectionsApi.setCanonical(id, isCanonical);
+      setCollection((prev) => ({ ...prev, is_canonical: saved.is_canonical }));
     } finally {
       setSettingCanonical(false);
     }
   };
 
   const handleSetOwner = async (ownerUsername) => {
-    setCollection(await domain.collectionsApi.setOwner(id, ownerUsername));
+    // PATCH /owner повертає голий рядок (без items/owner_username) — оновлюємо лише власника.
+    const saved = await domain.collectionsApi.setOwner(id, ownerUsername);
+    const ownerId = saved.user_id ?? saved.created_by;
+    setCollection((prev) => ({ ...prev, owner_username: ownerUsername, is_owner: ownerId === user?.id }));
   };
 
   const copyShareLink = () => {
@@ -120,6 +126,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
   const canManage = collection.is_owner || isAdmin;
+  const showCanonicalSwitch = domain.supportsCanonical !== false && canManageCanonical;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -147,6 +154,12 @@ export default function CollectionView({ domainKey, publicView = false }) {
           <h1 className="font-display text-3xl text-accent">{collection.name}</h1>
           <ShareButton className="mt-1" url={collection.is_public ? shareUrl : undefined} />
         </div>
+        <AuthorBadge
+          username={collection.owner_username}
+          size="sm"
+          className="px-5 pb-2"
+          onChangeOwner={!publicView && isAdmin ? handleSetOwner : undefined}
+        />
         {collection.description && (
           <SmartTextReader text={collection.description} className="px-5 pb-3 text-sm text-text-muted" />
         )}
@@ -193,26 +206,24 @@ export default function CollectionView({ domainKey, publicView = false }) {
           </div>
         </div>
 
-        {!publicView && domain.supportsCanonical !== false && canManageCanonical && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" onClick={() => handleSetCanonical(!collection.is_canonical)} disabled={settingCanonical}>
-              {settingCanonical ? 'Позначення...' : collection.is_canonical ? 'Зняти позначку «канонічне»' : 'Зробити канонічним'}
-            </Button>
-          </div>
-        )}
-
-        {!publicView && isAdmin && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <ChangeOwnerControl onSubmit={handleSetOwner} />
-          </div>
-        )}
-
-        {!publicView && canManage && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" to={`${domain.basePath}/collections/${id}/edit`}>Редагувати</Button>
-            <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Видалення...' : 'Видалити'}
-            </Button>
+        {!publicView && (canManage || showCanonicalSwitch) && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+            {canManage && (
+              <>
+                <Button variant="ghost" to={`${domain.basePath}/collections/${id}/edit`}>Редагувати</Button>
+                <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? 'Видалення...' : 'Видалити'}
+                </Button>
+              </>
+            )}
+            {showCanonicalSwitch && (
+              <CanonicalSwitch
+                className="ml-auto"
+                checked={!!collection.is_canonical}
+                disabled={settingCanonical}
+                onChange={handleSetCanonical}
+              />
+            )}
           </div>
         )}
       </div>

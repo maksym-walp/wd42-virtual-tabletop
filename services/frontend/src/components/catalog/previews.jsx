@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import {
-  natureLabels, SPELL_KINDS, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration as formatSpellDuration, spellForms,
+  natureLabels, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration as formatSpellDuration, spellForms,
 } from '../../constants/spellbook';
+import useSpellKinds from '../../hooks/useSpellKinds';
 import { EQUIPMENT_TYPES, ARMOR_WEIGHTS, weaponModifierLabel } from '../../constants/equipment';
 import { RARITIES } from '../../constants/artifacts';
 import { ARCHETYPES } from '../../constants/characterSheet';
@@ -76,13 +77,14 @@ function PreviewCard({ href, image, badges = [], title, subtitle, stats = [], ch
 }
 
 export function SpellPreview({ spell }) {
+  const { spellKindsMap } = useSpellKinds();
   const forms = spellForms(spell);
   const ritual = RITUAL_TYPES[spell.ritual];
   return (
     <PreviewCard
       href={`/spellbook/${spell.id}`}
       image={spell.image_url}
-      badges={[natureLabels(spell.nature), SPELL_KINDS[spell.spell_kind]?.label]}
+      badges={[natureLabels(spell.nature), spellKindsMap[spell.spell_kind]?.label]}
       title={spell.name}
       subtitle={spell.owner_username ? `@${spell.owner_username}` : null}
       stats={[

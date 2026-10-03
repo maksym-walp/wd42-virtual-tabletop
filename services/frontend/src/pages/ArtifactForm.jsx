@@ -8,13 +8,14 @@ import Field, { inputClass } from '../components/ui/Field';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.equipment;
 
 const EMPTY = {
-  name: '', description: '', is_public: true,
+  name: '', description: '', is_public: true, is_canonical: true,
   price: '', image_url: '',
   creator: '', rarity: '',
   collectionIds: [],
@@ -24,6 +25,8 @@ export default function ArtifactForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { user } = useAuth();
+  const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -189,6 +192,17 @@ export default function ArtifactForm() {
             />
             Публічне — видиме всім гравцям
           </label>
+          {/* Лише при створенні — далі канонічність перемикається на сторінці запису. */}
+          {!isEdit && canManageCanonical && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+              <input
+                type="checkbox" checked={form.is_canonical}
+                onChange={(e) => setForm((f) => ({ ...f, is_canonical: e.target.checked }))}
+                className="h-5 w-5 accent-accent"
+              />
+              Канонічне — офіційний артефакт світу
+            </label>
+          )}
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

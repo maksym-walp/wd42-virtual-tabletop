@@ -10,7 +10,9 @@ const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 
 const CharacterController = {
   async list(req, res) {
-    const characters = await CharacterModel.findAllByUser(req.user.sub, req.user.role === 'admin');
+    const characters = await CharacterModel.findAllByUser(req.user.sub, req.user.role === 'admin', {
+      includeGmCampaigns: req.query.include === 'campaigns',
+    });
     res.json({ characters });
   },
 

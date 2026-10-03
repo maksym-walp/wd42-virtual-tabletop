@@ -11,6 +11,7 @@ import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
@@ -20,7 +21,7 @@ const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
-  name: '', archetypes: [], mechanical_desc: '', narrative_desc: '', is_public: true,
+  name: '', archetypes: [], mechanical_desc: '', narrative_desc: '', is_public: true, is_canonical: true,
   is_maneuver: false, duration_value: '', duration_unit: 'instant',
   lore_creator: '', lore_creator_npc_id: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
@@ -32,6 +33,8 @@ export default function AbilityForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { user } = useAuth();
+  const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
 
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(isEdit);
@@ -264,6 +267,17 @@ export default function AbilityForm() {
             />
             Публічне — видиме всім гравцям
           </label>
+          {/* Лише при створенні — далі канонічність перемикається на сторінці запису. */}
+          {!isEdit && canManageCanonical && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-sm text-text">
+              <input
+                type="checkbox" checked={form.is_canonical}
+                onChange={(e) => setForm((f) => ({ ...f, is_canonical: e.target.checked }))}
+                className="h-5 w-5 accent-accent"
+              />
+              Канонічне — офіційне вміння світу
+            </label>
+          )}
         </FormSection>
 
         {error && <p className="text-sm text-danger">{error}</p>}

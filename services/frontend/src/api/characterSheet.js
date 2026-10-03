@@ -4,8 +4,10 @@ const BASE = '/api/characters';
 
 const characterApi = {
   // Characters
-  async list() {
-    const { data } = await api.get(BASE + '/');
+  // includeGmCampaigns — додати персонажів гравців з кампаній, де поточний
+  // користувач є майстром (сторінка "Персонажі").
+  async list({ includeGmCampaigns = false } = {}) {
+    const { data } = await api.get(BASE + '/', { params: includeGmCampaigns ? { include: 'campaigns' } : {} });
     return data.characters;
   },
 

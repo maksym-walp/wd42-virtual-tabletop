@@ -1,4 +1,5 @@
 const AbilityModel = require('../models/ability.model');
+const { canonicalOnCreate } = require('../middleware/auth.middleware');
 
 // Поля, яких немає (чи не має бути) в експортованому JSON: зображення не
 // експортуються (лежать на диску конкретного деплою, ре-імпорт скидає їх у
@@ -33,7 +34,7 @@ const AbilityController = {
 
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
-    const ability = await AbilityModel.create(req.user.sub, req.body);
+    const ability = await AbilityModel.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
     res.status(201).json({ ability });
   },
 
@@ -87,7 +88,7 @@ const AbilityController = {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив обʼєктів' });
     }
-    const imported = await AbilityModel.bulkImport(req.user.sub, req.body);
+    const imported = await AbilityModel.bulkImport(req.user.sub, req.body, true);
     res.status(201).json({ imported });
   },
 };
