@@ -7,6 +7,7 @@ const TARGETS = {
   'campaign-gallery': { requiresId: true,  dir: (id) => `campaigns/${id}/gallery` },
   'combat-scene':     { requiresId: true,  dir: (id) => `campaigns/combat-scenes/${id}` },
   'map-lenses':       { requiresId: true,  dir: (id) => `maps/${id}/lenses` },
+  'map-preview':      { requiresId: true,  dir: (id) => `maps/${id}/preview` },
   'location':         { requiresId: false, dir: () => 'maps/locations' },
   'marker-icon':      { requiresId: false, dir: () => 'maps/marker-icons' },
   'character':        { requiresId: true,  dir: (id) => `characters/${id}` },

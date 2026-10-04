@@ -10,6 +10,7 @@ import CanonicalSwitch from '../components/CanonicalSwitch';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function ArtifactView() {
   const { id } = useParams();
@@ -24,7 +25,7 @@ export default function ArtifactView() {
     api.get(`/api/equipment/artifacts/${id}`)
       .then(({ data }) => {
         setArtifact(data.item);
-        recordView({ type: 'artifact', id, name: data.item.name, href: `/equipment/artifacts/${id}`, image_url: data.item.image_url });
+        recordView({ type: 'artifact', id, name: data.item.name, href: `/equipment/artifacts/${id}`, image_url: data.item.image_url, image_crop: data.item.image_crop });
       })
       .catch(() => navigate('/equipment/artifacts', { replace: true }))
       .finally(() => setLoading(false));
@@ -75,7 +76,7 @@ export default function ArtifactView() {
       <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {artifact.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <img src={artifact.image_url} alt={artifact.name} className="h-full w-full object-cover" />
+            <CroppedImage src={artifact.image_url} crop={artifact.image_crop} alt={artifact.name} />
           </div>
         )}
 

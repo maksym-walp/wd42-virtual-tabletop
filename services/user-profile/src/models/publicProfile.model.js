@@ -30,7 +30,7 @@ const PublicProfileModel = {
       // плоску форму з `type`, тож зводимо їх union-ом і добиваємо NULL-ами
       // ті поля, яких у конкретного виду немає.
       pool.query(
-        `SELECT id, name, 'item' AS type, description, is_public, price, image_url,
+        `SELECT id, name, 'item' AS type, description, is_public, price, image_url, image_crop,
                 NULL::varchar AS damage_die, NULL::varchar AS weapon_type,
                 NULL::varchar AS weapon_grip,
                 NULL::smallint AS defense_value, NULL::varchar AS armor_weight,
@@ -38,14 +38,14 @@ const PublicProfileModel = {
            FROM equipment.items
           WHERE user_id = $1 AND is_public = true
          UNION ALL
-         SELECT id, name, 'weapon', description, is_public, price, image_url,
+         SELECT id, name, 'weapon', description, is_public, price, image_url, image_crop,
                 damage_die, weapon_type, weapon_grip,
                 NULL::smallint, NULL::varchar,
                 is_canonical, created_at, true
            FROM equipment.weapons
           WHERE user_id = $1 AND is_public = true
          UNION ALL
-         SELECT id, name, 'armor', description, is_public, price, image_url,
+         SELECT id, name, 'armor', description, is_public, price, image_url, image_crop,
                 NULL::varchar, NULL::varchar, NULL::varchar,
                 defense_value, armor_weight,
                 is_canonical, created_at, true

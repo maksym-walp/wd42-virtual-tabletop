@@ -9,6 +9,7 @@ import { ARCHETYPES } from '../../constants/characterSheet';
 import { formatDuration as formatAbilityDuration } from '../../constants/abilities';
 import { ENTITY_TYPES } from '../../constants/compendium';
 import { htmlToPreviewText } from '../../utils/richText';
+import CroppedImage from '../ui/CroppedImage';
 
 // Стислі прев'ю записів для бічної панелі каталогу (CatalogLayout). Кожне
 // доменне прев'ю лише збирає дані для спільного PreviewCard.
@@ -27,14 +28,14 @@ export function CatalogPreview({ item, children }) {
   );
 }
 
-function PreviewCard({ href, image, badges = [], title, subtitle, stats = [], chips = [], description }) {
+function PreviewCard({ href, image, imageCrop, badges = [], title, subtitle, stats = [], chips = [], description }) {
   const text = htmlToPreviewText(description, 600);
   const shownStats = stats.filter((s) => s.value != null && s.value !== '');
   return (
     <div>
       {image && (
         <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-          <img src={image} alt={title} className="h-full w-full object-cover" />
+          <CroppedImage src={image} crop={imageCrop} alt={title} />
         </div>
       )}
       <div className="px-4 pb-3 pt-3">
@@ -84,6 +85,7 @@ export function SpellPreview({ spell }) {
     <PreviewCard
       href={`/spellbook/${spell.id}`}
       image={spell.image_url}
+      imageCrop={spell.image_crop}
       badges={[natureLabels(spell.nature), spellKindsMap[spell.spell_kind]?.label]}
       title={spell.name}
       subtitle={spell.owner_username ? `@${spell.owner_username}` : null}
@@ -108,6 +110,7 @@ export function EquipmentPreview({ item, artifact = false }) {
     <PreviewCard
       href={isArtifact ? `/equipment/artifacts/${item.id}` : `/equipment/${item.id}`}
       image={item.thumbnail_url || item.image_url}
+      imageCrop={item.image_crop}
       badges={[isArtifact ? 'Артефакт' : EQUIPMENT_TYPES[item.type]?.label, RARITIES[item.rarity]?.label]}
       title={item.name}
       subtitle={[item.creator && `Творець: ${item.creator}`, item.owner_username && `@${item.owner_username}`].filter(Boolean).join(' · ')}
@@ -128,6 +131,7 @@ export function AbilityPreview({ ability }) {
     <PreviewCard
       href={`/abilities/${ability.id}`}
       image={ability.image_url}
+      imageCrop={ability.image_crop}
       badges={[...(ability.archetypes ?? []).map((a) => ARCHETYPES[a]?.label ?? a), ability.is_maneuver && 'Маневр']}
       title={ability.name}
       subtitle={ability.owner_username ? `@${ability.owner_username}` : null}
@@ -144,6 +148,7 @@ export function CompendiumEntryPreview({ entry, speciesName }) {
     <PreviewCard
       href={`/compendium/entries/${entry.id}`}
       image={entry.image_url}
+      imageCrop={entry.image_crop}
       badges={[(ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc).label]}
       title={entry.name}
       subtitle={speciesName}
@@ -154,8 +159,8 @@ export function CompendiumEntryPreview({ entry, speciesName }) {
 
 // Для списків без власних карток-компонентів (таксономія, фракції,
 // колекції, традиції, локації, мапи).
-export function SimplePreview({ href, image, badges, title, subtitle, description }) {
+export function SimplePreview({ href, image, imageCrop, badges, title, subtitle, description }) {
   return (
-    <PreviewCard href={href} image={image} badges={badges} title={title} subtitle={subtitle} description={description} />
+    <PreviewCard href={href} image={image} imageCrop={imageCrop} badges={badges} title={title} subtitle={subtitle} description={description} />
   );
 }

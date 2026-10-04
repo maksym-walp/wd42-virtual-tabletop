@@ -9,7 +9,7 @@ const { canonicalOnCreate } = require('../middleware/auth.middleware');
 // скидає їх до дефолтів, а не довіряє значенням з файлу); prerequisite_nodes/
 // traditions — обчислені/приєднані в findAll/findById, не справжні колонки.
 const EXPORT_OMIT_FIELDS = [
-  'image_url', 'created_at', 'updated_at', 'is_owner', 'owner_username',
+  'image_url', 'image_crop', 'created_at', 'updated_at', 'is_owner', 'owner_username',
   'is_canonical', 'prerequisite_node_ids', 'prerequisite_logic', 'prerequisite_nodes', 'traditions',
 ];
 

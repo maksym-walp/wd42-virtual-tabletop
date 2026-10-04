@@ -32,7 +32,7 @@ const CampaignCharacterModel = {
     const { rows } = await pool.query(
       `SELECT cc.character_id, cc.added_at,
               c.name AS character_name, c.archetype, c.race, c.user_id AS owner_id,
-              c.is_public, c.image_url,
+              c.is_public, c.image_url, c.image_crop,
               u.username AS owner_username, u.email AS owner_email
        FROM campaigns.campaign_characters cc
        JOIN character_sheet.characters c ON c.id = cc.character_id

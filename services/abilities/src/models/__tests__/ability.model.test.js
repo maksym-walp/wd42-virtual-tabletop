@@ -114,7 +114,7 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, false]);
+    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, false, null]);
   });
 
   it('inserts lore_creator/lore_creator_npc_id when provided', async () => {
@@ -123,13 +123,13 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false]);
+    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.create('u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false]);
+    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null]);
   });
 });
 
@@ -144,7 +144,7 @@ describe('AbilityModel.update', () => {
     expect(sql).toMatch(/is_maneuver=\$11, duration_value=\$12, duration_unit=\$13/);
     expect(sql).toMatch(/lore_creator=\$14, lore_creator_npc_id=\$15/);
     expect(sql).toMatch(/\$16 = true/);
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true]);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true, null]);
   });
 
   it('updates lore_creator/lore_creator_npc_id when provided', async () => {
@@ -152,13 +152,13 @@ describe('AbilityModel.update', () => {
       name: 'Розсічення', lore_creator: 'Легендарний коваль', lore_creator_npc_id: 'npc-1',
     });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false]);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.update('a1', 'u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false]);
+    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null]);
   });
 });
 

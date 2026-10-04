@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus, Clock } from 'lucide-react';
+import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus, Clock, ImageIcon } from 'lucide-react';
 import mapsApi from '../api/maps';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -13,6 +13,7 @@ import LocationDrawer from '../components/map/LocationDrawer';
 import PinForm from '../components/map/PinForm';
 import TimelineSlider from '../components/map/TimelineSlider';
 import LensVersionsSheet from '../components/map/LensVersionsSheet';
+import MapPreviewSheet from '../components/map/MapPreviewSheet';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
@@ -34,6 +35,7 @@ export default function MapView() {
   const [map, setMap] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [lenses, setLenses] = useState([]);
   const [activeLensId, setActiveLensId] = useState(null);
@@ -413,6 +415,15 @@ export default function MapView() {
               </span>
             )}
             {isOwner && (
+              <button
+                onClick={() => setPreviewOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted hover:bg-surface-hover"
+                title="Зображення для картки мапи в каталозі"
+              >
+                <ImageIcon size={13} /> Прев'ю
+              </button>
+            )}
+            {isOwner && (
               <Button variant="danger" size="sm" onClick={handleDelete}>
                 <Trash2 size={14} /> Видалити
               </Button>
@@ -517,6 +528,10 @@ export default function MapView() {
           </>
         )}
       </div>
+
+      {previewOpen && (
+        <MapPreviewSheet map={map} onSaved={setMap} onClose={() => setPreviewOpen(false)} />
+      )}
 
       {versionsLensId && (
         <LensVersionsSheet

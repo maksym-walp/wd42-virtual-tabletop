@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 const SORT_MAP = {
   name: 'a.name ASC',
@@ -82,19 +83,19 @@ const AbilityModel = {
   async create(userId, data) {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical,
+      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
          (user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
        RETURNING *`,
       [
         userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null,
-        is_canonical ?? false,
+        is_canonical ?? false, serializeImageCrop(image_url ? image_crop : null),
       ]
     );
     return rows[0];
@@ -103,7 +104,7 @@ const AbilityModel = {
   async update(id, userId, data, isAdmin = false) {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id,
+      is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, image_crop,
     } = data;
 
     const { rows } = await pool.query(
@@ -111,12 +112,13 @@ const AbilityModel = {
        SET name=$3, archetypes=$4, mechanical_desc=$5, narrative_desc=$6, is_public=$7,
            prerequisite_node_ids=$8, prerequisite_logic=$9, image_url=$10,
            is_maneuver=$11, duration_value=$12, duration_unit=$13,
-           lore_creator=$14, lore_creator_npc_id=$15, updated_at=NOW()
+           lore_creator=$14, lore_creator_npc_id=$15, image_crop=$17::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $16 = true)
        RETURNING *`,
       [
         id, userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
+        serializeImageCrop(image_url ? image_crop : null),
       ]
     );
     return rows[0] || null;

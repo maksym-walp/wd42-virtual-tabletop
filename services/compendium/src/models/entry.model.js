@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 // An entry's health die is, in order: its own explicit override (NPCs may
 // set one), else its subspecies' die, else its species' die, else a d6
@@ -12,16 +13,16 @@ const EntryModel = {
   async create({ createdBy, entityType, name, speciesId, subspeciesId, raceId, peopleId, description, history,
                  imageUrl, motivation, backstory, faction, attributes, isPublic,
                  age, gender, birthCalendarId, birthYear, birthMonthId, birthDay,
-                 healthDieOverride, privateNotes }) {
+                 healthDieOverride, privateNotes, imageCrop }) {
     const { rows } = await pool.query(
       `WITH inserted AS (
          INSERT INTO compendium.compendium_entries
            (entity_type, created_by, name, species_id, subspecies_id, race_id, people_id, description, history,
             image_url, motivation, backstory, faction, dexterity, body, intelligence, wisdom, charisma, is_public,
             age, gender, birth_calendar_id, birth_year, birth_month_id, birth_day,
-            health_die_override, private_notes)
+            health_die_override, private_notes, image_crop)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-                 $20, $21, $22, $23, $24, $25, $26, $27)
+                 $20, $21, $22, $23, $24, $25, $26, $27, $28::jsonb)
          RETURNING *
        )
        SELECT e.*, ${HEALTH_DIE_SELECT}
@@ -31,7 +32,7 @@ const EntryModel = {
        attributes.dexterity, attributes.body, attributes.intelligence, attributes.wisdom, attributes.charisma,
        isPublic ?? false,
        age ?? null, gender ?? null, birthCalendarId ?? null, birthYear ?? null, birthMonthId ?? null, birthDay ?? null,
-       healthDieOverride ?? null, privateNotes ?? null]
+       healthDieOverride ?? null, privateNotes ?? null, serializeImageCrop(imageUrl ? imageCrop : null)]
     );
     return rows[0];
   },
@@ -67,7 +68,7 @@ const EntryModel = {
   async update(id, { name, speciesId, subspeciesId, raceId, peopleId, description, history, imageUrl,
                       motivation, backstory, faction, attributes, isPublic,
                       age, gender, birthCalendarId, birthYear, birthMonthId, birthDay,
-                      healthDieOverride, privateNotes }) {
+                      healthDieOverride, privateNotes, imageCrop }) {
     const { rows } = await pool.query(
       `WITH updated AS (
          UPDATE compendium.compendium_entries
@@ -75,7 +76,7 @@ const EntryModel = {
              history = $8, image_url = $9, motivation = $10, backstory = $11, faction = $12,
              dexterity = $13, body = $14, intelligence = $15, wisdom = $16, charisma = $17, is_public = $18,
              age = $19, gender = $20, birth_calendar_id = $21, birth_year = $22, birth_month_id = $23, birth_day = $24,
-             health_die_override = $25, private_notes = $26,
+             health_die_override = $25, private_notes = $26, image_crop = $27::jsonb,
              updated_at = NOW()
          WHERE id = $1
          RETURNING *
@@ -87,7 +88,7 @@ const EntryModel = {
        attributes.dexterity, attributes.body, attributes.intelligence, attributes.wisdom, attributes.charisma,
        isPublic ?? false,
        age ?? null, gender ?? null, birthCalendarId ?? null, birthYear ?? null, birthMonthId ?? null, birthDay ?? null,
-       healthDieOverride ?? null, privateNotes ?? null]
+       healthDieOverride ?? null, privateNotes ?? null, serializeImageCrop(imageUrl ? imageCrop : null)]
     );
     return rows[0] || null;
   },

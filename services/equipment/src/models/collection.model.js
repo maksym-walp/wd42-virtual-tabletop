@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 const { CATALOG_UNION, findKindById } = require('./catalog.model');
 
 // Колекція збирає спорядження будь-якого виду (набір «стартове спорядження»
@@ -9,7 +10,7 @@ const itemFields = `jsonb_build_object(
     'id', i.id, 'name', i.name, 'type', i.type,
     'damage_die', i.damage_die, 'defense_value', i.defense_value,
     'description', i.description, 'is_public', i.is_public,
-    'price', i.price, 'image_url', i.image_url,
+    'price', i.price, 'image_url', i.image_url, 'thumbnail_url', i.thumbnail_url, 'image_crop', i.image_crop,
     'weapon_type', i.weapon_type, 'weapon_grip', i.weapon_grip,
     'armor_weight', i.armor_weight,
     'creator', i.creator, 'rarity', i.rarity
@@ -77,25 +78,27 @@ const CollectionModel = {
   },
 
   async create(userId, data) {
-    const { name, description, is_public, image_url, is_canonical } = data;
+    const { name, description, is_public, image_url, image_crop, is_canonical } = data;
     const { rows } = await pool.query(
       `INSERT INTO equipment.collections
-         (user_id, name, description, is_public, image_url, is_canonical)
-       VALUES ($1,$2,$3,$4,$5,$6)
+         (user_id, name, description, is_public, image_url, is_canonical, image_crop)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, image_url ?? null, is_canonical ?? false]
+      [userId, name, description ?? null, is_public ?? false, image_url ?? null, is_canonical ?? false,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0];
   },
 
   async update(id, userId, data, isAdmin = false) {
-    const { name, description, is_public, image_url } = data;
+    const { name, description, is_public, image_url, image_crop } = data;
     const { rows } = await pool.query(
       `UPDATE equipment.collections
-       SET name=$3, description=$4, is_public=$5, image_url=$6, updated_at=NOW()
+       SET name=$3, description=$4, is_public=$5, image_url=$6, image_crop=$8::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $7 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, image_url ?? null, isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, image_url ?? null, isAdmin,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0] || null;
   },

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { htmlToPreviewText } from '../utils/richText';
+import CroppedImage from './ui/CroppedImage';
 
 // Equipment's Колекції tab groups collections by which type-table their
 // items belong to (see EquipmentCatalog.jsx / /equipment/weapon|armor|items|
@@ -71,7 +72,7 @@ function CollectionsScrollRow({ label, collections, basePath, bindPreview }) {
             >
               {c.image_url && (
                 <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" loading="lazy" />
+                  <CroppedImage src={c.image_url} crop={c.image_crop} alt={c.name} loading="lazy" />
                 </div>
               )}
               <div className="flex items-center gap-1.5 border-b border-border px-3.5 py-2">

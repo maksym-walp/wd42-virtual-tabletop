@@ -77,7 +77,11 @@ describe('entity_type whitelist', () => {
 });
 
 describe('entity_id validation', () => {
-  it.each(['campaign-gallery', 'combat-scene', 'map-lenses', 'character'])('requires an id for %s', (type) => {
+  it('maps map-preview under the map id in a preview/ subdirectory', () => {
+    expect(resolveTarget('map-preview', UUID, DIR).relDir).toBe(`maps/${UUID}/preview`);
+  });
+
+  it.each(['campaign-gallery', 'combat-scene', 'map-lenses', 'map-preview', 'character'])('requires an id for %s', (type) => {
     expectBadRequest(() => resolveTarget(type, undefined, DIR));
   });
 

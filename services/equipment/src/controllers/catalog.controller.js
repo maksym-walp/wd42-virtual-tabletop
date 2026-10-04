@@ -66,7 +66,7 @@ function createCatalogController(kind) {
 // обчислені чи прив'язані до поточного користувача/деплою, тож для
 // перевикористання в іншому місці не мають сенсу.
 const EXPORT_OMIT_FIELDS = [
-  'image_url', 'thumbnail_url', 'created_at', 'updated_at',
+  'image_url', 'thumbnail_url', 'image_crop', 'created_at', 'updated_at',
   'is_owner', 'owner_username', 'used_in_spells',
 ];
 

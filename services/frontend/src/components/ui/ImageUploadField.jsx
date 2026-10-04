@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
-import { Upload, ImagePlus, Trash2 } from 'lucide-react';
+import { Upload, ImagePlus, Trash2, Crop } from 'lucide-react';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../../api/media';
 import { inputClass } from './Field';
+import CroppedImage from './CroppedImage';
+import ImageCropDialog from './ImageCropDialog';
 
 /**
  * Головний спосіб задати зображення — завантажити файл із пристрою.
@@ -10,6 +12,14 @@ import { inputClass } from './Field';
  *
  * Свідомо НЕ загорнуто у <Field>: той рендерить <label> навколо дітей, а
  * <label> навколо file-інпута й текстового інпута дає хаотичні кліки.
+ *
+ * onChange(url, thumbnailUrl): після завантаження файлу другим аргументом
+ * іде 400px webp-мініатюра; для вставленого посилання чи видалення — null.
+ *
+ * Кадрування (необовʼязкове): з onCropChange поле показує «Кадрувати» і
+ * відкриває ImageCropDialog одразу після завантаження нового файлу. crop —
+ * поточний image_crop запису; нове зображення скидає його в null (кадр
+ * рахувався під інші пропорції). cropAspect — основна форма показу.
  */
 export default function ImageUploadField({
   value,
@@ -18,10 +28,20 @@ export default function ImageUploadField({
   entityId,
   label = 'Зображення',
   disabled = false,
+  crop = null,
+  onCropChange,
+  cropAspect = 4 / 3,
 }) {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [cropping, setCropping] = useState(false);
+  const canCrop = Boolean(onCropChange);
+
+  const changeImage = (url, thumbnailUrl) => {
+    onChange(url, thumbnailUrl);
+    onCropChange?.(null);
+  };
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -38,8 +58,9 @@ export default function ImageUploadField({
 
     setUploading(true);
     try {
-      const url = await mediaApi.upload(file, { entityType, entityId });
-      onChange(url);
+      const { image_url, thumbnail_url } = await mediaApi.uploadWithThumbnail(file, { entityType, entityId });
+      changeImage(image_url, thumbnail_url || null);
+      if (canCrop) setCropping(true);
     } catch (err) {
       // nginx віддає 413 з HTML-тілом, тож data.message може не існувати.
       setError(err.response?.data?.message ?? 'Не вдалось завантажити зображення');
@@ -59,11 +80,9 @@ export default function ImageUploadField({
 
       <div className="flex items-start gap-3">
         {value ? (
-          <img
-            src={value}
-            alt=""
-            className="h-24 w-24 shrink-0 rounded-lg border border-border object-cover"
-          />
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border">
+            <CroppedImage src={value} crop={crop} />
+          </div>
         ) : (
           <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-border text-text-dim">
             <ImagePlus size={22} />
@@ -81,10 +100,22 @@ export default function ImageUploadField({
             {value ? 'Замінити' : 'Завантажити зображення'}
           </button>
 
+          {value && canCrop && (
+            <button
+              type="button"
+              onClick={() => setCropping(true)}
+              disabled={disabled || uploading}
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-transparent px-3.5 text-xs font-semibold text-text transition-opacity hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Crop size={14} />
+              Кадрувати
+            </button>
+          )}
+
           {value && (
             <button
               type="button"
-              onClick={() => { setError(''); onChange(''); }}
+              onClick={() => { setError(''); changeImage('', null); }}
               disabled={disabled || uploading}
               className="inline-flex min-h-9 items-center gap-2 rounded-lg px-1 text-xs text-danger hover:underline disabled:opacity-50"
             >
@@ -111,11 +142,21 @@ export default function ImageUploadField({
           type="text"
           className={`${inputClass} mt-1.5`}
           value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => changeImage(e.target.value, null)}
           placeholder="https://..."
           disabled={disabled || uploading}
         />
       </details>
+
+      {cropping && value && (
+        <ImageCropDialog
+          src={value}
+          crop={crop}
+          aspect={cropAspect}
+          onSave={(next) => { onCropChange(next); setCropping(false); }}
+          onClose={() => setCropping(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import chronologyApi from '../../api/chronology';
 import Field, { inputClass } from '../ui/Field';
+import { ageOnCalendarDate, yearLabel } from '../../utils/chronologyMath';
 
 // Picks a birth date against one of the user's own/public calendars — first
 // the calendar itself (chronologyApi.list(), same own+public visibility
 // ChronologyList.jsx shows), then year/month/day scoped to it. Unlike
 // EventForm.jsx (which assumes a calendar already in context), this picks
 // the calendar too, since an NPC isn't tied to one campaign's calendar.
-export default function BirthDatePicker({ value, onChange }) {
+//
+// onAgeComputed(age | null): вік на поточну дату обраного календаря
+// (default_year/default_month_id) — форма підставляє його у поле «Вік».
+export default function BirthDatePicker({ value, onChange, onAgeComputed }) {
   const { calendarId = '', year = '', monthId = '', day = '' } = value || {};
   const [calendars, setCalendars] = useState([]);
   const [months, setMonths] = useState([]);
@@ -20,6 +24,15 @@ export default function BirthDatePicker({ value, onChange }) {
   }, [calendarId]);
 
   const selectedMonth = months.find((m) => m.id === monthId);
+  const calendar = calendars.find((c) => c.id === calendarId);
+  const now = calendar ? { year: calendar.default_year, monthId: calendar.default_month_id } : null;
+  // months порожні, доки не підвантажились, — тоді вік рахується лише за роками
+  // й одразу уточнюється, щойно місяці прийдуть.
+  const age = calendar ? ageOnCalendarDate(months, { year, monthId, day }, now) : null;
+  const nowMonth = months.find((m) => m.id === calendar?.default_month_id);
+
+  useEffect(() => { onAgeComputed?.(age); }, [age]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onAgeComputed?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (field) => (e) => onChange({ ...value, [field]: e.target.value });
 
@@ -53,6 +66,21 @@ export default function BirthDatePicker({ value, onChange }) {
             />
           </Field>
         </div>
+      )}
+
+      {calendar && year !== '' && (
+        calendar.default_year == null ? (
+          <p className="text-xs text-text-dim">
+            Щоб вік рахувався автоматично, задайте календарю рік за замовчуванням (поточну дату) у його налаштуваннях.
+          </p>
+        ) : age == null ? (
+          <p className="text-xs text-danger">Дата народження пізніша за поточну дату календаря.</p>
+        ) : (
+          <p className="text-xs text-text-dim">
+            Вік на {[nowMonth?.name, yearLabel(Number(calendar.default_year), calendar.current_era_name, calendar.previous_era_name)].filter(Boolean).join(' ')}:{' '}
+            <span className="font-semibold text-text">{age}</span>
+          </p>
+        )
       )}
     </div>
   );

@@ -39,13 +39,16 @@ describe('MapModel.listVisible', () => {
 });
 
 describe('MapModel.update', () => {
-  it('sets name, is_public and updated_at', async () => {
+  it('sets name, is_public, preview urls and updated_at', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'm1' }] });
-    await MapModel.update('m1', 'New', false);
+    await MapModel.update('m1', {
+      name: 'New', isPublic: false, previewImageUrl: '/uploads/a.png', previewThumbnailUrl: '/uploads/a.webp',
+    });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE maps\.maps/);
+    expect(sql).toMatch(/preview_image_url = \$4, preview_thumbnail_url = \$5/);
     expect(sql).toMatch(/updated_at = NOW\(\)/);
-    expect(params).toEqual(['m1', 'New', false]);
+    expect(params).toEqual(['m1', 'New', false, '/uploads/a.png', '/uploads/a.webp']);
   });
 });
 

@@ -5,6 +5,7 @@ import { pluralizeUk } from '../utils/pluralize';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
+import CroppedImage from './ui/CroppedImage';
 
 export default function SpellCard({ spell, ...rest }) {
   const { spellKindsMap } = useSpellKinds();
@@ -21,7 +22,7 @@ export default function SpellCard({ spell, ...rest }) {
     >
       {spell.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={spell.image_url} alt={spell.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={spell.image_url} crop={spell.image_crop} alt={spell.name} loading="lazy" />
         </div>
       )}
 

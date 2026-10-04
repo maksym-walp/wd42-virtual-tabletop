@@ -1,4 +1,5 @@
 const MapModel = require('../models/map.model');
+const { isAllowedImageUrl } = require('../utils/image-url');
 const { canCreate, canReadMap, canWriteMap, isAdmin, loadMapOr404 } = require('./access');
 
 function withOwner(map, user) {
@@ -39,7 +40,24 @@ const MapController = {
     if (!name || !name.trim()) return res.status(400).json({ message: 'name є обовʼязковим' });
     const isPublic = req.body.is_public === undefined ? map.is_public : Boolean(req.body.is_public);
 
-    const updated = await MapModel.update(map.id, name.trim(), isPublic);
+    // Прев'ю: undefined — не чіпати, null/'' — прибрати, інакше лише наш
+    // /uploads/ або https (як і зображення шарів). Мініатюра йде в парі з
+    // оригіналом; без неї картки просто падають на оригінал.
+    let previewImageUrl = map.preview_image_url ?? null;
+    let previewThumbnailUrl = map.preview_thumbnail_url ?? null;
+    if (req.body.preview_image_url !== undefined) {
+      const image = req.body.preview_image_url || null;
+      const thumb = req.body.preview_thumbnail_url || null;
+      if ((image && !isAllowedImageUrl(image)) || (thumb && !isAllowedImageUrl(thumb))) {
+        return res.status(400).json({ message: 'Некоректне посилання на зображення' });
+      }
+      previewImageUrl = image;
+      previewThumbnailUrl = image ? thumb : null;
+    }
+
+    const updated = await MapModel.update(map.id, {
+      name: name.trim(), isPublic, previewImageUrl, previewThumbnailUrl,
+    });
     res.json({ map: withOwner(updated, req.user) });
   },
 

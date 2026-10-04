@@ -34,12 +34,13 @@ const MapModel = {
     return rows;
   },
 
-  async update(id, name, isPublic) {
+  async update(id, { name, isPublic, previewImageUrl, previewThumbnailUrl }) {
     const { rows } = await pool.query(
-      `UPDATE maps.maps SET name = $2, is_public = $3, updated_at = NOW()
+      `UPDATE maps.maps
+       SET name = $2, is_public = $3, preview_image_url = $4, preview_thumbnail_url = $5, updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, isPublic]
+      [id, name, isPublic, previewImageUrl, previewThumbnailUrl]
     );
     return rows[0] || null;
   },

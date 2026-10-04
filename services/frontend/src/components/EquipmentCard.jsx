@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ARMOR_WEIGHTS, weaponModifierLabel } from '../constants/equipment';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
+import CroppedImage from './ui/CroppedImage';
 import { StatGrid, StatBox } from './StatGrid';
 
 export default function EquipmentCard({ item, ...rest }) {
@@ -18,7 +19,7 @@ export default function EquipmentCard({ item, ...rest }) {
     >
       {thumbnail && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={thumbnail} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={thumbnail} crop={item.image_crop} alt={item.name} loading="lazy" />
         </div>
       )}
 

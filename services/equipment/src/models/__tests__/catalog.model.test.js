@@ -173,23 +173,23 @@ describe('create / update column sets', () => {
       defense_value: 3, armor_weight: 'heavy',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
-    expect(params).toEqual(['u1', false, 'Меч', null, false, 40, 'https://x/y.png', 'https://x/y_thumb.webp', null, 'melee', 'one_handed', null]);
+    expect(sql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, image_crop, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(params).toEqual(['u1', false, 'Меч', null, false, 40, 'https://x/y.png', 'https://x/y_thumb.webp', null, null, 'melee', 'one_handed', null]);
   });
 
   it('defaults is_public to false and every other unset column to NULL', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'i1' }] });
     await ItemModel.create('u1', { name: 'Мотузка' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', false, 'Мотузка', null, false, null, null, null]);
+    expect(params).toEqual(['u1', false, 'Мотузка', null, false, null, null, null, null]);
   });
 
   it('updates the armor-only columns, leaving the id/owner/admin params first', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 'a1' }] });
     await ArmorModel.update('a1', 'u1', { name: 'Кіраса', defense_value: 3, armor_weight: 'heavy' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/SET name=\$4, description=\$5, is_public=\$6, price=\$7, image_url=\$8, thumbnail_url=\$9, defense_value=\$10, armor_weight=\$11, updated_at=NOW\(\)/);
-    expect(params).toEqual(['a1', 'u1', false, 'Кіраса', null, false, null, null, null, 3, 'heavy']);
+    expect(sql).toMatch(/SET name=\$4, description=\$5, is_public=\$6, price=\$7, image_url=\$8, thumbnail_url=\$9, image_crop=\$10, defense_value=\$11, armor_weight=\$12, updated_at=NOW\(\)/);
+    expect(params).toEqual(['a1', 'u1', false, 'Кіраса', null, false, null, null, null, null, 3, 'heavy']);
   });
 
   it('tags the created row with its kind', async () => {
@@ -247,7 +247,7 @@ describe('update across kinds', () => {
     const moved = await WeaponModel.update('x1', 'owner', { name: 'Меч', damage_die: 'd8' });
 
     const insert = client.query.mock.calls.find(([sql]) => /INSERT INTO equipment\.weapons/.test(sql));
-    expect(insert[0]).toMatch(/\(id, user_id, created_at, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\)/);
+    expect(insert[0]).toMatch(/\(id, user_id, created_at, is_canonical, name, description, is_public, price, image_url, thumbnail_url, image_crop, damage_die, weapon_type, weapon_grip, modifier\)/);
     expect(insert[1].slice(0, 4)).toEqual(['x1', 'owner', 'ts', true]);
     expect(moved).toEqual({ id: 'x1', name: 'Меч', type: 'weapon' });
   });
@@ -366,8 +366,8 @@ describe('UnionModel.bulkImport', () => {
 
     expect(pool.query).toHaveBeenCalledTimes(2);
     const [weaponSql, weaponParams] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.weapons'));
-    expect(weaponSql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, damage_die, weapon_type, weapon_grip, modifier\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12\)/);
-    expect(weaponParams).toEqual(['importer', false, 'Меч', null, false, null, null, null, null, 'melee', null, null]);
+    expect(weaponSql).toMatch(/INSERT INTO equipment\.weapons \(user_id, is_canonical, name, description, is_public, price, image_url, thumbnail_url, image_crop, damage_die, weapon_type, weapon_grip, modifier\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13\)/);
+    expect(weaponParams).toEqual(['importer', false, 'Меч', null, false, null, null, null, null, null, 'melee', null, null]);
 
     const [armorSql] = pool.query.mock.calls.find(([sql]) => sql.includes('equipment.armor'));
     expect(armorSql).toMatch(/INSERT INTO equipment\.armor/);

@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 // Каталог спорядження живе у чотирьох таблицях — по одній на вид
 // (39-equipment-split-tables.sql; артефакти приєднались як четвертий вид у
@@ -41,7 +42,7 @@ const KINDS = {
   },
 };
 
-const COMMON_COLUMNS = ['name', 'description', 'is_public', 'price', 'image_url', 'thumbnail_url'];
+const COMMON_COLUMNS = ['name', 'description', 'is_public', 'price', 'image_url', 'thumbnail_url', 'image_crop'];
 const COMMON_SORT_EXPR = { name: 'i.name', price: 'i.price' };
 
 function buildOrderBy(sortExpr, sort, dir) {
@@ -82,7 +83,7 @@ const usedInSpellsSelect = `COALESCE(
 // Спільні колонки чотирьох таблиць у фіксованому порядку — основа для UNION,
 // де відсутні для конкретного виду поля добиваються NULL-ами, щоб усі чотири
 // гілки мали однакову форму рядка.
-const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, price, image_url, thumbnail_url, created_at, updated_at';
+const UNION_COMMON = 'id, user_id, name, description, is_public, is_canonical, price, image_url, thumbnail_url, image_crop, created_at, updated_at';
 
 // Читальний зріз через усі чотири таблиці: ним живуть спільні списки (пікер
 // предметів у листі персонажа, реагенти в заклинаннях) і перехід за голим
@@ -195,6 +196,8 @@ async function moveKind(targetKind, id, userId, data, isAdmin = false) {
 
 function normalize(column, data) {
   if (column === 'is_public') return data.is_public ?? false;
+  // Кадр без зображення не має сенсу — і рядок JSON для jsonb-колонки.
+  if (column === 'image_crop') return serializeImageCrop(data.image_url ? data.image_crop : null);
   return data[column] ?? null;
 }
 
@@ -426,7 +429,7 @@ const UnionModel = {
           userId,
           isCanonical,
           ...COMMON_COLUMNS.map((column) => (
-            column === 'image_url' || column === 'thumbnail_url' ? null : normalize(column, row)
+            column === 'image_url' || column === 'thumbnail_url' || column === 'image_crop' ? null : normalize(column, row)
           )),
           ...columns.map((column) => normalize(column, row))
         );

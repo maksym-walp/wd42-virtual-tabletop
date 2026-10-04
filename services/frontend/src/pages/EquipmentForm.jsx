@@ -22,7 +22,7 @@ const domain = COLLECTION_DOMAINS.equipment;
 const EMPTY = {
   name: '', type: 'weapon', damage_die: '', defense_value: '',
   description: '', is_public: true, is_canonical: true,
-  price: '', image_url: '',
+  price: '', image_url: '', image_crop: null,
   weapon_type: '', weapon_grip: [], modifier: '',
   armor_weight: '',
   collectionIds: [],
@@ -69,7 +69,7 @@ export default function EquipmentForm() {
           name: i.name, type: i.type,
           damage_die: i.damage_die || '', defense_value: i.defense_value ?? '',
           description: i.description || '', is_public: i.is_public,
-          price: i.price ?? '', image_url: i.image_url || '',
+          price: i.price ?? '', image_url: i.image_url || '', image_crop: i.image_crop || null,
           weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || [], modifier: i.modifier || '',
           armor_weight: i.armor_weight || '',
         }));
@@ -138,6 +138,7 @@ export default function EquipmentForm() {
         defense_value: form.defense_value === '' ? null : Number(form.defense_value),
         price: form.price === '' ? null : Number(form.price),
         image_url: form.image_url || null,
+        image_crop: form.image_url ? (form.image_crop || null) : null,
         weapon_type: form.weapon_type || null,
         weapon_grip: form.weapon_grip.length ? form.weapon_grip : null,
         modifier: form.modifier || null,
@@ -194,6 +195,8 @@ export default function EquipmentForm() {
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            crop={form.image_crop}
+            onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
             entityType="item"
           />
         </FormSection>

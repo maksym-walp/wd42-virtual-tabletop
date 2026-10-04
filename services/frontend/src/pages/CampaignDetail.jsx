@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Trash2, Upload, Map, CalendarDays, Globe, Lock, Plus, LogOut, ArrowLeft } from 'lucide-react';
+import { Trash2, Upload, CalendarDays, Lock, Plus, LogOut, ArrowLeft } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
 import chronologyApi from '../api/chronology';
@@ -17,6 +17,9 @@ import SmartTextarea from '../components/ui/SmartTextarea';
 import SmartTextReader from '../components/SmartTextReader';
 import CombatTab from './CampaignCombat';
 import ShareButton from '../components/ShareButton';
+import CardOverlayButton from '../components/ui/CardOverlayButton';
+import MapCard from '../components/map/MapCard';
+import CalendarCard from '../components/chronology/CalendarCard';
 
 const TABS = [
   { key: 'home', label: 'Головна' },
@@ -381,7 +384,7 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
 function CalendarBlock({ campaign, isGm, onChange }) {
   const navigate = useNavigate();
   const [calendars, setCalendars] = useState([]);
-  const [linkedName, setLinkedName] = useState('');
+  const [linked, setLinked] = useState(null);
   const [pick, setPick] = useState('');
   // A player with no linked calendar has nothing to fetch and nothing to
   // show (see the early return below) — starting loading=false for them
@@ -404,7 +407,7 @@ function CalendarBlock({ campaign, isGm, onChange }) {
       .then((list) => {
         if (!alive) return;
         setCalendars(isGm ? list : []);
-        setLinkedName(list.find((c) => c.id === campaign.calendar_id)?.name || '');
+        setLinked(list.find((c) => c.id === campaign.calendar_id) || null);
       })
       .catch(() => {
         if (!alive) return;
@@ -483,18 +486,29 @@ function CalendarBlock({ campaign, isGm, onChange }) {
       {loading ? (
         <p className="text-sm text-text-dim">Завантаження...</p>
       ) : campaign.calendar_id ? (
-        <Card className="cursor-pointer hover:border-accent/50" onClick={() => navigate(viewHref)}>
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="flex items-center gap-2 font-display text-base text-text">
-              <CalendarDays size={16} className="text-text-dim" /> {linkedName || 'Календар кампанії'}
-            </h3>
-            {isGm && (
-              <button onClick={(e) => { e.stopPropagation(); handleUnlink(); }} aria-label="Відвʼязати календар" className="shrink-0 text-text-dim hover:text-danger">
-                <Trash2 size={15} />
-              </button>
-            )}
-          </div>
-        </Card>
+        <div className="sm:max-w-sm">
+          {linked ? (
+            <CalendarCard
+              calendar={linked}
+              to={viewHref}
+              label="Поточна дата кампанії"
+              date={campaign.current_year != null
+                ? { year: campaign.current_year, monthId: campaign.current_month_id, day: campaign.current_day }
+                : undefined}
+              actions={isGm && (
+                <CardOverlayButton label="Відвʼязати календар" danger onClick={handleUnlink}>
+                  <Trash2 size={15} />
+                </CardOverlayButton>
+              )}
+            />
+          ) : (
+            <Card className="cursor-pointer hover:border-accent/50" onClick={() => navigate(viewHref)}>
+              <h3 className="flex items-center gap-2 font-display text-base text-text">
+                <CalendarDays size={16} className="text-text-dim" /> Календар кампанії
+              </h3>
+            </Card>
+          )}
+        </div>
       ) : (
         <EmptyState icon="🗓️" title="До кампанії не привʼязано календар">
           {isGm ? 'Оберіть календар вище, щоб вести поточну дату кампанії.' : 'Майстер ще не привʼязав календар.'}
@@ -507,7 +521,6 @@ function CalendarBlock({ campaign, isGm, onChange }) {
 // Map "cards": links from a campaign to standalone maps (which live in the
 // separate maps service). The GM links existing maps; players just follow them.
 function MapsBlock({ campaignId, isGm }) {
-  const navigate = useNavigate();
   const [cards, setCards] = useState([]);
   const [myMaps, setMyMaps] = useState([]);
   const [pick, setPick] = useState('');
@@ -558,23 +571,18 @@ function MapsBlock({ campaignId, isGm }) {
   };
 
   const renderCard = (card) => (
-    <Card key={card.id} className="cursor-pointer hover:border-accent/50" onClick={() => navigate(`/maps/${card.map_id}?campaign_id=${campaignId}`)}>
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="flex items-center gap-2 font-display text-base text-text">
-          <Map size={16} className="text-text-dim" /> {card.map_name}
-        </h3>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-text-dim" title={card.is_public ? 'Публічна' : 'Приватна'}>
-            {card.is_public ? <Globe size={13} /> : <Lock size={13} />}
-          </span>
-          {isGm && (
-            <button onClick={(e) => { e.stopPropagation(); handleRemove(card.id); }} aria-label="Прибрати мапу" className="text-text-dim hover:text-danger">
-              <Trash2 size={15} />
-            </button>
-          )}
-        </div>
-      </div>
-    </Card>
+    <MapCard
+      key={card.id}
+      to={`/maps/${card.map_id}?campaign_id=${campaignId}`}
+      name={card.map_name}
+      isPublic={card.is_public}
+      previewUrl={card.preview_thumbnail_url || card.preview_image_url}
+      actions={isGm && (
+        <CardOverlayButton label="Прибрати мапу" danger onClick={() => handleRemove(card.id)}>
+          <Trash2 size={15} />
+        </CardOverlayButton>
+      )}
+    />
   );
 
   return (
@@ -606,12 +614,10 @@ function MapsBlock({ campaignId, isGm }) {
         <EmptyState icon="🗺" title="До кампанії не прив'язано жодної мапи">
           {isGm ? 'Додайте картку-посилання на створену мапу.' : 'Майстер ще не додав мап.'}
         </EmptyState>
-      ) : cards.length > 1 ? (
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {cards.map((card) => <div key={card.id} className="w-64 shrink-0">{renderCard(card)}</div>)}
-        </div>
       ) : (
-        renderCard(cards[0])
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {cards.map(renderCard)}
+        </div>
       )}
     </div>
   );

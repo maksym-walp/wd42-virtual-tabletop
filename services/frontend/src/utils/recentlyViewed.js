@@ -1,7 +1,7 @@
 const KEY = 'walp:recentlyViewed';
 const MAX = 15;
 
-// entry: { type, id, name, href, image_url }
+// entry: { type, id, name, href, image_url, image_crop }
 export function recordView(entry) {
   const list = getRecentlyViewed().filter((e) => !(e.type === entry.type && e.id === entry.id));
   list.unshift({ ...entry, viewedAt: Date.now() });

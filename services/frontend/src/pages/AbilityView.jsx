@@ -13,6 +13,7 @@ import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ShareButton from '../components/ShareButton';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function AbilityView() {
   const { id } = useParams();
@@ -29,7 +30,7 @@ export default function AbilityView() {
     api.get(`/api/abilities/${id}`)
       .then(({ data }) => {
         setAbility(data.ability);
-        recordView({ type: 'ability', id, name: data.ability.name, href: `/abilities/${id}`, image_url: data.ability.image_url });
+        recordView({ type: 'ability', id, name: data.ability.name, href: `/abilities/${id}`, image_url: data.ability.image_url, image_crop: data.ability.image_crop });
       })
       .catch(() => navigate('/abilities', { replace: true }))
       .finally(() => setLoading(false));
@@ -79,7 +80,7 @@ export default function AbilityView() {
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-gold)' }}>
         {ability.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <img src={ability.image_url} alt={ability.name} className="h-full w-full object-cover" />
+            <CroppedImage src={ability.image_url} crop={ability.image_crop} alt={ability.name} />
           </div>
         )}
 

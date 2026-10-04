@@ -64,6 +64,7 @@ function toModelFields(body, entityType) {
     description: body.description ?? null,
     history: isCreature ? (body.history ?? null) : null,
     imageUrl: body.image_url ?? null,
+    imageCrop: body.image_crop ?? null,
     motivation: isCreature ? null : (body.motivation ?? null),
     backstory: isCreature ? null : (body.backstory ?? null),
     faction: isCreature ? null : (body.faction ?? null),

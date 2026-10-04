@@ -88,3 +88,24 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
       return Number(event.year) === cell.year && event.month_id === cell.monthId && Number(event.day) === cell.day;
   }
 }
+
+// Вік на «поточну дату» календаря — його default_year/default_month_id (рік і
+// місяць, які ChronologyView відкриває за замовчуванням; дня там немає).
+// Рахується як прожиті повні роки: різниця років мінус один, якщо день
+// народження цього року ще не настав. Без місяця народження (або без
+// поточного місяця) — лише різниця років. year — внутрішня суцільна нумерація
+// (див. yearLabel), тож перехід між ерами окремо не обробляється.
+// null — якщо поточного року немає, рік народження не задано або дата
+// народження пізніша за поточну.
+export function ageOnCalendarDate(months, birth, now) {
+  if (birth?.year == null || birth.year === '' || now?.year == null || now.year === '') return null;
+  let age = Number(now.year) - Number(birth.year);
+  const birthMi = birth.monthId ? months.findIndex((m) => m.id === birth.monthId) : -1;
+  const nowMi = now.monthId ? months.findIndex((m) => m.id === now.monthId) : -1;
+  if (birthMi !== -1 && nowMi !== -1) {
+    const birthDay = birth.day ? Number(birth.day) : 1;
+    const nowDay = now.day ? Number(now.day) : 1;
+    if (birthMi > nowMi || (birthMi === nowMi && birthDay > nowDay)) age -= 1;
+  }
+  return Number.isFinite(age) && age >= 0 ? age : null;
+}

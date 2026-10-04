@@ -11,8 +11,8 @@ export const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
 const mediaApi = {
   /**
    * Завантажує файл і повертає site-relative URL оригіналу (/uploads/...).
-   * entityType: 'campaign-gallery' | 'map-lenses' | 'character' | 'item'
-   * entityId потрібен для всіх, окрім 'item' (для 'map-lenses' — це id кампанії).
+   * entityType: 'campaign-gallery' | 'map-lenses' | 'map-preview' | 'character' | 'item'
+   * entityId потрібен для всіх, окрім 'item' (для 'map-lenses'/'map-preview' — це id мапи).
    */
   async upload(file, { entityType, entityId } = {}) {
     const { image_url } = await mediaApi.uploadWithThumbnail(file, { entityType, entityId });

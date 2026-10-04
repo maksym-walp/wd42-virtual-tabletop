@@ -10,7 +10,8 @@ const CampaignMapModel = {
   async listByCampaign(campaignId, userId, admin) {
     const { rows } = await pool.query(
       `SELECT cm.id, cm.map_id, cm.created_at,
-              m.name AS map_name, m.is_public, (m.created_by = $2) AS is_owner
+              m.name AS map_name, m.is_public, (m.created_by = $2) AS is_owner,
+              m.preview_image_url, m.preview_thumbnail_url
        FROM campaigns.campaign_maps cm
        JOIN maps.maps m ON m.id = cm.map_id
        WHERE cm.campaign_id = $1

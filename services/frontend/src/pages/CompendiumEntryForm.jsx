@@ -20,7 +20,7 @@ const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
 const EMPTY = {
   name: '', entity_type: 'npc', species_id: '', subspecies_id: '', race_id: '', people_id: '',
-  description: '', history: '', motivation: '', backstory: '', faction: '', image_url: '',
+  description: '', history: '', motivation: '', backstory: '', faction: '', image_url: '', image_crop: null,
   dexterity: 3, body: 3, intelligence: 3, wisdom: 3, charisma: 3,
   is_public: false,
   age: '', gender: '', birth_calendar_id: '', birth_year: '', birth_month_id: '', birth_day: '',
@@ -42,6 +42,8 @@ export default function CompendiumEntryForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Вік, обчислений BirthDatePicker'ом за календарем; null — рахувати нема з чого.
+  const [autoAge, setAutoAge] = useState(null);
 
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
@@ -70,7 +72,7 @@ export default function CompendiumEntryForm() {
           race_id: e.race_id || '', people_id: e.people_id || '',
           description: e.description || '', history: e.history || '',
           motivation: e.motivation || '', backstory: e.backstory || '', faction: e.faction || '',
-          image_url: e.image_url || '',
+          image_url: e.image_url || '', image_crop: e.image_crop || null,
           dexterity: e.dexterity, body: e.body, intelligence: e.intelligence, wisdom: e.wisdom, charisma: e.charisma,
           is_public: e.is_public,
           age: e.age ?? '', gender: e.gender || '',
@@ -129,8 +131,10 @@ export default function CompendiumEntryForm() {
         race_id: form.race_id || null,
         people_id: form.people_id || null,
         image_url: form.image_url || null,
+        image_crop: form.image_url ? (form.image_crop || null) : null,
         ...Object.fromEntries(ATTRIBUTE_KEYS.map((k) => [k, Number(form[k])])),
-        age: form.age === '' ? null : Number(form.age),
+        // Обчислений із дати народження вік має пріоритет над ручним.
+        age: autoAge ?? (form.age === '' ? null : Number(form.age)),
         gender: form.gender || null,
         birth_calendar_id: form.birth_calendar_id || null,
         birth_year: form.birth_year === '' ? null : Number(form.birth_year),
@@ -212,6 +216,8 @@ export default function CompendiumEntryForm() {
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            crop={form.image_crop}
+            onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
             entityType="item"
           />
         </FormSection>
@@ -266,8 +272,11 @@ export default function CompendiumEntryForm() {
         {isNpc && (
           <FormSection title="Біографія">
             <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Вік">
-                <input type="number" min={0} className={inputClass} value={form.age} onChange={set('age')} />
+              <Field label="Вік" hint={autoAge != null ? 'Обчислено з дати народження' : undefined}>
+                <input
+                  type="number" min={0} className={inputClass}
+                  value={autoAge ?? form.age} onChange={set('age')} readOnly={autoAge != null}
+                />
               </Field>
               <Field label="Стать">
                 <select className={inputClass} value={form.gender} onChange={set('gender')}>
@@ -285,6 +294,7 @@ export default function CompendiumEntryForm() {
                 onChange={(v) => setForm((f) => ({
                   ...f, birth_calendar_id: v.calendarId, birth_year: v.year, birth_month_id: v.monthId, birth_day: v.day,
                 }))}
+                onAgeComputed={setAutoAge}
               />
             </Field>
           </FormSection>

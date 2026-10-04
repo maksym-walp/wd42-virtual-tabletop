@@ -12,6 +12,7 @@ import CatalogLayout, {
   SidebarSection, SidebarActions, SidebarSearch, SidebarViewCount, MobileFab, CATALOG_GRID,
 } from '../components/catalog/CatalogLayout';
 import { CatalogPreview, SimplePreview } from '../components/catalog/previews';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function CollectionsList({ domainKey }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -54,6 +55,7 @@ export default function CollectionsList({ domainKey }) {
             <SimplePreview
               href={`${domain.basePath}/collections/${hovered.id}`}
               image={hovered.image_url}
+              imageCrop={hovered.image_crop}
               badges={[`${(hovered.items || []).length} ${domain.itemLabel}`]}
               title={hovered.name}
               subtitle={(hovered.items || []).slice(0, 8).map((it) => it.name).filter(Boolean).join(', ')}
@@ -81,7 +83,7 @@ export default function CollectionsList({ domainKey }) {
             >
               {c.image_url && (
                 <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" loading="lazy" />
+                  <CroppedImage src={c.image_url} crop={c.image_crop} alt={c.name} loading="lazy" />
                 </div>
               )}
               <div className="flex items-center gap-1.5 border-b border-border px-3.5 py-2">

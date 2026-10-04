@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft, Crop } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -22,6 +22,8 @@ import ExperienceMenu from '../components/ExperienceMenu';
 import GmSkillEditor from '../components/GmSkillEditor';
 import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
+import CroppedImage from '../components/ui/CroppedImage';
+import ImageCropDialog from '../components/ui/ImageCropDialog';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import IntInput from '../components/ui/IntInput';
@@ -770,6 +772,7 @@ function CharacterPortrait({ character, isOwner, onChange }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [zoomed, setZoomed] = useState(false);
+  const [cropping, setCropping] = useState(false);
 
   const url = character.image_url;
 
@@ -790,7 +793,9 @@ function CharacterPortrait({ character, isOwner, onChange }) {
         entityType: 'character',
         entityId: character.id,
       });
-      onChange({ image_url: uploaded });
+      // Новий файл — новий кадр: старий рахувався під інші пропорції.
+      onChange({ image_url: uploaded, image_crop: null });
+      setCropping(true);
     } catch (err) {
       setError(err.response?.data?.message ?? 'Не вдалось завантажити зображення');
     } finally {
@@ -808,7 +813,9 @@ function CharacterPortrait({ character, isOwner, onChange }) {
       {url ? (
         <div className="group relative">
           <button type="button" onClick={() => setZoomed(true)} aria-label="Переглянути портрет">
-            <img src={url} alt="" className={`${box} object-cover`} />
+            <div className={`${box} overflow-hidden`}>
+              <CroppedImage src={url} crop={character.image_crop} />
+            </div>
           </button>
           {isOwner && (
             <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1 rounded-b-lg bg-black/55 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -823,7 +830,16 @@ function CharacterPortrait({ character, isOwner, onChange }) {
               </button>
               <button
                 type="button"
-                onClick={() => onChange({ image_url: null })}
+                onClick={() => setCropping(true)}
+                disabled={uploading}
+                aria-label="Кадрувати портрет"
+                className="rounded p-0.5 text-white hover:bg-white/20"
+              >
+                <Crop size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ image_url: null, image_crop: null })}
                 disabled={uploading}
                 aria-label="Видалити портрет"
                 className="rounded p-0.5 text-white hover:bg-white/20"
@@ -849,7 +865,7 @@ function CharacterPortrait({ character, isOwner, onChange }) {
       {error && <span className="max-w-24 text-center text-[10px] text-danger">{error}</span>}
       {isOwner && !url && !uploading && !error && (
         <span className="max-w-24 text-center text-[10px] text-text-dim">
-          Рекомендовано квадратне або альбомне фото — вертикальні світлини обріжуться
+          Після завантаження можна обрати кадр — напр. обличчя на вертикальному фото
         </span>
       )}
 
@@ -864,6 +880,15 @@ function CharacterPortrait({ character, isOwner, onChange }) {
       )}
 
       {zoomed && url && <Lightbox images={[url]} onClose={() => setZoomed(false)} />}
+      {cropping && url && (
+        <ImageCropDialog
+          src={url}
+          crop={character.image_crop}
+          aspect={1}
+          onSave={(crop) => { onChange({ image_crop: crop }); setCropping(false); }}
+          onClose={() => setCropping(false)}
+        />
+      )}
     </div>
   );
 }

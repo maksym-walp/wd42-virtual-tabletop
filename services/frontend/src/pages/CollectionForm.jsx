@@ -13,7 +13,7 @@ import KindSwitch from '../components/KindSwitch';
 import CollectionItemPicker from '../components/CollectionItemPicker';
 
 const EMPTY = {
-  name: '', description: '', is_public: false, is_canonical: true, image_url: '',
+  name: '', description: '', is_public: false, is_canonical: true, image_url: '', image_crop: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
 };
 
@@ -57,7 +57,7 @@ export default function CollectionForm({ domainKey }) {
     domain.collectionsApi.getOne(id)
       .then((c) => setForm({
         name: c.name, description: c.description || '', is_public: c.is_public,
-        image_url: c.image_url || '',
+        image_url: c.image_url || '', image_crop: c.image_crop || null,
         prerequisite_node_ids: c.prerequisite_node_ids || [],
         prerequisite_logic: c.prerequisite_logic || 'or',
       }))
@@ -124,6 +124,9 @@ export default function CollectionForm({ domainKey }) {
             <ImageUploadField
               value={form.image_url}
               onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+              crop={form.image_crop}
+              onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
+              cropAspect={16 / 9}
               entityType="collection"
             />
           </div>

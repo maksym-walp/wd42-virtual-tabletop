@@ -32,7 +32,7 @@ const EMPTY = {
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true, is_canonical: true,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
-  image_url: '',
+  image_url: '', image_crop: null,
   collectionIds: [],
   traditionIds: [],
   // Додаткові форми — { kind, id, name } + повні знімки FORM_FIELDS;
@@ -151,7 +151,7 @@ export default function SpellForm() {
           is_public: s.is_public,
           prerequisite_node_ids: s.prerequisite_node_ids || [],
           prerequisite_logic: s.prerequisite_logic || 'or',
-          image_url: s.image_url || '',
+          image_url: s.image_url || '', image_crop: s.image_crop || null,
           traditionIds,
           main_form_name: s.main_form_name || '',
           forms: (s.forms || []).map(formToState),
@@ -272,6 +272,7 @@ export default function SpellForm() {
         ...serializeForm(form),
         forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id, name: f.name })),
         image_url: form.image_url || null,
+        image_crop: form.image_url ? (form.image_crop || null) : null,
       };
       if (isEdit) {
         await api.put(`/api/spellbook/${id}`, payload);
@@ -365,6 +366,8 @@ export default function SpellForm() {
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            crop={form.image_crop}
+            onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
             entityType="item"
           />
         </FormSection>

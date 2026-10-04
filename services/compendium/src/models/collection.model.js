@@ -1,8 +1,10 @@
 const pool = require('../config/db');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 const entryFields = `jsonb_build_object(
     'id', e.id, 'name', e.name, 'entity_type', e.entity_type,
-    'description', e.description, 'is_public', e.is_public, 'image_url', e.image_url
+    'description', e.description, 'is_public', e.is_public, 'image_url', e.image_url,
+    'image_crop', e.image_crop
   )`;
 
 const itemsSelect = `COALESCE(
@@ -55,23 +57,24 @@ const CollectionModel = {
     return rows[0] || null;
   },
 
-  async create(userId, { name, description, is_public, image_url }) {
+  async create(userId, { name, description, is_public, image_url, image_crop }) {
     const { rows } = await pool.query(
-      `INSERT INTO compendium.collections (created_by, name, description, is_public, image_url)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO compendium.collections (created_by, name, description, is_public, image_url, image_crop)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, image_url ?? null]
+      [userId, name, description ?? null, is_public ?? false, image_url ?? null, serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0];
   },
 
-  async update(id, userId, { name, description, is_public, image_url }, isAdmin = false) {
+  async update(id, userId, { name, description, is_public, image_url, image_crop }, isAdmin = false) {
     const { rows } = await pool.query(
       `UPDATE compendium.collections
-       SET name = $3, description = $4, is_public = $5, image_url = $6, updated_at = NOW()
+       SET name = $3, description = $4, is_public = $5, image_url = $6, image_crop = $8::jsonb, updated_at = NOW()
        WHERE id = $1 AND (created_by = $2 OR $7 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, image_url ?? null, isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, image_url ?? null, isAdmin,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0] || null;
   },

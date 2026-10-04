@@ -10,6 +10,7 @@ import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
 import ShareButton from '../components/ShareButton';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function CollectionView({ domainKey, publicView = false }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -139,7 +140,7 @@ export default function CollectionView({ domainKey, publicView = false }) {
       <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-accent)' }}>
         {collection.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <img src={collection.image_url} alt={collection.name} className="h-full w-full object-cover" />
+            <CroppedImage src={collection.image_url} crop={collection.image_crop} alt={collection.name} />
           </div>
         )}
 

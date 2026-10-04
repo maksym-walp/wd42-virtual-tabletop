@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { RARITIES } from '../constants/artifacts';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
+import CroppedImage from './ui/CroppedImage';
 
 export default function ArtifactCard({ artifact, ...rest }) {
   const rarity = RARITIES[artifact.rarity];
@@ -15,7 +16,7 @@ export default function ArtifactCard({ artifact, ...rest }) {
     >
       {artifact.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={artifact.image_url} alt={artifact.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={artifact.image_url} crop={artifact.image_crop} alt={artifact.name} loading="lazy" />
         </div>
       )}
 

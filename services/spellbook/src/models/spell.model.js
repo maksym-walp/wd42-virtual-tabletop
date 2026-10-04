@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 const SORT_MAP = {
   name:        's.name ASC',
@@ -210,7 +211,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
-      prerequisite_node_ids, prerequisite_logic, image_url,
+      prerequisite_node_ids, prerequisite_logic, image_url, image_crop,
       lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical,
     } = data;
 
@@ -219,8 +220,8 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
-          image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23)
+          image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24::jsonb)
        RETURNING *`,
       [
         userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -232,6 +233,7 @@ const SpellModel = {
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeMainFormName(main_form_name), is_canonical ?? false,
+        serializeImageCrop(image_url ? image_crop : null),
       ]
     );
     return rows[0];
@@ -243,7 +245,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public,
-      prerequisite_node_ids, prerequisite_logic, image_url,
+      prerequisite_node_ids, prerequisite_logic, image_url, image_crop,
       lore_creator, lore_creator_npc_id, complexity, forms, main_form_name,
     } = data;
 
@@ -256,7 +258,7 @@ const SpellModel = {
            components=$14::jsonb, is_public=$15,
            prerequisite_node_ids=$16, prerequisite_logic=$17,
            image_url=$18, lore_creator=$19, lore_creator_npc_id=$20,
-           complexity=$22, forms=$23::jsonb, main_form_name=$24, updated_at=NOW()
+           complexity=$22, forms=$23::jsonb, main_form_name=$24, image_crop=$25::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $21 = true)
        RETURNING *`,
       [
@@ -269,6 +271,7 @@ const SpellModel = {
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeMainFormName(main_form_name),
+        serializeImageCrop(image_url ? image_crop : null),
       ]
     );
     return rows[0] || null;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Plus, Globe, Lock, Map as MapIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import mapsApi from '../api/maps';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { inputClass } from '../components/ui/Field';
 import MapsTabs from '../components/map/MapsTabs';
+import MapCard from '../components/map/MapCard';
 import useHoverPreview from '../hooks/useHoverPreview';
 import CatalogLayout, {
   SidebarViewCount,
@@ -71,7 +72,7 @@ export default function MapList() {
           {hovered && (
             <SimplePreview
               href={`/maps/${hovered.id}`}
-              image={hovered.thumbnail_url || hovered.image_url}
+              image={hovered.preview_image_url || hovered.preview_thumbnail_url}
               badges={[hovered.is_public ? 'Публічна' : 'Приватна', hovered.is_owner ? 'ваша мапа' : null]}
               title={hovered.name}
               description={hovered.description}
@@ -117,21 +118,17 @@ export default function MapList() {
           {canCreate ? 'Створіть першу мапу.' : 'Публічних мап поки немає.'}
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {maps.map((m) => (
-            <Link key={m.id} to={`/maps/${m.id}`} className="block" {...bindPreview(m)}>
-              <Card className="cursor-pointer hover:border-accent/50">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="flex items-center gap-2 font-display text-base text-text">
-                    <MapIcon size={16} className="text-text-dim" /> {m.name}
-                  </h3>
-                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-text-dim" title={m.is_public ? 'Публічна' : 'Приватна'}>
-                    {m.is_public ? <Globe size={13} /> : <Lock size={13} />}
-                  </span>
-                </div>
-                {m.is_owner && <p className="mt-2 text-xs text-accent">ваша мапа</p>}
-              </Card>
-            </Link>
+            <MapCard
+              key={m.id}
+              to={`/maps/${m.id}`}
+              name={m.name}
+              isPublic={m.is_public}
+              isOwner={m.is_owner}
+              previewUrl={m.preview_thumbnail_url || m.preview_image_url}
+              {...bindPreview(m)}
+            />
           ))}
         </div>
       )}

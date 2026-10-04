@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ENTITY_TYPES } from '../../constants/compendium';
 import { htmlToPreviewText } from '../../utils/richText';
+import CroppedImage from '../ui/CroppedImage';
 
 export default function CompendiumEntryCard({ entry, ...rest }) {
   const type = ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc;
@@ -14,7 +15,7 @@ export default function CompendiumEntryCard({ entry, ...rest }) {
     >
       {entry.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={entry.image_url} alt={entry.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} loading="lazy" />
         </div>
       )}
 

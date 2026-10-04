@@ -13,6 +13,7 @@ import AbilityCard from '../components/AbilityCard';
 import DiceStatsGrid from '../components/DiceStatsGrid';
 import Card from '../components/ui/Card';
 import PageHeader from '../components/ui/PageHeader';
+import CroppedImage from '../components/ui/CroppedImage';
 
 const RECENT_TYPE_META = {
   artifact:  { label: 'Артефакт',    icon: Gem },
@@ -120,7 +121,7 @@ function RecentViewCard({ entry }) {
     >
       {entry.image_url ? (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={entry.image_url} alt={entry.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} loading="lazy" />
         </div>
       ) : (
         <div className="flex aspect-[4/3] w-full items-center justify-center bg-bg text-accent">
@@ -146,7 +147,7 @@ function CommunityCharacterCard({ character: c }) {
     >
       {c.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={c.image_url} crop={c.image_crop} alt={c.name} loading="lazy" />
         </div>
       )}
       <div className="px-3.5 py-2.5">

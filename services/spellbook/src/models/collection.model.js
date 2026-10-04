@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 const itemFields = `jsonb_build_object(
     'id', s.id, 'name', s.name, 'nature', s.nature, 'spell_kind', s.spell_kind,
@@ -9,7 +10,7 @@ const itemFields = `jsonb_build_object(
     'range_desc', s.range_desc, 'components', s.components, 'is_public', s.is_public,
     'prerequisite_node_ids', s.prerequisite_node_ids,
     'prerequisite_logic', s.prerequisite_logic,
-    'image_url', s.image_url
+    'image_url', s.image_url, 'image_crop', s.image_crop
   )`;
 
 const itemsSelect = `COALESCE(
@@ -74,26 +75,28 @@ const CollectionModel = {
   },
 
   async create(userId, data) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, image_crop, is_canonical } = data;
     const { rows } = await pool.query(
       `INSERT INTO spellbook.collections
-         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical, image_crop)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, is_canonical ?? false]
+      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, is_canonical ?? false,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0];
   },
 
   async update(id, userId, data, isAdmin = false) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, image_crop } = data;
     const { rows } = await pool.query(
       `UPDATE spellbook.collections
        SET name=$3, description=$4, is_public=$5,
-           prerequisite_node_ids=$6, prerequisite_logic=$7, image_url=$8, updated_at=NOW()
+           prerequisite_node_ids=$6, prerequisite_logic=$7, image_url=$8, image_crop=$10::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $9 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0] || null;
   },

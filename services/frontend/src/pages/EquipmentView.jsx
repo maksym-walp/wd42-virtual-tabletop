@@ -12,6 +12,7 @@ import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function EquipmentView() {
   const { id } = useParams();
@@ -37,7 +38,7 @@ export default function EquipmentView() {
           return;
         }
         setItem(data.item);
-        recordView({ type: 'equipment', id, name: data.item.name, href: `/equipment/${id}`, image_url: data.item.image_url });
+        recordView({ type: 'equipment', id, name: data.item.name, href: `/equipment/${id}`, image_url: data.item.image_url, image_crop: data.item.image_crop });
       })
       .catch(() => navigate('/equipment', { replace: true }))
       .finally(() => setLoading(false));
@@ -97,7 +98,7 @@ export default function EquipmentView() {
       <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {item.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+            <CroppedImage src={item.image_url} crop={item.image_crop} alt={item.name} />
           </div>
         )}
 

@@ -11,7 +11,7 @@ describe('CollectionModel.create', () => {
     await CollectionModel.create('u1', { name: 'Bandit camp', description: 'Ambush pack', is_public: true });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO compendium\.collections/);
-    expect(params).toEqual(['u1', 'Bandit camp', 'Ambush pack', true, null]);
+    expect(params).toEqual(['u1', 'Bandit camp', 'Ambush pack', true, null, null]);
   });
 });
 
@@ -61,7 +61,7 @@ describe('CollectionModel.update', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE compendium\.collections/);
     expect(sql).toMatch(/WHERE id = \$1 AND \(created_by = \$2 OR \$7 = true\)/);
-    expect(params).toEqual(['c1', 'u1', 'New', null, true, null, false]);
+    expect(params).toEqual(['c1', 'u1', 'New', null, true, null, false, null]);
   });
 });
 

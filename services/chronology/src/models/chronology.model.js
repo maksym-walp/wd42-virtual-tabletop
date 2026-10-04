@@ -1,5 +1,20 @@
 const pool = require('../config/db');
 
+// Структура календаря для згенерованої мініатюри на картках (каталог /chronology
+// і блок календаря кампанії) — одним запитом замість чотирьох list-ендпоінтів
+// на кожну картку. Поля ті самі, що віддають відповідні list-ендпоінти.
+const PREVIEW_COLUMNS = `
+  (SELECT COALESCE(json_agg(json_build_object('id', m.id, 'name', m.name, 'length', m.length) ORDER BY m.order_num), '[]'::json)
+     FROM chronology.calendar_months m WHERE m.calendar_id = c.id) AS preview_months,
+  (SELECT COALESCE(json_agg(json_build_object('name', w.name, 'short_name', w.short_name) ORDER BY w.order_num), '[]'::json)
+     FROM chronology.calendar_weekdays w WHERE w.calendar_id = c.id) AS preview_weekdays,
+  (SELECT COALESCE(json_agg(json_build_object('id', s.id, 'name', s.name, 'start_month_id', s.start_month_id,
+            'start_day', s.start_day, 'color', s.color, 'bg_image_url', s.bg_image_url)), '[]'::json)
+     FROM chronology.calendar_seasons s WHERE s.calendar_id = c.id) AS preview_seasons,
+  (SELECT COALESCE(json_agg(json_build_object('id', mo.id, 'name', mo.name, 'cycle_length', mo.cycle_length,
+            'shift', mo.shift, 'color', mo.color)), '[]'::json)
+     FROM chronology.calendar_moons mo WHERE mo.calendar_id = c.id) AS preview_moons`;
+
 const ChronologyModel = {
   // Visible to the requester: public calendars, their own (any visibility),
   // or everything if admin. Mirrors maps.maps' owner+admin/public convention,
@@ -7,7 +22,7 @@ const ChronologyModel = {
   async findAll(userId, isAdmin = false) {
     const visibility = isAdmin ? 'TRUE' : '(c.is_private = false OR c.creator_id = $1)';
     const { rows } = await pool.query(
-      `SELECT c.*, (c.creator_id = $1) AS is_owner
+      `SELECT c.*, (c.creator_id = $1) AS is_owner, ${PREVIEW_COLUMNS}
        FROM chronology.calendars c
        WHERE ${visibility}
        ORDER BY c.name ASC`,
@@ -20,7 +35,7 @@ const ChronologyModel = {
   async findById(id, userId, isAdmin = false) {
     const visibility = isAdmin ? 'TRUE' : '(c.is_private = false OR c.creator_id = $2)';
     const { rows } = await pool.query(
-      `SELECT c.*, (c.creator_id = $2) AS is_owner
+      `SELECT c.*, (c.creator_id = $2) AS is_owner, ${PREVIEW_COLUMNS}
        FROM chronology.calendars c
        WHERE c.id = $1 AND ${visibility}`,
       [id, userId]

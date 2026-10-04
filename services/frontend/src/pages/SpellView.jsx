@@ -12,6 +12,7 @@ import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
 import useSpellKinds from '../hooks/useSpellKinds';
+import CroppedImage from '../components/ui/CroppedImage';
 
 export default function SpellView() {
   const { id } = useParams();
@@ -29,7 +30,7 @@ export default function SpellView() {
       .then(({ data }) => {
         setSpell(data.spell);
         setActiveForm('main');
-        recordView({ type: 'spell', id, name: data.spell.name, href: `/spellbook/${id}`, image_url: data.spell.image_url });
+        recordView({ type: 'spell', id, name: data.spell.name, href: `/spellbook/${id}`, image_url: data.spell.image_url, image_crop: data.spell.image_crop });
       })
       .catch(() => navigate('/spellbook', { replace: true }))
       .finally(() => setLoading(false));
@@ -89,7 +90,7 @@ export default function SpellView() {
         <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
           {spell.image_url && (
             <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-              <img src={spell.image_url} alt={spell.name} className="h-full w-full object-cover" />
+              <CroppedImage src={spell.image_url} crop={spell.image_crop} alt={spell.name} />
             </div>
           )}
 

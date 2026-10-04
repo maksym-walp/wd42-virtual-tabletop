@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 // Колекція збирає вміння (маневр — тепер просто вміння з is_maneuver=true,
 // не окрема таблиця), тож звʼязка — пряма FK на abilities.entries.
@@ -12,7 +13,7 @@ const itemsSelect = `COALESCE(
         'is_public', a.is_public,
         'prerequisite_node_ids', a.prerequisite_node_ids,
         'prerequisite_logic', a.prerequisite_logic,
-        'image_url', a.image_url
+        'image_url', a.image_url, 'image_crop', a.image_crop
       ) ORDER BY a.name)
      FROM abilities.collection_items ci
      JOIN abilities.entries a ON a.id = ci.ability_id
@@ -74,26 +75,28 @@ const CollectionModel = {
   },
 
   async create(userId, data) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, image_crop, is_canonical } = data;
     const { rows } = await pool.query(
       `INSERT INTO abilities.collections
-         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         (user_id, name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, is_canonical, image_crop)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
        RETURNING *`,
-      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, is_canonical ?? false]
+      [userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, is_canonical ?? false,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0];
   },
 
   async update(id, userId, data, isAdmin = false) {
-    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url } = data;
+    const { name, description, is_public, prerequisite_node_ids, prerequisite_logic, image_url, image_crop } = data;
     const { rows } = await pool.query(
       `UPDATE abilities.collections
        SET name=$3, description=$4, is_public=$5,
-           prerequisite_node_ids=$6, prerequisite_logic=$7, image_url=$8, updated_at=NOW()
+           prerequisite_node_ids=$6, prerequisite_logic=$7, image_url=$8, image_crop=$10::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $9 = true)
        RETURNING *`,
-      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin]
+      [id, userId, name, description ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null, isAdmin,
+        serializeImageCrop(image_url ? image_crop : null)]
     );
     return rows[0] || null;
   },

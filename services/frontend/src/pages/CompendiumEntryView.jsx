@@ -5,12 +5,14 @@ import compendiumApi from '../api/compendium';
 import chronologyApi from '../api/chronology';
 import { ENTITY_TYPES, ATTRIBUTE_LABELS, GENDER_OPTIONS } from '../constants/compendium';
 import { recordView, removeView } from '../utils/recentlyViewed';
+import { ageOnCalendarDate } from '../utils/chronologyMath';
 import Button from '../components/ui/Button';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import RollButton from '../components/RollButton';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import CroppedImage from '../components/ui/CroppedImage';
 
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_LABELS);
 
@@ -26,6 +28,7 @@ export default function CompendiumEntryView() {
   const [people, setPeople] = useState(null);
   const [birthCalendar, setBirthCalendar] = useState(null);
   const [birthMonth, setBirthMonth] = useState(null);
+  const [birthMonths, setBirthMonths] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
   const [abilities, setAbilities] = useState([]);
@@ -39,18 +42,19 @@ export default function CompendiumEntryView() {
       .then((e) => {
         if (cancelled) return;
         setEntry(e);
-        recordView({ type: 'compendium-entry', id, name: e.name, href: `/compendium/entries/${id}`, image_url: e.image_url });
+        recordView({ type: 'compendium-entry', id, name: e.name, href: `/compendium/entries/${id}`, image_url: e.image_url, image_crop: e.image_crop });
         if (e.species_id) compendiumApi.getSpecies(e.species_id).then(setSpecies).catch(() => {});
         if (e.subspecies_id) compendiumApi.getSubspecies(e.subspecies_id).then(setSubspecies).catch(() => {});
         if (e.race_id) compendiumApi.getRace(e.race_id).then(setRace).catch(() => {});
         if (e.people_id) compendiumApi.getPeople(e.people_id).then(setPeople).catch(() => {});
         if (e.birth_calendar_id) {
           chronologyApi.getOne(e.birth_calendar_id).then(setBirthCalendar).catch(() => {});
-          if (e.birth_month_id) {
-            chronologyApi.listMonths(e.birth_calendar_id)
-              .then((months) => setBirthMonth(months.find((m) => m.id === e.birth_month_id) || null))
-              .catch(() => {});
-          }
+          chronologyApi.listMonths(e.birth_calendar_id)
+            .then((months) => {
+              setBirthMonths(months);
+              setBirthMonth(months.find((m) => m.id === e.birth_month_id) || null);
+            })
+            .catch(() => {});
         }
         compendiumApi.listEntryEquipment(id).then(setEquipment).catch(() => {});
         compendiumApi.listEntrySpells(id).then(setSpells).catch(() => {});
@@ -96,6 +100,16 @@ export default function CompendiumEntryView() {
   const isAdmin = user?.role === 'admin';
   const type = ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc;
   const isNpc = entry.entity_type === 'npc';
+  // Вік від дати народження рахується наживо — з поточною датою календаря
+  // (default_year/month) персонаж «старішає»; збережений age — запасний варіант.
+  const computedAge = birthCalendar
+    ? ageOnCalendarDate(
+      birthMonths,
+      { year: entry.birth_year, monthId: entry.birth_month_id, day: entry.birth_day },
+      { year: birthCalendar.default_year, monthId: birthCalendar.default_month_id },
+    )
+    : null;
+  const age = computedAge ?? entry.age;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -109,7 +123,7 @@ export default function CompendiumEntryView() {
       <div className="overflow-hidden rounded-lg border border-border bg-surface">
         {entry.image_url && (
           <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <img src={entry.image_url} alt={entry.name} className="h-full w-full object-cover" />
+            <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} />
           </div>
         )}
 
@@ -216,10 +230,10 @@ export default function CompendiumEntryView() {
           )
         )}
 
-        {isNpc && (entry.age != null || entry.gender || entry.birth_calendar_id) && (
+        {isNpc && (age != null || entry.gender || entry.birth_calendar_id) && (
           <Section title="Біографія">
             <div className="flex flex-col gap-2 text-sm text-text">
-              {entry.age != null && <p><span className="text-text-dim">Вік:</span> {entry.age}</p>}
+              {age != null && <p><span className="text-text-dim">Вік:</span> {age}</p>}
               {entry.gender && <p><span className="text-text-dim">Стать:</span> {GENDER_OPTIONS[entry.gender] || entry.gender}</p>}
               {entry.birth_calendar_id && (
                 <p>

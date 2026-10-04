@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
-import Card from '../components/ui/Card';
-import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import SmartTextReader from '../components/SmartTextReader';
+import CardOverlayButton from '../components/ui/CardOverlayButton';
+import CalendarCard from '../components/chronology/CalendarCard';
 import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
 import Field, { inputClass } from '../components/ui/Field';
@@ -53,9 +52,12 @@ export default function ChronologyList() {
             <CalendarCard
               key={c.id}
               calendar={c}
-              canManage={canManage}
-              onClick={() => navigate(`/chronology/${c.id}`)}
-              onManage={() => navigate(`/chronology/${c.id}/build`)}
+              to={`/chronology/${c.id}`}
+              actions={canManage && (
+                <CardOverlayButton label="Побудувати структуру" onClick={() => navigate(`/chronology/${c.id}/build`)}>
+                  <Settings size={15} />
+                </CardOverlayButton>
+              )}
             />
           ))}
         </div>
@@ -67,32 +69,6 @@ export default function ChronologyList() {
         onCreated={(calendar) => navigate(`/chronology/${calendar.id}/build`)}
       />
     </div>
-  );
-}
-
-function CalendarCard({ calendar: c, canManage, onClick, onManage }) {
-  return (
-    <Card onClick={onClick} className="cursor-pointer hover:border-accent/50">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <h2 className="font-display text-lg text-text">{c.name}</h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Badge className={c.is_private ? 'border border-border text-text-dim' : 'bg-sage text-bg'}>
-            {c.is_private ? 'Приватний' : 'Публічний'}
-          </Badge>
-          {canManage && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onManage(); }}
-              aria-label="Побудувати структуру"
-              className="rounded p-1 text-text-dim hover:bg-surface-hover hover:text-text"
-            >
-              <Settings size={15} />
-            </button>
-          )}
-        </div>
-      </div>
-      {c.description && <SmartTextReader text={c.description} className="text-sm text-text-dim" />}
-    </Card>
   );
 }
 

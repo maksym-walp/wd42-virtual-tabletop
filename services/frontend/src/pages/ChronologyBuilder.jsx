@@ -286,7 +286,7 @@ export default function ChronologyBuilder() {
             )}
           </Field>
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Рік за замовчуванням" hint="Який рік відкривати на початку перегляду">
+            <Field label="Рік за замовчуванням" hint="Який рік відкривати на початку перегляду. Разом із місяцем — «поточна дата», від якої рахується вік NPC">
               <input
                 type="number"
                 className={inputClass}

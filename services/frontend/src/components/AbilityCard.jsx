@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
 import { StatGrid, StatBox } from './StatGrid';
+import CroppedImage from './ui/CroppedImage';
 
 // literal (not templated) column-count classes — Tailwind's content scan
 // needs the full class name present in source to keep it.
@@ -24,7 +25,7 @@ export default function AbilityCard({ ability, ...rest }) {
     >
       {ability.image_url && (
         <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
-          <img src={ability.image_url} alt={ability.name} className="h-full w-full object-cover" loading="lazy" />
+          <CroppedImage src={ability.image_url} crop={ability.image_crop} alt={ability.name} loading="lazy" />
         </div>
       )}
 

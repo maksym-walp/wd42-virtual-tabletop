@@ -109,8 +109,8 @@ describe('SpellModel.create', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical\)/);
-    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22,\$23\)/);
+    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop\)/);
+    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22,\$23,\$24::jsonb\)/);
     expect(params).toEqual([
       'u1', 'Вогняна куля', [], 'utility',
       undefined, undefined,
@@ -120,7 +120,17 @@ describe('SpellModel.create', () => {
       [], 'or',
       null, 'Стара Мірна', 'npc-1',
       null, '[]', null, false,
+      null,
     ]);
+  });
+
+  it('stores image_crop only together with an image', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
+    const crop = { x: 50, y: 20, zoom: 1.5, ratio: 0.75 };
+    await SpellModel.create('u1', { name: 'X', image_url: '/uploads/a.png', image_crop: crop });
+    expect(pool.query.mock.calls[0][1][23]).toBe(JSON.stringify(crop));
+    await SpellModel.create('u1', { name: 'X', image_crop: crop });
+    expect(pool.query.mock.calls[1][1][23]).toBeNull();
   });
 
   it('defaults lore_creator_npc_id to null when omitted', async () => {
@@ -139,11 +149,11 @@ describe('SpellModel.update', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     }, true);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/image_url=\$18, lore_creator=\$19, lore_creator_npc_id=\$20,\s*complexity=\$22, forms=\$23::jsonb, main_form_name=\$24, updated_at=NOW\(\)/);
+    expect(sql).toMatch(/image_url=\$18, lore_creator=\$19, lore_creator_npc_id=\$20,\s*complexity=\$22, forms=\$23::jsonb, main_form_name=\$24, image_crop=\$25::jsonb, updated_at=NOW\(\)/);
     expect(sql).toMatch(/WHERE id=\$1 AND \(user_id=\$2 OR \$21 = true\)/);
     expect(params[19]).toBe('npc-1'); // lore_creator_npc_id ($20)
     expect(params[20]).toBe(true);    // isAdmin ($21)
-    expect(params).toHaveLength(24);
+    expect(params).toHaveLength(25);
   });
 
   it('defaults lore_creator_npc_id to null when omitted', async () => {

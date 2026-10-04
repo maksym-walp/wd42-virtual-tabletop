@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
+const { serializeImageCrop } = require('../utils/image-crop');
 
 const CHILD_TABLES = [
   'skills', 'known_spells', 'tree_progress', 'equipment',
@@ -173,7 +174,7 @@ const CharacterModel = {
       death_scale, health_dice_values, conditions, experience_points, money,
       spell_bonus, temp_hp, defense_bonus, inspiration_used, narrative_inspiration_die,
       luck_current, luck_max, rogue_inspiration_die, rogue_inspiration_given_to,
-      image_url,
+      image_url, image_crop,
     } = data;
 
     // death_scale/narrative_inspiration_die/rogue_inspiration_* use a
@@ -186,6 +187,10 @@ const CharacterModel = {
     // image_url joins them: NULL means "no portrait", so COALESCE would make
     // removing a portrait impossible (null would read as "leave unchanged").
     const setImageUrl = 'image_url' in data;
+    // Кадр портрета (див. utils/image-crop.js) — так само через прапорець, бо
+    // NULL означає «показ по центру». Нове зображення без кадру скидає старий
+    // кадр: він рахувався під інші пропорції.
+    const setImageCrop = 'image_crop' in data || setImageUrl;
 
     const { rows } = await pool.query(
       `UPDATE character_sheet.characters
@@ -211,6 +216,7 @@ const CharacterModel = {
            rogue_inspiration_die      = CASE WHEN $23 THEN $24 ELSE rogue_inspiration_die END,
            rogue_inspiration_given_to = CASE WHEN $25 THEN $26 ELSE rogue_inspiration_given_to END,
            image_url           = CASE WHEN $27 THEN $28 ELSE image_url END,
+           image_crop          = CASE WHEN $29 THEN $30::jsonb ELSE image_crop END,
            updated_at          = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -233,6 +239,7 @@ const CharacterModel = {
         setRogueDie, setRogueDie ? (rogue_inspiration_die ?? null) : null,
         setRogueGivenTo, setRogueGivenTo ? (rogue_inspiration_given_to ?? null) : null,
         setImageUrl, setImageUrl ? (image_url ?? null) : null,
+        setImageCrop, setImageCrop && !(setImageUrl && !image_url) ? serializeImageCrop(image_crop) : null,
       ]
     );
     return rows[0] || null;
@@ -279,13 +286,13 @@ const CharacterModel = {
             health_dice_values, conditions, experience_points, money,
             spell_bonus, temp_hp, defense_bonus, inspiration_used,
             narrative_inspiration_die, luck_current, luck_max,
-            rogue_inspiration_die, rogue_inspiration_given_to, image_url)
+            rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop)
          SELECT user_id, $2, $3, $4, is_public, backstory, notes,
                 current_hp, current_magic, heroic_actions_used, death_scale,
                 health_dice_values, conditions, experience_points, money,
                 spell_bonus, temp_hp, defense_bonus, inspiration_used,
                 narrative_inspiration_die, luck_current, luck_max,
-                rogue_inspiration_die, rogue_inspiration_given_to, image_url
+                rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop
          FROM character_sheet.characters WHERE id = $1
          RETURNING *`,
         [sourceId, name ?? source.name, newArchetype, newRace]

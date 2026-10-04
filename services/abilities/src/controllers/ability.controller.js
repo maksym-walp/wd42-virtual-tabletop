@@ -9,7 +9,7 @@ const { canonicalOnCreate } = require('../middleware/auth.middleware');
 // вузли скіл-дерева конкретного користувача — для перевикористання в іншому
 // місці не мають сенсу (той самий підхід, що й у equipment/catalog.controller).
 const EXPORT_OMIT_FIELDS = [
-  'image_url', 'created_at', 'updated_at', 'is_owner', 'owner_username',
+  'image_url', 'image_crop', 'created_at', 'updated_at', 'is_owner', 'owner_username',
   'is_canonical', 'prerequisite_node_ids', 'prerequisite_logic', 'prerequisite_nodes',
 ];
 

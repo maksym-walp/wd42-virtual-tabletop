@@ -25,7 +25,7 @@ const EMPTY = {
   is_maneuver: false, duration_value: '', duration_unit: 'instant',
   lore_creator: '', lore_creator_npc_id: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
-  image_url: '',
+  image_url: '', image_crop: null,
   collectionIds: [],
 };
 
@@ -79,7 +79,7 @@ export default function AbilityForm() {
           lore_creator_npc_id: a.lore_creator_npc_id ?? null,
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
-          image_url: a.image_url || '',
+          image_url: a.image_url || '', image_crop: a.image_crop || null,
         }));
       })
       .catch(() => navigate('/abilities'))
@@ -128,6 +128,7 @@ export default function AbilityForm() {
         ...rest,
         duration_value: form.duration_value === '' ? null : Number(form.duration_value),
         image_url: form.image_url || null,
+        image_crop: form.image_url ? (form.image_crop || null) : null,
       };
       if (isEdit) {
         await api.put(`/api/abilities/${id}`, payload);
@@ -211,6 +212,8 @@ export default function AbilityForm() {
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            crop={form.image_crop}
+            onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
             entityType="item"
           />
         </FormSection>

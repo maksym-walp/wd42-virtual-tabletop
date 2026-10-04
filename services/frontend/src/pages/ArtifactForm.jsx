@@ -16,7 +16,7 @@ const domain = COLLECTION_DOMAINS.equipment;
 
 const EMPTY = {
   name: '', description: '', is_public: true, is_canonical: true,
-  price: '', image_url: '',
+  price: '', image_url: '', image_crop: null,
   creator: '', rarity: '',
   collectionIds: [],
 };
@@ -53,7 +53,7 @@ export default function ArtifactForm() {
           ...f,
           name: a.name,
           description: a.description || '', is_public: a.is_public,
-          price: a.price ?? '', image_url: a.image_url || '',
+          price: a.price ?? '', image_url: a.image_url || '', image_crop: a.image_crop || null,
           creator: a.creator || '', rarity: a.rarity || '',
         }));
       })
@@ -96,6 +96,7 @@ export default function ArtifactForm() {
         ...rest,
         price: form.price === '' ? null : Number(form.price),
         image_url: form.image_url || null,
+        image_crop: form.image_url ? (form.image_crop || null) : null,
         creator: form.creator || null,
         rarity: form.rarity || null,
       };
@@ -140,6 +141,8 @@ export default function ArtifactForm() {
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+            crop={form.image_crop}
+            onCropChange={(crop) => setForm((f) => ({ ...f, image_crop: crop }))}
             entityType="item"
           />
         </FormSection>
