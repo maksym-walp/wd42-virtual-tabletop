@@ -385,7 +385,7 @@ describe('UnionModel.bulkImport', () => {
 
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\), \(\$9, \$10, \$11, \$12, \$13, \$14, \$15, \$16\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9\), \(\$10, \$11, \$12, \$13, \$14, \$15, \$16, \$17, \$18\)/);
     expect(imported).toBe(2);
   });
 

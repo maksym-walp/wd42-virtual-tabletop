@@ -246,7 +246,7 @@ describe('SpellModel complexity and forms on write', () => {
       forms: [{ kind: 'primitive', energy_cost: '5', complexity: 'bogus', extra: 'drop me' }],
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/\$20,\$21::jsonb,\$22,\$23\)/);
+    expect(sql).toMatch(/\$20,\$21::jsonb,\$22,\$23,\$24::jsonb\)/);
     expect(params[19]).toBe('complex');
     const forms = JSON.parse(params[20]);
     expect(forms).toHaveLength(1);

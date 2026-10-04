@@ -113,13 +113,13 @@ describe('MapController.update / remove', () => {
   it('update sets and clears the preview', async () => {
     MapModel.update.mockResolvedValue(ownPrivate);
     await MapController.update(mockReq({
-      params: { id: 'm1' }, body: { preview_image_url: '/uploads/p.png', preview_thumbnail_url: '/uploads/p.webp' }, user: GM,
+      params: { id: 'm1' }, body: { name: 'Мапа', preview_image_url: '/uploads/p.png', preview_thumbnail_url: '/uploads/p.webp' }, user: GM,
     }), mockRes());
     expect(MapModel.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({
       previewImageUrl: '/uploads/p.png', previewThumbnailUrl: '/uploads/p.webp',
     }));
 
-    await MapController.update(mockReq({ params: { id: 'm1' }, body: { preview_image_url: null }, user: GM }), mockRes());
+    await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'Мапа', preview_image_url: null }, user: GM }), mockRes());
     expect(MapModel.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({
       previewImageUrl: null, previewThumbnailUrl: null,
     }));
@@ -127,7 +127,7 @@ describe('MapController.update / remove', () => {
 
   it('update 400 for a javascript: preview url', async () => {
     const res = mockRes();
-    await MapController.update(mockReq({ params: { id: 'm1' }, body: { preview_image_url: 'javascript:alert(1)' }, user: GM }), res);
+    await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'Мапа', preview_image_url: 'javascript:alert(1)' }, user: GM }), res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(MapModel.update).not.toHaveBeenCalled();
   });
