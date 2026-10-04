@@ -26,7 +26,7 @@ export function buildSpellbookImportTemplate(spellKinds) {
 //   mechanical_desc       — рядок або null — що відбувається механічно
 //   narrative_desc        — рядок або null — як це виглядає у світі гри
 //   lore_creator          — рядок або null — вільний текст, ім'я лорного автора заклинання
-//   lore_creator_npc_id   — uuid або null — id запису НІПа з бестіарію (compendium), якщо творець
+//   lore_creator_npc_id   — uuid або null — id НІПа (сервіс npcs), якщо творець
 //                           прив'язаний до конкретного НІПа. Не обов'язково: якщо такого id немає
 //                           чи він не потрібен, досить самого lore_creator як вільного тексту.
 //   energy_cost           — число (магічна енергія)

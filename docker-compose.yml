@@ -231,6 +231,40 @@ services:
     networks:
       - walp-network
 
+  bestiary:
+    build:
+      context: ./services/bestiary
+      target: development
+    container_name: walp-bestiary
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3016
+    volumes:
+      - ./services/bestiary/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
+  npcs:
+    build:
+      context: ./services/npcs
+      target: development
+    container_name: walp-npcs
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3017
+    volumes:
+      - ./services/npcs/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   admin:
     build:
       context: ./services/admin
@@ -319,6 +353,8 @@ services:
       - campaigns
       - maps
       - compendium
+      - bestiary
+      - npcs
       - admin
       - chronology
       - media

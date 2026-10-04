@@ -4,7 +4,8 @@ import { ArrowLeft, Settings, Plus, Trash2, Pencil, ExternalLink, ArrowUpDown } 
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import mapsApi from '../api/maps';
-import compendiumApi from '../api/compendium';
+import npcsApi from '../api/npcs';
+import bestiaryApi from '../api/bestiary';
 import { eventDateRangeLabel, eventPlaceLabel, eventSortKey } from '../utils/chronologyEvent';
 import CatalogTabs from '../components/CatalogTabs';
 import EventForm from '../components/chronology/EventForm';
@@ -47,7 +48,7 @@ export default function ChronologyEvents() {
     chronologyApi.listMonths(id),
     chronologyApi.listEvents(id, campaignId),
     mapsApi.listLocations(),
-    Promise.all([compendiumApi.listEntries('npc'), compendiumApi.listEntries('creature')]),
+    Promise.all([npcsApi.list(), bestiaryApi.list()]),
   ]).then(([cal, monthsList, eventsList, locationsList, [npcs, creatures]]) => {
     setCalendar(cal);
     setMonths(monthsList);

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
-import compendiumApi from '../api/compendium';
+import npcsApi from '../api/npcs';
 import { ARCHETYPES } from '../constants/characterSheet';
 import { DURATION_UNITS } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
@@ -53,7 +53,7 @@ export default function AbilityForm() {
   }, []);
 
   useEffect(() => {
-    compendiumApi.listEntries('npc').then(setNpcs).catch(() => {});
+    npcsApi.list().then(setNpcs).catch(() => {});
   }, []);
 
   useEffect(() => {

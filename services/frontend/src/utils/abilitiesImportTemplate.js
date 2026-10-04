@@ -23,7 +23,7 @@ export function buildAbilitiesImportTemplate() {
 //   duration_value        — число або null (має сенс лише коли duration_unit не "instant"/"permanent")
 //   duration_unit         — один з: ${durationUnitList}
 //   lore_creator          — рядок або null — вільний текст, ім'я лорного автора/винахідника вміння
-//   lore_creator_npc_id   — uuid або null — id запису НІПа з бестіарію (compendium), якщо творець
+//   lore_creator_npc_id   — uuid або null — id НІПа (сервіс npcs), якщо творець
 //                           прив'язаний до конкретного НІПа. Не обов'язково: якщо такого id немає
 //                           чи він не потрібен, досить самого lore_creator як вільного тексту.
 //

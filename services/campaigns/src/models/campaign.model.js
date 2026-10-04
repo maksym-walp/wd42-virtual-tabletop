@@ -139,23 +139,32 @@ const CampaignModel = {
     return rows[0] || null;
   },
 
-  // Cross-schema read (campaigns -> compendium) for cloning a compendium
-  // entry into the combat tracker. Visibility mirrors compendium's own rule
+  // Cross-schema read (campaigns -> npcs/bestiary) for cloning an NPC or a
+  // creature into the combat tracker. Both used to live in one compendium
+  // table; ids were preserved by the split, so compendium_entry_id keeps
+  // pointing at either one. Visibility mirrors the owning services' rule
   // (own or public, admin sees all) — a GM shouldn't be able to clone
   // another GM's private homebrew monster into their combat.
-  // health_die is resolved the same way compendium's own entry.model.js
-  // does it (subspecies overrides species, 'd6' fallback for neither) —
-  // duplicated here since services share no code, only the database.
+  // health_die is resolved the same way npcs/bestiary resolve it (own
+  // override, else subspecies, else species, else 'd6') — duplicated here
+  // since services share no code, only the database.
   // entity_type/rolled_health are read too: an NPC's persisted rolled
-  // health (see compendium's EntryModel.updateRolledHealth) is what gets
-  // cloned into combat, not a recomputed average — creatures have no
-  // persistent health, so rolled_health is always null for them.
+  // health is what gets cloned into combat, not a recomputed average —
+  // creatures have no persistent health, so rolled_health is null for them.
   async findCompendiumEntry(entryId, userId, isAdmin) {
     const { rows } = await pool.query(
       `SELECT e.id, e.name, e.entity_type, e.dexterity, e.body, e.intelligence, e.wisdom, e.charisma,
               e.rolled_health,
-              COALESCE(sub.health_die, sp.health_die, 'd6') AS health_die
-       FROM compendium.compendium_entries e
+              COALESCE(e.health_die_override, sub.health_die, sp.health_die, 'd6') AS health_die
+       FROM (
+         SELECT id, name, 'npc'::varchar AS entity_type, dexterity, body, intelligence, wisdom, charisma,
+                rolled_health, health_die_override, species_id, subspecies_id, created_by, is_public
+         FROM npcs.npcs
+         UNION ALL
+         SELECT id, name, 'creature'::varchar, dexterity, body, intelligence, wisdom, charisma,
+                NULL::smallint, health_die_override, species_id, subspecies_id, created_by, is_public
+         FROM bestiary.creatures
+       ) e
        LEFT JOIN compendium.species sp ON sp.id = e.species_id
        LEFT JOIN compendium.subspecies sub ON sub.id = e.subspecies_id
        WHERE e.id = $1 AND ($3::bool OR e.created_by = $2 OR e.is_public = true)`,

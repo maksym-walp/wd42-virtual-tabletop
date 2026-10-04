@@ -107,6 +107,58 @@ const ChronologyEventModel = {
     return { ...rows[0], participant_ids: participant_ids || [] };
   },
 
+  // Every event (across all calendars the viewer can see) that lists this
+  // entry (NPC/creature id) as a participant — the NPC page's "Події" block.
+  // Carries the calendar and month names so the caller can label dates
+  // without loading each calendar's months separately. Managers see private
+  // and campaign-specific events too; everyone else only public lore events
+  // (campaign_id IS NULL), same as findAllByCalendar without a campaign.
+  async findAllByParticipant(entryId, { userId, isAdmin, isManager }) {
+    const calendarVisibility = isAdmin ? 'TRUE' : '(c.is_private = false OR c.creator_id = $2)';
+    const eventVisibility = isManager ? 'TRUE' : '(e.is_public = true AND e.campaign_id IS NULL)';
+    const { rows } = await pool.query(
+      `SELECT e.*, c.name AS calendar_name, c.current_era_name, c.previous_era_name,
+              m.name AS month_name, em.name AS end_month_name
+       FROM chronology.calendar_event_participants p
+       JOIN chronology.calendar_events e ON e.id = p.event_id
+       JOIN chronology.calendars c ON c.id = e.calendar_id
+       LEFT JOIN chronology.calendar_months m ON m.id = e.month_id
+       LEFT JOIN chronology.calendar_months em ON em.id = e.end_month_id
+       WHERE p.entry_id = $1 AND ${calendarVisibility} AND ${eventVisibility}
+       ORDER BY c.name ASC, e.year ASC NULLS LAST, m.order_num ASC NULLS LAST, e.day ASC NULLS LAST, e.name ASC`,
+      [entryId, userId]
+    );
+    return rows;
+  },
+
+  async findById(id, calendarId) {
+    const { rows } = await pool.query(
+      `SELECT * FROM chronology.calendar_events WHERE id = $1 AND calendar_id = $2`,
+      [id, calendarId]
+    );
+    return rows[0] || null;
+  },
+
+  // Point add/remove of a single participant — used from an NPC's page,
+  // where replacing the event's whole participant set (setParticipants)
+  // would need the full event payload.
+  async addParticipant(eventId, entryId) {
+    await pool.query(
+      `INSERT INTO chronology.calendar_event_participants (event_id, entry_id)
+       VALUES ($1, $2)
+       ON CONFLICT (event_id, entry_id) DO NOTHING`,
+      [eventId, entryId]
+    );
+  },
+
+  async removeParticipant(eventId, entryId) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM chronology.calendar_event_participants WHERE event_id = $1 AND entry_id = $2`,
+      [eventId, entryId]
+    );
+    return rowCount > 0;
+  },
+
   async delete(id, calendarId) {
     // calendar_event_participants rows cascade via their own FK — no
     // separate cleanup needed here.

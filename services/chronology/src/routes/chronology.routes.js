@@ -14,6 +14,9 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 // requireChronologyManager (it calls requireAuth internally) — no route
 // needs both, so there's no blanket router.use(requireAuth) here.
 
+// Declared before '/:id' so 'events' is never read as a calendar id.
+router.get('/events/by-participant/:entryId', requireAuth, wrap(ChronologyEventController.listByParticipant));
+
 router.get('/',        requireAuth, wrap(ChronologyController.list));
 router.post('/',       requireChronologyManager, wrap(ChronologyController.create));
 router.get('/:id',     requireAuth, wrap(ChronologyController.getOne));
@@ -46,5 +49,7 @@ router.get('/:id/events',           requireAuth, wrap(ChronologyEventController.
 router.post('/:id/events',          requireChronologyManager, wrap(ChronologyEventController.create));
 router.put('/:id/events/:eventId',  requireChronologyManager, wrap(ChronologyEventController.update));
 router.delete('/:id/events/:eventId', requireChronologyManager, wrap(ChronologyEventController.remove));
+router.post('/:id/events/:eventId/participants', requireChronologyManager, wrap(ChronologyEventController.addParticipant));
+router.delete('/:id/events/:eventId/participants/:entryId', requireChronologyManager, wrap(ChronologyEventController.removeParticipant));
 
 module.exports = router;

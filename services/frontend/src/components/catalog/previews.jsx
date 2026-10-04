@@ -7,7 +7,7 @@ import { EQUIPMENT_TYPES, ARMOR_WEIGHTS, weaponModifierLabel } from '../../const
 import { RARITIES } from '../../constants/artifacts';
 import { ARCHETYPES } from '../../constants/characterSheet';
 import { formatDuration as formatAbilityDuration } from '../../constants/abilities';
-import { ENTITY_TYPES } from '../../constants/compendium';
+import { STAT_BLOCK_KINDS } from '../../constants/statBlocks';
 import { htmlToPreviewText } from '../../utils/richText';
 import CroppedImage from '../ui/CroppedImage';
 
@@ -143,13 +143,14 @@ export function AbilityPreview({ ability }) {
   );
 }
 
-export function CompendiumEntryPreview({ entry, speciesName }) {
+export function StatBlockPreview({ kind: kindKey, entry, speciesName }) {
+  const kind = STAT_BLOCK_KINDS[kindKey];
   return (
     <PreviewCard
-      href={`/compendium/entries/${entry.id}`}
+      href={`${kind.basePath}/${entry.id}`}
       image={entry.image_url}
       imageCrop={entry.image_crop}
-      badges={[(ENTITY_TYPES[entry.entity_type] || ENTITY_TYPES.npc).label]}
+      badges={[kind.label]}
       title={entry.name}
       subtitle={speciesName}
       description={entry.description}

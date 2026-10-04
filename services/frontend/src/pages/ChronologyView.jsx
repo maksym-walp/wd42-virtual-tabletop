@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
-import compendiumApi from '../api/compendium';
+import npcsApi from '../api/npcs';
+import bestiaryApi from '../api/bestiary';
 import { totalDaysSinceEpoch, weekdayIndexOf, yearLabel, getActiveSeason, eventOccursOnDay } from '../utils/chronologyMath';
 import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
@@ -77,7 +78,7 @@ export default function ChronologyView() {
       chronologyApi.listEvents(id, campaignId),
       mapsApi.listLocations(),
       canManage
-        ? Promise.all([compendiumApi.listEntries('npc'), compendiumApi.listEntries('creature')])
+        ? Promise.all([npcsApi.list(), bestiaryApi.list()])
         : Promise.resolve([[], []]),
     ])
       .then(([cal, monthsList, weekdaysList, seasonsList, moonsList, eventsList, locationsList, [npcs, creatures]]) => {

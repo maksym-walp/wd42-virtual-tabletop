@@ -64,7 +64,7 @@ export default function AuthorField({ name, npcId, onChange, npcs = [], label = 
       {npcId && linkedNpc && (
         <p className="mt-1 text-xs text-sage">
           Пов&rsquo;язано з НІПом:{' '}
-          <Link to={`/compendium/entries/${npcId}`} className="underline">{linkedNpc.name}</Link>
+          <Link to={`/npcs/${npcId}`} className="underline">{linkedNpc.name}</Link>
         </p>
       )}
       {hint && <span className="text-xs text-text-dim">{hint}</span>}

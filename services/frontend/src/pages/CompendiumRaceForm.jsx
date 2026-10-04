@@ -41,7 +41,7 @@ export default function CompendiumRaceForm({ isPeople = false }) {
         setForm({ name: r.name, description: r.description || '', origin: r.origin || '', is_public: r.is_public });
         if (isPeople) setRaceId(r.race_id);
       })
-      .catch(() => navigate('/compendium/taxonomy'))
+      .catch(() => navigate('/compendium'))
       .finally(() => setLoading(false));
   }, [id, isEdit, isPeople]);
 
@@ -80,7 +80,7 @@ export default function CompendiumRaceForm({ isPeople = false }) {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
-  const backTo = isPeople && raceId ? `/compendium/races/${raceId}` : '/compendium/taxonomy';
+  const backTo = isPeople && raceId ? `/compendium/races/${raceId}` : '/compendium';
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">

@@ -189,3 +189,54 @@ describe('ChronologyEventController.remove', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });
+
+describe('ChronologyEventController.listByParticipant', () => {
+  it('passes the viewer\'s visibility flags through', async () => {
+    ChronologyEventModel.findAllByParticipant.mockResolvedValue([{ id: 'e1' }]);
+    const res = mockRes();
+    await ChronologyEventController.listByParticipant(mockReq({ params: { entryId: 'n1' }, user: { sub: 'u1', role: 'user' } }), res);
+    expect(ChronologyEventModel.findAllByParticipant).toHaveBeenCalledWith('n1', { userId: 'u1', isAdmin: false, isManager: false });
+    expect(res.json).toHaveBeenCalledWith({ events: [{ id: 'e1' }] });
+  });
+
+  it('managers see private/campaign events, admins any calendar', async () => {
+    ChronologyEventModel.findAllByParticipant.mockResolvedValue([]);
+    await ChronologyEventController.listByParticipant(mockReq({ params: { entryId: 'n1' }, user: { sub: 'a1', role: 'admin' } }), mockRes());
+    expect(ChronologyEventModel.findAllByParticipant).toHaveBeenCalledWith('n1', { userId: 'a1', isAdmin: true, isManager: true });
+  });
+});
+
+describe('ChronologyEventController participants', () => {
+  beforeEach(() => ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' }));
+
+  it('400 without entry_id', async () => {
+    const res = mockRes();
+    await ChronologyEventController.addParticipant(mockReq({ params: { id: 'c1', eventId: 'e1' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('404 when the event is not in this calendar', async () => {
+    ChronologyEventModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+    await ChronologyEventController.addParticipant(mockReq({ params: { id: 'c1', eventId: 'e9' }, body: { entry_id: 'n1' } }), res);
+    expect(ChronologyEventModel.findById).toHaveBeenCalledWith('e9', 'c1');
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(ChronologyEventModel.addParticipant).not.toHaveBeenCalled();
+  });
+
+  it('201 adds one participant', async () => {
+    ChronologyEventModel.findById.mockResolvedValue({ id: 'e1' });
+    const res = mockRes();
+    await ChronologyEventController.addParticipant(mockReq({ params: { id: 'c1', eventId: 'e1' }, body: { entry_id: 'n1' } }), res);
+    expect(ChronologyEventModel.addParticipant).toHaveBeenCalledWith('e1', 'n1');
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('404 when removing someone who was not a participant', async () => {
+    ChronologyEventModel.findById.mockResolvedValue({ id: 'e1' });
+    ChronologyEventModel.removeParticipant.mockResolvedValue(false);
+    const res = mockRes();
+    await ChronologyEventController.removeParticipant(mockReq({ params: { id: 'c1', eventId: 'e1', entryId: 'n1' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+});

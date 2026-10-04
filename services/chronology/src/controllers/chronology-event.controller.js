@@ -78,6 +78,39 @@ const ChronologyEventController = {
     res.json({ event });
   },
 
+  async listByParticipant(req, res) {
+    const events = await ChronologyEventModel.findAllByParticipant(req.params.entryId, {
+      userId: req.user.sub,
+      isAdmin: req.user.role === 'admin',
+      isManager: ['admin', 'game_master'].includes(req.user.role),
+    });
+    res.json({ events });
+  },
+
+  async addParticipant(req, res) {
+    const calendar = await loadChronologyForManageOr404(req, res);
+    if (!calendar) return;
+    const { entry_id: entryId } = req.body;
+    if (!entryId) return res.status(400).json({ message: 'entry_id є обовʼязковим' });
+
+    const event = await ChronologyEventModel.findById(req.params.eventId, calendar.id);
+    if (!event) return res.status(404).json({ message: 'Подію не знайдено' });
+
+    await ChronologyEventModel.addParticipant(event.id, entryId);
+    res.status(201).json({ event_id: event.id, entry_id: entryId });
+  },
+
+  async removeParticipant(req, res) {
+    const calendar = await loadChronologyForManageOr404(req, res);
+    if (!calendar) return;
+    const event = await ChronologyEventModel.findById(req.params.eventId, calendar.id);
+    if (!event) return res.status(404).json({ message: 'Подію не знайдено' });
+
+    const removed = await ChronologyEventModel.removeParticipant(event.id, req.params.entryId);
+    if (!removed) return res.status(404).json({ message: 'Учасника не знайдено' });
+    res.json({ message: 'Видалено' });
+  },
+
   async remove(req, res) {
     const calendar = await loadChronologyForManageOr404(req, res);
     if (!calendar) return;

@@ -132,7 +132,7 @@ export default function AbilityView() {
           <Section title="Творець">
             <p className="text-[0.95rem] text-text">
               {ability.lore_creator_npc_id
-                ? <Link to={`/compendium/entries/${ability.lore_creator_npc_id}`} className="text-accent hover:underline">{ability.lore_creator}</Link>
+                ? <Link to={`/npcs/${ability.lore_creator_npc_id}`} className="text-accent hover:underline">{ability.lore_creator}</Link>
                 : ability.lore_creator}
             </p>
           </Section>

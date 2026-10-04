@@ -47,17 +47,18 @@ import ChronologyBuilder from './pages/ChronologyBuilder';
 import ChronologyView from './pages/ChronologyView';
 import ChronologyEvents from './pages/ChronologyEvents';
 import LocationDetail from './pages/LocationDetail';
-import CompendiumEntries from './pages/CompendiumEntries';
-import CompendiumEntryForm from './pages/CompendiumEntryForm';
-import CompendiumEntryView from './pages/CompendiumEntryView';
+import StatBlockList from './pages/StatBlockList';
+import StatBlockForm from './pages/StatBlockForm';
+import StatBlockView from './pages/StatBlockView';
+import { LegacyEntryRedirect, LegacyFactionRedirect } from './pages/LegacyCompendiumRedirect';
 import CompendiumTaxonomyList from './pages/CompendiumTaxonomyList';
 import CompendiumSpeciesDetail from './pages/CompendiumSpeciesDetail';
 import CompendiumSpeciesForm from './pages/CompendiumSpeciesForm';
 import CompendiumRaceDetail from './pages/CompendiumRaceDetail';
 import CompendiumRaceForm from './pages/CompendiumRaceForm';
-import CompendiumFactionList from './pages/CompendiumFactionList';
-import CompendiumFactionDetail from './pages/CompendiumFactionDetail';
-import CompendiumFactionForm from './pages/CompendiumFactionForm';
+import FactionList from './pages/FactionList';
+import FactionDetail from './pages/FactionDetail';
+import FactionForm from './pages/FactionForm';
 import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
@@ -136,9 +137,8 @@ export default function App() {
                   <Route path="/chronology/:id/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
                   <Route path="/locations/:id" element={<PrivateRoute><LocationDetail /></PrivateRoute>} />
 
-                  <Route path="/compendium" element={<PrivateRoute><CompendiumEntries entityType="npc" title="НІПи" newLabel="Новий НІП" /></PrivateRoute>} />
-                  <Route path="/compendium/bestiary" element={<PrivateRoute><CompendiumEntries entityType="creature" title="Бестіарій" newLabel="Нова істота" /></PrivateRoute>} />
-                  <Route path="/compendium/taxonomy" element={<PrivateRoute><CompendiumTaxonomyList /></PrivateRoute>} />
+                  {/* Компендіум — вікі-довідник: види/підвиди, раси/народи. */}
+                  <Route path="/compendium" element={<PrivateRoute><CompendiumTaxonomyList /></PrivateRoute>} />
                   <Route path="/compendium/species/new" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
                   <Route path="/compendium/species/:id" element={<PrivateRoute><CompendiumSpeciesDetail /></PrivateRoute>} />
                   <Route path="/compendium/species/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
@@ -149,18 +149,40 @@ export default function App() {
                   <Route path="/compendium/races/:id/edit" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
                   <Route path="/compendium/peoples/new" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
                   <Route path="/compendium/peoples/:id/edit" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
-                  <Route path="/compendium/factions" element={<PrivateRoute><CompendiumFactionList /></PrivateRoute>} />
-                  <Route path="/compendium/factions/new" element={<PrivateRoute><CompendiumFactionForm /></PrivateRoute>} />
-                  <Route path="/compendium/factions/:id" element={<PrivateRoute><CompendiumFactionDetail /></PrivateRoute>} />
-                  <Route path="/compendium/factions/:id/edit" element={<PrivateRoute><CompendiumFactionForm /></PrivateRoute>} />
-                  <Route path="/compendium/collections" element={<PrivateRoute><CollectionsList domainKey="compendium" /></PrivateRoute>} />
-                  <Route path="/compendium/collections/new" element={<PrivateRoute><CollectionForm domainKey="compendium" /></PrivateRoute>} />
-                  <Route path="/compendium/collections/public/:id" element={<CollectionView domainKey="compendium" publicView />} />
-                  <Route path="/compendium/collections/:id" element={<PrivateRoute><CollectionView domainKey="compendium" /></PrivateRoute>} />
-                  <Route path="/compendium/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="compendium" /></PrivateRoute>} />
-                  <Route path="/compendium/entries/new" element={<PrivateRoute><CompendiumEntryForm /></PrivateRoute>} />
-                  <Route path="/compendium/entries/:id" element={<PrivateRoute><CompendiumEntryView /></PrivateRoute>} />
-                  <Route path="/compendium/entries/:id/edit" element={<PrivateRoute><CompendiumEntryForm /></PrivateRoute>} />
+                  {/* Старі адреси, до розділення компендіуму на три сервіси. */}
+                  <Route path="/compendium/taxonomy" element={<Navigate to="/compendium" replace />} />
+                  <Route path="/compendium/bestiary" element={<Navigate to="/bestiary" replace />} />
+                  <Route path="/compendium/factions/*" element={<LegacyFactionRedirect />} />
+                  <Route path="/compendium/collections/*" element={<Navigate to="/npcs/collections" replace />} />
+                  <Route path="/compendium/entries/new" element={<Navigate to="/npcs/new" replace />} />
+                  <Route path="/compendium/entries/:id" element={<PrivateRoute><LegacyEntryRedirect /></PrivateRoute>} />
+                  <Route path="/compendium/entries/:id/edit" element={<PrivateRoute><LegacyEntryRedirect edit /></PrivateRoute>} />
+
+                  {/* Бестіарій. key — щоб форма/перегляд не переносили стан між НІПом та істотою. */}
+                  <Route path="/bestiary" element={<PrivateRoute><StatBlockList key="creature" kind="creature" /></PrivateRoute>} />
+                  <Route path="/bestiary/new" element={<PrivateRoute><StatBlockForm key="creature-new" kind="creature" /></PrivateRoute>} />
+                  <Route path="/bestiary/collections" element={<PrivateRoute><CollectionsList domainKey="bestiary" /></PrivateRoute>} />
+                  <Route path="/bestiary/collections/new" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
+                  <Route path="/bestiary/collections/public/:id" element={<CollectionView domainKey="bestiary" publicView />} />
+                  <Route path="/bestiary/collections/:id" element={<PrivateRoute><CollectionView domainKey="bestiary" /></PrivateRoute>} />
+                  <Route path="/bestiary/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
+                  <Route path="/bestiary/:id" element={<PrivateRoute><StatBlockView key="creature" kind="creature" /></PrivateRoute>} />
+                  <Route path="/bestiary/:id/edit" element={<PrivateRoute><StatBlockForm key="creature-edit" kind="creature" /></PrivateRoute>} />
+
+                  {/* НІПи та фракції. */}
+                  <Route path="/npcs" element={<PrivateRoute><StatBlockList key="npc" kind="npc" /></PrivateRoute>} />
+                  <Route path="/npcs/new" element={<PrivateRoute><StatBlockForm key="npc-new" kind="npc" /></PrivateRoute>} />
+                  <Route path="/npcs/factions" element={<PrivateRoute><FactionList /></PrivateRoute>} />
+                  <Route path="/npcs/factions/new" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
+                  <Route path="/npcs/factions/:id" element={<PrivateRoute><FactionDetail /></PrivateRoute>} />
+                  <Route path="/npcs/factions/:id/edit" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
+                  <Route path="/npcs/collections" element={<PrivateRoute><CollectionsList domainKey="npcs" /></PrivateRoute>} />
+                  <Route path="/npcs/collections/new" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
+                  <Route path="/npcs/collections/public/:id" element={<CollectionView domainKey="npcs" publicView />} />
+                  <Route path="/npcs/collections/:id" element={<PrivateRoute><CollectionView domainKey="npcs" /></PrivateRoute>} />
+                  <Route path="/npcs/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
+                  <Route path="/npcs/:id" element={<PrivateRoute><StatBlockView key="npc" kind="npc" /></PrivateRoute>} />
+                  <Route path="/npcs/:id/edit" element={<PrivateRoute><StatBlockForm key="npc-edit" kind="npc" /></PrivateRoute>} />
 
                   <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
 

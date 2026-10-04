@@ -21,6 +21,8 @@ jobs:
           - equipment
           - abilities
           - campaigns
+          - bestiary
+          - npcs
           - admin
           - media
     steps:

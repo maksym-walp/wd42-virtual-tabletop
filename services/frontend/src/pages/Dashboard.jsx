@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Gem, BookOpen, Star, Swords, Users } from 'lucide-react';
+import { ChevronDown, Gem, BookOpen, Star, Swords, Users, Skull, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
 import characterApi from '../api/characterSheet';
@@ -21,6 +21,10 @@ const RECENT_TYPE_META = {
   ability:   { label: 'Вміння',      icon: Star },
   equipment: { label: 'Спорядження', icon: Swords },
   character: { label: 'Персонаж',    icon: Users },
+  npc:       { label: 'НІП',         icon: UserRound },
+  creature:  { label: 'Істота',      icon: Skull },
+  // Записи, переглянуті до розділення компендіуму (href веде на редирект).
+  'compendium-entry': { label: 'НІП / істота', icon: UserRound },
 };
 
 const COMMUNITY_LIMIT = 12;

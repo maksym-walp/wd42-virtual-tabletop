@@ -41,7 +41,7 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
         setForm({ name: s.name, description: s.description || '', is_public: s.is_public, health_die: s.health_die || 'd6' });
         if (isSubspecies) setSpeciesId(s.species_id);
       })
-      .catch(() => navigate('/compendium/taxonomy'))
+      .catch(() => navigate('/compendium'))
       .finally(() => setLoading(false));
   }, [id, isEdit, isSubspecies]);
 
@@ -76,7 +76,7 @@ export default function CompendiumSpeciesForm({ isSubspecies = false }) {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
-  const backTo = isSubspecies && speciesId ? `/compendium/species/${speciesId}` : '/compendium/taxonomy';
+  const backTo = isSubspecies && speciesId ? `/compendium/species/${speciesId}` : '/compendium';
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">

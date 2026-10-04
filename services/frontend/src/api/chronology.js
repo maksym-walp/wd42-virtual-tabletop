@@ -117,6 +117,19 @@ const chronologyApi = {
   async removeEvent(id, eventId) {
     await api.delete(`${BASE}/${id}/events/${eventId}`);
   },
+
+  // Усі видимі події (у всіх календарях), де entryId — учасник (НІП/істота).
+  // Кожна подія несе calendar_name/month_name/end_month_name для підпису дати.
+  async listEventsByParticipant(entryId) {
+    const { data } = await api.get(`${BASE}/events/by-participant/${entryId}`);
+    return data.events;
+  },
+  async addEventParticipant(id, eventId, entryId) {
+    await api.post(`${BASE}/${id}/events/${eventId}/participants`, { entry_id: entryId });
+  },
+  async removeEventParticipant(id, eventId, entryId) {
+    await api.delete(`${BASE}/${id}/events/${eventId}/participants/${entryId}`);
+  },
 };
 
 export default chronologyApi;

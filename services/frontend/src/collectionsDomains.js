@@ -1,12 +1,12 @@
 import equipmentApi from './api/equipment';
 import abilitiesApi from './api/abilities';
 import spellbookApi from './api/spellbook';
-import compendiumApi from './api/compendium';
+import npcsApi from './api/npcs';
+import bestiaryApi from './api/bestiary';
 import { createCollectionsApi } from './api/collections';
 import { EQUIPMENT_TYPES } from './constants/equipment';
 import { RARITIES } from './constants/artifacts';
 import { natureLabels } from './constants/spellbook';
-import { ENTITY_TYPES } from './constants/compendium';
 
 // One config per catalog service that owns a `collections` module —
 // drives the generic CollectionsList/CollectionForm/CollectionView pages
@@ -106,52 +106,68 @@ export const COLLECTION_DOMAINS = {
       { key: 'collection', label: 'Колекція',   newPath: '/spellbook/collections/new' },
     ],
   },
+  // Компендіум — вікі-довідник (види/підвиди/раси/народи) без власних
+  // колекцій: збірки є лише в бестіарію та НІПів. Види (species) і Раси
+  // (races) переглядаються одним злитим списком — див.
+  // CompendiumTaxonomyList.jsx — хоча на бекенді це два окремі каталоги.
+  // Немає collectionsApi, тож CollectionsList/Form/View сюди не підключені.
   compendium: {
     title: 'Компендіум',
     basePath: '/compendium',
-    itemLabel: 'записів',
-    collectionsApi: createCollectionsApi('/api/compendium/collections/'),
-    catalogApi: { getAll: () => compendiumApi.listEntries() },
-    itemIdField: 'entry_id',
-    itemLink: (item) => `/compendium/entries/${item.id}`,
-    itemMeta: (item) => ENTITY_TYPES[item.entity_type]?.label ?? '',
-    supportsPrerequisites: false,
-    // Compendium has no "official vs community" concept anywhere in its
-    // schema (unlike equipment/spellbook/abilities) — no
-    // is_canonical column, no /canonical endpoint.
-    supportsCanonical: false,
-    // Compendium has more than one browsable list (NPCs vs Bestiary vs the
-    // merged Народи та види taxonomy vs Фракції) alongside Колекції, so it
-    // needs an explicit tab set instead of the [catalog, Колекції] pair
-    // getDomainTabs() derives by default. Види (species) and Раси та народи
-    // (races) browse as one merged, filterable list — see
-    // CompendiumTaxonomyList.jsx — even though they stay two separate
-    // catalogs on the backend.
     tabs: [
-      { to: '/compendium', label: 'НІПи', end: true },
-      { to: '/compendium/bestiary', label: 'Бестіарій' },
-      { to: '/compendium/taxonomy', label: 'Народи та види' },
-      { to: '/compendium/factions', label: 'Фракції' },
-      { to: '/compendium/collections', label: 'Колекції' },
+      { to: '/compendium', label: 'Народи та види', end: true },
     ],
-    // NPC and creature share one form/table (CompendiumEntryForm, entity_type
-    // column) and so can switch in place — species/race/faction/collection
-    // each live on their own page, so switching to them is always a navigation.
     kindSwitch: [
-      { key: 'npc',        label: 'НІП',       newPath: '/compendium/entries/new?type=npc' },
-      { key: 'creature',   label: 'Істота',    newPath: '/compendium/entries/new?type=creature' },
-      { key: 'species',    label: 'Вид',       newPath: '/compendium/species/new' },
-      { key: 'race',       label: 'Раса',      newPath: '/compendium/races/new' },
-      { key: 'faction',    label: 'Фракція',   newPath: '/compendium/factions/new' },
-      { key: 'collection', label: 'Колекція',  newPath: '/compendium/collections/new' },
+      { key: 'species', label: 'Вид',  newPath: '/compendium/species/new' },
+      { key: 'race',    label: 'Раса', newPath: '/compendium/races/new' },
+    ],
+  },
+  bestiary: {
+    title: 'Бестіарій',
+    basePath: '/bestiary',
+    itemLabel: 'істот',
+    collectionsApi: createCollectionsApi('/api/bestiary/collections/'),
+    catalogApi: { getAll: () => bestiaryApi.list() },
+    itemIdField: 'creature_id',
+    itemLink: (item) => `/bestiary/${item.id}`,
+    itemMeta: () => '',
+    supportsPrerequisites: false,
+    // No "official vs community" concept here (unlike equipment/spellbook/
+    // abilities) — no is_canonical column, no /canonical endpoint.
+    supportsCanonical: false,
+    kindSwitch: [
+      { key: 'creature',   label: 'Істота',   newPath: '/bestiary/new' },
+      { key: 'collection', label: 'Колекція', newPath: '/bestiary/collections/new' },
+    ],
+  },
+  npcs: {
+    title: 'НІПи',
+    basePath: '/npcs',
+    itemLabel: 'НІПів',
+    collectionsApi: createCollectionsApi('/api/npcs/collections/'),
+    catalogApi: { getAll: () => npcsApi.list() },
+    itemIdField: 'npc_id',
+    itemLink: (item) => `/npcs/${item.id}`,
+    itemMeta: () => '',
+    supportsPrerequisites: false,
+    supportsCanonical: false,
+    // NPCs and their factions browse side by side, alongside Колекції.
+    tabs: [
+      { to: '/npcs', label: 'НІПи', end: true },
+      { to: '/npcs/factions', label: 'Фракції' },
+      { to: '/npcs/collections', label: 'Колекції' },
+    ],
+    kindSwitch: [
+      { key: 'npc',        label: 'НІП',      newPath: '/npcs/new' },
+      { key: 'faction',    label: 'Фракція',  newPath: '/npcs/factions/new' },
+      { key: 'collection', label: 'Колекція', newPath: '/npcs/collections/new' },
     ],
   },
 };
 
 // The tab bar every catalog service shows (CatalogTabs) — a domain with a
 // single browsable list just gets [catalog, Колекції]; equipment/abilities/
-// spellbook/compendium override this via their own `tabs` above since each
-// has more than one list to switch between.
+// spellbook/compendium/npcs override this via their own `tabs` above.
 export function getDomainTabs(domainKey) {
   const domain = COLLECTION_DOMAINS[domainKey];
   return domain.tabs || [

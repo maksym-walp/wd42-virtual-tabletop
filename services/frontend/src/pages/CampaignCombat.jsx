@@ -2,7 +2,8 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import characterApi from '../api/characterSheet';
-import compendiumApi from '../api/compendium';
+import npcsApi from '../api/npcs';
+import bestiaryApi from '../api/bestiary';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
 import { modifierDie } from '../constants/characterSheet';
@@ -938,7 +939,7 @@ function AddNpcSheet({ open, campaignId, sceneId, onClose, onAdded }) {
   );
 }
 
-// Autocomplete over the compendium (NPCs + Bestiary together) + a quantity —
+// Autocomplete over NPCs + Bestiary together (two services, one list) + a quantity —
 // stats aren't entered here: the backend computes each clone's starting
 // health/active_defense/initiative from the entry's attributes.
 function CompendiumNpcFields({ campaignId, sceneId, onAdded }) {
@@ -950,7 +951,13 @@ function CompendiumNpcFields({ campaignId, sceneId, onAdded }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    compendiumApi.listEntries().then(setEntries).catch(() => {});
+    // compendium_entry_id accepts either kind — NPC and creature ids never
+    // collide (they shared one table before the split).
+    Promise.all([npcsApi.list().catch(() => []), bestiaryApi.list().catch(() => [])])
+      .then(([npcs, creatures]) => setEntries([
+        ...npcs.map((n) => ({ ...n, entity_type: 'npc' })),
+        ...creatures.map((c) => ({ ...c, entity_type: 'creature' })),
+      ].sort((a, b) => a.name.localeCompare(b.name))));
   }, []);
 
   const filtered = search.trim() && !selected

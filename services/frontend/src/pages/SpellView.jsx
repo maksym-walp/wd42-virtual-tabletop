@@ -129,7 +129,7 @@ export default function SpellView() {
             <p className="px-5 pb-2 text-sm text-text-dim">
               Творець:{' '}
               {shown.lore_creator_npc_id
-                ? <Link to={`/compendium/entries/${shown.lore_creator_npc_id}`} className="text-accent hover:underline">{shown.lore_creator}</Link>
+                ? <Link to={`/npcs/${shown.lore_creator_npc_id}`} className="text-accent hover:underline">{shown.lore_creator}</Link>
                 : <span className="text-text">{shown.lore_creator}</span>}
             </p>
           )}

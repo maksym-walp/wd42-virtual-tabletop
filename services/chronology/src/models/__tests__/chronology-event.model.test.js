@@ -113,3 +113,36 @@ describe('ChronologyEventModel.update/delete', () => {
     expect(pool.query.mock.calls[1][0]).toMatch(/WHERE id=\$1 AND calendar_id=\$2/);
   });
 });
+
+describe('ChronologyEventModel.findAllByParticipant', () => {
+  it('non-managers only get public lore events from calendars they can see', async () => {
+    await ChronologyEventModel.findAllByParticipant('n1', { userId: 'u1', isAdmin: false, isManager: false });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/FROM chronology\.calendar_event_participants p/);
+    expect(sql).toMatch(/WHERE p\.entry_id = \$1/);
+    expect(sql).toMatch(/c\.is_private = false OR c\.creator_id = \$2/);
+    expect(sql).toMatch(/e\.is_public = true AND e\.campaign_id IS NULL/);
+    expect(params).toEqual(['n1', 'u1']);
+  });
+
+  it('managers see every event; admins every calendar', async () => {
+    await ChronologyEventModel.findAllByParticipant('n1', { userId: 'a1', isAdmin: true, isManager: true });
+    const [sql] = pool.query.mock.calls[0];
+    expect(sql).not.toMatch(/is_private = false/);
+    expect(sql).not.toMatch(/campaign_id IS NULL/);
+  });
+});
+
+describe('ChronologyEventModel participants', () => {
+  it('addParticipant is idempotent', async () => {
+    await ChronologyEventModel.addParticipant('e1', 'n1');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/ON CONFLICT \(event_id, entry_id\) DO NOTHING/);
+    expect(params).toEqual(['e1', 'n1']);
+  });
+
+  it('removeParticipant reports whether a row went away', async () => {
+    pool.query.mockResolvedValueOnce({ rowCount: 1 });
+    expect(await ChronologyEventModel.removeParticipant('e1', 'n1')).toBe(true);
+  });
+});

@@ -5,7 +5,7 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
-import compendiumApi from '../api/compendium';
+import npcsApi from '../api/npcs';
 import {
   NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFormFields, spellForms, spellFormMode,
@@ -111,7 +111,7 @@ export default function SpellForm() {
   }, []);
 
   useEffect(() => {
-    compendiumApi.listEntries('npc').then(setNpcs).catch(() => {});
+    npcsApi.list().then(setNpcs).catch(() => {});
   }, []);
 
   useEffect(() => {

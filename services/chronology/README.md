@@ -68,6 +68,9 @@
 | POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, is_public?, year?, month_id?, day?, recurrence?, location_id?, region?, end_year?, end_month_id?, end_day?, participant_ids? }` | `201 { event }` / `400` |
 | PUT | `/:id/events/:eventId` | admin/game_master | те саме, що й POST | `200 { event }` / `404` |
 | DELETE | `/:id/events/:eventId` | admin/game_master | — | `200 { message }` / `404` |
+| POST | `/:id/events/:eventId/participants` | admin/game_master | `{ entry_id }` | `201 { event_id, entry_id }` / `400` без `entry_id` / `404` якщо подія не в цьому календарі |
+| DELETE | `/:id/events/:eventId/participants/:entryId` | admin/game_master | — | `200 { message }` / `404` |
+| GET | `/events/by-participant/:entryId` | так | — | `200 { events: [...] }` — події з усіх видимих календарів, де `entryId` — учасник; кожна несе `calendar_name`, `current_era_name`/`previous_era_name`, `month_name`/`end_month_name` |
 
 Примітки:
 - `campaign_id` відсутній/`null` → глобальна лор-подія, видима у будь-якій кампанії з цим календарем. Заданий → подія належить лише цій кампанії.
@@ -76,7 +79,8 @@
 - `color` — hex-формат `#rrggbb`; `recurrence` — одне з `none`/`yearly`/`monthly`/`weekly` (за замовчуванням `none`); `day`/`end_day`, якщо задані, мають бути додатними.
 - `month_id`/`end_month_id`, якщо задані, мають належати тому самому календарю (`:id` з URL) — `400`, якщо це місяць іншого календаря. `year`/`month_id`/`day` незалежно nullable — подію можна прив'язати до часу настільки точно, наскільки відомо ГМу; заповнення `end_year`/`end_month_id`/`end_day` перетворює точкову подію на тривалу.
 - `location_id` (крос-сервісний UUID → `maps.locations.id`, без FK) і `region` (вільний текст, до 200 символів) взаємовиключні — `400`, якщо задані обидва.
-- `participant_ids` — масив крос-сервісних UUID (`compendium.compendium_entries.id`, НІПи чи істоти); повна заміна набору учасників події при кожному `POST`/`PUT` (порожній масив чи відсутність поля прибирає всіх).
+- `participant_ids` — масив крос-сервісних UUID (`npcs.npcs.id` / `bestiary.creatures.id`, НІПи чи істоти); повна заміна набору учасників події при кожному `POST`/`PUT` (порожній масив чи відсутність поля прибирає всіх).
+- `/participants` — точкове додавання/видалення одного учасника (сторінка НІПа в сервісі npcs), без повної заміни набору через `PUT`. `by-participant`: `admin`/`game_master` бачать усі події (приватні й кампанійні), решта — лише публічні глобальні (`campaign_id IS NULL`), і лише з календарів, які їм видимі (`is_private = false` або власний; адмін — усі).
 
 Усі неочікувані помилки моделі (наприклад, збій БД) не перехоплюються контролерами — вони прокидаються далі у глобальний error-handler (`err.statusCode || 500`), визначений у `src/index.js`.
 
@@ -90,7 +94,7 @@
 - `chronology.calendar_seasons` — сезони (`calendar_id`, `name`, `start_month_id` → `calendar_months.id`, `start_day`, `color`, `bg_image_url`).
 - `chronology.calendar_moons` — супутники (`calendar_id`, `name`, `cycle_length`, `shift`, `color`).
 - `chronology.calendar_events` — лор-/сесійні події (`calendar_id`, `campaign_id` — нативно nullable, крос-сервісний UUID без FK на `campaigns.campaigns.id`, як і скрізь у репо для крос-сервісних посилань, — `name`, `description`, `color`, `is_public`, `year`, `month_id` → `calendar_months.id`, `day`, `recurrence` — ENUM `chronology.event_recurrence` (`none`/`yearly`/`monthly`/`weekly`), `location_id` — крос-сервісний UUID → `maps.locations.id`, `region`, `end_year`, `end_month_id` → `calendar_months.id`, `end_day`; `location_id`/`region` взаємовиключні через `CHECK`).
-- `chronology.calendar_event_participants` — учасники події (`event_id` → `calendar_events.id` `ON DELETE CASCADE`, `entry_id` — крос-сервісний UUID → `compendium.compendium_entries.id`, складений `PRIMARY KEY (event_id, entry_id)`).
+- `chronology.calendar_event_participants` — учасники події (`event_id` → `calendar_events.id` `ON DELETE CASCADE`, `entry_id` — крос-сервісний UUID → `npcs.npcs.id` або `bestiary.creatures.id` (до `86-split-compendium.sql` — `compendium.compendium_entries.id`; id збережено), складений `PRIMARY KEY (event_id, entry_id)`).
 
 Усі дочірні таблиці мають `calendar_id` з `ON DELETE CASCADE` — видалення календаря прибирає всю його структуру. `calendar_seasons.start_month_id`, `calendar_events.month_id`/`end_month_id` теж каскадні: видалення місяця прибирає сезони й події, що на нього посилаються.
 

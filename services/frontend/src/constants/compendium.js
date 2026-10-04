@@ -1,15 +1,6 @@
-// NPC vs Creature — the two entity_type values compendium_entries can hold
-// (Single Table Inheritance, see database/migrations/44-compendium-service.sql).
-// No per-type accent color — a type is conveyed by its label, not a hue
-// (colors are reserved for archetype badges, which map to one specific archetype).
-export const ENTITY_TYPES = {
-  npc:      { label: 'НІП', newLabel: 'Новий НІП' },
-  creature: { label: 'Істота', newLabel: 'Нова істота' },
-};
-
-// Column names on compendium_entries — the same 5 attributes the skill dice
-// ladder in the backend DTO (services/compendium/src/dto/entry.dto.js) is
-// keyed by.
+// Column names on npcs.npcs / bestiary.creatures — the same 5 attributes the
+// skill dice ladder in the backend DTO (services/{npcs,bestiary}/src/dto/
+// stat-block.dto.js) is keyed by.
 export const ATTRIBUTE_LABELS = {
   dexterity: 'Спритність',
   body: 'Тілобудова',
@@ -23,7 +14,7 @@ export const ATTRIBUTE_LABELS = {
 export const HEALTH_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
 
 // NPC-only gender field — fixed list, matches the backend CHECK constraint
-// on compendium_entries.gender (74-compendium-races.sql/75-compendium-factions.sql).
+// on npcs.npcs.gender.
 export const GENDER_OPTIONS = {
   male: 'Чоловіча',
   female: 'Жіноча',

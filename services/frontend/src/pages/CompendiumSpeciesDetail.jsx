@@ -24,7 +24,7 @@ export default function CompendiumSpeciesDetail() {
     setLoading(true);
     Promise.all([compendiumApi.getSpecies(id), compendiumApi.listSubspecies(id)])
       .then(([s, sub]) => { if (!cancelled) { setSpecies(s); setSubspecies(sub); } })
-      .catch(() => { if (!cancelled) navigate('/compendium/taxonomy', { replace: true }); })
+      .catch(() => { if (!cancelled) navigate('/compendium', { replace: true }); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [id]);
@@ -34,7 +34,7 @@ export default function CompendiumSpeciesDetail() {
     setDeleting(true);
     try {
       await compendiumApi.removeSpecies(id);
-      navigate('/compendium/taxonomy');
+      navigate('/compendium');
     } catch {
       setDeleting(false);
     }
@@ -63,7 +63,7 @@ export default function CompendiumSpeciesDetail() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <Link to="/compendium/taxonomy" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
+      <Link to="/compendium" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Народи та види
       </Link>
 

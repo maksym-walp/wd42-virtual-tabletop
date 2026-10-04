@@ -6,9 +6,6 @@ const speciesRoutes = require('./routes/species.routes');
 const subspeciesRoutes = require('./routes/subspecies.routes');
 const raceRoutes = require('./routes/race.routes');
 const peopleRoutes = require('./routes/people.routes');
-const factionRoutes = require('./routes/faction.routes');
-const entryRoutes = require('./routes/entry.routes');
-const collectionRoutes = require('./routes/collection.routes');
 
 const app = express();
 
@@ -24,9 +21,6 @@ app.use('/species', speciesRoutes);
 app.use('/subspecies', subspeciesRoutes);
 app.use('/races', raceRoutes);
 app.use('/peoples', peopleRoutes);
-app.use('/factions', factionRoutes);
-app.use('/entries', entryRoutes);
-app.use('/collections', collectionRoutes);
 
 app.use((err, req, res, next) => {
   const status = err.statusCode || 500;

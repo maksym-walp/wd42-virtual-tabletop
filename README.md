@@ -26,7 +26,9 @@
     ├── campaigns/                 # порт 3010 — кампанії ГМ/гравців
     ├── media/                     # порт 3012 — завантаження зображень
     ├── maps/                      # порт 3013 — інтерактивні мапи та локації
-    ├── compendium/                 # порт 3014 — НІП та бестіарій
+    ├── compendium/                 # порт 3014 — вікі: види/підвиди, раси/народи
+    ├── bestiary/                   # порт 3016 — бестіарій (істоти)
+    ├── npcs/                       # порт 3017 — НІПи та фракції
     ├── chronology/                 # порт 3015 — власні фентезійні календарі та події
     └── frontend/                 # порт 5173 (dev) — React/Vite SPA
 ```
@@ -47,7 +49,9 @@
 - [abilities](services/abilities/README.md) — вміння та маневри
 - [campaigns](services/campaigns/README.md) — кампанії ГМ/гравців
 - [media](services/media/README.md) — завантаження зображень
-- [compendium](services/compendium/README.md) — НІП та бестіарій
+- [compendium](services/compendium/README.md) — вікі: види/підвиди, раси/народи
+- [bestiary](services/bestiary/README.md) — бестіарій (істоти)
+- [npcs](services/npcs/README.md) — НІПи, фракції, звʼязки
 - [chronology](services/chronology/README.md) — власні фентезійні календарі та події
 
 Nginx проксує запити з порту 80:
@@ -62,6 +66,8 @@ Nginx проксує запити з порту 80:
 - `/api/campaigns/` → campaigns
 - `/api/maps/` → maps
 - `/api/compendium/` → compendium
+- `/api/bestiary/` → bestiary
+- `/api/npcs/` → npcs
 - `/api/media/` → media (завантаження файлів; `client_max_body_size 12m` лише тут)
 - `/uploads/` → статика з volume `media_data`, повз бекенд
 - `/` → frontend
@@ -98,7 +104,7 @@ docker compose down                         # зупинити все (дода�
 
 Потрібен Node.js 20+ і локальний/віддалений PostgreSQL, змінні оточення — з `.env`.
 
-Для кожного бекенд-сервіса (`auth`, `user-profile`, `spellbook`, `skill-tree`, `character-sheet`, `dice-roller`, `equipment`, `abilities`, `campaigns`, `media`, `maps`, `compendium`):
+Для кожного бекенд-сервіса (`auth`, `user-profile`, `spellbook`, `skill-tree`, `character-sheet`, `dice-roller`, `equipment`, `abilities`, `campaigns`, `media`, `maps`, `compendium`, `bestiary`, `npcs`):
 ```bash
 cd services/<service>
 npm install
@@ -122,13 +128,13 @@ npm run preview    # перегляд прод-збірки локально
 
 Запуск тестів одного сервіса:
 ```bash
-cd services/<service>   # auth | user-profile | spellbook | skill-tree | character-sheet | dice-roller | equipment | abilities | campaigns | media | maps | compendium
+cd services/<service>   # auth | user-profile | spellbook | skill-tree | character-sheet | dice-roller | equipment | abilities | campaigns | media | maps | compendium | bestiary | npcs
 npm test
 ```
 
 Прогнати тести всіх бекенд-сервісів послідовно:
 ```bash
-for s in auth user-profile spellbook skill-tree character-sheet dice-roller equipment abilities campaigns media maps compendium; do
+for s in auth user-profile spellbook skill-tree character-sheet dice-roller equipment abilities campaigns media maps compendium bestiary npcs; do
   (cd services/$s && npm test) || break
 done
 ```

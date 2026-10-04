@@ -1,4 +1,4 @@
-// Species/subspecies/entries: owner + public + role-based, mirroring the
+// Species/subspecies/races/peoples: owner + public + role-based, mirroring the
 // maps service's access pattern (created_by + is_public).
 
 function isAdmin(user) {
