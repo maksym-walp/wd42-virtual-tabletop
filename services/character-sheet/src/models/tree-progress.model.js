@@ -1,5 +1,4 @@
 const pool = require('../config/db');
-const CharacterModel = require('./character.model');
 
 // Expand a node's grant links (mode='grant') into concrete catalog ids and
 // insert them into the character's sheet. Collections are resolved to their
@@ -69,10 +68,12 @@ const TreeProgressModel = {
     return rows;
   },
 
-  // Prerequisite + affordability check. Points are only mandatory when the
-  // node has no narrative alternative (or require_both is set) — a purely
-  // narrative unlock never spends experience.
-  async canUnlock(characterId, nodeId) {
+  // Prerequisite + affordability check. experience_points is a plain
+  // balance that only the tree spends. Points are charged when the node has
+  // no narrative alternative (or require_both is set), or when the player
+  // picked the points route (`via` !== 'narrative') — a narrative unlock
+  // never spends experience. Returns { ok, spend } on success.
+  async canUnlock(characterId, nodeId, via) {
     const { rows: [node] } = await pool.query(
       `SELECT id, cost, require_both, narrative_condition FROM skill_tree.nodes WHERE id = $1`,
       [nodeId]
@@ -97,19 +98,25 @@ const TreeProgressModel = {
     }
 
     const hasNarrative = (node.narrative_condition || []).length > 0;
-    const pointsMandatory = node.cost > 0 && (!hasNarrative || node.require_both);
-    if (pointsMandatory) {
-      const summary = await CharacterModel.experienceSummary(characterId);
-      if (summary && node.cost > summary.remaining) {
+    const pointsMandatory = !hasNarrative || node.require_both;
+    const spend = node.cost > 0 && (pointsMandatory || via !== 'narrative') ? node.cost : 0;
+    if (spend > 0) {
+      const { rows: [char] } = await pool.query(
+        `SELECT experience_points FROM character_sheet.characters WHERE id = $1`,
+        [characterId]
+      );
+      if (!char || spend > char.experience_points) {
         return { ok: false, status: 403, message: 'Недостатньо пунктів досвіду' };
       }
     }
-    return { ok: true };
+    return { ok: true, spend };
   },
 
-  // Unlock a node and apply any grant-mode links, atomically. Returns
-  // { progress, granted } — progress is null when it was already unlocked.
-  async unlock(characterId, nodeId) {
+  // Unlock a node, charge `spend` experience and apply any grant-mode links,
+  // atomically. Returns { progress, granted } — progress is null when it was
+  // already unlocked (nothing charged), and `insufficient` is set when the
+  // balance dropped below `spend` since canUnlock (nothing changed).
+  async unlock(characterId, nodeId, spend = 0) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -121,6 +128,18 @@ const TreeProgressModel = {
         [characterId, nodeId]
       );
       const progress = rows[0] || null;
+      if (progress && spend > 0) {
+        const { rowCount } = await client.query(
+          `UPDATE character_sheet.characters
+              SET experience_points = experience_points - $2, updated_at = NOW()
+            WHERE id = $1 AND experience_points >= $2`,
+          [characterId, spend]
+        );
+        if (rowCount === 0) {
+          await client.query('ROLLBACK');
+          return { progress: null, granted: { abilities: [], spells: [] }, insufficient: true };
+        }
+      }
       const granted = progress
         ? await applyGrants(client, characterId, nodeId)
         : { abilities: [], spells: [] };

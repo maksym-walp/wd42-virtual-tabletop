@@ -18,14 +18,12 @@ const TREE_NODE_ICON_SIZE = TREE_NODE_R * 1.3;
 // (TreeTab) and in the last step of character creation. Read-only viewer of
 // the GM-authored graph (pages/SkillTree.jsx) plus per-character unlocking.
 //
-// Experience is a single wallet: `experienceTotal` minus skill spend
-// (`experienceSkillSpent`, computed server-side) minus the cost of unlocked
-// non-root nodes (computed here so it updates the instant a node opens).
+// Experience is a plain balance (`experiencePoints`) spent only here: a
+// points unlock decrements it server-side, a narrative unlock is free.
 export default function DevelopmentTree({
   archetype,
   tree = [],
-  experienceTotal = 0,
-  experienceSkillSpent = 0,
+  experiencePoints = 0,
   is_owner = false,
   onUnlock,
   onExperienceChange,
@@ -87,10 +85,7 @@ export default function DevelopmentTree({
   const rootNodeIds = new Set(nodes.filter((n) => n.is_root).map((n) => n.id));
   const unlockedIds = new Set([...(tree || []).map((t) => t.node_id), ...rootNodeIds]);
 
-  const treeSpent = nodes
-    .filter((n) => unlockedIds.has(n.id) && !n.is_root)
-    .reduce((s, n) => s + (n.cost || 0), 0);
-  const remaining = experienceTotal - experienceSkillSpent - treeSpent;
+  const remaining = experiencePoints;
 
   const checkCanUnlock = (node) => {
     if (unlockedIds.has(node.id)) return { unlocked: true };
@@ -121,8 +116,8 @@ export default function DevelopmentTree({
     return { unlocked: false, prereqsMet, points, narrative, bothAvail };
   };
 
-  const handleUnlock = async (nodeId) => {
-    await onUnlock?.(nodeId);
+  const handleUnlock = async (nodeId, via) => {
+    await onUnlock?.(nodeId, via);
     setSelectedNode(null);
   };
 
@@ -181,17 +176,12 @@ export default function DevelopmentTree({
         ) : (
           <span
             className={`font-semibold text-gold ${is_owner && onExperienceChange ? 'cursor-pointer underline decoration-dotted' : 'cursor-default'}`}
-            onClick={() => { if (!is_owner || !onExperienceChange) return; setBudgetDraft(String(experienceTotal)); setEditingBudget(true); }}
+            onClick={() => { if (!is_owner || !onExperienceChange) return; setBudgetDraft(String(experiencePoints)); setEditingBudget(true); }}
             title={is_owner && onExperienceChange ? 'Натисни щоб змінити' : undefined}
           >
-            {experienceTotal}
+            {experiencePoints}
           </span>
         )}
-        {experienceSkillSpent > 0 && (
-          <span className="text-border">·<span className="ml-2 text-text-dim">на навички <strong className="text-danger">{experienceSkillSpent}</strong></span></span>
-        )}
-        <span className="text-border">·<span className="ml-2 text-text-dim">на дерево <strong className="text-danger">{treeSpent}</strong></span></span>
-        <span className="text-border">·<span className="ml-2 text-text-dim">залишилось <strong className={remaining >= 0 ? 'text-sage' : 'text-danger'}>{remaining}</strong></span></span>
       </div>
 
       {/* Canvas */}
@@ -314,7 +304,7 @@ export default function DevelopmentTree({
             unlocked={unlockedIds.has(selectedNode.id)}
             canUnlock={checkCanUnlock(selectedNode)}
             is_owner={is_owner}
-            onUnlock={() => handleUnlock(selectedNode.id)}
+            onUnlock={(via) => handleUnlock(selectedNode.id, via)}
             onClose={() => setSelectedNode(null)}
             catalog={catalog}
           />
@@ -473,17 +463,17 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
       {is_owner && (
         <div className="mt-1 flex flex-wrap gap-2">
           {!unlocked && canUnlock.bothAvail && (
-            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
+            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={() => onUnlock('points')}>
               Витратити {costLabel} + наратив
             </button>
           )}
           {!unlocked && canUnlock.points && (
-            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={onUnlock}>
+            <button className="min-h-9 rounded border border-sage/40 bg-sage/15 px-3 py-1.5 text-sm font-semibold text-sage" onClick={() => onUnlock('points')}>
               Витратити {costLabel}
             </button>
           )}
           {!unlocked && canUnlock.narrative && (
-            <button className="min-h-9 rounded border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent" onClick={onUnlock}>
+            <button className="min-h-9 rounded border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent" onClick={() => onUnlock('narrative')}>
               Відкрити наративно
             </button>
           )}

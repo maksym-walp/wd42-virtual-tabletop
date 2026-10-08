@@ -64,17 +64,30 @@ describe('TreeProgressController.unlock', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Вузол вже відкрито' });
   });
 
-  it('201s with the new progress row and granted items on success', async () => {
+  it('403s when the balance dropped below the spend mid-unlock', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    TreeProgressModel.canUnlock.mockResolvedValue({ ok: true });
-    const granted = { abilities: [{ ability_id: 'a1' }], spells: [] };
-    TreeProgressModel.unlock.mockResolvedValue({ progress: { id: 'p1', node_id: 'n1' }, granted });
+    TreeProgressModel.canUnlock.mockResolvedValue({ ok: true, spend: 3 });
+    TreeProgressModel.unlock.mockResolvedValue({ progress: null, granted: { abilities: [], spells: [] }, insufficient: true });
     const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
     const res = mockRes();
 
     await TreeProgressController.unlock(req, res);
 
-    expect(TreeProgressModel.unlock).toHaveBeenCalledWith('c1', 'n1');
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('201s with the new progress row and granted items on success', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    TreeProgressModel.canUnlock.mockResolvedValue({ ok: true, spend: 2 });
+    const granted = { abilities: [{ ability_id: 'a1' }], spells: [] };
+    TreeProgressModel.unlock.mockResolvedValue({ progress: { id: 'p1', node_id: 'n1' }, granted });
+    const req = mockReq({ params: { id: 'c1', nodeId: 'n1' }, body: { via: 'points' } });
+    const res = mockRes();
+
+    await TreeProgressController.unlock(req, res);
+
+    expect(TreeProgressModel.canUnlock).toHaveBeenCalledWith('c1', 'n1', 'points');
+    expect(TreeProgressModel.unlock).toHaveBeenCalledWith('c1', 'n1', 2);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ progress: { id: 'p1', node_id: 'n1' }, granted });
   });

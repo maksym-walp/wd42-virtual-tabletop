@@ -138,35 +138,6 @@ const CharacterModel = {
   // Authorization (owner or campaign GM) is fully resolved by the controller
   // (authorizeCharacterWrite) before this is called, so no user_id gate here —
   // same convention as every child-table model (skill.model.js, equipment.model.js, ...).
-  // Single experience wallet + derived spend. Skill spend uses the same
-  // 5-per-level rule the sheet shows (4 progress circles + the "+1" action);
-  // tree spend is the sum of unlocked non-root node costs. base_value snapshots
-  // a skill's value after character creation (point-buy is its own pool).
-  async experienceSummary(characterId) {
-    const { rows: [char] } = await pool.query(
-      `SELECT experience_points FROM character_sheet.characters WHERE id = $1`,
-      [characterId]
-    );
-    if (!char) return null;
-
-    const { rows: [{ tree_spent }] } = await pool.query(
-      `SELECT COALESCE(SUM(n.cost), 0)::int AS tree_spent
-         FROM character_sheet.tree_progress tp
-         JOIN skill_tree.nodes n ON n.id = tp.node_id
-        WHERE tp.character_id = $1 AND n.is_root = false`,
-      [characterId]
-    );
-    const { rows: [{ skill_spent }] } = await pool.query(
-      `SELECT COALESCE(SUM(GREATEST(value - base_value, 0) * 5 + progress_marks), 0)::int AS skill_spent
-         FROM character_sheet.skills WHERE character_id = $1`,
-      [characterId]
-    );
-
-    const total = char.experience_points;
-    const spent = tree_spent + skill_spent;
-    return { total, spent, remaining: total - spent, tree_spent, skill_spent };
-  },
-
   async update(id, data) {
     const {
       name, is_public, backstory, notes,

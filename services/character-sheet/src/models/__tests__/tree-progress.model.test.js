@@ -1,8 +1,6 @@
 jest.mock('../../config/db');
-jest.mock('../character.model');
 
 const pool = require('../../config/db');
-const CharacterModel = require('../character.model');
 const TreeProgressModel = require('../tree-progress.model');
 
 let client;
@@ -70,6 +68,47 @@ describe('TreeProgressModel.unlock', () => {
     expect(result.granted.abilities).toEqual([{ character_id: 'c1', ability_id: 'a1' }]);
   });
 
+  it('charges the spend on a fresh unlock', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('INSERT INTO character_sheet.tree_progress')) return Promise.resolve({ rows: [{ id: 'p1' }] });
+      if (sql.includes('UPDATE character_sheet.characters')) return Promise.resolve({ rows: [], rowCount: 1 });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await TreeProgressModel.unlock('c1', 'n1', 3);
+
+    expect(result.progress).toEqual({ id: 'p1' });
+    const update = client.query.mock.calls.find(([sql]) => sql.includes('UPDATE character_sheet.characters'));
+    expect(update[1]).toEqual(['c1', 3]);
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq[seq.length - 1]).toBe('COMMIT');
+  });
+
+  it('rolls back (no grants) when the balance no longer covers the spend', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('INSERT INTO character_sheet.tree_progress')) return Promise.resolve({ rows: [{ id: 'p1' }] });
+      if (sql.includes('UPDATE character_sheet.characters')) return Promise.resolve({ rows: [], rowCount: 0 });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await TreeProgressModel.unlock('c1', 'n1', 3);
+
+    expect(result).toEqual({ progress: null, granted: { abilities: [], spells: [] }, insufficient: true });
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq).toContain('ROLLBACK');
+    expect(seq).not.toContain('COMMIT');
+    expect(seq.some((q) => q.includes('node_grants'))).toBe(false);
+  });
+
+  it('does not charge when the node was already unlocked', async () => {
+    client.query.mockResolvedValue({ rows: [] });
+
+    await TreeProgressModel.unlock('c1', 'n1', 3);
+
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq.some((q) => q.includes('UPDATE character_sheet.characters'))).toBe(false);
+  });
+
   it('rolls back and rethrows on failure', async () => {
     client.query.mockImplementation((sql) => {
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return Promise.resolve();
@@ -104,22 +143,45 @@ describe('TreeProgressModel.canUnlock', () => {
     pool.query
       .mockResolvedValueOnce({ rows: [{ id: 'n2', cost: 5, require_both: false, narrative_condition: [] }] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
-    CharacterModel.experienceSummary.mockResolvedValue({ remaining: 2 });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ experience_points: 2 }] });
 
     const result = await TreeProgressModel.canUnlock('c1', 'n2');
     expect(result).toEqual({ ok: false, status: 403, message: 'Недостатньо пунктів досвіду' });
   });
 
-  it('ok when a narrative alternative exists even if points are short', async () => {
+  it('charges the node cost when points are mandatory and affordable', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: 'n2', cost: 5, require_both: false, narrative_condition: [] }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ experience_points: 7 }] });
+
+    const result = await TreeProgressModel.canUnlock('c1', 'n2');
+    expect(result).toEqual({ ok: true, spend: 5 });
+  });
+
+  it('narrative route spends nothing even if points are short', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [{ id: 'n2', cost: 5, require_both: false, narrative_condition: ['do a thing'] }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
-    const result = await TreeProgressModel.canUnlock('c1', 'n2');
-    expect(result).toEqual({ ok: true });
-    expect(CharacterModel.experienceSummary).not.toHaveBeenCalled();
+    const result = await TreeProgressModel.canUnlock('c1', 'n2', 'narrative');
+    expect(result).toEqual({ ok: true, spend: 0 });
+    expect(pool.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('points route on a node with a narrative alternative still charges', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: 'n2', cost: 5, require_both: false, narrative_condition: ['do a thing'] }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ experience_points: 1 }] });
+
+    const result = await TreeProgressModel.canUnlock('c1', 'n2', 'points');
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(403);
   });
 
   it('ok when prerequisites are met and the node is free', async () => {
@@ -129,7 +191,7 @@ describe('TreeProgressModel.canUnlock', () => {
       .mockResolvedValueOnce({ rows: [{ node_id: 'n1' }] });
 
     const result = await TreeProgressModel.canUnlock('c1', 'n2');
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, spend: 0 });
   });
 });
 

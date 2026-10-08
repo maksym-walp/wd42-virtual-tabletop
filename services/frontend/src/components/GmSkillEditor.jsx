@@ -3,8 +3,8 @@ import Sheet from './ui/Sheet';
 import Button from './ui/Button';
 
 // GM-only bulk editor: every skill's value and progress circles, all at
-// once, bypassing the cost formula entirely (matches the backend's existing
-// trust model — SkillModel.patch/bulkUpdate just clamp, no XP check). Only
+// once, bypassing the player's edit menu entirely (matches the backend's
+// trust model — SkillModel.patch/bulkUpdate just clamp). Only
 // reachable when the sheet already told us this viewer is a GM for THIS
 // character (authorizeCharacterWrite scopes that to characters attached to
 // one of their campaigns — see character.controller.js's is_gm).

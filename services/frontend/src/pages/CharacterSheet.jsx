@@ -18,7 +18,6 @@ import {
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import DevelopmentTree from '../components/DevelopmentTree';
-import ExperienceMenu from '../components/ExperienceMenu';
 import GmSkillEditor from '../components/GmSkillEditor';
 import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
@@ -90,7 +89,6 @@ export default function CharacterSheet({ publicView = false }) {
   const [editingDefense, setEditingDefense]         = useState(false);
   const [defenseBonusDraft, setDefenseBonusDraft]   = useState(0);
   const [editingInspiration, setEditingInspiration] = useState(false);
-  const [editingExperience, setEditingExperience] = useState(false);
   const [editingAllSkills, setEditingAllSkills] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
 
@@ -205,13 +203,13 @@ export default function CharacterSheet({ publicView = false }) {
     }));
   };
 
-  const unlockTreeNode = async (nodeId) => {
-    const { progress, granted } = await characterApi.unlockNode(id, nodeId);
+  const unlockTreeNode = async (nodeId, via) => {
+    const { progress, granted } = await characterApi.unlockNode(id, nodeId, via);
     if (progress) {
       setData(prev => (prev ? { ...prev, tree: [...(prev.tree || []), progress] } : prev));
     }
-    // A "видавати автоматично" link added catalog entries, and any unlock
-    // changed remaining experience — pull a fresh sheet to stay consistent.
+    // A "видавати автоматично" link added catalog entries, and a points
+    // unlock decremented experience — pull a fresh sheet to stay consistent.
     const grantedAnything = granted && (granted.abilities?.length || granted.spells?.length);
     if (progress || grantedAnything) {
       try {
@@ -221,7 +219,7 @@ export default function CharacterSheet({ publicView = false }) {
           tree: fresh.tree,
           abilities: fresh.abilities,
           spells: fresh.spells,
-          experience: fresh.experience,
+          character: { ...prev.character, experience_points: fresh.character.experience_points },
         } : prev));
       } catch { /* keep optimistic state */ }
     }
@@ -295,57 +293,33 @@ export default function CharacterSheet({ publicView = false }) {
 
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
 
-  // Single experience wallet. Skill spend is derived here (updates instantly on
-  // a circle click); tree spend comes from the server summary and refreshes
-  // after every unlock. See DevelopmentTree for the tree-side breakdown.
-  const experienceTotal   = c.experience_points || 0;
-  const skillExperienceSpent = skills.reduce(
-    (sum, s) => sum + Math.max(0, (s.value - (s.base_value ?? s.value))) * (SKILL_PROGRESS_MARKS + 1) + (s.progress_marks || 0),
-    0,
-  );
-  const treeExperienceSpent  = data.experience?.tree_spent ?? 0;
-  const experienceRemaining  = experienceTotal - skillExperienceSpent - treeExperienceSpent;
-
-  // Shared by the on-card circle stepper, the "Пункти досвіду" modal's own
-  // stepper (manual nat-1/20 path lives there too), and the roll-triggered
-  // nat-1/20 auto-bump — one place that owns "what a ±1 circle click does".
-  const adjustSkillProgress = (skillKey, delta) => {
-    const s = skillMap[skillKey];
-    if (!s) return;
-    if (delta > 0 && experienceRemaining <= 0) return;
-    const next = Math.max(0, Math.min(SKILL_PROGRESS_MARKS, (s.progress_marks || 0) + delta));
-    if (next === s.progress_marks) return;
-    patchSkill(skillKey, { progress_marks: next });
-  };
-  // The actual "spend XP to raise a skill" purchase — only reachable from
-  // the experience modal now, never from the card (see SkillRow).
-  const levelUpSkill = (skillKey) => {
-    const s = skillMap[skillKey];
-    if (!s || s.progress_marks !== SKILL_PROGRESS_MARKS || s.value >= 12 || experienceRemaining <= 0) return;
-    patchSkill(skillKey, { value: s.value + 1, progress_marks: 0 });
-  };
   // Free circle bump (critical success/failure, narrative growth): moves
-  // one progress mark, then compensates the character's total XP by the
-  // same delta so `experienceRemaining` (total - spent) doesn't move —
-  // the mark itself still counts in the spend formula, but nothing is
-  // actually spent or refunded from the player's budget.
-  const shiftSkillMarkFree = (skillKey, delta) => {
+  // one progress mark, costs nothing.
+  const shiftSkillMark = (skillKey, delta) => {
     const s = skillMap[skillKey];
     if (!s) return;
     const current = s.progress_marks || 0;
     const next = Math.max(0, Math.min(SKILL_PROGRESS_MARKS, current + delta));
     if (next === current) return;
     patchSkill(skillKey, { progress_marks: next });
-    patchCharacter({ experience_points: experienceTotal + (next - current) });
   };
-  // Single dispatcher behind each skill's edit menu — all four actions
-  // move exactly one progress mark, never the skill's value itself
-  // (leveling up stays the ExperienceMenu's dedicated action).
+  // Spends the character's game inspiration on one progress mark — or, with
+  // every circle already marked, raises the skill itself by one.
+  const improveWithInspiration = (skillKey) => {
+    const s = skillMap[skillKey];
+    if (!s || c.inspiration_used) return;
+    const marks = s.progress_marks || 0;
+    if (marks < SKILL_PROGRESS_MARKS) patchSkill(skillKey, { progress_marks: marks + 1 });
+    else if (s.value < 12) patchSkill(skillKey, { value: s.value + 1, progress_marks: 0 });
+    else return;
+    patchCharacter({ inspiration_used: true });
+  };
+  // Single dispatcher behind each skill's edit menu.
   const handleSkillAction = (skillKey, action) => {
-    if (action === 'crit_success') return shiftSkillMarkFree(skillKey, 1);
-    if (action === 'crit_failure') return shiftSkillMarkFree(skillKey, -1);
-    if (action === 'narrative')    return shiftSkillMarkFree(skillKey, 1);
-    if (action === 'spend_xp')     return adjustSkillProgress(skillKey, 1);
+    if (action === 'crit_success') return shiftSkillMark(skillKey, 1);
+    if (action === 'crit_failure') return shiftSkillMark(skillKey, -1);
+    if (action === 'narrative')    return shiftSkillMark(skillKey, 1);
+    if (action === 'inspiration')  return improveWithInspiration(skillKey);
   };
 
   const bulkPatchSkills = async (updates) => {
@@ -513,7 +487,7 @@ export default function CharacterSheet({ publicView = false }) {
             charLevels={charLevels}
             is_owner={is_owner}
             is_gm={is_gm}
-            canSpendExperience={experienceRemaining > 0}
+            canUseInspiration={!c.inspiration_used}
             onAction={handleSkillAction}
             onEditAll={() => setEditingAllSkills(true)}
             initiativeDie={INITIATIVE_DIE[charLevels.agility]}
@@ -562,12 +536,6 @@ export default function CharacterSheet({ publicView = false }) {
                       <Pencil size={12} />
                     </button>
                   )}
-                />
-                <BannerBox
-                  label="ПУНКТИ ДОСВІДУ"
-                  sub={`${experienceRemaining} / ${experienceTotal}`}
-                  accent={experienceRemaining > 0}
-                  onClick={(is_owner || is_gm) ? () => setEditingExperience(true) : undefined}
                 />
                 <BannerBox
                   label="МАГІЧНА ЕНЕРГІЯ"
@@ -659,8 +627,7 @@ export default function CharacterSheet({ publicView = false }) {
           <DevelopmentTree
             archetype={c.archetype}
             tree={data.tree || []}
-            experienceTotal={experienceTotal}
-            experienceSkillSpent={skillExperienceSpent}
+            experiencePoints={c.experience_points || 0}
             is_owner={is_owner}
             onUnlock={unlockTreeNode}
             onExperienceChange={(v) => patchCharacter({ experience_points: v })}
@@ -749,24 +716,6 @@ export default function CharacterSheet({ publicView = false }) {
             </div>
           </div>
         </Sheet>
-      )}
-
-      {editingExperience && (
-        <ExperienceMenu
-          open
-          onClose={() => setEditingExperience(false)}
-          is_gm={is_gm}
-          experienceTotal={experienceTotal}
-          skillExperienceSpent={skillExperienceSpent}
-          treeExperienceSpent={treeExperienceSpent}
-          experienceRemaining={experienceRemaining}
-          skillMap={skillMap}
-          onSetExperience={(v) => patchCharacter({ experience_points: v })}
-          onAddExperience={(delta) => patchCharacter({ experience_points: experienceTotal + delta })}
-          onProgressAdjust={adjustSkillProgress}
-          onLevelUp={levelUpSkill}
-          onGoToTree={() => { setEditingExperience(false); setTab('tree'); }}
-        />
       )}
 
       {editingAllSkills && (
@@ -936,7 +885,7 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 // ── SkillsTab ─────────────────────────────────────────────────────────────────
 
 function SkillsTab({
-  characteristics, skillMap, charLevels, is_owner, is_gm, canSpendExperience, onAction, onEditAll,
+  characteristics, skillMap, charLevels, is_owner, is_gm, canUseInspiration, onAction, onEditAll,
   health, extras, initiativeDie, heroic, onHeroicChange,
 }) {
   // Особливі значення в шапках характеристик: кубик ініціативи кидається
@@ -978,14 +927,6 @@ function SkillsTab({
 
   return (
     <div className="flex flex-col gap-3">
-      {is_gm && (
-        <button
-          className="self-end rounded border border-border px-3 py-1.5 text-sm text-accent hover:bg-surface-hover"
-          onClick={onEditAll}
-        >
-          Редагувати навички персонажа
-        </button>
-      )}
       {/* Вузька колонка здоровʼя ліворуч; праворуч характеристики 3×2, де
           шоста клітинка — натхнення, магічна енергія й пасивний захист. */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[17rem_minmax(0,1fr)]">
@@ -1018,7 +959,7 @@ function SkillsTab({
                     progress={s.progress_marks}
                     is_owner={is_owner}
                     is_gm={is_gm}
-                    canSpendExperience={canSpendExperience}
+                    canUseInspiration={canUseInspiration}
                     onAction={action => onAction(skill.key, action)}
                   />
                 );
@@ -1027,7 +968,19 @@ function SkillsTab({
           </div>
         );
       })}
-      {extras && <div className="min-w-0">{extras}</div>}
+      {(extras || is_gm) && (
+        <div className="flex min-w-0 flex-col gap-3">
+          {extras}
+          {is_gm && (
+            <button
+              className="rounded border border-border px-3 py-1.5 text-sm text-accent hover:bg-surface-hover"
+              onClick={onEditAll}
+            >
+              Редагувати навички персонажа
+            </button>
+          )}
+        </div>
+      )}
       </div>
       </div>
     </div>
@@ -1047,13 +1000,13 @@ function LevelSquares({ level }) {
 // The four actions offered by a skill's edit menu — see handleSkillAction
 // in the parent CharacterSheet for what each one actually does.
 const SKILL_ACTIONS = [
-  { key: 'crit_success', label: 'Критичний успіх (+1)',      hint: 'не витрачає очки' },
-  { key: 'crit_failure', label: 'Критична невдача (−1)',     hint: 'не витрачає очки' },
-  { key: 'spend_xp',     label: 'Покращити за пункти досвіду' },
-  { key: 'narrative',    label: 'Покращити наративно',       hint: 'не витрачає пункти досвіду' },
+  { key: 'crit_success', label: 'Критичний успіх (+1)',      hint: 'нічого не витрачає' },
+  { key: 'crit_failure', label: 'Критична невдача (−1)',     hint: 'нічого не витрачає' },
+  { key: 'inspiration',  label: 'Покращити за ігрове натхнення' },
+  { key: 'narrative',    label: 'Покращити наративно',       hint: 'нічого не витрачає' },
 ];
 
-function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience = true, onAction }) {
+function SkillRow({ label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
   const die = modifierDie(value);
   const rollFormula = die === '—' ? '1d20' : `1d20+1${die}`;
   const isPlayerEditable = is_owner && !is_gm;
@@ -1066,7 +1019,7 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
 
   // A natural 1 or 20 on the d20 offers the same crit success/failure bump
   // the edit menu below exposes manually (for a physically-rolled die) —
-  // one progress mark, no XP spent or refunded.
+  // one progress mark, nothing spent.
   const handleRollResult = (result) => {
     const d20 = result?.groups?.find(g => g.type === 'dice' && g.sides === 20);
     const nat = d20?.rolls?.[0];
@@ -1074,7 +1027,7 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
     if (nat === 20 && progress >= SKILL_PROGRESS_MARKS) return;
     if (nat === 1 && progress <= 0) return;
     const verb = nat === 20 ? 'позначити' : 'стерти';
-    if (window.confirm(`Природна ${nat} на кидку навички «${label}» — ${verb} одне коло (без витрати пунктів досвіду)?`)) {
+    if (window.confirm(`Природна ${nat} на кидку навички «${label}» — ${verb} одне коло?`)) {
       onAction(nat === 20 ? 'crit_success' : 'crit_failure');
     }
   };
@@ -1121,7 +1074,11 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
                 (a.key === 'crit_success' && progress >= SKILL_PROGRESS_MARKS) ||
                 (a.key === 'crit_failure' && progress <= 0) ||
                 (a.key === 'narrative' && progress >= SKILL_PROGRESS_MARKS) ||
-                (a.key === 'spend_xp' && (progress >= SKILL_PROGRESS_MARKS || !canSpendExperience));
+                (a.key === 'inspiration' && (!canUseInspiration || (progress >= SKILL_PROGRESS_MARKS && value >= 12)));
+              const hint = a.key === 'inspiration'
+                ? (progress >= SKILL_PROGRESS_MARKS ? 'усі кола заповнені — підвищує навичку на 1' : 'позначає одне коло')
+                  + (canUseInspiration ? '' : ' · натхнення вже використано')
+                : a.hint;
               return (
                 <button
                   key={a.key}
@@ -1130,7 +1087,7 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
                   className="flex flex-col items-start gap-0.5 rounded-lg border border-border px-3.5 py-2.5 text-left text-sm font-semibold text-text disabled:cursor-not-allowed disabled:opacity-50 enabled:hover:bg-surface-hover"
                 >
                   <span>{a.label}</span>
-                  {a.hint && <span className="text-xs font-normal text-text-dim">{a.hint}</span>}
+                  {hint && <span className="text-xs font-normal text-text-dim">{hint}</span>}
                 </button>
               );
             })}

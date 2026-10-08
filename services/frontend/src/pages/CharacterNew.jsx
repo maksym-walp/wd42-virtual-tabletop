@@ -202,10 +202,13 @@ export default function CharacterNew() {
     characterApi.update(characterId, { experience_points: v }).catch(() => {});
   };
 
-  const unlockTreeNode = async (nodeId) => {
-    await characterApi.unlockNode(characterId, nodeId).catch(() => {});
+  const unlockTreeNode = async (nodeId, via) => {
+    await characterApi.unlockNode(characterId, nodeId, via).catch(() => {});
     const fresh = await characterApi.getSheet(characterId).catch(() => null);
-    if (fresh) setTreeProgress(fresh.tree || []);
+    if (fresh) {
+      setTreeProgress(fresh.tree || []);
+      setExperiencePoints(fresh.character.experience_points);
+    }
   };
 
   const finish = () => navigate(`/characters/${characterId}`);
@@ -680,8 +683,7 @@ function Step5Tree({ archetype, treeProgress, experiencePoints, onExperienceChan
       <DevelopmentTree
         archetype={archetype}
         tree={treeProgress}
-        experienceTotal={experiencePoints}
-        experienceSkillSpent={0}
+        experiencePoints={experiencePoints}
         is_owner
         onUnlock={onUnlock}
         onExperienceChange={onExperienceChange}

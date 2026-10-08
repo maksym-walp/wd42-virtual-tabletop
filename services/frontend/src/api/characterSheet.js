@@ -93,8 +93,9 @@ const characterApi = {
     return data.progress;
   },
 
-  async unlockNode(characterId, nodeId) {
-    const { data } = await api.post(`${BASE}/${characterId}/tree/${nodeId}`);
+  // via: 'points' | 'narrative' — a narrative unlock spends no experience.
+  async unlockNode(characterId, nodeId, via) {
+    const { data } = await api.post(`${BASE}/${characterId}/tree/${nodeId}`, { via });
     // { progress, granted: { abilities, spells } } — granted holds
     // any entries a "видавати автоматично" node link added to the sheet.
     return data;

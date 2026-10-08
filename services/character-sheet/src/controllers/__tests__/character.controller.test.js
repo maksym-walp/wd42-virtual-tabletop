@@ -37,7 +37,6 @@ function mockAggregationModels() {
   AbilityModel.findAll.mockResolvedValue(['ability-x']);
   RitualTrackerModel.findAll.mockResolvedValue(['ritual-x']);
   CharacterModel.findOwnerUsername.mockResolvedValue('ownerName');
-  CharacterModel.experienceSummary.mockResolvedValue({ total: 10, spent: 0, remaining: 10 });
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -229,7 +228,7 @@ describe('CharacterController.getPublicSheet', () => {
     expect(payload.equipment).toEqual(['equip-x']);
     expect(payload.abilities).toEqual(['ability-x']);
     expect(payload.rituals).toEqual(['ritual-x']);
-    expect(payload.experience).toEqual({ total: 10, spent: 0, remaining: 10 });
+    expect(payload.experience).toBeUndefined();
     expect(payload.is_owner).toBe(false);
   });
 });

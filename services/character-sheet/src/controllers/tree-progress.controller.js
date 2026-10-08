@@ -9,10 +9,12 @@ const TreeProgressController = {
 
   async unlock(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const check = await TreeProgressModel.canUnlock(req.params.id, req.params.nodeId);
+    // via: 'points' | 'narrative' — which unlock route the player picked.
+    const check = await TreeProgressModel.canUnlock(req.params.id, req.params.nodeId, req.body?.via);
     if (!check.ok) return res.status(check.status).json({ message: check.message });
 
-    const { progress, granted } = await TreeProgressModel.unlock(req.params.id, req.params.nodeId);
+    const { progress, granted, insufficient } = await TreeProgressModel.unlock(req.params.id, req.params.nodeId, check.spend);
+    if (insufficient) return res.status(403).json({ message: 'Недостатньо пунктів досвіду' });
     if (!progress) return res.status(200).json({ message: 'Вузол вже відкрито' });
     res.status(201).json({ progress, granted });
   },
