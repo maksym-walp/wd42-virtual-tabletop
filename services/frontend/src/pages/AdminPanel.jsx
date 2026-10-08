@@ -5,14 +5,24 @@ import adminApi from '../api/admin';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
+import { ConditionsConfigCard, CurrenciesConfigCard } from '../components/admin/CharacterConfigEditors';
 
 // Список сихронізований із services/admin's ALLOWED_KEYS — типи й
 // особливості зброї (читає equipment, useWeaponOptions на фронті) та види
-// заклинань (читає spellbook, useSpellKinds на фронті).
+// заклинань (читає spellbook, useSpellKinds на фронті), стани й валюти
+// персонажа (читає character-sheet, useCharacterConfig на фронті).
 const CONFIG_LABELS = {
   weapon_types: 'Типи зброї',
   weapon_grips: 'Особливості зброї',
   spell_kinds: 'Види заклинань',
+  conditions: 'Стани персонажа',
+  currencies: 'Валюти',
+};
+
+// Конфіги з полями понад {key, label} мають власні редактори.
+const CONFIG_EDITORS = {
+  conditions: ConditionsConfigCard,
+  currencies: CurrenciesConfigCard,
 };
 
 // key — сире значення у записах (weapon_type/weapon_grip/spell_kind) і
@@ -75,7 +85,7 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader title="Адмін панель" subtitle="Користувачі, конфіги та резервні копії сайту" />
 
       <UsersTable
@@ -92,14 +102,17 @@ export default function AdminPanel() {
         <p className="text-sm text-danger">{error}</p>
       ) : (
         <div className="flex flex-col gap-5">
-          {configs.map((config) => (
-            <ConfigCard
-              key={config.key}
-              config={config}
-              onChange={(value) => updateLocal(config.key, value)}
-              onSaved={(saved) => handleSaved(config.key, saved)}
-            />
-          ))}
+          {configs.map((config) => {
+            const Editor = CONFIG_EDITORS[config.key] ?? ConfigCard;
+            return (
+              <Editor
+                key={config.key}
+                config={config}
+                onChange={(value) => updateLocal(config.key, value)}
+                onSaved={(saved) => handleSaved(config.key, saved)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

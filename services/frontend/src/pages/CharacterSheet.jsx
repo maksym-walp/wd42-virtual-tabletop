@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, ArrowLeft, Crop } from 'lucide-react';
+import { Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, Crop, Info, Coffee, Moon, FlaskRound } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -12,9 +12,9 @@ import { recordView } from '../utils/recentlyViewed';
 import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellVariantForms, spellForCharacter } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS, CONDITIONS,
+  ARCHETYPES, RACES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  valueToLevel, modifierDie, skillsToCharLevel, CURRENCIES, SKILL_PROGRESS_MARKS,
+  valueToLevel, modifierDie, skillsToCharLevel, SKILL_PROGRESS_MARKS,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import DevelopmentTree from '../components/DevelopmentTree';
@@ -26,15 +26,18 @@ import CroppedImage from '../components/ui/CroppedImage';
 import ImageCropDialog from '../components/ui/ImageCropDialog';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
-import IntInput from '../components/ui/IntInput';
 import SmartTextReader from '../components/SmartTextReader';
-import SmartTextarea from '../components/ui/SmartTextarea';
 import { htmlToPreviewText } from '../utils/richText';
 import RollButton from '../components/RollButton';
 import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
 import { useDice } from '../context/DiceContext';
 import ShareButton from '../components/ShareButton';
+import MoneySection from '../components/character/MoneySection';
+import NarrativeTab from '../components/character/NarrativeTab';
+import CharacterSidebar from '../components/character/CharacterSidebar';
+import useCharacterConfig from '../hooks/useCharacterConfig';
+import useMediaQuery from '../hooks/useMediaQuery';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,9 @@ export default function CharacterSheet({ publicView = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { conditions: conditionsConfig, currencies } = useCharacterConfig();
+  // На xl+ праворуч стоїть колонка з нотатками й вбудованими кубиками.
+  const wide = useMediaQuery('(min-width: 1280px)');
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
 
   const [data, setData]         = useState(null);
@@ -390,37 +396,44 @@ export default function CharacterSheet({ publicView = false }) {
 
   // Fighter has no archetype-specific tab of its own — its abilities
   // (including maneuver-capable ones, is_maneuver=true) show on the general
-  // AbilitiesTab like every other archetype's.
+  // AbilitiesTab like every other archetype's. Ритуали чаклуна живуть у
+  // «Магії та чарах», окремої вкладки не мають.
   const ARCHETYPE_TABS = {
-    spellcaster: { key: 'rituals',   label: 'Ритуали' },
     rogue:       { key: 'luck',      label: 'Вдача' },
   };
   const archetypeTab = ARCHETYPE_TABS[c.archetype];
 
   const TABS = [
     { key: 'skills',    label: 'Характеристики' },
-    { key: 'vitals',    label: 'Стан' },
     { key: 'magic',     label: 'Магія та чари' },
     ...(archetypeTab ? [archetypeTab] : []),
     { key: 'abilities', label: 'Вміння' },
     { key: 'equipment', label: 'Спорядження' },
     { key: 'tree',      label: 'Дерево розвитку' },
-    { key: 'notes',     label: 'Нотатки' },
+    { key: 'narrative', label: 'Наратив' },
   ];
 
+  const tabButtons = TABS.map(t => (
+    <button key={t.key}
+      className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+        tab === t.key ? 'border-gold/60 bg-gold/10 text-gold' : 'border-border text-text-dim'
+      }`}
+      onClick={() => setTab(t.key)}>
+      {t.label}
+    </button>
+  ));
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto grid w-full max-w-[1920px] grid-cols-1 gap-6 px-4 py-5 pb-24 sm:px-6 md:pb-8 xl:grid-cols-[minmax(0,1fr)_22rem] xl:px-8 2xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="min-w-0">
       {/* ─── Header ─── */}
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-4">
-          <CharacterPortrait character={c} isOwner={is_owner} onChange={patchCharacter} />
-          <div>
-          <div className="mb-1 flex items-center gap-4">
-            <Link to="/characters" className="inline-flex items-center gap-1.5 text-sm text-text-dim">
-              <ArrowLeft size={15} /> Персонажі
-            </Link>
-            {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
-          </div>
+      {/* Фото ліворуч; праворуч імʼя/архетип і службовий блок, а під ними —
+          перемикачі вкладок (з sm). */}
+      <div className="mb-4 flex items-start gap-4">
+        <CharacterPortrait character={c} isOwner={is_owner} onChange={patchCharacter} />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
           {is_owner && editingName ? (
             <input
               autoFocus
@@ -432,7 +445,7 @@ export default function CharacterSheet({ publicView = false }) {
               maxLength={200}
             />
           ) : (
-            <h1 className="flex items-center gap-2 font-display text-3xl text-accent">
+            <h1 className="flex flex-wrap items-center gap-2 font-display text-3xl text-accent">
               {c.name}
               {is_owner && (
                 <button
@@ -444,6 +457,7 @@ export default function CharacterSheet({ publicView = false }) {
               )}
               {/* Публічний персонаж — посилання на публічний лист (його відкриє будь-хто). */}
               <ShareButton url={c.is_public ? `${window.location.origin}/characters/public/${c.id}` : undefined} />
+              {saving && <span className="font-sans text-xs font-normal text-text-dim">• Збереження...</span>}
             </h1>
           )}
           <p className="mt-1 text-sm text-text-dim">
@@ -451,128 +465,44 @@ export default function CharacterSheet({ publicView = false }) {
               {archetype.label}
             </span> · {race.label}
           </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-text-dim">
-            <button
-              onClick={() => handleCopyId(c.id)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 hover:bg-surface-hover hover:text-text"
-              title="Скопіювати ID персонажа"
-            >
-              {idCopied ? <Check size={13} /> : <Copy size={13} />}
-              <span className="font-mono">{c.id}</span>
-            </button>
+          </div>
+        <div className="flex flex-col gap-2 text-xs text-text-dim sm:items-end">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:justify-end">
             {c.owner_username && (
               <span>Власник: <Link to={`/profile/${c.owner_username}`} className="text-accent hover:underline">{c.owner_username}</Link></span>
             )}
+            {is_owner && (
+              <label className="inline-flex cursor-pointer items-center gap-2">
+                <input type="checkbox" checked={c.is_public} className="h-5 w-5 accent-accent"
+                  onChange={e => patchCharacter({ is_public: e.target.checked })} />
+                <span className="text-sm text-text-dim">Публічний</span>
+              </label>
+            )}
+            {c.is_public && (
+              <a href={`/characters/public/${c.id}`} target="_blank" rel="noreferrer" className="text-sm text-accent">
+                Поділитись ↗
+              </a>
+            )}
           </div>
-          </div>
+          <button
+            onClick={() => handleCopyId(c.id)}
+            className="inline-flex max-w-full items-center gap-1.5 self-start rounded-md border border-border px-2 py-1 hover:bg-surface-hover hover:text-text sm:self-end"
+            title="Скопіювати ID персонажа"
+          >
+            {idCopied ? <Check size={13} /> : <Copy size={13} />}
+            <span className="truncate font-mono">{c.id}</span>
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          {is_owner && (
-            <label className="inline-flex cursor-pointer items-center gap-2">
-              <input type="checkbox" checked={c.is_public} className="h-5 w-5 accent-accent"
-                onChange={e => patchCharacter({ is_public: e.target.checked })} />
-              <span className="text-sm text-text-dim">Публічний</span>
-            </label>
-          )}
-          {c.is_public && (
-            <a href={`/characters/public/${c.id}`} target="_blank" rel="noreferrer" className="text-sm text-accent">
-              Поділитись ↗
-            </a>
-          )}
+        </div>
+        <div className="hidden border-b border-border pb-3 sm:block">
+          <div className="flex flex-wrap gap-2">{tabButtons}</div>
+        </div>
         </div>
       </div>
 
-      {/* ─── Banner (matches the PDF top row) ─── */}
-      <div className="mb-5 flex flex-wrap gap-1.5">
-        <BannerBox
-          label="НАТХНЕННЯ"
-          accent
-          sub={
-            <span className="inline-flex items-center gap-1">
-              {gameInspirationDie === '—' ? (
-                <span className={c.inspiration_used ? 'text-text-dim line-through' : ''}>—</span>
-              ) : (
-                <RollButton
-                  formula={`1${gameInspirationDie}`}
-                  disabled={c.inspiration_used}
-                  title={`Кинути ${gameInspirationDie} (ігрове натхнення)`}
-                  icon={false}
-                  className="p-0 text-base font-bold disabled:line-through"
-                >
-                  {gameInspirationDie}
-                </RollButton>
-              )}
-              {c.narrative_inspiration_die && <span className="text-text-dim">/</span>}
-              {c.narrative_inspiration_die && (
-                <RollButton
-                  formula={`1${c.narrative_inspiration_die}`}
-                  title={`Кинути ${c.narrative_inspiration_die} (наративне натхнення)`}
-                  icon={false}
-                  className="p-0 text-base font-bold"
-                >
-                  {c.narrative_inspiration_die}
-                </RollButton>
-              )}
-            </span>
-          }
-          corner={is_owner && (
-            <button
-              type="button"
-              onClick={() => setEditingInspiration(true)}
-              title="Редагувати натхнення"
-              className="flex h-6 w-6 items-center justify-center rounded text-text-dim hover:bg-surface-hover hover:text-text"
-            >
-              <Pencil size={12} />
-            </button>
-          )}
-        />
-        <BannerBox
-          label="ЗАХИСТ"
-          sub={`пасивний: ${totalDefense}`}
-          onClick={is_owner ? openDefenseEditor : undefined}
-        />
-        <BannerBox
-          label="ГЕРОЇЧНІ ДІЇ"
-          sub={`${heroicLeft} / ${heroicTotal}`}
-          accent={heroicLeft > 0}
-        />
-        <BannerBox
-          label="ПУНКТИ ДОСВІДУ"
-          sub={`${experienceRemaining} / ${experienceTotal}`}
-          accent={experienceRemaining > 0}
-          onClick={(is_owner || is_gm) ? () => setEditingExperience(true) : undefined}
-        />
-        <BannerBox
-          label="ІНІЦІАТИВА"
-          accent
-          sub={
-            <RollButton
-              formula={`1${INITIATIVE_DIE[charLevels.agility]}`}
-              title={`Кинути ${INITIATIVE_DIE[charLevels.agility]} (ініціатива)`}
-              icon={false}
-              className="p-0 text-base font-bold"
-            >
-              {INITIATIVE_DIE[charLevels.agility]}
-            </RollButton>
-          }
-        />
-        <BannerBox label="ПЗ" sub={`${c.current_hp} / ${maxHp}${c.temp_hp ? ` (+${c.temp_hp})` : ''}`} accent wide />
-        <BannerBox label="МАГІЯ" sub={`${c.current_magic} / ${maxMagic}`} wide />
-      </div>
-
-      {/* ─── Tabs ─── */}
-      <div className="sticky top-0 z-20 mb-6 -mx-4 touch-pan-x overflow-x-auto overscroll-x-contain border-b border-border bg-bg px-4 py-2 sm:static sm:mx-0 sm:overflow-visible sm:px-0">
-        <div className="flex w-max gap-2 sm:w-full sm:flex-wrap">
-          {TABS.map(t => (
-            <button key={t.key}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-                tab === t.key ? 'border-gold/60 bg-gold/10 text-gold' : 'border-border text-text-dim'
-              }`}
-              onClick={() => setTab(t.key)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {/* ─── Tabs (мобільний: липка смуга під шапкою; з sm — у шапці) ─── */}
+      <div className="sticky top-0 z-20 mb-4 -mx-4 touch-pan-x overflow-x-auto overscroll-x-contain border-b border-border bg-bg px-4 py-2 sm:hidden">
+        <div className="flex w-max gap-2">{tabButtons}</div>
       </div>
 
       <div>
@@ -586,16 +516,97 @@ export default function CharacterSheet({ publicView = false }) {
             canSpendExperience={experienceRemaining > 0}
             onAction={handleSkillAction}
             onEditAll={() => setEditingAllSkills(true)}
-          />
-        )}
-        {tab === 'vitals' && (
-          <VitalsTab
-            c={c} maxHp={maxHp}
-            maxDiceCount={maxDiceCount}
-            totalCondLevel={totalCondLevel}
-            heroicTotal={heroicTotal}
-            is_owner={is_owner} archetype={archetype}
-            patchCharacter={patchCharacter}
+            initiativeDie={INITIATIVE_DIE[charLevels.agility]}
+            heroic={{ total: heroicTotal, left: heroicLeft }}
+            onHeroicChange={(left) => patchCharacter({ heroic_actions_used: Math.max(0, Math.min(heroicTotal, heroicTotal - left)) })}
+            extras={(
+              <div className="flex flex-col gap-3">
+                <BannerBox
+                  label="НАТХНЕННЯ"
+                  accent
+                  sub={
+                    <span className="inline-flex items-center gap-1">
+                      {gameInspirationDie === '—' ? (
+                        <span className={c.inspiration_used ? 'text-text-dim line-through' : ''}>—</span>
+                      ) : (
+                        <RollButton
+                          formula={`1${gameInspirationDie}`}
+                          disabled={c.inspiration_used}
+                          title={`Кинути ${gameInspirationDie} (ігрове натхнення)`}
+                          icon={false}
+                          className="p-0 text-base font-bold disabled:line-through"
+                        >
+                          {gameInspirationDie}
+                        </RollButton>
+                      )}
+                      {c.narrative_inspiration_die && <span className="text-text-dim">/</span>}
+                      {c.narrative_inspiration_die && (
+                        <RollButton
+                          formula={`1${c.narrative_inspiration_die}`}
+                          title={`Кинути ${c.narrative_inspiration_die} (наративне натхнення)`}
+                          icon={false}
+                          className="p-0 text-base font-bold"
+                        >
+                          {c.narrative_inspiration_die}
+                        </RollButton>
+                      )}
+                    </span>
+                  }
+                  corner={is_owner && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingInspiration(true)}
+                      title="Редагувати натхнення"
+                      className="flex h-6 w-6 items-center justify-center rounded text-text-dim hover:bg-surface-hover hover:text-text"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                />
+                <BannerBox
+                  label="ПУНКТИ ДОСВІДУ"
+                  sub={`${experienceRemaining} / ${experienceTotal}`}
+                  accent={experienceRemaining > 0}
+                  onClick={(is_owner || is_gm) ? () => setEditingExperience(true) : undefined}
+                />
+                <BannerBox
+                  label="МАГІЧНА ЕНЕРГІЯ"
+                  sub={(
+                    <span className="inline-flex items-center gap-2">
+                      {is_owner && (
+                        <button type="button" aria-label="Менше магії"
+                          className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
+                          disabled={c.current_magic <= 0}
+                          onClick={() => patchCharacter({ current_magic: Math.max(0, c.current_magic - 1) })}>−</button>
+                      )}
+                      <span>{c.current_magic} / {maxMagic}</span>
+                      {is_owner && (
+                        <button type="button" aria-label="Більше магії"
+                          className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
+                          disabled={c.current_magic >= maxMagic}
+                          onClick={() => patchCharacter({ current_magic: Math.min(maxMagic, c.current_magic + 1) })}>+</button>
+                      )}
+                    </span>
+                  )}
+                  accent
+                />
+                <BannerBox
+                  label="ПАСИВНИЙ ЗАХИСТ"
+                  sub={totalDefense}
+                  onClick={is_owner ? openDefenseEditor : undefined}
+                />
+              </div>
+            )}
+            health={(
+              <HealthCard
+                c={c} maxHp={maxHp}
+                maxDiceCount={maxDiceCount}
+                totalCondLevel={totalCondLevel}
+                conditionsConfig={conditionsConfig}
+                is_owner={is_owner} archetype={archetype}
+                patchCharacter={patchCharacter}
+              />
+            )}
           />
         )}
         {tab === 'magic' && (
@@ -611,6 +622,19 @@ export default function CharacterSheet({ publicView = false }) {
             unlockedNodeIds={unlockedNodeIds}
           />
         )}
+        {tab === 'magic' && c.archetype === 'spellcaster' && (
+          <section className="mt-6">
+            <div className="mb-3 border-b border-border pb-1.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-gold">Ритуали</span>
+            </div>
+            <RitualsTab
+              trackers={rituals} is_owner={is_owner}
+              onAdd={addRitual}
+              onUpdate={updateRitual}
+              onRemove={removeRitual}
+            />
+          </section>
+        )}
         {tab === 'abilities' && (
           <AbilitiesTab
             abilities={abilities} allAbilities={allAbilities} archetype={c.archetype} is_owner={is_owner}
@@ -619,20 +643,12 @@ export default function CharacterSheet({ publicView = false }) {
             unlockedNodeIds={unlockedNodeIds}
           />
         )}
-        {tab === 'rituals' && (
-          <RitualsTab
-            trackers={rituals} is_owner={is_owner}
-            onAdd={addRitual}
-            onUpdate={updateRitual}
-            onRemove={removeRitual}
-          />
-        )}
         {tab === 'luck' && (
           <LuckTab c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
         )}
         {tab === 'equipment' && (
           <EquipmentTab
-            c={c} patchCharacter={patchCharacter}
+            c={c} patchCharacter={patchCharacter} currencies={currencies}
             equipment={equipment} allEquipment={allEquipment} is_owner={is_owner}
             onAdd={addEquipment}
             onPatch={patchEquipment}
@@ -656,10 +672,14 @@ export default function CharacterSheet({ publicView = false }) {
             }}
           />
         )}
-        {tab === 'notes' && (
-          <NotesTab c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
+        {tab === 'narrative' && (
+          <NarrativeTab c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
         )}
       </div>
+      </div>
+
+      {/* ─── Права колонка: нотатки + кубики (на вужчих екранах — під вкладкою) ─── */}
+      <CharacterSidebar c={c} is_owner={is_owner} patchCharacter={patchCharacter} showDice={wide && !publicView} />
 
       {editingDefense && (
         <Sheet open onClose={() => setEditingDefense(false)} title="Пасивний захист">
@@ -863,11 +883,6 @@ function CharacterPortrait({ character, isOwner, onChange }) {
 
       {uploading && <span className="text-[10px] text-text-dim">Завантаження...</span>}
       {error && <span className="max-w-24 text-center text-[10px] text-danger">{error}</span>}
-      {isOwner && !url && !uploading && !error && (
-        <span className="max-w-24 text-center text-[10px] text-text-dim">
-          Після завантаження можна обрати кадр — напр. обличчя на вертикальному фото
-        </span>
-      )}
 
       {isOwner && (
         <input
@@ -902,11 +917,11 @@ function CharacterPortrait({ character, isOwner, onChange }) {
 function BannerBox({ label, sub, accent, wide, onClick, corner }) {
   const Tag = onClick ? 'button' : 'div';
   return (
-    <div className={`relative ${wide ? 'min-w-[120px] flex-[1.5]' : 'min-w-[90px] flex-1'}`}>
+    <div className={`relative min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
       <Tag
         type={onClick ? 'button' : undefined}
         onClick={onClick}
-        className={`flex w-full flex-col items-center gap-0.5 rounded-md border-[1.5px] bg-surface px-3 py-2.5 ${
+        className={`flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-md border-[1.5px] bg-surface px-1.5 py-2 text-center sm:px-3 ${
           accent ? 'border-gold/30' : 'border-border'
         } ${onClick ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
       >
@@ -920,7 +935,47 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 
 // ── SkillsTab ─────────────────────────────────────────────────────────────────
 
-function SkillsTab({ characteristics, skillMap, charLevels, is_owner, is_gm, canSpendExperience, onAction, onEditAll }) {
+function SkillsTab({
+  characteristics, skillMap, charLevels, is_owner, is_gm, canSpendExperience, onAction, onEditAll,
+  health, extras, initiativeDie, heroic, onHeroicChange,
+}) {
+  // Особливі значення в шапках характеристик: кубик ініціативи кидається
+  // прямо звідси, героїчні дії Мудрості — лічильник «залишилось / макс».
+  const renderEffect = (char, level) => {
+    if (char.key === 'agility' && initiativeDie && initiativeDie !== '—') {
+      return (
+        <RollButton
+          formula={`1${initiativeDie}`}
+          title={`Кинути ${initiativeDie} (ініціатива)`}
+          icon={false}
+          className="p-0 text-sm font-bold text-gold"
+        >
+          {initiativeDie}
+        </RollButton>
+      );
+    }
+    if (char.key === 'wisdom' && heroic) {
+      return (
+        <span className="inline-flex items-center gap-1">
+          {is_owner && (
+            <button type="button" aria-label="Використати героїчну дію"
+              className="flex h-5 w-5 items-center justify-center rounded border border-border text-xs text-text disabled:opacity-40"
+              disabled={heroic.left <= 0}
+              onClick={() => onHeroicChange(heroic.left - 1)}>−</button>
+          )}
+          <span className={heroic.left > 0 ? 'text-gold' : ''}>{heroic.left} / {heroic.total}</span>
+          {is_owner && (
+            <button type="button" aria-label="Повернути героїчну дію"
+              className="flex h-5 w-5 items-center justify-center rounded border border-border text-xs text-text disabled:opacity-40"
+              disabled={heroic.left >= heroic.total}
+              onClick={() => onHeroicChange(heroic.left + 1)}>+</button>
+          )}
+        </span>
+      );
+    }
+    return char.effect(level);
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {is_gm && (
@@ -931,25 +986,28 @@ function SkillsTab({ characteristics, skillMap, charLevels, is_owner, is_gm, can
           Редагувати навички персонажа
         </button>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+      {/* Вузька колонка здоровʼя ліворуч; праворуч характеристики 3×2, де
+          шоста клітинка — натхнення, магічна енергія й пасивний захист. */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="min-w-0">{health}</div>
+      <div className="grid grid-cols-1 content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {characteristics.map(char => {
         const level  = charLevels[char.key];
-        const effect = char.effect(level);
         return (
           <div key={char.key} className="overflow-hidden rounded-lg border border-border bg-surface">
             {/* Section header strip */}
-            <div className="flex items-start justify-between border-b border-border bg-bg px-3.5 py-2.5">
+            <div className="flex items-start justify-between gap-2 border-b border-border bg-bg px-3 py-2">
               <div>
                 <h3 className="m-0 text-[0.8rem] font-bold uppercase tracking-wide text-gold">{char.label}</h3>
                 <LevelSquares level={level} />
               </div>
               <div className="flex flex-col items-end">
-                <span className="text-[0.6rem] uppercase tracking-wide text-text-dim">{char.effectLabel}</span>
-                <span className="text-sm font-bold text-text-muted">{effect}</span>
+                <span className="text-right text-[0.6rem] uppercase leading-tight tracking-wide text-text-dim">{char.effectLabel}</span>
+                <span className="text-sm font-bold text-text-muted">{renderEffect(char, level)}</span>
               </div>
             </div>
 
-            <div className="px-3.5 py-2">
+            <div className="px-3 py-1.5">
               {char.skills.map(skill => {
                 const s = skillMap[skill.key] || { value: 1, progress_marks: 0 };
                 return (
@@ -969,6 +1027,8 @@ function SkillsTab({ characteristics, skillMap, charLevels, is_owner, is_gm, can
           </div>
         );
       })}
+      {extras && <div className="min-w-0">{extras}</div>}
+      </div>
       </div>
     </div>
   );
@@ -1020,11 +1080,11 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
   };
 
   return (
-    <div className="flex flex-col gap-1 border-b border-bg py-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-base font-semibold text-text-muted">{label}</span>
-        <div className="flex items-center gap-1.5">
-          <span className="w-6 text-center text-base font-bold text-text">{value}</span>
+    <div className="flex flex-col gap-0.5 border-b border-bg py-1">
+      <div className="flex items-center justify-between gap-1">
+        <span className="min-w-0 truncate text-sm font-semibold text-text-muted" title={label}>{label}</span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="w-5 text-center text-base font-bold text-text">{value}</span>
           {isPlayerEditable && (
             <button
               className="rounded p-1 leading-none text-text-dim hover:bg-surface-hover hover:text-text"
@@ -1047,8 +1107,8 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
       </div>
       <div className="flex items-center gap-1">
         {Array.from({ length: SKILL_PROGRESS_MARKS }).map((_, i) => (
-          <span key={i} className="flex h-6 w-6 items-center justify-center">
-            <span className={`h-3.5 w-3.5 rounded-full border-[1.5px] border-gold/50 ${i < progress ? 'bg-gold' : 'bg-transparent'}`} />
+          <span key={i} className="flex h-5 w-5 items-center justify-center">
+            <span className={`h-3 w-3 rounded-full border-[1.5px] border-gold/50 ${i < progress ? 'bg-gold' : 'bg-transparent'}`} />
           </span>
         ))}
       </div>
@@ -1081,17 +1141,30 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canSpendExperience 
   );
 }
 
-// ── VitalsTab ─────────────────────────────────────────────────────────────────
+// Короткий і тривалий відпочинок — поки лише кнопки: механіку (що саме
+// відновлюється) ще не реалізовано ні тут, ні на бекенді.
+const RESTS = [
+  { key: 'short', label: 'Короткий відпочинок', Icon: Coffee },
+  { key: 'long', label: 'Тривалий відпочинок', Icon: Moon },
+];
 
-function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_owner, archetype, patchCharacter }) {
+// Зілля зцілення чотирьох розмірів — так само поки лише кнопки-заглушки.
+// iconSize — щоб розмір пляшечки було видно без підпису.
+const HEALING_POTIONS = [
+  { key: 'small', label: 'Мале зілля зцілення', iconSize: 11 },
+  { key: 'medium', label: 'Середнє зілля зцілення', iconSize: 13 },
+  { key: 'large', label: 'Велике зілля зцілення', iconSize: 15 },
+  { key: 'huge', label: 'Величезне зілля зцілення', iconSize: 17 },
+];
+
+// ── HealthCard ────────────────────────────────────────────────────────────────
+
+// Здоровʼя (поточне/макс, кубики здоровʼя, тимчасове) і рятунки від смерті —
+// стоїть на вкладці «Характеристики» поруч із характеристиками.
+function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, is_owner, archetype, patchCharacter }) {
   const { rollAndShow, rolling } = useDice();
-  const healthDice   = c.health_dice_values || [];
-  const crossedCount = totalCondLevel;
-
-  const effectiveMaxHp = maxHp + (c.temp_hp || 0);
-  const setCurrentHp  = v => patchCharacter({ current_hp: Math.max(0, Math.min(effectiveMaxHp, v)) });
-  const setTempHp      = v => patchCharacter({ temp_hp: Math.max(0, v) });
-  const setDeathScale = v => patchCharacter({ death_scale: v });
+  const [infoCondition, setInfoCondition] = useState(null);
+  const [restNotice, setRestNotice] = useState('');
 
   const setConditionLevel = (type, level) => {
     const conditions = [...(c.conditions || [])];
@@ -1106,6 +1179,23 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
     patchCharacter({ conditions });
   };
 
+  // Стани з конфігу + ті, що є в персонажа, але зникли з конфігу (адмін
+  // прибрав) — щоб їхній рівень, який досі зменшує ПЗ, не ховався.
+  const knownKeys = new Set(conditionsConfig.map((cond) => cond.key));
+  const conditionRows = [
+    ...conditionsConfig,
+    ...(c.conditions || [])
+      .filter((cond) => !knownKeys.has(cond.type) && cond.level > 0)
+      .map((cond) => ({ key: cond.type, label: cond.type, description: '', max_level: null })),
+  ];
+  const healthDice   = c.health_dice_values || [];
+  const crossedCount = totalCondLevel;
+
+  const effectiveMaxHp = maxHp + (c.temp_hp || 0);
+  const setCurrentHp  = v => patchCharacter({ current_hp: Math.max(0, Math.min(effectiveMaxHp, v)) });
+  const setTempHp      = v => patchCharacter({ temp_hp: Math.max(0, v) });
+  const setDeathScale = v => patchCharacter({ death_scale: v });
+
   const handleRollHealthDice = async (existing = []) => {
     const dieSize = parseInt(archetype.healthDie.slice(1));
     const needed = maxDiceCount - existing.length;
@@ -1119,160 +1209,184 @@ function VitalsTab({ c, maxHp, maxDiceCount, totalCondLevel, heroicTotal, is_own
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
-
-      {/* Health section — matches PDF layout */}
-      <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-2">
         <SectionTitle>Здоров'я</SectionTitle>
-        <p className="-mt-1 mb-3 text-xs italic text-text-dim">Кубик здоров'я — {archetype.healthDie}</p>
-
-        {/* HP counter */}
-        <div className="mb-2 flex items-center gap-2">
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Поточне</span>
-            <div className="flex items-center gap-1">
-              {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setCurrentHp(c.current_hp - 1)}>−</button>}
-              <span className="min-w-[40px] text-center text-3xl font-bold text-gold">{c.current_hp}</span>
-              {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setCurrentHp(c.current_hp + 1)}>+</button>}
-            </div>
-          </div>
-          <span className="text-lg text-border">/</span>
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">{totalCondLevel > 0 ? 'Макс (зі ст.)' : 'Макс'}</span>
-            <span className={`text-lg font-semibold ${totalCondLevel > 0 ? 'text-danger' : 'text-text-muted'}`}>{maxHp}</span>
-          </div>
-        </div>
-
-        {/* Dice pool — matches PDF cells */}
-        <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(26px,1fr))] gap-[3px]">
-          {Array.from({ length: maxDiceCount }).map((_, i) => {
-            const val     = healthDice[i];
-            const crossed = i >= maxDiceCount - crossedCount;
-            return (
-              <div key={i} className={`flex h-[26px] items-center justify-center rounded border-[1.5px] text-xs font-semibold ${
-                crossed
-                  ? 'border-danger/40 bg-danger/10 text-danger/70 line-through opacity-60'
-                  : val
-                    ? 'border-gold/50 bg-bg text-gold'
-                    : 'border-border bg-bg text-text-dim'
-              }`}>
-                {val ?? '·'}
-              </div>
-            );
-          })}
-        </div>
-
-        {is_owner && healthDice.length < maxDiceCount && (
-          <button
-            className="mb-3 min-h-11 w-full rounded border border-border px-3 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => handleRollHealthDice(healthDice)}
-            disabled={rolling}
-          >
-            {healthDice.length === 0
-              ? `Кинути ${maxDiceCount}${archetype.healthDie}`
-              : `Кинути ${maxDiceCount - healthDice.length}${archetype.healthDie} (нові кістки)`}
-          </button>
-        )}
-
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Тимчасове</span>
-            <div className="flex items-center gap-1">
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) - 1)}>−</button>}
-              <span className="min-w-[24px] text-center text-lg font-semibold text-sage">{c.temp_hp || 0}</span>
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) + 1)}>+</button>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Death scale + heroic actions */}
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <SectionTitle>Рятунки від смерті</SectionTitle>
-        <div className="-mt-1 mb-3 flex items-center justify-between">
-          <p className="text-xs italic text-text-dim">Кидок — d12</p>
-          <RollButton formula="1d12" title="Кинути d12" size={16} />
-        </div>
-        <div className="mb-2 flex gap-[3px]">
-          {[-3, -2, -1, 0, 1, 2, 3].map(v => {
-            const isActive = c.death_scale != null && c.death_scale === v;
-            const toneClass = v < 0 ? 'text-danger' : v > 0 ? 'text-sage' : 'text-gold';
-            const activeClass = v < 0 ? 'border-danger bg-danger/25' : v > 0 ? 'border-sage bg-sage/25' : 'border-gold bg-gold/25';
-            return (
-              <button key={v}
-                className={`flex h-10 flex-1 items-center justify-center rounded border-[1.5px] text-sm font-bold ${toneClass} ${isActive ? activeClass : 'border-border bg-bg'}`}
-                onClick={() => is_owner && setDeathScale(isActive ? null : v)}
-                disabled={!is_owner}
+        {is_owner && (
+          <div className="flex shrink-0 gap-1">
+            {RESTS.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                title={label}
+                aria-label={label}
+                onClick={() => setRestNotice(`«${label}» ще не підключено — відновлення зʼявиться згодом.`)}
+                className="flex h-8 w-8 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover hover:text-accent"
               >
-                {v === -3 ? '☠' : v === 3 ? '✓' : v > 0 ? `+${v}` : v}
+                <Icon size={15} />
               </button>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </div>
+      {restNotice && <p className="mb-2 text-xs text-text-dim">{restNotice}</p>}
+      <p className="-mt-1 mb-3 text-xs italic text-text-dim">Кубик здоров'я — {archetype.healthDie}</p>
+
+      <div className="flex gap-2">
+        <div className="min-w-0 flex-1">
+          {/* HP counter */}
+          <div className="mb-2 flex items-center gap-2">
+            <div className="flex flex-col items-center">
+              <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Поточне</span>
+              <div className="flex items-center gap-1">
+                {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setCurrentHp(c.current_hp - 1)}>−</button>}
+                <span className="min-w-[40px] text-center text-3xl font-bold text-gold">{c.current_hp}</span>
+                {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setCurrentHp(c.current_hp + 1)}>+</button>}
+              </div>
+            </div>
+            <span className="text-lg text-border">/</span>
+            <div className="flex flex-col items-center">
+              <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">{totalCondLevel > 0 ? 'Макс (зі ст.)' : 'Макс'}</span>
+              <span className={`text-lg font-semibold ${totalCondLevel > 0 ? 'text-danger' : 'text-text-muted'}`}>{maxHp}</span>
+            </div>
+          </div>
+
+          {/* Dice pool — matches PDF cells */}
+          <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(26px,1fr))] gap-[3px]">
+            {Array.from({ length: maxDiceCount }).map((_, i) => {
+              const val     = healthDice[i];
+              const crossed = i >= maxDiceCount - crossedCount;
+              return (
+                <div key={i} className={`flex h-[26px] items-center justify-center rounded border-[1.5px] text-xs font-semibold ${
+                  crossed
+                    ? 'border-danger/40 bg-danger/10 text-danger/70 line-through opacity-60'
+                    : val
+                      ? 'border-gold/50 bg-bg text-gold'
+                      : 'border-border bg-bg text-text-dim'
+                }`}>
+                  {val ?? '·'}
+                </div>
+              );
+            })}
+          </div>
+
+          {is_owner && healthDice.length < maxDiceCount && (
+            <button
+              className="mb-3 min-h-11 w-full rounded border border-border px-3 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => handleRollHealthDice(healthDice)}
+              disabled={rolling}
+            >
+              {healthDice.length === 0
+                ? `Кинути ${maxDiceCount}${archetype.healthDie}`
+                : `Кинути ${maxDiceCount - healthDice.length}${archetype.healthDie} (нові кістки)`}
+            </button>
+          )}
+
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col items-center">
+              <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Тимчасове</span>
+              <div className="flex items-center gap-1">
+                {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) - 1)}>−</button>}
+                <span className="min-w-[24px] text-center text-lg font-semibold text-sage">{c.temp_hp || 0}</span>
+                {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setTempHp((c.temp_hp || 0) + 1)}>+</button>}
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="mb-1 text-sm text-text-dim">
-          {c.death_scale == null ? ' ' :
-           c.death_scale <= -3 ? 'Смерть' :
+        {is_owner && (
+          <div className="flex shrink-0 flex-col gap-1">
+            {HEALING_POTIONS.map(({ key, label, iconSize }) => (
+              <button
+                key={key}
+                type="button"
+                title={label}
+                aria-label={label}
+                onClick={() => setRestNotice(`«${label}» ще не підключено — зцілення зʼявиться згодом.`)}
+                className="flex h-8 w-8 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover hover:text-danger"
+              >
+                <FlaskRound size={iconSize} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-4 border-t border-border pt-4" />
+      <SectionTitle>Рятунки від смерті</SectionTitle>
+      <div className="-mt-1 mb-3 flex items-center justify-between">
+        <p className="text-xs italic text-text-dim">Кидок — d12</p>
+        <RollButton formula="1d12" title="Кинути d12" size={16} />
+      </div>
+      <div className="mb-2 flex gap-[3px]">
+        {[-3, -2, -1, 0, 1, 2, 3].map(v => {
+          const isActive = c.death_scale != null && c.death_scale === v;
+          const toneClass = v < 0 ? 'text-danger' : v > 0 ? 'text-sage' : 'text-gold';
+          const activeClass = v < 0 ? 'border-danger bg-danger/25' : v > 0 ? 'border-sage bg-sage/25' : 'border-gold bg-gold/25';
+          return (
+            <button key={v}
+              className={`flex h-10 flex-1 items-center justify-center rounded border-[1.5px] text-sm font-bold ${toneClass} ${isActive ? activeClass : 'border-border bg-bg'}`}
+              onClick={() => is_owner && setDeathScale(isActive ? null : v)}
+              disabled={!is_owner}
+            >
+              {v === -3 ? '☠' : v === 3 ? '✓' : v > 0 ? `+${v}` : v}
+            </button>
+          );
+        })}
+      </div>
+      {c.death_scale != null && (
+        <p className="text-sm text-text-dim">
+          {c.death_scale <= -3 ? 'Смерть' :
            c.death_scale < 0  ? `Провалів: ${Math.abs(c.death_scale)}` :
            c.death_scale === 0 ? 'Непритомний' :
            `Успіхів: ${c.death_scale}`}
         </p>
+      )}
 
-        <SectionTitle className="mt-5">Героїчні дії</SectionTitle>
-        <div className="flex items-center gap-2">
-          {is_owner && (
-            <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text"
-              onClick={() => patchCharacter({ heroic_actions_used: Math.min(heroicTotal, c.heroic_actions_used + 1) })}
-              disabled={c.heroic_actions_used >= heroicTotal}
-            >−</button>
-          )}
-          <span className="text-2xl font-bold text-gold">{heroicTotal - c.heroic_actions_used}</span>
-          <span className="text-sm text-text-dim">/ {heroicTotal}</span>
-          {is_owner && (
-            <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text"
-              onClick={() => patchCharacter({ heroic_actions_used: Math.max(0, c.heroic_actions_used - 1) })}
-              disabled={c.heroic_actions_used <= 0}
-            >+</button>
-          )}
-        </div>
-      </div>
-
-      {/* Conditions */}
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <SectionTitle>Стани та ефекти</SectionTitle>
-        {CONDITIONS.map(cond => {
-          const current = c.conditions?.find(x => x.type === cond.key);
-          const level   = current?.level ?? 0;
-          return (
-            <div key={cond.key} className="flex items-center justify-between border-b border-bg py-2">
-              <div>
-                <span className="text-sm text-text-muted">{cond.label}</span>
-                {cond.maxLevel && (
-                  <span className="ml-1 text-xs text-text-dim">
-                    (макс {cond.maxLevel})
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {is_owner && (
-                  <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, Math.max(0, level - 1))} disabled={level === 0}>−</button>
-                )}
-                <span className={`w-6 text-center text-sm font-bold ${level > 0 ? 'text-danger' : 'text-text-dim'}`}>
-                  {level > 0 ? level : '—'}
-                </span>
-                {is_owner && (
-                  <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, level + 1)}
-                    disabled={cond.maxLevel !== null && level >= cond.maxLevel}>+</button>
-                )}
-              </div>
+      <div className="mt-3 border-t border-border pt-3" />
+      <SectionTitle>Стани та ефекти</SectionTitle>
+      {conditionRows.map(cond => {
+        const current = c.conditions?.find(x => x.type === cond.key);
+        const level   = current?.level ?? 0;
+        const maxLevel = cond.max_level ?? null;
+        return (
+          <div key={cond.key} className="flex items-center justify-between border-b border-bg py-1.5">
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-text-muted">{cond.label}</span>
+              {maxLevel && (
+                <span className="text-xs text-text-dim">(макс {maxLevel})</span>
+              )}
+              {cond.description && (
+                <button
+                  type="button"
+                  onClick={() => setInfoCondition(cond)}
+                  aria-label={`Що таке «${cond.label}»`}
+                  title="Опис стану"
+                  className="rounded p-1 text-text-dim hover:bg-surface-hover hover:text-accent"
+                >
+                  <Info size={14} />
+                </button>
+              )}
             </div>
-          );
-        })}
+            <div className="flex items-center gap-2">
+              {is_owner && (
+                <button className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, Math.max(0, level - 1))} disabled={level === 0}>−</button>
+              )}
+              <span className={`w-6 text-center text-sm font-bold ${level > 0 ? 'text-danger' : 'text-text-dim'}`}>
+                {level > 0 ? level : '—'}
+              </span>
+              {is_owner && (
+                <button className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, level + 1)}
+                  disabled={maxLevel !== null && level >= maxLevel}>+</button>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
-        <p className="mt-4 text-xs italic text-text-dim">
-          Передсмертний героїзм: 2 провали + 6 рів. втоми = 1 хід без штрафів з подвоєною шкодою
-        </p>
-      </div>
-
+      {infoCondition && (
+        <Sheet open onClose={() => setInfoCondition(null)} title={infoCondition.label}>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-text">{infoCondition.description}</p>
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -1621,98 +1735,6 @@ function ModalStat({ label, value }) {
   );
 }
 
-// ── MoneySection ──────────────────────────────────────────────────────────────
-
-function MoneySection({ c, is_owner, patchCharacter }) {
-  const money = c.money || {};
-  const setDenom = (key, value) => patchCharacter({ money: { ...money, [key]: Math.max(0, value) } });
-
-  // Within a mint, the high denomination is always worth 100 of the low one
-  // (e.g. 1 Альґос = 100 Дельґос) — except "Інші", whose two currencies
-  // aren't a fixed-rate coinage.
-  const convertUp = (cur) => {
-    const lowVal = money[cur.low.key] ?? 0;
-    const count = Math.floor(lowVal / 100);
-    if (count <= 0) return;
-    patchCharacter({ money: {
-      ...money,
-      [cur.high.key]: (money[cur.high.key] ?? 0) + count,
-      [cur.low.key]: lowVal - count * 100,
-    } });
-  };
-  const convertDown = (cur) => {
-    const highVal = money[cur.high.key] ?? 0;
-    if (highVal <= 0) return;
-    patchCharacter({ money: {
-      ...money,
-      [cur.high.key]: highVal - 1,
-      [cur.low.key]: (money[cur.low.key] ?? 0) + 100,
-    } });
-  };
-
-  if (!is_owner) {
-    const nonzero = CURRENCIES.flatMap(cur => [cur.high, cur.low])
-      .filter(denom => (money[denom.key] ?? 0) > 0)
-      .map(denom => `${denom.name}: ${money[denom.key]}`);
-    if (nonzero.length === 0) return null;
-    return (
-      <div className="mb-6">
-        <div className="mb-2 border-b border-border pb-1.5">
-          <span className="text-xs font-bold uppercase tracking-wide text-gold">Гроші</span>
-        </div>
-        <p className="text-sm text-text-muted">{nonzero.join(' · ')}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mb-6">
-      <div className="mb-2 border-b border-border pb-1.5">
-        <span className="text-xs font-bold uppercase tracking-wide text-gold">Гроші</span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {CURRENCIES.map(cur => (
-          <div key={cur.region} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded border border-border bg-bg px-2.5 py-1.5">
-            <span className="w-full text-xs text-text-dim sm:w-[130px] sm:shrink-0">{cur.region}</span>
-            {[cur.high, cur.low].map(denom => (
-              <div key={denom.key} className="flex items-center gap-1.5">
-                <span className="text-xs text-text-dim">{denom.name}{denom.metal ? ` (${denom.metal})` : ''}</span>
-                <IntInput
-                  className="w-16 rounded border border-border bg-surface px-2 py-1 text-sm text-text focus:border-accent focus:outline-none"
-                  value={money[denom.key] ?? 0}
-                  onChange={v => setDenom(denom.key, v)}
-                />
-              </div>
-            ))}
-            {cur.convertible && (
-              <div className="flex items-center gap-1 border-l border-border pl-2.5">
-                <button
-                  type="button"
-                  title={`Обміняти 100 ${cur.low.name} → 1 ${cur.high.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => convertUp(cur)}
-                  disabled={(money[cur.low.key] ?? 0) < 100}
-                >
-                  <ChevronUp size={14} />
-                </button>
-                <button
-                  type="button"
-                  title={`Обміняти 1 ${cur.high.name} → 100 ${cur.low.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => convertDown(cur)}
-                  disabled={(money[cur.high.key] ?? 0) < 1}
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── EquipmentTab ──────────────────────────────────────────────────────────────
 
 const EQUIPMENT_SECTIONS = [
@@ -1722,31 +1744,28 @@ const EQUIPMENT_SECTIONS = [
   { type: 'item', addLabel: 'предмет' },
 ];
 
-function EquipmentTab({ c, patchCharacter, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
+function EquipmentTab({ c, patchCharacter, currencies, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
+  const section = ({ type, addLabel }) => (
+    <EquipmentTypeSection
+      key={type}
+      type={type}
+      addLabel={addLabel}
+      equipment={equipment}
+      allEquipment={allEquipment}
+      is_owner={is_owner}
+      onAdd={onAdd}
+      onPatch={onPatch}
+      onRemove={onRemove}
+    />
+  );
+
+  // Зброя | Обладунок, Артефакт | Предмет — по парі в рядку на ширших екранах.
   return (
     <div>
-      <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
-
-      {is_owner && (
-        <div className="mb-5 flex justify-end gap-3">
-          <Link to="/equipment" className="text-sm text-accent">Спорядження →</Link>
-          <Link to="/equipment/artifacts" className="text-sm text-accent">Артефакти →</Link>
-        </div>
-      )}
-
-      {EQUIPMENT_SECTIONS.map(({ type, addLabel }) => (
-        <EquipmentTypeSection
-          key={type}
-          type={type}
-          addLabel={addLabel}
-          equipment={equipment}
-          allEquipment={allEquipment}
-          is_owner={is_owner}
-          onAdd={onAdd}
-          onPatch={onPatch}
-          onRemove={onRemove}
-        />
-      ))}
+      <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} currencies={currencies} />
+      <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-2">
+        {EQUIPMENT_SECTIONS.map(section)}
+      </div>
     </div>
   );
 }
@@ -1768,7 +1787,7 @@ function EquipmentTypeSection({ type, addLabel, equipment, allEquipment, is_owne
   );
 
   return (
-    <div className="mb-6">
+    <div className="mb-6 min-w-0">
       <div className="mb-2.5 flex items-center justify-between border-b border-border pb-1.5">
         <span className="text-xs font-bold uppercase tracking-wide text-gold">{CATALOG_TYPES[type].label}</span>
         {is_owner && (
@@ -1944,7 +1963,7 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
   );
 }
 
-// ── RitualsTab (spellcaster) ────────────────────────────────────────────────
+// ── RitualsTab (spellcaster; секція «Магії та чарів») ───────────────────────
 
 function RitualsTab({ trackers, is_owner, onAdd, onUpdate, onRemove }) {
   const [creating, setCreating] = useState(false);
@@ -2118,47 +2137,6 @@ function LuckTab({ c, is_owner, patchCharacter }) {
     </div>
   );
 }
-
-// ── NotesTab ──────────────────────────────────────────────────────────────────
-
-function NotesTab({ c, is_owner, patchCharacter }) {
-  return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_1fr]">
-      <div>
-        <label className="mb-1 block text-xs text-text-dim">Передісторія</label>
-        {is_owner ? (
-          <SmartTextarea
-            rows={10}
-            value={c.backstory ?? ''}
-            onChange={e => patchCharacter({ backstory: e.target.value })}
-            placeholder="Розкажіть про минуле персонажа..."
-          />
-        ) : c.backstory ? (
-          <SmartTextReader text={c.backstory} className="text-sm text-text" />
-        ) : (
-          <p className="text-sm text-text-dim">Передісторії ще немає.</p>
-        )}
-      </div>
-      <div>
-        <label className="mb-1 block text-xs text-text-dim">Нотатки гравця</label>
-        {is_owner ? (
-          <SmartTextarea
-            rows={10}
-            value={c.notes ?? ''}
-            onChange={e => patchCharacter({ notes: e.target.value })}
-            placeholder="Квести, контакти, важливі деталі..."
-          />
-        ) : c.notes ? (
-          <SmartTextReader text={c.notes} className="text-sm text-text" />
-        ) : (
-          <p className="text-sm text-text-dim">Нотаток ще немає.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── SectionTitle ──────────────────────────────────────────────────────────────
 
 function SectionTitle({ children, className = '' }) {
   return (

@@ -22,8 +22,10 @@ function ToolbarButton({ active, onClick, title, children }) {
 // SmartTextReader which renders the same HTML read-only. Both share the
 // exact extension set (see ./tiptap/extensions) so nothing renders here
 // that wouldn't also render in the reader.
+// fill — поле розтягується на всю висоту батька (батько задає висоту),
+// напр. нотатки в правій колонці листа персонажа.
 export default function SmartTextarea({
-  label, hint, className = '', value, onChange, rows = 4, placeholder,
+  label, hint, className = '', value, onChange, rows = 4, placeholder, fill = false,
 }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkText, setLinkText] = useState('');
@@ -88,7 +90,7 @@ export default function SmartTextarea({
           editor together, and clicking the caption would forward the click
           to the first toolbar button instead of focusing the editor. Plain
           <div> replicates Field's look without that. */}
-      <div className={`flex flex-col gap-1.5 ${className}`}>
+      <div className={`flex flex-col gap-1.5 ${fill ? 'h-full min-h-0' : ''} ${className}`}>
         {label && <span className={labelClass}>{label}</span>}
         <div className="flex flex-wrap gap-2">
           <ToolbarButton active={editor?.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Жирний">
@@ -104,7 +106,7 @@ export default function SmartTextarea({
             <Link2 size={14} /> Посилання
           </ToolbarButton>
         </div>
-        <EditorContent editor={editor} />
+        <EditorContent editor={editor} className={fill ? 'min-h-0 flex-1 [&>.ProseMirror]:h-full [&>.ProseMirror]:resize-none' : undefined} />
         {hint && <span className={hintClass}>{hint}</span>}
       </div>
 

@@ -46,8 +46,8 @@ describe('CampaignController.create', () => {
 describe('CampaignController.listMine', () => {
   it('strips gm_notes from campaigns the user is not GM of, keeps them where they are', async () => {
     CampaignModel.findAllForUser.mockResolvedValue([
-      { id: 'c1', gm_notes: 'secret GM stuff', is_gm: true },
-      { id: 'c2', gm_notes: 'other GM secret', is_gm: false },
+      { id: 'c1', gm_id: 'user-1', gm_notes: 'secret GM stuff', is_gm: true },
+      { id: 'c2', gm_id: 'gm-2', gm_notes: 'other GM secret', is_gm: false },
     ]);
     const req = mockReq();
     const res = mockRes();
@@ -61,6 +61,29 @@ describe('CampaignController.listMine', () => {
     expect(mine.gm_notes).toBe('secret GM stuff');
     expect(notMine.gm_notes).toBeUndefined();
     expect('gm_notes' in notMine).toBe(false);
+  });
+
+  it('returns every campaign with GM access for an admin asking for scope=all', async () => {
+    CampaignModel.findAll.mockResolvedValue([{ id: 'c9', gm_id: 'gm-9', gm_notes: 'n' }]);
+    const req = { ...mockReq({ user: { sub: 'admin-1', role: 'admin' } }), query: { scope: 'all' } };
+    const res = mockRes();
+
+    await CampaignController.listMine(req, res);
+
+    expect(CampaignModel.findAllForUser).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      campaigns: [{ id: 'c9', gm_id: 'gm-9', gm_notes: 'n', is_gm: true, access: 'admin' }],
+    });
+  });
+
+  it('ignores scope=all for a non-admin', async () => {
+    CampaignModel.findAllForUser.mockResolvedValue([]);
+    const req = { ...mockReq(), query: { scope: 'all' } };
+
+    await CampaignController.listMine(req, mockRes());
+
+    expect(CampaignModel.findAll).not.toHaveBeenCalled();
+    expect(CampaignModel.findAllForUser).toHaveBeenCalledWith('user-1');
   });
 });
 
@@ -82,7 +105,7 @@ describe('CampaignController.getOne', () => {
 
     expect(CampaignCharacterModel.isMember).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
-      campaign: { id: 'c1', gm_id: 'user-1', gm_notes: 'secret', is_gm: true },
+      campaign: { id: 'c1', gm_id: 'user-1', gm_notes: 'secret', is_gm: true, access: 'gm' },
     });
   });
 
@@ -96,7 +119,20 @@ describe('CampaignController.getOne', () => {
 
     expect(CampaignCharacterModel.isMember).toHaveBeenCalledWith('c1', 'member-1');
     expect(res.json).toHaveBeenCalledWith({
-      campaign: { id: 'c1', gm_id: 'gm-1', is_gm: false },
+      campaign: { id: 'c1', gm_id: 'gm-1', is_gm: false, access: 'player' },
+    });
+  });
+
+  it('gives an admin who is not a member full GM access', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1', gm_notes: 'secret' });
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'admin-1', role: 'admin' } });
+    const res = mockRes();
+
+    await CampaignController.getOne(req, res);
+
+    expect(CampaignCharacterModel.isMember).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      campaign: { id: 'c1', gm_id: 'gm-1', gm_notes: 'secret', is_gm: true, access: 'admin' },
     });
   });
 
@@ -109,48 +145,6 @@ describe('CampaignController.getOne', () => {
     await CampaignController.getOne(req, res);
 
     expect(res.status).toHaveBeenCalledWith(403);
-  });
-});
-
-describe('CampaignController.updateSharedNotes', () => {
-  it('returns 404 when campaign is missing', async () => {
-    CampaignModel.findById.mockResolvedValue(null);
-    const req = mockReq({ params: { id: 'missing' } });
-    const res = mockRes();
-    await CampaignController.updateSharedNotes(req, res);
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('returns 403 when requester is not GM', async () => {
-    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
-    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'not-gm' } });
-    const res = mockRes();
-    await CampaignController.updateSharedNotes(req, res);
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(CampaignModel.updateSharedNotes).not.toHaveBeenCalled();
-  });
-
-  it('updates shared notes for the GM', async () => {
-    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
-    CampaignModel.updateSharedNotes.mockResolvedValue({ id: 'c1', shared_notes: 'hello' });
-    const req = mockReq({ params: { id: 'c1' }, body: { shared_notes: 'hello' }, user: { sub: 'gm-1' } });
-    const res = mockRes();
-
-    await CampaignController.updateSharedNotes(req, res);
-
-    expect(CampaignModel.updateSharedNotes).toHaveBeenCalledWith('c1', 'hello');
-    expect(res.json).toHaveBeenCalledWith({ campaign: { id: 'c1', shared_notes: 'hello' } });
-  });
-
-  it('defaults shared_notes to empty string when not provided', async () => {
-    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
-    CampaignModel.updateSharedNotes.mockResolvedValue({ id: 'c1', shared_notes: '' });
-    const req = mockReq({ params: { id: 'c1' }, body: {}, user: { sub: 'gm-1' } });
-    const res = mockRes();
-
-    await CampaignController.updateSharedNotes(req, res);
-
-    expect(CampaignModel.updateSharedNotes).toHaveBeenCalledWith('c1', '');
   });
 });
 
@@ -327,5 +321,24 @@ describe('CampaignController.remove', () => {
     expect(CampaignModel.remove).toHaveBeenCalledWith('c1');
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
+  });
+});
+
+describe('CampaignController.regenerateInviteCode', () => {
+  it('returns 403 for a player', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    const res = mockRes();
+    await CampaignController.regenerateInviteCode(mockReq({ params: { id: 'c1' }, user: { sub: 'p1' } }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CampaignModel.regenerateInviteCode).not.toHaveBeenCalled();
+  });
+
+  it('issues a new code for the GM', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CampaignModel.regenerateInviteCode.mockResolvedValue({ id: 'c1', invite_code: 'NEWCODE1' });
+    const res = mockRes();
+    await CampaignController.regenerateInviteCode(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' } }), res);
+    expect(CampaignModel.regenerateInviteCode).toHaveBeenCalledWith('c1');
+    expect(res.json).toHaveBeenCalledWith({ campaign: { id: 'c1', invite_code: 'NEWCODE1' } });
   });
 });

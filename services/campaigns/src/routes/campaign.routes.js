@@ -2,8 +2,8 @@ const express = require('express');
 const requireAuth = require('../middleware/auth.middleware');
 const CampaignController = require('../controllers/campaign.controller');
 const CampaignCharacterController = require('../controllers/campaign-character.controller');
-const CampaignGalleryController = require('../controllers/campaign-gallery.controller');
-const CampaignMapController = require('../controllers/campaign-map.controller');
+const BoardController = require('../controllers/board.controller');
+const EventsController = require('../controllers/events.controller');
 const CampaignSessionController = require('../controllers/campaign-session.controller');
 const CombatController = require('../controllers/combat.controller');
 
@@ -19,10 +19,13 @@ router.get('/', wrap(CampaignController.listMine));
 router.get('/:id', wrap(CampaignController.getOne));
 router.patch('/:id', wrap(CampaignController.rename));
 router.delete('/:id', wrap(CampaignController.remove));
-router.patch('/:id/shared-notes', wrap(CampaignController.updateSharedNotes));
 router.patch('/:id/gm-notes', wrap(CampaignController.updateGmNotes));
 router.patch('/:id/description', wrap(CampaignController.updateDescription));
 router.patch('/:id/date', wrap(CampaignController.updateCurrentDate));
+router.post('/:id/invite-code/regenerate', wrap(CampaignController.regenerateInviteCode));
+
+// Server-Sent Events: сповіщення відкритих вкладок про зміни в кампанії.
+router.get('/:id/events', wrap(EventsController.stream));
 
 router.post('/:id/characters', wrap(CampaignCharacterController.addByGm));
 router.get('/:id/characters', wrap(CampaignCharacterController.list));
@@ -30,13 +33,13 @@ router.delete('/:id/characters/:characterId', wrap(CampaignCharacterController.r
 router.post('/:id/characters/experience', wrap(CampaignCharacterController.grantExperience));
 router.post('/:id/leave', wrap(CampaignCharacterController.leave));
 
-router.get('/:id/gallery', wrap(CampaignGalleryController.list));
-router.post('/:id/gallery', wrap(CampaignGalleryController.add));
-router.delete('/:id/gallery/:imageId', wrap(CampaignGalleryController.remove));
-
-router.get('/:id/maps', wrap(CampaignMapController.list));
-router.post('/:id/maps', wrap(CampaignMapController.add));
-router.delete('/:id/maps/:cardId', wrap(CampaignMapController.remove));
+// Стіл (zone=table) і Ширма (zone=screen)
+router.get('/:id/board', wrap(BoardController.list));
+router.post('/:id/board', wrap(BoardController.add));
+router.put('/:id/board/order', wrap(BoardController.reorder));
+router.patch('/:id/board/:itemId', wrap(BoardController.update));
+router.post('/:id/board/:itemId/refresh', wrap(BoardController.refresh));
+router.delete('/:id/board/:itemId', wrap(BoardController.remove));
 
 router.get('/:id/sessions', wrap(CampaignSessionController.list));
 router.post('/:id/sessions', wrap(CampaignSessionController.add));

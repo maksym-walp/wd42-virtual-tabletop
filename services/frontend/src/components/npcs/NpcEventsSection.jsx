@@ -11,7 +11,9 @@ import Button from '../ui/Button';
 // (calendar_event_participants) — the same list the event form edits — so
 // adding the NPC here makes it show up as a participant there and vice versa.
 // Managing events is a chronology-manager action (admin/game_master).
-export default function NpcEventsSection({ npcId, Section }) {
+// Той самий блок стоїть на листі персонажа гравця (вкладка «Наратив») —
+// учасником події може бути й персонаж; who — як назвати його в текстах.
+export default function NpcEventsSection({ npcId, Section, who = 'НІПа', emptyText = 'Не брав участі в жодній події' }) {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'game_master';
   const [events, setEvents] = useState([]);
@@ -38,7 +40,7 @@ export default function NpcEventsSection({ npcId, Section }) {
 
   return (
     <Section title="Події">
-      {events.length === 0 && !adding && <p className="text-sm text-text-dim">Не брав участі в жодній події</p>}
+      {events.length === 0 && !adding && <p className="text-sm text-text-dim">{emptyText}</p>}
       <ul className="flex flex-col gap-2">
         {events.map((event) => (
           <li key={event.id} className="flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
@@ -53,7 +55,7 @@ export default function NpcEventsSection({ npcId, Section }) {
               <button
                 type="button" className="flex h-8 w-8 items-center justify-center text-sm text-danger" title="Прибрати з учасників"
                 onClick={() => {
-                  if (confirm(`Прибрати НІПа з учасників події «${event.name}»?`)) {
+                  if (confirm(`Прибрати ${who} з учасників події «${event.name}»?`)) {
                     run(() => chronologyApi.removeEventParticipant(event.calendar_id, event.id, npcId));
                   }
                 }}

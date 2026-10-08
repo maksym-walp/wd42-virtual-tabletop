@@ -6,6 +6,7 @@ import chronologyApi from '../api/chronology';
 import mapsApi from '../api/maps';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
+import characterApi from '../api/characterSheet';
 import { eventDateRangeLabel, eventPlaceLabel, eventSortKey } from '../utils/chronologyEvent';
 import CatalogTabs from '../components/CatalogTabs';
 import EventForm from '../components/chronology/EventForm';
@@ -48,8 +49,15 @@ export default function ChronologyEvents() {
     chronologyApi.listMonths(id),
     chronologyApi.listEvents(id, campaignId),
     mapsApi.listLocations(),
-    Promise.all([npcsApi.list(), bestiaryApi.list()]),
-  ]).then(([cal, monthsList, eventsList, locationsList, [npcs, creatures]]) => {
+    // Персонажі гравців теж можуть бути учасниками — їхні події видно на
+    // вкладці «Наратив» листа персонажа. Список — власні та прикріплені до
+    // кампаній, де користувач майстер (адмін бачить усіх).
+    Promise.all([
+      npcsApi.list(),
+      bestiaryApi.list(),
+      characterApi.list({ includeGmCampaigns: true }).catch(() => []),
+    ]),
+  ]).then(([cal, monthsList, eventsList, locationsList, [npcs, creatures, characters]]) => {
     setCalendar(cal);
     setMonths(monthsList);
     setEvents(eventsList);
@@ -57,6 +65,7 @@ export default function ChronologyEvents() {
     setCharacterOptions([
       ...npcs.map((n) => ({ key: n.id, label: `${n.name} (НІП)` })),
       ...creatures.map((c) => ({ key: c.id, label: `${c.name} (Істота)` })),
+      ...characters.map((c) => ({ key: c.id, label: `${c.name} (Персонаж)` })),
     ]);
   });
 

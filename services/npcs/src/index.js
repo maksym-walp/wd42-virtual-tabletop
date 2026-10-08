@@ -5,6 +5,7 @@ const cors = require('cors');
 const npcRoutes = require('./routes/npc.routes');
 const factionRoutes = require('./routes/faction.routes');
 const collectionRoutes = require('./routes/collection.routes');
+const characterRoutes = require('./routes/character.routes');
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use('/npcs', npcRoutes);
 app.use('/factions', factionRoutes);
 app.use('/collections', collectionRoutes);
+app.use('/characters', characterRoutes);
 
 app.use((err, req, res, next) => {
   const status = err.statusCode || 500;

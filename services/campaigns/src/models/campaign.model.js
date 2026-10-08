@@ -5,24 +5,36 @@ function generateInviteCode() {
   return crypto.randomBytes(6).toString('base64url').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 }
 
+// invite_code UNIQUE: на рідкісну колізію (23505) пробуємо інший код.
+async function withUniqueInviteCode(run) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { rows } = await run(generateInviteCode());
+      return rows[0] || null;
+    } catch (err) {
+      if (err.code === '23505') { lastErr = err; continue; }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 const CampaignModel = {
   async create(gmId, name) {
-    let lastErr;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const { rows } = await pool.query(
-          `INSERT INTO campaigns.campaigns (gm_id, name, invite_code)
-           VALUES ($1, $2, $3)
-           RETURNING *`,
-          [gmId, name, generateInviteCode()]
-        );
-        return rows[0];
-      } catch (err) {
-        if (err.code === '23505') { lastErr = err; continue; }
-        throw err;
-      }
-    }
-    throw lastErr;
+    return withUniqueInviteCode((code) => pool.query(
+      `INSERT INTO campaigns.campaigns (gm_id, name, invite_code)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [gmId, name, code]
+    ));
+  },
+
+  async regenerateInviteCode(id) {
+    return withUniqueInviteCode((code) => pool.query(
+      `UPDATE campaigns.campaigns SET invite_code = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, code]
+    ));
   },
 
   // Joined with the GM's username so every campaign-scoped controller (they
@@ -70,12 +82,15 @@ const CampaignModel = {
     return rows;
   },
 
-  async updateSharedNotes(id, sharedNotes) {
+  // Адмінський огляд: усі кампанії з ніком майстра.
+  async findAll() {
     const { rows } = await pool.query(
-      `UPDATE campaigns.campaigns SET shared_notes = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id, sharedNotes]
+      `SELECT cp.*, u.username AS gm_username
+       FROM campaigns.campaigns cp
+       LEFT JOIN auth.users u ON u.id = cp.gm_id
+       ORDER BY cp.created_at DESC`
     );
-    return rows[0] || null;
+    return rows;
   },
 
   async updateDescription(id, description) {
@@ -188,6 +203,16 @@ const CampaignModel = {
       [characterId, userId]
     );
     return rows.length > 0;
+  },
+
+  // Кампанії, до яких прикріплено персонажа — кому розіслати real-time
+  // подію, коли лист персонажа синхронізує ХП.
+  async campaignIdsForCharacter(characterId) {
+    const { rows } = await pool.query(
+      `SELECT campaign_id FROM campaigns.campaign_characters WHERE character_id = $1`,
+      [characterId]
+    );
+    return rows.map((r) => r.campaign_id);
   },
 };
 

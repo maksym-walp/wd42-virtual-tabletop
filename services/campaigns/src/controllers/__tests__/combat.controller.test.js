@@ -8,6 +8,7 @@ const CampaignCharacterModel = require('../../models/campaign-character.model');
 const CombatSceneModel = require('../../models/combat-scene.model');
 const CombatantModel = require('../../models/combatant.model');
 const CombatController = require('../combat.controller');
+const bus = require('../../realtime/bus');
 
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
@@ -631,6 +632,8 @@ describe('CombatController.nextRound', () => {
 });
 
 describe('CombatController.syncHpFromCharacterSheet', () => {
+  beforeEach(() => CampaignModel.campaignIdsForCharacter.mockResolvedValue([]));
+
   it('404s when the character does not exist', async () => {
     CampaignModel.findCharacterOwner.mockResolvedValue(null);
     const req = mockReq({ params: { characterId: 'ch1' }, body: { health: 10 }, user: { sub: 'player-1' } });
@@ -678,5 +681,49 @@ describe('CombatController.syncHpFromCharacterSheet', () => {
 
     expect(CombatantModel.updateHpByCharacterId).toHaveBeenCalledWith('ch1', { health: 10, temp_hp: 2 });
     expect(res.json).toHaveBeenCalledWith({ combatants: [{ id: 'cb1', health: 10, temp_hp: 2 }] });
+  });
+});
+
+describe('CombatController real-time events', () => {
+  it('publishes a combat event to the campaign after a GM mutation', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CombatSceneModel.create.mockResolvedValue({ id: 's1' });
+    const listener = jest.fn();
+    const unsubscribe = bus.subscribe('c1', listener);
+
+    await CombatController.createScene(mockReq({ params: { id: 'c1' }, body: {}, user: { sub: 'gm-1' } }), mockRes());
+
+    unsubscribe();
+    expect(listener).toHaveBeenCalledWith('combat');
+  });
+
+  it('lets an admin who is not the GM run GM-only actions', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    CombatSceneModel.create.mockResolvedValue({ id: 's1' });
+    const res = mockRes();
+
+    await CombatController.createScene(
+      mockReq({ params: { id: 'c1' }, body: {}, user: { sub: 'admin-1', role: 'admin' } }), res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('notifies every campaign the character is attached to when its sheet syncs HP', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'player-1' });
+    CombatantModel.updateHpByCharacterId.mockResolvedValue([]);
+    CampaignModel.campaignIdsForCharacter.mockResolvedValue(['c1', 'c2']);
+    const l1 = jest.fn();
+    const l2 = jest.fn();
+    const off1 = bus.subscribe('c1', l1);
+    const off2 = bus.subscribe('c2', l2);
+
+    await CombatController.syncHpFromCharacterSheet(
+      mockReq({ params: { characterId: 'ch1' }, body: { health: 3 }, user: { sub: 'player-1' } }), mockRes(),
+    );
+
+    off1(); off2();
+    expect(l1.mock.calls.map(([t]) => t)).toEqual(['combat', 'characters']);
+    expect(l2.mock.calls.map(([t]) => t)).toEqual(['combat', 'characters']);
   });
 });

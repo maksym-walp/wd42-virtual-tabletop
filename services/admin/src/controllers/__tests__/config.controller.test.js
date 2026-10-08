@@ -89,3 +89,74 @@ describe('ConfigController.update', () => {
     expect(res.json).toHaveBeenCalledWith({ config: { key: 'weapon_types', value } });
   });
 });
+
+describe('ConfigController.update — conditions', () => {
+  const valid = [
+    { key: 'exhaustion', label: 'Втома', description: 'Опис', max_level: 6 },
+    { key: 'injury', label: 'Поранення', description: '', max_level: null },
+  ];
+  const put = async (value) => {
+    const res = mockRes();
+    await ConfigController.update(mockReq({ params: { key: 'conditions' }, body: { value } }), res);
+    return res;
+  };
+
+  it('200 for a valid list and stores descriptions as-is', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'conditions', value: valid });
+    const res = await put(valid);
+    expect(ConfigModel.upsert).toHaveBeenCalledWith('conditions', valid);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('400 for a non-integer max_level', async () => {
+    const res = await put([{ key: 'x', label: 'X', max_level: 2.5 }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a too-long description', async () => {
+    const res = await put([{ key: 'x', label: 'X', description: 'a'.repeat(2001) }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('ConfigController.update — currencies', () => {
+  const pair = (key, high, low, extra = {}) => ({
+    key, label: key, description: '', convertible: true, rate: 100,
+    high: { key: high, name: high, metal: 'золото' },
+    low: { key: low, name: low, metal: 'срібло' },
+    ...extra,
+  });
+  const put = async (value) => {
+    const res = mockRes();
+    await ConfigController.update(mockReq({ params: { key: 'currencies' }, body: { value } }), res);
+    return res;
+  };
+
+  it('200 for valid pairs, including a non-convertible one without a rate', async () => {
+    const value = [pair('arbor', 'alios', 'delios'), pair('other', 'gold', 'gems', { convertible: false, rate: null })];
+    ConfigModel.upsert.mockResolvedValue({ key: 'currencies', value });
+    const res = await put(value);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(ConfigModel.upsert).toHaveBeenCalledWith('currencies', value);
+  });
+
+  it('400 when a denomination key repeats across pairs', async () => {
+    const res = await put([pair('a', 'alios', 'delios'), pair('b', 'alios', 'other')]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a convertible pair without a valid rate', async () => {
+    const res = await put([pair('a', 'alios', 'delios', { rate: 1 })]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a denomination key with invalid characters', async () => {
+    const res = await put([pair('a', 'Альґос', 'delios')]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when a denomination is missing', async () => {
+    const res = await put([{ ...pair('a', 'alios', 'delios'), low: undefined }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});

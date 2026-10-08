@@ -1,5 +1,7 @@
 const CampaignModel = require('../models/campaign.model');
 const CampaignCharacterModel = require('../models/campaign-character.model');
+const bus = require('../realtime/bus');
+const { canManage, canView } = require('./load-campaign');
 
 const CampaignCharacterController = {
   // Спосіб А: гравець сам приєднує власного персонажа за invite_code
@@ -20,6 +22,7 @@ const CampaignCharacterController = {
 
     const added = await CampaignCharacterModel.add(campaign.id, character_id);
     if (!added) return res.status(200).json({ message: 'Персонаж вже приєднаний до цієї кампанії', campaign });
+    bus.publish(campaign.id, 'characters');
     res.status(201).json({ campaign, character_id });
   },
 
@@ -27,7 +30,7 @@ const CampaignCharacterController = {
   async addByGm(req, res) {
     const campaign = await CampaignModel.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
-    if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const { character_id } = req.body;
     if (!character_id) return res.status(400).json({ message: 'character_id є обовʼязковим' });
@@ -37,6 +40,7 @@ const CampaignCharacterController = {
 
     const added = await CampaignCharacterModel.add(campaign.id, character_id);
     if (!added) return res.status(200).json({ message: 'Персонаж вже приєднаний до цієї кампанії' });
+    bus.publish(campaign.id, 'characters');
     res.status(201).json({ character_id });
   },
 
@@ -44,9 +48,7 @@ const CampaignCharacterController = {
     const campaign = await CampaignModel.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
 
-    const isGm = campaign.gm_id === req.user.sub;
-    const isMember = isGm || await CampaignCharacterModel.isMember(campaign.id, req.user.sub);
-    if (!isMember) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!await canView(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const characters = await CampaignCharacterModel.listWithOwners(campaign.id);
     const visible = characters.map((ch) => {
@@ -74,9 +76,10 @@ const CampaignCharacterController = {
   async remove(req, res) {
     const campaign = await CampaignModel.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
-    if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     await CampaignCharacterModel.remove(campaign.id, req.params.characterId);
+    bus.publish(campaign.id, 'characters');
     res.status(204).send();
   },
 
@@ -84,7 +87,7 @@ const CampaignCharacterController = {
   async grantExperience(req, res) {
     const campaign = await CampaignModel.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: 'Кампанію не знайдено' });
-    if (campaign.gm_id !== req.user.sub) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const amount = parseInt(req.body.amount, 10);
     if (!Number.isInteger(amount) || amount === 0) {
@@ -92,6 +95,7 @@ const CampaignCharacterController = {
     }
 
     const updated = await CampaignCharacterModel.grantExperienceToAll(campaign.id, amount);
+    bus.publish(campaign.id, 'characters');
     res.json({ updated: updated.length });
   },
 
@@ -106,6 +110,7 @@ const CampaignCharacterController = {
 
     const removed = await CampaignCharacterModel.removeAllForUser(campaign.id, req.user.sub);
     if (!removed) return res.status(404).json({ message: 'Ви не берете участі в цій кампанії' });
+    bus.publish(campaign.id, 'characters');
     res.status(204).send();
   },
 };

@@ -3,8 +3,9 @@ import api from './client';
 const BASE = '/api/campaigns';
 
 const campaignApi = {
-  async list() {
-    const { data } = await api.get(BASE + '/');
+  // scope='all' — адмін отримує всі кампанії (для інших бекенд ігнорує).
+  async list({ scope } = {}) {
+    const { data } = await api.get(BASE + '/', { params: scope ? { scope } : undefined });
     return data.campaigns;
   },
 
@@ -15,11 +16,6 @@ const campaignApi = {
 
   async getOne(id) {
     const { data } = await api.get(`${BASE}/${id}`);
-    return data.campaign;
-  },
-
-  async updateSharedNotes(id, shared_notes) {
-    const { data } = await api.patch(`${BASE}/${id}/shared-notes`, { shared_notes });
     return data.campaign;
   },
 
@@ -42,6 +38,11 @@ const campaignApi = {
   // разом — див. 60-campaign-time-tracking.sql / CampaignController.updateCurrentDate).
   async updateCurrentDate(id, { calendar_id, current_year, current_month_id, current_day }) {
     const { data } = await api.patch(`${BASE}/${id}/date`, { calendar_id, current_year, current_month_id, current_day });
+    return data.campaign;
+  },
+
+  async regenerateInviteCode(id) {
+    const { data } = await api.post(`${BASE}/${id}/invite-code/regenerate`);
     return data.campaign;
   },
 
@@ -81,36 +82,37 @@ const campaignApi = {
     return data; // { updated: <count> }
   },
 
-  // Галерея майстра: файл спершу летить у media-service, а сюди приходить
-  // уже готовий URL — саме цей запис і робить зображення власністю кампанії.
-  async listGallery(id) {
-    const { data } = await api.get(`${BASE}/${id}/gallery`);
-    return data.images;
+  // Стіл (zone='table') і Ширма (zone='screen'). Записи каталогів бекенд
+  // зберігає знімком картки (назва, зображення, опис) — гравці бачать лише
+  // його. Гравцеві повертаються тільки видимі записи Столу.
+  async listBoard(id, zone = 'table') {
+    const { data } = await api.get(`${BASE}/${id}/board`, { params: { zone } });
+    return data.items;
   },
 
-  async addGalleryImage(id, image_url) {
-    const { data } = await api.post(`${BASE}/${id}/gallery`, { image_url });
-    return data.image;
+  // { zone, kind, ref_id?, ref_subtype?, title?, content?, image_url?, is_visible? }
+  async addBoardItem(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/board`, payload);
+    return data.item;
   },
 
-  async removeGalleryImage(id, imageId) {
-    await api.delete(`${BASE}/${id}/gallery/${imageId}`);
+  // { zone?, is_visible?, is_featured?, title?, subtitle?, content?, image_url? }
+  async updateBoardItem(id, itemId, payload) {
+    const { data } = await api.patch(`${BASE}/${id}/board/${itemId}`, payload);
+    return data.item;
   },
 
-  // Map "cards": a campaign references standalone maps (maps live in the maps
-  // service; here we only keep links to them).
-  async listMapCards(id) {
-    const { data } = await api.get(`${BASE}/${id}/maps`);
-    return data.maps;
+  async refreshBoardItem(id, itemId) {
+    const { data } = await api.post(`${BASE}/${id}/board/${itemId}/refresh`);
+    return data.item;
   },
 
-  async addMapCard(id, map_id) {
-    const { data } = await api.post(`${BASE}/${id}/maps`, { map_id });
-    return data.card;
+  async reorderBoard(id, zone, ids) {
+    await api.put(`${BASE}/${id}/board/order`, { zone, ids });
   },
 
-  async removeMapCard(id, cardId) {
-    await api.delete(`${BASE}/${id}/maps/${cardId}`);
+  async removeBoardItem(id, itemId) {
+    await api.delete(`${BASE}/${id}/board/${itemId}`);
   },
 
   // Session recaps: GM-authored notes about past sessions.

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import diceApi from '../api/dice';
 
 const DiceContext = createContext(null);
@@ -10,6 +10,27 @@ export function DiceProvider({ children }) {
   const [error, setError] = useState('');
   const [lastRoll, setLastRoll] = useState(null);
   const [recent, setRecent] = useState([]);
+  // Скільки вбудованих панелей (DicePanel поза Sheet) зараз змонтовано —
+  // поки є хоч одна, rollAndShow не відкриває плаваючий Sheet: результат
+  // і так видно у вбудованій панелі.
+  const inlinePanels = useRef(0);
+  // Чернетка панелі кубиків (режим, модифікатор, формула) живе тут, а не в
+  // DicePanel: Sheet розмонтовує вміст при закритті, а формула має
+  // лишатися між відкриттями й бути спільною для плаваючої та вбудованої панелі.
+  const [mode, setMode] = useState('normal');
+  const [modifier, setModifier] = useState(0);
+  const [formulaInput, setFormulaInput] = useState('');
+  const [inlinePanelActive, setInlinePanelActive] = useState(false);
+
+  const registerInlinePanel = useCallback(() => {
+    inlinePanels.current += 1;
+    setInlinePanelActive(true);
+    setIsOpen(false);
+    return () => {
+      inlinePanels.current -= 1;
+      setInlinePanelActive(inlinePanels.current > 0);
+    };
+  }, []);
 
   const open = () => setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -34,7 +55,7 @@ export function DiceProvider({ children }) {
   // Used by [[formula]] buttons embedded in spell/skill text: open the
   // widget so the result is visible, then roll.
   const rollAndShow = (formula) => {
-    open();
+    if (inlinePanels.current === 0) open();
     return roll(formula).catch(() => {});
   };
 
@@ -45,7 +66,11 @@ export function DiceProvider({ children }) {
 
   return (
     <DiceContext.Provider
-      value={{ isOpen, open, close, toggle, rolling, error, lastRoll, recent, roll, rollAndShow, clearRecent }}
+      value={{
+        isOpen, open, close, toggle, rolling, error, lastRoll, recent, roll, rollAndShow, clearRecent,
+        inlinePanelActive, registerInlinePanel,
+        mode, setMode, modifier, setModifier, formulaInput, setFormulaInput,
+      }}
     >
       {children}
     </DiceContext.Provider>

@@ -41,3 +41,16 @@ describe('FactionModel.findMembershipsByNpc', () => {
     expect(params).toEqual(['n1', 'u1', false]);
   });
 });
+
+describe('FactionModel.findMembershipsByCharacter', () => {
+  it('reads character memberships with role, filtered to visible factions', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'f1', role: 'r' }] });
+
+    await expect(FactionModel.findMembershipsByCharacter('ch1', 'u1', true)).resolves.toEqual([{ id: 'f1', role: 'r' }]);
+
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/fm\.member_type = 'character' AND fm\.member_id = \$1/);
+    expect(sql).toMatch(/\$3::bool OR f\.created_by = \$2 OR f\.is_public = true/);
+    expect(params).toEqual(['ch1', 'u1', true]);
+  });
+});

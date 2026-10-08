@@ -45,3 +45,16 @@ describe('RelationshipModel writes', () => {
     expect(pool.query.mock.calls[1][0]).toMatch(/DELETE FROM npcs\.npc_relationships WHERE id = \$2 AND npc_id = \$1/);
   });
 });
+
+describe('RelationshipModel.findByCharacterTarget', () => {
+  it('reads character-targeted rows, filtered to NPCs the viewer can read', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'r1' }] });
+
+    await expect(RelationshipModel.findByCharacterTarget('ch1', 'u1', false)).resolves.toEqual([{ id: 'r1' }]);
+
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/r\.target_type = 'character' AND r\.target_id = \$1/);
+    expect(sql).toMatch(/\$3::bool OR n\.created_by = \$2 OR n\.is_public = true/);
+    expect(params).toEqual(['ch1', 'u1', false]);
+  });
+});

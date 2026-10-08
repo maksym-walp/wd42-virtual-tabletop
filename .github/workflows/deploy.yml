@@ -60,7 +60,18 @@ jobs:
           cd /opt/walp-tabletop
           git fetch origin production
           git reset --hard origin/production
-          docker compose -f docker-compose.prod.yml up -d --build
+          # BuildKit resolves base-image metadata (node:20-alpine) against
+          # Docker Hub on every build, even when the image is cached, so a
+          # transient registry/TLS timeout fails the whole deploy — retry the
+          # build a few times before giving up. Running containers are left
+          # untouched until the build succeeds.
+          for attempt in 1 2 3; do
+            if docker compose -f docker-compose.prod.yml build; then break; fi
+            if [ "$attempt" -eq 3 ]; then echo "Build failed after 3 attempts" >&2; exit 1; fi
+            echo "Build attempt $attempt failed, retrying in 20s..." >&2
+            sleep 20
+          done
+          docker compose -f docker-compose.prod.yml up -d
           # nginx.prod.conf is bind-mounted, so "up -d" alone won't reload it
           # or re-resolve backend container IPs if only the file content
           # changed (compose only recreates containers on service-spec

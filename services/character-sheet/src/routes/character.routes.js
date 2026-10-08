@@ -7,6 +7,7 @@ const TreeProgressController = require('../controllers/tree-progress.controller'
 const EquipmentController = require('../controllers/equipment.controller');
 const AbilityController = require('../controllers/ability.controller');
 const RitualTrackerController = require('../controllers/ritual-tracker.controller');
+const ConfigController = require('../controllers/config.controller');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -20,6 +21,8 @@ router.use(requireAuth);
 // Characters
 router.get('/',       wrap(CharacterController.list));
 router.get('/community', wrap(CharacterController.listCommunity));
+// Перед /:id, інакше 'config' сприймався б як id персонажа.
+router.get('/config', wrap(ConfigController.getCharacterConfig));
 router.post('/',      wrap(CharacterController.create));
 router.get('/:id',    wrap(CharacterController.getSheet));
 router.put('/:id',    wrap(CharacterController.update));

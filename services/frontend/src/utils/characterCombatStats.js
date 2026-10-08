@@ -1,4 +1,4 @@
-import { CHARACTERISTICS, PHYSIQUE_HEALTH, skillsToCharLevel } from '../constants/characterSheet';
+import { ARCHETYPES, CHARACTERISTICS, PHYSIQUE_HEALTH, skillsToCharLevel } from '../constants/characterSheet';
 
 // Максимальне ХП = сума "активних" кубиків здоров'я (перші maxDiceCount -
 // totalCondLevel із набутих кубиків), де maxDiceCount залежить від рівня
@@ -22,4 +22,11 @@ export function computePassiveDefense(equipment, defenseBonus = 0) {
     e.item?.type === 'armor' && e.is_equipped ? sum + (e.item.defense_value || 0) : sum
   ), 0);
   return armorDefense + (defenseBonus ?? 0);
+}
+
+// Максимальна магічна енергія = Чуття магії × множник архетипу — той самий
+// розрахунок, що на сторінці персонажа (CharacterSheet.jsx), для Ширми майстра.
+export function computeMaxMagic(character, skills) {
+  const magicSense = (skills ?? []).find((s) => s.skill_key === 'magic_sense')?.value ?? 1;
+  return magicSense * (ARCHETYPES[character.archetype]?.magicMult ?? 0);
 }

@@ -29,6 +29,22 @@ const RelationshipModel = {
     return rows;
   },
 
+  // NPCs that point at a player character — the "Наратив" tab of the
+  // character sheet. Only NPCs the viewer can read are listed.
+  async findByCharacterTarget(characterId, userId, isAdmin) {
+    const { rows } = await pool.query(
+      `SELECT r.id, r.npc_id, r.label, r.note, r.created_at,
+              jsonb_build_object('id', n.id, 'name', n.name, 'image_url', n.image_url, 'image_crop', n.image_crop) AS npc
+       FROM npcs.npc_relationships r
+       JOIN npcs.npcs n ON n.id = r.npc_id
+       WHERE r.target_type = 'character' AND r.target_id = $1
+         AND ($3::bool OR n.created_by = $2 OR n.is_public = true)
+       ORDER BY n.name ASC`,
+      [characterId, userId, isAdmin]
+    );
+    return rows;
+  },
+
   // Other NPCs that point at this NPC — the "Згадується у зв'язках" block.
   async findIncoming(npcId, userId, isAdmin) {
     const { rows } = await pool.query(

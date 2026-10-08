@@ -189,56 +189,56 @@ const CHARISMA_INSPIRATION = { 1: '—', 2: 'd4', 3: 'd6', 4: 'd8', 5: 'd10', 6:
 // Archetype healing die (one step below health die)
 export const HEALING_DIE = { fighter: 'd8', spellcaster: 'd4', rogue: 'd6' };
 
+// Запасні значення — актуальний список (з описами) редагує адмін
+// (admin.site_configs 'conditions', див. hooks/useCharacterConfig.js).
+// key — значення type у conditions персонажа; max_level null — без обмеження.
 export const CONDITIONS = [
-  { key: 'exhaustion', label: 'Втома',           maxLevel: 6 },
-  { key: 'injury',     label: 'Поранення',        maxLevel: null },
-  { key: 'illness',    label: 'Хвороба',           maxLevel: null },
-  { key: 'poison',     label: 'Отруєння',          maxLevel: null },
-  { key: 'trauma',     label: 'Серйозна травма',   maxLevel: null },
+  { key: 'exhaustion', label: 'Втома',           description: '', max_level: 6 },
+  { key: 'injury',     label: 'Поранення',        description: '', max_level: null },
+  { key: 'illness',    label: 'Хвороба',           description: '', max_level: null },
+  { key: 'poison',     label: 'Отруєння',          description: '', max_level: null },
+  { key: 'trauma',     label: 'Серйозна травма',   description: '', max_level: null },
 ];
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
 
 // Coin denominations by mint, from the character-sheet template (ttrpg-system/*.png) —
-// each mint has a high/low pair at a fixed 1:100 ratio within itself, except
+// each mint has a high/low pair at a fixed rate (1:100) within itself, except
 // "Інші" (infernal gold / gemstones aren't a fixed-rate coinage).
+// Запасні значення — актуальний список редагує адмін (admin.site_configs
+// 'currencies', див. hooks/useCharacterConfig.js). label — назва регіону.
 export const CURRENCIES = [
   {
-    region: 'Великий Арбор',
+    key: 'great_arbor', label: 'Великий Арбор', description: '', convertible: true, rate: 100,
     high: { key: 'alios', name: 'Альґос', metal: 'золото' },
     low: { key: 'delios', name: 'Дельґос', metal: 'срібло' },
-    convertible: true,
   },
   {
-    region: 'Трикоронний монетний договір',
+    key: 'three_crowns', label: 'Трикоронний монетний договір', description: '', convertible: true, rate: 100,
     high: { key: 'asim', name: 'Асім', metal: 'золото' },
     low: { key: 'bronvit', name: 'Бронвіт', metal: 'бронза' },
-    convertible: true,
   },
   {
-    region: 'Карифське царство',
+    key: 'karif', label: 'Карифське царство', description: '', convertible: true, rate: 100,
     high: { key: 'tezar', name: 'Тезар', metal: 'бронза' },
     low: { key: 'kuprum', name: 'Купрум', metal: 'бронза' },
-    convertible: true,
   },
   {
-    region: 'Давларія',
+    key: 'davlaria', label: 'Давларія', description: '', convertible: true, rate: 100,
     high: { key: 'velykyi_tong', name: 'Великий Тонг', metal: 'бронза' },
     low: { key: 'malyi_tong', name: 'Малий Тонг', metal: 'бронза' },
-    convertible: true,
   },
   {
-    region: 'Інші',
+    key: 'other', label: 'Інші', description: '', convertible: false, rate: null,
     high: { key: 'infernalne_zoloto', name: 'Інфернальне золото', metal: null },
     low: { key: 'samotsvity', name: 'Самоцвіти', metal: 'у золоті' },
-    convertible: false,
   },
 ];
 
 // Roll starting/additional health dice: dieSize from ARCHETYPES[x].healthDie (e.g. 10 for 'd10'),
 // maxDiceCount from PHYSIQUE_HEALTH[physiqueLevel]. Returns the sorted dice pool only — callers
 // derive current HP themselves since that depends on context (e.g. crossed-out condition dice).
-// Shared by VitalsTab (reroll) and the character-creation wizard (initial roll).
+// Shared by HealthCard on the character sheet (reroll) and the character-creation wizard (initial roll).
 export function rollHealthDice(dieSize, maxDiceCount, existing = []) {
   const needed = maxDiceCount - existing.length;
   if (needed <= 0) return existing;

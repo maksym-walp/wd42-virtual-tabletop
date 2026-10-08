@@ -2,7 +2,8 @@ const CombatSceneModel = require('../models/combat-scene.model');
 const CombatantModel = require('../models/combatant.model');
 const CampaignModel = require('../models/campaign.model');
 const CampaignCharacterModel = require('../models/campaign-character.model');
-const { loadCampaignOr404, isGm } = require('./load-campaign');
+const bus = require('../realtime/bus');
+const { loadCampaignOr404, canManage, canView, isAdmin } = require('./load-campaign');
 const { deriveCombatStats } = require('../utils/compendium-combat-stats');
 
 const HIDDEN_COMBATANT_FIELDS = ['id', 'name', 'description', 'is_hidden'];
@@ -33,9 +34,8 @@ const CombatController = {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
 
-    const gm = isGm(campaign, req.user.sub);
-    const member = gm || await CampaignCharacterModel.isMember(campaign.id, req.user.sub);
-    if (!member) return res.status(403).json({ message: 'Доступ заборонено' });
+    const gm = canManage(campaign, req.user);
+    if (!gm && !await CampaignCharacterModel.isMember(campaign.id, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
     if (!scene) return res.json({ scene: null, combatants: [] });
@@ -48,44 +48,47 @@ const CombatController = {
   async createScene(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const scene = await CombatSceneModel.create(campaign.id, { image_url: req.body.image_url });
+    bus.publish(campaign.id, 'combat');
     res.status(201).json({ scene });
   },
 
   async updateScene(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const { image_url, round_number } = req.body;
     const scene = await CombatSceneModel.update(req.params.sceneId, campaign.id, { image_url, round_number });
     if (!scene) return res.status(404).json({ message: 'Сцену не знайдено' });
+    bus.publish(campaign.id, 'combat');
     res.json({ scene });
   },
 
   async removeScene(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const removed = await CombatSceneModel.remove(req.params.sceneId, campaign.id);
     if (!removed) return res.status(404).json({ message: 'Сцену не знайдено' });
+    bus.publish(campaign.id, 'combat');
     res.status(204).send();
   },
 
   async addCombatant(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const scene = await CombatSceneModel.findById(req.params.sceneId, campaign.id);
     if (!scene) return res.status(404).json({ message: 'Сцену не знайдено' });
 
     const { compendium_entry_id: compendiumEntryId } = req.body;
     if (compendiumEntryId) {
-      const entry = await CampaignModel.findCompendiumEntry(compendiumEntryId, req.user.sub, req.user.role === 'admin');
+      const entry = await CampaignModel.findCompendiumEntry(compendiumEntryId, req.user.sub, isAdmin(req.user));
       if (!entry) return res.status(404).json({ message: 'Запис компендіуму не знайдено' });
 
       const quantity = Math.min(Math.max(parseInt(req.body.quantity, 10) || 1, 1), MAX_COMPENDIUM_QUANTITY);
@@ -102,6 +105,7 @@ const CombatController = {
       }));
 
       const combatants = await CombatantModel.addMany(scene.id, combatantsData);
+      bus.publish(campaign.id, 'combat');
       return res.status(201).json({ combatants });
     }
 
@@ -114,6 +118,7 @@ const CombatController = {
     }
 
     const combatant = await CombatantModel.add(scene.id, { ...req.body, name: name.trim() });
+    bus.publish(campaign.id, 'combat');
     res.status(201).json({ combatant });
   },
 
@@ -121,7 +126,7 @@ const CombatController = {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
 
-    if (!isGm(campaign, req.user.sub)) {
+    if (!canManage(campaign, req.user)) {
       const onlySelfServiceFields = Object.keys(req.body).every((key) => PLAYER_EDITABLE_FIELDS.includes(key));
       if (!onlySelfServiceFields) return res.status(403).json({ message: 'Доступ заборонено' });
 
@@ -131,16 +136,18 @@ const CombatController = {
 
     const combatant = await CombatantModel.update(req.params.combatantId, campaign.id, req.body);
     if (!combatant) return res.status(404).json({ message: 'Комбатанта не знайдено' });
+    bus.publish(campaign.id, 'combat');
     res.json({ combatant });
   },
 
   async removeCombatant(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const removed = await CombatantModel.remove(req.params.combatantId, campaign.id);
     if (!removed) return res.status(404).json({ message: 'Комбатанта не знайдено' });
+    bus.publish(campaign.id, 'combat');
     res.status(204).send();
   },
 
@@ -149,7 +156,7 @@ const CombatController = {
   async nextTurn(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
     if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
@@ -158,18 +165,20 @@ const CombatController = {
     if (!next) return res.status(404).json({ message: 'Усі комбатанти вже походили цього раунду' });
 
     const combatant = await CombatantModel.markActed(next.id);
+    bus.publish(campaign.id, 'combat');
     res.json({ combatant });
   },
 
   async nextRound(req, res) {
     const campaign = await loadCampaignOr404(req, res);
     if (!campaign) return;
-    if (!isGm(campaign, req.user.sub)) return res.status(403).json({ message: 'Доступ заборонено' });
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
     const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
     if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
 
     const updated = await CombatSceneModel.advanceRound(scene.id, campaign.id);
+    bus.publish(campaign.id, 'combat');
     res.json({ scene: updated });
   },
 
@@ -179,13 +188,18 @@ const CombatController = {
   async syncHpFromCharacterSheet(req, res) {
     const character = await CampaignModel.findCharacterOwner(req.params.characterId);
     if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
-    if (character.user_id !== req.user.sub
+    if (character.user_id !== req.user.sub && !isAdmin(req.user)
       && !await CampaignModel.isCampaignGmForCharacter(req.params.characterId, req.user.sub)) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
     const { health, temp_hp } = req.body;
     const combatants = await CombatantModel.updateHpByCharacterId(req.params.characterId, { health, temp_hp });
+    const campaignIds = await CampaignModel.campaignIdsForCharacter(req.params.characterId);
+    for (const campaignId of campaignIds) {
+      bus.publish(campaignId, 'combat');
+      bus.publish(campaignId, 'characters');
+    }
     res.json({ combatants });
   },
 };

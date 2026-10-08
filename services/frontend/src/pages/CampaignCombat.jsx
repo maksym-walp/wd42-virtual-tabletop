@@ -32,7 +32,7 @@ const customColumnIcons = imagesByKey(
   import.meta.glob('../assets/combat-icons/*.{png,svg}', { eager: true, import: 'default' })
 );
 
-const POLL_INTERVAL_MS = 3500;
+const POLL_INTERVAL_MS = 30000;
 
 // Компактні числові поля в рядках таблиці комбатантів. Не перевикористовує
 // inputClass (той зроблений під повнорозмірні форми, з py-2.5/min-h-11) —
@@ -162,7 +162,7 @@ const COLUMN_HEADERS = [
   { key: 'description', label: 'Опис', Icon: FileText, gmOnly: true },
 ];
 
-export default function CombatTab({ campaignId, isGm, characters }) {
+export default function CombatTab({ campaignId, isGm, characters, version }) {
   const [scene, setScene] = useState(null);
   const [combatants, setCombatants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,8 +177,11 @@ export default function CombatTab({ campaignId, isGm, characters }) {
 
   useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
 
-  // Без WS/SSE-інфраструктури хід і раунд майстра доходять до гравців
-  // періодичним опитуванням, поки вкладка відкрита й активна.
+  // Хід, раунд і ХП доходять миттєво через real-time подію 'combat'
+  // (CampaignDetail → useCampaignEvents змінює version). Рідке опитування
+  // лишається запасним шляхом на випадок розірваного стріму.
+  useEffect(() => { if (version) load(); }, [version, load]);
+
   useEffect(() => {
     const tick = () => { if (!document.hidden) load(); };
     const interval = setInterval(tick, POLL_INTERVAL_MS);

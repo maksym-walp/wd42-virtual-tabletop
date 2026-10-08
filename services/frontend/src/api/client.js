@@ -16,9 +16,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Silent refresh on 401
-let isRefreshing = false;
-let queue = [];
+// Silent refresh on 401. Один спільний запит на оновлення, навіть якщо
+// кілька викликів (axios-інтерсептор, SSE-стрім кампанії) отримали 401 разом.
+let refreshPromise = null;
+
+export function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = axios.post('/api/auth/refresh', {}, { withCredentials: true })
+      .then(({ data }) => {
+        setAccessToken(data.accessToken);
+        return data.accessToken;
+      })
+      .catch((err) => {
+        clearAccessToken();
+        window.location.href = '/login';
+        throw err;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
 
 api.interceptors.response.use(
   (res) => res,
@@ -29,34 +46,10 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        queue.push({ resolve, reject });
-      }).then((token) => {
-        original.headers.Authorization = `Bearer ${token}`;
-        return api(original);
-      });
-    }
-
     original._retry = true;
-    isRefreshing = true;
-
-    try {
-      const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true });
-      setAccessToken(data.accessToken);
-      queue.forEach(({ resolve }) => resolve(data.accessToken));
-      queue = [];
-      original.headers.Authorization = `Bearer ${data.accessToken}`;
-      return api(original);
-    } catch (refreshError) {
-      queue.forEach(({ reject }) => reject(refreshError));
-      queue = [];
-      clearAccessToken();
-      window.location.href = '/login';
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
+    const token = await refreshAccessToken();
+    original.headers.Authorization = `Bearer ${token}`;
+    return api(original);
   }
 );
 

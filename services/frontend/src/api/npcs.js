@@ -80,6 +80,16 @@ const npcsApi = {
     await api.delete(`${NPCS}/${id}/relationships/${relationshipId}`);
   },
 
+  // Звʼязки й фракції з боку персонажа гравця (вкладка «Наратив» листа).
+  async listCharacterRelationships(characterId) {
+    const { data } = await api.get(`${BASE}/characters/${characterId}/relationships`);
+    return data.relationships;
+  },
+  async listCharacterFactions(characterId) {
+    const { data } = await api.get(`${BASE}/characters/${characterId}/factions`);
+    return data.factions;
+  },
+
   // Factions
   async listFactions() {
     const { data } = await api.get(`${BASE}/factions`);

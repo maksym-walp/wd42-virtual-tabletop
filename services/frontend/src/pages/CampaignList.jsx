@@ -10,13 +10,19 @@ import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
 import Field, { inputClass } from '../components/ui/Field';
 import Sheet from '../components/ui/Sheet';
+import { useAuth } from '../context/AuthContext';
+
+const GRID = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
 export default function CampaignList() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [joinOpen, setJoinOpen] = useState(false);
+  const [allCampaigns, setAllCampaigns] = useState(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     campaignApi.list()
@@ -25,10 +31,19 @@ export default function CampaignList() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Адмін має права майстра в будь-якій кампанії — показуємо йому решту.
+  useEffect(() => {
+    if (!isAdmin) return;
+    campaignApi.list({ scope: 'all' }).then(setAllCampaigns).catch(() => {});
+  }, [isAdmin]);
+
+  const mineIds = new Set(campaigns.map((c) => c.id));
+  const others = (allCampaigns ?? []).filter((c) => !mineIds.has(c.id));
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-7xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader
         title="🏰 Мої кампанії"
         action={
@@ -50,11 +65,22 @@ export default function CampaignList() {
           Або приєднайтесь до кампанії майстра за кодом-запрошенням
         </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={GRID}>
           {campaigns.map((c) => (
             <CampaignCard key={c.id} campaign={c} onClick={() => navigate(`/campaigns/${c.id}`)} />
           ))}
         </div>
+      )}
+
+      {isAdmin && others.length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-3 font-display text-xl text-text">Усі кампанії</h2>
+          <div className={GRID}>
+            {others.map((c) => (
+              <CampaignCard key={c.id} campaign={c} onClick={() => navigate(`/campaigns/${c.id}`)} />
+            ))}
+          </div>
+        </section>
       )}
 
       <JoinCampaignSheet
@@ -66,15 +92,20 @@ export default function CampaignList() {
   );
 }
 
+const ACCESS_LABELS = { gm: 'Майстер', admin: 'Адмін', player: 'Гравець' };
+
 function CampaignCard({ campaign: c, onClick }) {
   return (
     <Card onClick={onClick} className="cursor-pointer hover:border-accent/50">
       <div className="mb-3 flex items-start justify-between gap-3">
         <h2 className="font-display text-lg text-text">{c.name}</h2>
         <Badge className={c.is_gm ? 'bg-gold text-bg' : 'border border-border text-text-dim'}>
-          {c.is_gm ? 'Майстер' : 'Гравець'}
+          {ACCESS_LABELS[c.access] ?? (c.is_gm ? 'Майстер' : 'Гравець')}
         </Badge>
       </div>
+      {c.access === 'admin' && c.gm_username && (
+        <p className="mb-1 text-sm text-text-dim">Майстер: {c.gm_username}</p>
+      )}
       {c.is_gm && (
         <p className="text-sm text-text-dim">
           Код запрошення: <span className="font-mono text-gold">{c.invite_code}</span>

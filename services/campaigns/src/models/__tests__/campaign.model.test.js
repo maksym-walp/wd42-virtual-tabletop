@@ -114,15 +114,6 @@ describe('CampaignModel.findCompendiumEntry', () => {
 });
 
 describe('CampaignModel notes updates', () => {
-  it('updateSharedNotes updates shared_notes only', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', shared_notes: 'hi' }] });
-    const updated = await CampaignModel.updateSharedNotes('c1', 'hi');
-    expect(updated).toEqual({ id: 'c1', shared_notes: 'hi' });
-    const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/SET shared_notes = \$2/);
-    expect(params).toEqual(['c1', 'hi']);
-  });
-
   it('updateGmNotes updates gm_notes only', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', gm_notes: 'secret' }] });
     const updated = await CampaignModel.updateGmNotes('c1', 'secret');
@@ -188,5 +179,39 @@ describe('CampaignModel.remove', () => {
   it('returns false when no matching campaign existed', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 0 });
     expect(await CampaignModel.remove('c1')).toBe(false);
+  });
+});
+
+describe('CampaignModel.regenerateInviteCode', () => {
+  it('writes a fresh 8-char code and retries on a unique collision', async () => {
+    const collision = Object.assign(new Error('dup'), { code: '23505' });
+    pool.query
+      .mockRejectedValueOnce(collision)
+      .mockResolvedValueOnce({ rows: [{ id: 'c1', invite_code: 'ABCDEFGH' }] });
+
+    const updated = await CampaignModel.regenerateInviteCode('c1');
+
+    expect(updated).toEqual({ id: 'c1', invite_code: 'ABCDEFGH' });
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    const [sql, params] = pool.query.mock.calls[1];
+    expect(sql).toMatch(/SET invite_code = \$2/);
+    expect(params[0]).toBe('c1');
+    expect(params[1]).toMatch(/^[A-Z0-9]{1,8}$/);
+  });
+});
+
+describe('CampaignModel.findAll', () => {
+  it('lists every campaign with the GM username', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1' }] });
+    await expect(CampaignModel.findAll()).resolves.toEqual([{ id: 'c1' }]);
+    expect(pool.query.mock.calls[0][0]).toMatch(/u\.username AS gm_username/);
+  });
+});
+
+describe('CampaignModel.campaignIdsForCharacter', () => {
+  it('returns the ids of campaigns the character is attached to', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ campaign_id: 'c1' }, { campaign_id: 'c2' }] });
+    await expect(CampaignModel.campaignIdsForCharacter('ch1')).resolves.toEqual(['c1', 'c2']);
+    expect(pool.query.mock.calls[0][1]).toEqual(['ch1']);
   });
 });

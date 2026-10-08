@@ -4,7 +4,10 @@ import { lockPageScroll } from '../../utils/scrollLock';
 
 // Bottom sheet on mobile, centered dialog on wider screens. Shared by
 // Spellbook's mobile filter panel and SkillTree's node-detail panel.
-export default function Sheet({ open, onClose, title, children }) {
+// size='lg' — ширший діалог на десктопі (картка запису зі Столу кампанії).
+const SIZES = { md: 'sm:max-w-md', lg: 'sm:max-w-2xl' };
+
+export default function Sheet({ open, onClose, title, size = 'md', children }) {
   // Fixed overlay — without this, iOS Safari lets the background scroll
   // (and can even snap the underlying page back to top) while the sheet is open.
   useEffect(() => {
@@ -20,7 +23,7 @@ export default function Sheet({ open, onClose, title, children }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-2xl sm:border sm:pb-5"
+        className={`relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] ${SIZES[size] ?? SIZES.md} sm:rounded-2xl sm:border sm:pb-5`}
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           {title && <h2 className="font-display text-lg text-text">{title}</h2>}

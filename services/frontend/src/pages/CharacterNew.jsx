@@ -19,6 +19,7 @@ import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import IntInput from '../components/ui/IntInput';
 import RollButton from '../components/RollButton';
+import useCharacterConfig from '../hooks/useCharacterConfig';
 
 const BASE_BUDGET = 42;
 const ALL_SKILL_KEYS = CHARACTERISTICS.flatMap((c) => c.skills.map((s) => s.key));
@@ -541,6 +542,7 @@ function Step3Vitals({ archetype, skills, healthDice, setHealthDice }) {
 }
 
 function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment, allEquipment }) {
+  const { currencies } = useCharacterConfig();
   const [showPicker, setShowPicker] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -566,9 +568,9 @@ function Step4Equipment({ characterId, money, setMoney, equipment, setEquipment,
       <Card>
         <h2 className="mb-5 font-display text-lg text-accent">4. Гроші</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {CURRENCIES.map((c) => (
-            <div key={c.region} className="rounded-lg bg-bg p-3">
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">{c.region}</h3>
+          {currencies.map((c) => (
+            <div key={c.key ?? c.label} className="rounded-lg bg-bg p-3">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-accent">{c.label}</h3>
               <div className="grid grid-cols-2 gap-3">
                 {[c.high, c.low].map((denom) => (
                   <div key={denom.key}>

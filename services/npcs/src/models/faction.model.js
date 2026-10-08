@@ -156,6 +156,22 @@ const FactionModel = {
     return rows;
   },
 
+  // Factions a player character belongs to (with its role), limited to
+  // factions the viewer can see — the character sheet's "Наратив" tab.
+  // Characters can't lead factions (faction_leaders holds NPCs only).
+  async findMembershipsByCharacter(characterId, userId, isAdmin) {
+    const { rows } = await pool.query(
+      `SELECT f.id, f.name, f.symbol_url, fm.role
+       FROM npcs.faction_members fm
+       JOIN npcs.factions f ON f.id = fm.faction_id
+       WHERE fm.member_type = 'character' AND fm.member_id = $1
+         AND ($3::bool OR f.created_by = $2 OR f.is_public = true)
+       ORDER BY f.name ASC`,
+      [characterId, userId, isAdmin]
+    );
+    return rows;
+  },
+
   async removeMember(factionId, memberType, memberId) {
     const { rowCount } = await pool.query(
       `DELETE FROM npcs.faction_members WHERE faction_id = $1 AND member_type = $2 AND member_id = $3`,
