@@ -16,6 +16,11 @@ export function createCollectionsApi(base) {
       const { data } = await api.get(`${base}${id}`);
       return data.collection;
     },
+    // Колекція разом з повними записами всередині (формат експорту каталогу).
+    async exportOne(id) {
+      const { data } = await api.get(`${base}${id}/export`);
+      return data;
+    },
     async getPublic(id) {
       const { data } = await api.get(`${base}public/${id}`);
       return data.collection;

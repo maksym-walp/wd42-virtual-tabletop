@@ -103,3 +103,4 @@ const SpellController = {
 };
 
 module.exports = SpellController;
+module.exports.sanitizeForExport = sanitizeForExport;

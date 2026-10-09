@@ -98,3 +98,4 @@ const AbilityController = {
 };
 
 module.exports = AbilityController;
+module.exports.sanitizeForExport = sanitizeForExport;

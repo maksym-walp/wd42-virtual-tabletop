@@ -2,6 +2,8 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import DiceRollNode from './DiceRollNode';
+import EntityLinkNode from './EntityLinkNode';
+import EntitySuggest from './EntitySuggest';
 
 // Only "https?://" and root-relative "/..." links render as real, clickable
 // <a href>s — anything else (javascript:, data:, ...) is rejected by the
@@ -14,7 +16,8 @@ export const SAFE_URL_RE = /^(https?:\/\/|\/)/i;
 // "no dangerouslySetInnerHTML anywhere" security story hold: whatever HTML
 // is loaded (ours or POSTed directly to an API), only nodes/marks declared
 // here ever become part of the live DOM.
-export function buildExtensions({ editable, placeholder }) {
+// entitySuggest — { onState, onKeyDown } для підказки «@» (лише в редакторі).
+export function buildExtensions({ editable, placeholder, entitySuggest }) {
   return [
     StarterKit.configure({
       heading: false,
@@ -35,6 +38,8 @@ export function buildExtensions({ editable, placeholder }) {
       HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' },
     }),
     DiceRollNode,
+    EntityLinkNode,
+    ...(editable && entitySuggest ? [EntitySuggest.configure({ handlers: entitySuggest })] : []),
     Placeholder.configure({ placeholder: placeholder || '' }),
   ];
 }

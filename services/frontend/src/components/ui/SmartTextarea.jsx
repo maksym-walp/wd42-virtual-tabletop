@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { Bold, Italic, Dices, Link2 } from 'lucide-react';
+import { Bold, Italic, Dices, Link2, AtSign } from 'lucide-react';
 import Field, { inputClass } from './Field';
 import Button from './Button';
 import Sheet from './Sheet';
 import { buildExtensions } from './tiptap/extensions';
+import EntityPickerSheet from '../entity/EntityPickerSheet';
+import EntitySuggestPopup from '../entity/EntitySuggestPopup';
 
 const labelClass = 'text-xs font-semibold uppercase tracking-wide text-text-dim';
 const hintClass = 'text-xs text-text-dim';
@@ -33,10 +35,20 @@ export default function SmartTextarea({
   const [diceOpen, setDiceOpen] = useState(false);
   const [diceFormula, setDiceFormula] = useState('');
 
+  const [entityOpen, setEntityOpen] = useState(false);
+  // Підказка «@»: плагін редактора створюється один раз, тож віддаємо йому
+  // стабільні обробники, що ходять у актуальний стан через ref.
+  const [suggest, setSuggest] = useState(null);
+  const suggestKeyRef = useRef(null);
+  const entitySuggest = useRef({
+    onState: setSuggest,
+    onKeyDown: (event) => suggestKeyRef.current?.(event) ?? false,
+  }).current;
+
   const emit = (html) => onChange({ target: { value: html } });
 
   const editor = useEditor({
-    extensions: buildExtensions({ editable: true, placeholder }),
+    extensions: buildExtensions({ editable: true, placeholder, entitySuggest }),
     content: value || '',
     onUpdate: ({ editor: ed }) => emit(ed.getHTML()),
     editorProps: {
@@ -102,6 +114,9 @@ export default function SmartTextarea({
           <ToolbarButton onClick={handleOpenDice} title="Кидок кубика">
             <Dices size={14} /> Кубик
           </ToolbarButton>
+          <ToolbarButton onClick={() => setEntityOpen(true)} title="Посилання на запис сайту (або набери @)">
+            <AtSign size={14} /> Запис
+          </ToolbarButton>
           <ToolbarButton onClick={handleOpenLink} title="Посилання">
             <Link2 size={14} /> Посилання
           </ToolbarButton>
@@ -109,6 +124,13 @@ export default function SmartTextarea({
         <EditorContent editor={editor} className={fill ? 'min-h-0 flex-1 [&>.ProseMirror]:h-full [&>.ProseMirror]:resize-none' : undefined} />
         {hint && <span className={hintClass}>{hint}</span>}
       </div>
+
+      <EntityPickerSheet
+        open={entityOpen}
+        onClose={() => setEntityOpen(false)}
+        onPick={(r) => editor.chain().focus().insertEntityLink({ kind: r.kind, id: r.id, name: r.name }).run()}
+      />
+      {suggest && editor && <EntitySuggestPopup state={suggest} editor={editor} keyRef={suggestKeyRef} />}
 
       <Sheet open={linkOpen} onClose={() => setLinkOpen(false)} title="Вставити посилання">
         <div className="flex flex-col gap-4">

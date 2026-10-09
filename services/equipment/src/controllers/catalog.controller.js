@@ -124,4 +124,5 @@ async function getWeaponOptionsHandler(req, res) {
   res.json(await getWeaponOptions());
 }
 
-module.exports = { createCatalogController, UnionController, getWeaponOptionsHandler };
+module.exports = {
+  sanitizeForExport, createCatalogController, UnionController, getWeaponOptionsHandler };

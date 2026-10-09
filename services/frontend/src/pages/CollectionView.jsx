@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Share2, Check, ArrowLeft } from 'lucide-react';
+import { Share2, Check, ArrowLeft, Download } from 'lucide-react';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import SmartTextReader from '../components/SmartTextReader';
 import ShareButton from '../components/ShareButton';
 import CroppedImage from '../components/ui/CroppedImage';
+import { downloadJsonFile } from '../utils/downloadJson';
 
 export default function CollectionView({ domainKey, publicView = false }) {
   const domain = COLLECTION_DOMAINS[domainKey];
@@ -104,6 +105,15 @@ export default function CollectionView({ domainKey, publicView = false }) {
     setCollection((prev) => ({ ...prev, owner_username: ownerUsername, is_owner: ownerId === user?.id }));
   };
 
+  const handleExport = async () => {
+    try {
+      const data = await domain.collectionsApi.exportOne(id);
+      downloadJsonFile(data, `${domainKey}_collection_${id}_export.json`);
+    } catch {
+      alert('Не вдалося експортувати колекцію');
+    }
+  };
+
   const copyShareLink = () => {
     navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
@@ -153,7 +163,14 @@ export default function CollectionView({ domainKey, publicView = false }) {
 
         <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
           <h1 className="font-display text-3xl text-accent">{collection.name}</h1>
-          <ShareButton className="mt-1" url={collection.is_public ? shareUrl : undefined} />
+          <div className="mt-1 flex shrink-0 items-center gap-1.5">
+            {!publicView && (
+              <Button type="button" variant="ghost" size="icon" onClick={handleExport} aria-label="Експорт" title="Експорт колекції разом із записами у JSON">
+                <Download size={16} />
+              </Button>
+            )}
+            <ShareButton url={collection.is_public ? shareUrl : undefined} />
+          </div>
         </div>
         <AuthorBadge
           username={collection.owner_username}

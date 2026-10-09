@@ -165,3 +165,4 @@ const NpcController = {
 };
 
 module.exports = NpcController;
+module.exports.present = present;

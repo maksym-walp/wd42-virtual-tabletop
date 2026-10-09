@@ -10,6 +10,7 @@ router.get('/public/:id', wrap(CollectionController.getPublic));
 
 router.get('/',    requireAuth, wrap(CollectionController.list));
 router.post('/',   requireAuth, wrap(CollectionController.create));
+router.get('/:id/export', requireAuth, wrap(CollectionController.export));
 router.get('/:id', requireAuth, wrap(CollectionController.getOne));
 router.put('/:id', requireAuth, wrap(CollectionController.update));
 router.delete('/:id', requireAuth, wrap(CollectionController.remove));

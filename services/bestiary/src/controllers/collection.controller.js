@@ -1,5 +1,20 @@
 const CollectionModel = require('../models/collection.model');
+const CreatureModel = require('../models/creature.model');
+const { decorateStatBlock } = require('../dto/stat-block.dto');
 const { isAdmin } = require('./access');
+
+// Поля, яких немає (чи не має бути) в експортованому JSON: зображення лежить
+// на диску конкретного деплою, решта — службові/обчислені чи прив'язані до
+// поточного користувача. Спільне для колекції й записів у ній.
+const EXPORT_OMIT_FIELDS = [
+  'image_url', 'image_crop', 'created_at', 'updated_at', 'is_owner', 'owner_username', 'created_by',
+];
+
+function sanitizeForExport(row) {
+  const clean = { ...row };
+  for (const field of EXPORT_OMIT_FIELDS) delete clean[field];
+  return clean;
+}
 
 const CollectionController = {
   async list(req, res) {
@@ -12,6 +27,21 @@ const CollectionController = {
     const collection = await CollectionModel.findById(req.params.id, req.user.sub, isAdmin(req.user));
     if (!collection) return res.status(404).json({ message: 'Колекцію не знайдено' });
     res.json({ collection });
+  },
+
+  // Колекція разом з повними записами всередині (а не лише тим зрізом, що
+  // віддає getOne): кожен запис добирається тим самим findById, що й у каталозі.
+  // Невидимі користувачу записи (чужі приватні) пропускаються.
+  async export(req, res) {
+    const collection = await CollectionModel.findById(req.params.id, req.user.sub, isAdmin(req.user));
+    if (!collection) return res.status(404).json({ message: 'Колекцію не знайдено' });
+    const records = await Promise.all(
+      (collection.items || []).map((item) => CreatureModel.findById(item.id, req.user.sub))
+    );
+    const items = records
+      .filter((record) => record && (record.is_public || record.created_by === req.user.sub || isAdmin(req.user)))
+      .map((record) => sanitizeForExport(decorateStatBlock(record)));
+    res.json({ ...sanitizeForExport(collection), items });
   },
 
   async getPublic(req, res) {

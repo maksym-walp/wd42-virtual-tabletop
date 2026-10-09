@@ -171,6 +171,38 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* Внутрішнє посилання на запис сайту (EntityLinkNode): рамка акцентного
+   кольору + іконка сервісу ліворуч. Селектор з .ProseMirror — щоб перебити
+   загальне `.ProseMirror a` вище. */
+.ProseMirror .entity-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: 100%;
+  margin: 0 0.1em;
+  padding: 0 0.45em 0 0.35em;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  border-radius: 0.4em;
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  color: var(--color-accent);
+  font-weight: 600;
+  line-height: 1.45;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.ProseMirror .entity-link:hover,
+.ProseMirror .entity-link--selected {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+.ProseMirror .entity-link__icon {
+  flex-shrink: 0;
+}
+.ProseMirror .entity-link--missing {
+  border-style: dashed;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
 .ProseMirror:focus {
   outline: none;
 }

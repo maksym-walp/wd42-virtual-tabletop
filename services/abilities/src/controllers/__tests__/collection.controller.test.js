@@ -1,6 +1,8 @@
 jest.mock('../../models/collection.model');
+jest.mock('../../models/ability.model');
 
 const CollectionModel = require('../../models/collection.model');
+const AbilityModel = require('../../models/ability.model');
 const CollectionController = require('../collection.controller');
 
 function mockRes() {
@@ -293,5 +295,35 @@ describe('CollectionController.removeItem', () => {
     const res = mockRes();
 
     await expect(CollectionController.removeItem(req, res)).rejects.toBe(err);
+  });
+});
+
+describe('CollectionController.export', () => {
+  it('returns 404 when the collection is not found or not visible', async () => {
+    CollectionModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+
+    await CollectionController.export(mockReq({ params: { id: 'missing' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('exports collection fields plus full sanitized records, skipping invisible ones', async () => {
+    CollectionModel.findById.mockResolvedValue({
+      id: 'c1', name: 'Набір', description: 'опис', is_public: true,
+      image_url: '/x.png', is_owner: true, owner_username: 'me', user_id: 'user-1',
+      items: [{ id: 'a1', name: 'Удар' }, { id: 'a2', name: 'Чуже' }],
+    });
+    AbilityModel.findById
+      .mockResolvedValueOnce({ id: 'a1', name: 'Удар', mechanical_desc: 'повний опис', image_url: '/a.png', is_owner: true })
+      .mockResolvedValueOnce(null);
+    const res = mockRes();
+
+    await CollectionController.export(mockReq({ params: { id: 'c1' } }), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      id: 'c1', name: 'Набір', description: 'опис', is_public: true,
+      items: [{ id: 'a1', name: 'Удар', mechanical_desc: 'повний опис' }],
+    });
   });
 });

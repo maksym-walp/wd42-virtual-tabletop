@@ -1,5 +1,22 @@
 const CollectionModel = require('../models/collection.model');
+const AbilityModel = require('../models/ability.model');
+const { sanitizeForExport } = require('./ability.controller');
 const { canonicalOnCreate } = require('../middleware/auth.middleware');
+
+// Поля колекції, яких немає (чи не має бути) в експортованому JSON — та сама
+// логіка, що й для записів у каталозі: зображення лежить на диску конкретного
+// деплою, решта — обчислена чи прив'язана до поточного користувача/деплою.
+// `items` замінюється повними записами (не урізаним зрізом із findById).
+const COLLECTION_EXPORT_OMIT_FIELDS = [
+  'image_url', 'image_crop', 'created_at', 'updated_at', 'is_owner', 'owner_username',
+  'is_canonical', 'user_id', 'prerequisite_node_ids', 'prerequisite_logic', 'items',
+];
+
+function sanitizeCollectionForExport(collection, items) {
+  const clean = { ...collection };
+  for (const field of COLLECTION_EXPORT_OMIT_FIELDS) delete clean[field];
+  return { ...clean, items };
+}
 
 const CollectionController = {
   async list(req, res) {
@@ -12,6 +29,20 @@ const CollectionController = {
     const collection = await CollectionModel.findById(req.params.id, req.user.sub, req.user.role === 'admin');
     if (!collection) return res.status(404).json({ message: 'Колекцію не знайдено' });
     res.json({ collection });
+  },
+
+  // Колекція разом з повними записами всередині (а не лише тим зрізом, що
+  // віддає getOne): кожен запис добирається тим самим findById, що й у каталозі,
+  // тож відповідає формату експорту каталогу. Невидимі користувачу записи
+  // (чужі приватні) пропускаються.
+  async export(req, res) {
+    const isAdmin = req.user.role === 'admin';
+    const collection = await CollectionModel.findById(req.params.id, req.user.sub, isAdmin);
+    if (!collection) return res.status(404).json({ message: 'Колекцію не знайдено' });
+    const records = await Promise.all(
+      (collection.items || []).map((item) => AbilityModel.findById(item.id, req.user.sub, isAdmin))
+    );
+    res.json(sanitizeCollectionForExport(collection, records.filter(Boolean).map(sanitizeForExport)));
   },
 
   async getPublic(req, res) {
