@@ -1,45 +1,42 @@
 const pool = require('../config/db');
 
-// sourceTable is always a fixed literal from our own code
-// ('abilities.entries' | 'spellbook.spells'), never user input.
-const KIND_BY_TABLE = {
-  'abilities.entries': 'ability',
-  'spellbook.spells': 'spell',
-};
+// sourceTable is always a fixed literal from our own code, never user input.
+// Only abilities are gated by nodes — spells go through traditions and
+// complexity instead (spell-access.model.js).
 
 // A catalog entry can be gated onto skill-tree nodes two ways, OR'd together:
 //   1. its own prerequisite_node_ids / prerequisite_logic column
 //   2. a skill_tree.node_grants row pointing at it (directly, or at a
 //      collection it belongs to) — the node editor's "робить доступним" / "видає"
 // If neither gate exists, the entry is freely addable (unchanged behaviour).
+//
+// Also returns `allowedForms` — which of the entry's forms the character may
+// take (see form-progress.js for the keys): null = every form (no gates, the
+// entry's own prerequisites met, or an unlocked link for the whole entry /
+// a collection holding it); otherwise the union of the form_keys of the
+// unlocked node_grants links; [] when not met at all.
 async function checkPrerequisites(characterId, sourceTable, itemId) {
-  const itemKind = KIND_BY_TABLE[sourceTable];
-
   const { rows } = await pool.query(
     `SELECT prerequisite_node_ids, prerequisite_logic FROM ${sourceTable} WHERE id = $1`,
     [itemId]
   );
   const item = rows[0];
-  if (!item) return { met: true, missing: [] };
+  if (!item) return { met: true, missing: [], allowedForms: null };
 
   const prereqIds = item.prerequisite_node_ids || [];
 
-  const collectionItemsTable = itemKind === 'spell' ? 'spellbook.collection_items' : 'abilities.collection_items';
-  const collectionItemCol = itemKind === 'spell' ? 'spell_id' : 'item_id';
-  const collectionGrantKind = itemKind === 'spell' ? 'spell_collection' : 'ability_collection';
-
   const { rows: gateRows } = await pool.query(
-    `SELECT DISTINCT g.node_id
+    `SELECT DISTINCT g.node_id, CASE WHEN g.item_kind = 'ability' THEN g.form_key END AS form_key
        FROM skill_tree.node_grants g
-      WHERE (g.item_kind = $2 AND g.item_id = $1)
-         OR (g.item_kind = $3 AND g.item_id IN (
-              SELECT collection_id FROM ${collectionItemsTable} WHERE ${collectionItemCol} = $1
+      WHERE (g.item_kind = 'ability' AND g.item_id = $1)
+         OR (g.item_kind = 'ability_collection' AND g.item_id IN (
+              SELECT collection_id FROM abilities.collection_items WHERE item_id = $1
             ))`,
-    [itemId, itemKind, collectionGrantKind]
+    [itemId]
   );
-  const gateNodeIds = gateRows.map((r) => r.node_id);
+  const gateNodeIds = [...new Set(gateRows.map((r) => r.node_id))];
 
-  if (prereqIds.length === 0 && gateNodeIds.length === 0) return { met: true, missing: [] };
+  if (prereqIds.length === 0 && gateNodeIds.length === 0) return { met: true, missing: [], allowedForms: null };
 
   const allNodeIds = [...new Set([...prereqIds, ...gateNodeIds])];
   const { rows: unlocked } = await pool.query(
@@ -57,7 +54,13 @@ async function checkPrerequisites(characterId, sourceTable, itemId) {
   const met = prereqOk || gateOk;
 
   const missing = met ? [] : allNodeIds.filter((id) => !unlockedSet.has(id));
-  return { met, missing };
+
+  const openGates = gateRows.filter((r) => unlockedSet.has(r.node_id));
+  let allowedForms = [];
+  if (prereqOk || openGates.some((r) => r.form_key == null)) allowedForms = null;
+  else allowedForms = [...new Set(openGates.map((r) => r.form_key))];
+
+  return { met, missing, allowedForms };
 }
 
 // sourceTable is always a fixed literal from our own code, never user input.

@@ -290,14 +290,14 @@ const CharacterModel = {
           [sourceId, copy.id]
         );
         await client.query(
-          `INSERT INTO character_sheet.known_spells (character_id, spell_id, mastered, cast_count, form_tier, primary_form, mastered_forms)
-           SELECT $2, spell_id, mastered, cast_count, form_tier, primary_form, mastered_forms
+          `INSERT INTO character_sheet.known_spells (character_id, spell_id, mastered, cast_count, form_tier, primary_form, mastered_forms, gm_granted)
+           SELECT $2, spell_id, mastered, cast_count, form_tier, primary_form, mastered_forms, gm_granted
            FROM character_sheet.known_spells WHERE character_id = $1`,
           [sourceId, copy.id]
         );
         await client.query(
-          `INSERT INTO character_sheet.abilities (character_id, ability_id)
-           SELECT $2, ability_id
+          `INSERT INTO character_sheet.abilities (character_id, ability_id, form_tier, primary_form, mastered_forms)
+           SELECT $2, ability_id, form_tier, primary_form, mastered_forms
            FROM character_sheet.abilities WHERE character_id = $1`,
           [sourceId, copy.id]
         );

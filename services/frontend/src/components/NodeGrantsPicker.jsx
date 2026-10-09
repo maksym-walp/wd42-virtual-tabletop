@@ -1,27 +1,34 @@
 import { useMemo, useState } from 'react';
 import { inputClass } from './ui/Field';
+import { abilityForms } from '../constants/abilities';
 
-// Picks catalog entries / collections to attach to a skill-tree node, each
+// Picks abilities / ability collections to attach to a skill-tree node, each
 // with a mode: 'grant' (opening the node adds it to the character) or
 // 'unlock' (opening the node just makes it available to add).
-// value: [{ item_kind, item_id, mode }]
-const KIND_ORDER = ['ability', 'spell', 'ability_collection', 'spell_collection'];
+// value: [{ item_kind, item_id, mode, form_key }]
+// form_key (abilities with 2+ forms): null — every form, else the key
+// of the one form the node grants / opens (see constants/forms.js).
+//
+// Default mode follows the list size: a single entry is 'grant', two or more
+// are all 'unlock'. It's recomputed on every add/remove, but only for entries
+// added in this editing session whose mode the GM hasn't picked by hand —
+// saved entries and manual choices are never overridden.
+// Spells are not linked to nodes — a node opens spell traditions and
+// complexity instead (NodeSpellAccessPicker).
+const KIND_ORDER = ['ability', 'ability_collection'];
 const KIND_LABEL = {
   ability: 'Вміння',
-  spell: 'Заклинання',
   ability_collection: 'Колекція вмінь',
-  spell_collection: 'Колекція заклинань',
 };
 
 export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }) {
   const [search, setSearch] = useState('');
+  const [autoKeys, setAutoKeys] = useState(() => new Set()); // entries still on the default mode
 
   const pool = useMemo(() => {
     const rows = [
-      ...(catalogs.abilities || []).map((x) => ({ item_kind: 'ability', id: x.id, name: x.name })),
-      ...(catalogs.spells || []).map((x) => ({ item_kind: 'spell', id: x.id, name: x.name })),
+      ...(catalogs.abilities || []).map((x) => ({ item_kind: 'ability', id: x.id, name: x.name, forms: abilityForms(x) })),
       ...(catalogs.abilityCollections || []).map((x) => ({ item_kind: 'ability_collection', id: x.id, name: x.name })),
-      ...(catalogs.spellCollections || []).map((x) => ({ item_kind: 'spell_collection', id: x.id, name: x.name })),
     ];
     rows.sort((a, b) => KIND_ORDER.indexOf(a.item_kind) - KIND_ORDER.indexOf(b.item_kind) || (a.name || '').localeCompare(b.name || ''));
     return rows;
@@ -30,19 +37,38 @@ export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }
   const selectedKey = (g) => `${g.item_kind}:${g.item_id}`;
   const selectedMap = new Map(value.map((g) => [selectedKey(g), g]));
 
-  const nameOf = (kind, id) => pool.find((p) => p.item_kind === kind && p.id === id)?.name || '—';
+  const rowOf = (kind, id) => pool.find((p) => p.item_kind === kind && p.id === id);
+  const nameOf = (kind, id) => rowOf(kind, id)?.name || '—';
+
+  const withDefaults = (list, auto) => {
+    const mode = list.length === 1 ? 'grant' : 'unlock';
+    return list.map((g) => (auto.has(selectedKey(g)) ? { ...g, mode } : g));
+  };
 
   const toggle = (row) => {
     const key = `${row.item_kind}:${row.id}`;
+    const auto = new Set(autoKeys);
+    let next;
     if (selectedMap.has(key)) {
-      onChange(value.filter((g) => selectedKey(g) !== key));
+      auto.delete(key);
+      next = value.filter((g) => selectedKey(g) !== key);
     } else {
-      onChange([...value, { item_kind: row.item_kind, item_id: row.id, mode: 'unlock' }]);
+      auto.add(key);
+      next = [...value, { item_kind: row.item_kind, item_id: row.id, mode: 'unlock', form_key: null }];
     }
+    setAutoKeys(auto);
+    onChange(withDefaults(next, auto));
   };
 
   const setMode = (g, mode) => {
+    const auto = new Set(autoKeys);
+    auto.delete(selectedKey(g));
+    setAutoKeys(auto);
     onChange(value.map((x) => (selectedKey(x) === selectedKey(g) ? { ...x, mode } : x)));
+  };
+
+  const setFormKey = (g, formKey) => {
+    onChange(value.map((x) => (selectedKey(x) === selectedKey(g) ? { ...x, form_key: formKey || null } : x)));
   };
 
   const available = search
@@ -59,6 +85,17 @@ export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }
                 {KIND_LABEL[g.item_kind]}
               </span>
               <span className="flex-1 text-text">{nameOf(g.item_kind, g.item_id)}</span>
+              {(rowOf(g.item_kind, g.item_id)?.forms?.length ?? 0) > 1 && (
+                <select
+                  className="min-h-7 rounded border border-border bg-surface px-1.5 text-xs text-text"
+                  value={g.form_key ?? ''}
+                  onChange={(e) => setFormKey(g, e.target.value)}
+                  title="Яку форму вузол видає / робить доступною"
+                >
+                  <option value="">Усі форми</option>
+                  {rowOf(g.item_kind, g.item_id).forms.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+              )}
               <div className="flex overflow-hidden rounded border border-border text-xs">
                 <button
                   type="button"
@@ -86,7 +123,7 @@ export default function NodeGrantsPicker({ catalogs = {}, value = [], onChange }
       <input
         type="text"
         className={`${inputClass} text-sm`}
-        placeholder="Пошук вміння, заклинання, колекції..."
+        placeholder="Пошук вміння чи колекції..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />

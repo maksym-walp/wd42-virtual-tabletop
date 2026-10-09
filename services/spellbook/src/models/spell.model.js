@@ -9,12 +9,6 @@ const SORT_MAP = {
   energy_cost: 's.energy_cost ASC, s.name ASC',
 };
 
-const prereqNodesSelect = (alias) => `COALESCE(
-    (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
-     FROM skill_tree.nodes n WHERE n.id = ANY(${alias}.prerequisite_node_ids)),
-    '[]'::jsonb
-  ) AS prerequisite_nodes`;
-
 const traditionsSelect = (alias) => `COALESCE(
     (SELECT jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name) ORDER BY t.name)
      FROM spellbook.tradition_spells ts
@@ -90,9 +84,8 @@ const normalizeMainFormName = (value) => (typeof value === 'string' && value.tri
 
 // Колонки, які пише bulkImport — той самий набір полів, що create/update
 // пишуть сьогодні (плюс lore_creator_npc_id із задачі 1), за винятком
-// image_url (немає сенсу тягнути чужий шлях на диску) і
-// prerequisite_node_ids/prerequisite_logic (навмисно відсутні — див. коментар
-// над bulkImport). is_canonical береться з ролі імпортера, а не з файлу.
+// image_url (немає сенсу тягнути чужий шлях на диску). is_canonical
+// береться з ролі імпортера, а не з файлу.
 const IMPORT_COLUMNS = [
   'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
   'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
@@ -179,7 +172,7 @@ const SpellModel = {
     }
 
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $1) AS is_owner, ${prereqNodesSelect('s')},
+      `SELECT s.*, (s.user_id = $1) AS is_owner,
               ${traditionsSelect('s')},
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM spellbook.spells s
@@ -194,7 +187,7 @@ const SpellModel = {
   async findById(id, userId, isAdmin = false) {
     const visibility = isAdmin ? 'TRUE' : '(s.user_id = $2 OR s.is_public = true)';
     const { rows } = await pool.query(
-      `SELECT s.*, (s.user_id = $2) AS is_owner, ${prereqNodesSelect('s')},
+      `SELECT s.*, (s.user_id = $2) AS is_owner,
               ${traditionsSelect('s')},
               ${IS_CANONICAL_EXPR} AS is_canonical, cu.username AS owner_username
        FROM spellbook.spells s
@@ -210,8 +203,7 @@ const SpellModel = {
       name, nature, spell_kind, mechanical_desc, narrative_desc,
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
-      components, is_public,
-      prerequisite_node_ids, prerequisite_logic, image_url, image_crop,
+      components, is_public, image_url, image_crop,
       lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical,
     } = data;
 
@@ -219,9 +211,9 @@ const SpellModel = {
       `INSERT INTO spellbook.spells
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
-          range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,
+          range_desc, components, is_public,
           image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23,$24::jsonb)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19::jsonb,$20,$21,$22::jsonb)
        RETURNING *`,
       [
         userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -229,7 +221,6 @@ const SpellModel = {
         energy_cost ?? 0, action_time ?? 1, ritual ?? 'impossible',
         duration_value ?? null, duration_unit ?? 'instant',
         range_desc ?? null, JSON.stringify(components ?? []), is_public ?? false,
-        prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeMainFormName(main_form_name), is_canonical ?? false,
@@ -244,8 +235,7 @@ const SpellModel = {
       name, nature, spell_kind, mechanical_desc, narrative_desc,
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
-      components, is_public,
-      prerequisite_node_ids, prerequisite_logic, image_url, image_crop,
+      components, is_public, image_url, image_crop,
       lore_creator, lore_creator_npc_id, complexity, forms, main_form_name,
     } = data;
 
@@ -256,10 +246,9 @@ const SpellModel = {
            energy_cost=$8, action_time=$9, ritual=$10,
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14::jsonb, is_public=$15,
-           prerequisite_node_ids=$16, prerequisite_logic=$17,
-           image_url=$18, lore_creator=$19, lore_creator_npc_id=$20,
-           complexity=$22, forms=$23::jsonb, main_form_name=$24, image_crop=$25::jsonb, updated_at=NOW()
-       WHERE id=$1 AND (user_id=$2 OR $21 = true)
+           image_url=$16, lore_creator=$17, lore_creator_npc_id=$18,
+           complexity=$20, forms=$21::jsonb, main_form_name=$22, image_crop=$23::jsonb, updated_at=NOW()
+       WHERE id=$1 AND (user_id=$2 OR $19 = true)
        RETURNING *`,
       [
         id, userId, name, nature ?? [], spell_kind ?? 'utility',
@@ -267,7 +256,6 @@ const SpellModel = {
         energy_cost, action_time, ritual,
         duration_value ?? null, duration_unit, range_desc ?? null,
         JSON.stringify(components ?? []), is_public ?? false,
-        prerequisite_node_ids ?? [], prerequisite_logic ?? 'or',
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeMainFormName(main_form_name),
@@ -316,10 +304,8 @@ const SpellModel = {
 
   // Import зі /export: один multi-row INSERT (на відміну від equipment — тут
   // лише одна таблиця, а не чотири за видом), user_id примусово стає
-  // імпортером. prerequisite_node_ids/prerequisite_logic навмисно НЕ входять
-  // до списку колонок — новий рядок отримує їхні значення за замовчуванням
-  // із таблиці, а не чужий skill-tree з експорту. is_canonical — не з
-  // експорту, а з ролі імпортера (isCanonical). Рядки без name пропускаються.
+  // імпортером. is_canonical — не з експорту, а з ролі імпортера
+  // (isCanonical). Рядки без name пропускаються.
   async bulkImport(userId, records, isCanonical = false) {
     const rows = (records || []).filter((record) => record && record.name);
     if (!rows.length) return 0;

@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import api from '../api/client';
-import skillTreeApi from '../api/skillTree';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
 import npcsApi from '../api/npcs';
 import {
   NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFormFields, spellForms, spellFormMode,
+  ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_FIELDS, pickFormFields, spellFormMode,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { useAuth } from '../context/AuthContext';
@@ -16,12 +15,13 @@ import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
-import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
 import AuthorField from '../components/AuthorField';
 import useSpellKinds from '../hooks/useSpellKinds';
+import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
+import EntryFormsSection from '../components/EntryFormsSection';
 
 const domain = COLLECTION_DOMAINS.spellbook;
 
@@ -31,7 +31,6 @@ const EMPTY = {
   energy_cost: 0, action_time: 1, ritual: 'impossible',
   duration_value: '', duration_unit: 'instant', range_desc: '',
   components: [], is_public: true, is_canonical: true,
-  prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '', image_crop: null,
   collectionIds: [],
   traditionIds: [],
@@ -41,9 +40,6 @@ const EMPTY = {
   main_form_name: '',
   forms: [],
 };
-
-// Ключ форми в UI: 'main' — основна, рівневі — за kind, альтернативні — id.
-const formKey = (f) => (f.kind === 'alternative' ? f.id : f.kind);
 
 // Серверна форма → стан редактора (ті самі перетворення, що й для основної
 // при завантаженні: '' замість null для інпутів, рядки компонентів з key).
@@ -69,9 +65,7 @@ function newForm(kind, source) {
   return {
     ...pickFormFields(source),
     kind,
-    // randomUUID є лише в безпечному контексті (https/localhost); інакше
-    // тимчасовий ключ — сервер замінить його справжнім uuid при збереженні.
-    id: kind === 'alternative' ? (crypto.randomUUID?.() ?? `tmp-${Date.now()}-${Math.random()}`) : kind,
+    id: kind === 'alternative' ? newAlternativeFormId() : kind,
     name: kind === 'alternative' ? 'Нова форма' : null,
     components: source.components.map((c) => ({ ...c, key: emptyComponentRow().key })),
   };
@@ -91,7 +85,6 @@ export default function SpellForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [nodes, setNodes] = useState([]);
   const [equipmentItems, setEquipmentItems] = useState([]);
   const [collections, setCollections] = useState([]);
   const [collectionsLoaded, setCollectionsLoaded] = useState(false);
@@ -100,15 +93,9 @@ export default function SpellForm() {
   const [traditions, setTraditions] = useState([]);
   const initialTraditionIds = useRef([]);
   const [npcs, setNpcs] = useState([]);
-  // formKey активної форми; 'main' — поля самого form.
-  const [activeForm, setActiveForm] = useState('main');
-  // Тип додаткових форм: 'alternative' (основна + альтернативні) або
-  // 'tiered' (примітивна / повноцінна / довершена). Разом — не можна.
-  const [formMode, setFormMode] = useState('alternative');
-
-  useEffect(() => {
-    skillTreeApi.getNodes({ archetype: 'spellcaster' }).then(setNodes).catch(() => {});
-  }, []);
+  // Активна форма й тип форм (основна + альтернативні або рівневі).
+  const formsEditor = useEntryForms({ form, setForm, fields: FORM_FIELDS, newForm });
+  const { activeEntry, current, patchForm, setFormMode } = formsEditor;
 
   useEffect(() => {
     npcsApi.list().then(setNpcs).catch(() => {});
@@ -149,8 +136,6 @@ export default function SpellForm() {
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
           components: (s.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
           is_public: s.is_public,
-          prerequisite_node_ids: s.prerequisite_node_ids || [],
-          prerequisite_logic: s.prerequisite_logic || 'or',
           image_url: s.image_url || '', image_crop: s.image_crop || null,
           traditionIds,
           main_form_name: s.main_form_name || '',
@@ -173,38 +158,8 @@ export default function SpellForm() {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   // Поля, що відрізняються між формами, читаються й пишуться через активну форму.
-  const allForms = spellForms(form);
-  const activeEntry = allForms.find((f) => f.key === activeForm) ?? allForms.find((f) => f.key === 'main');
-  const current = activeEntry.key === 'main' ? form : form.forms.find((f) => formKey(f) === activeEntry.key);
-  const patchForm = (patch) => setForm((f) => (activeEntry.key === 'main'
-    ? { ...f, ...patch }
-    : { ...f, forms: f.forms.map((x) => (formKey(x) === activeEntry.key ? { ...x, ...patch } : x)) }));
   const setL = (field) => (e) => patchForm({ [field]: e.target.value });
   const setLNum = (field) => (e) => patchForm({ [field]: Number(e.target.value) });
-
-  const addForm = (kind) => {
-    const created = newForm(kind, form);
-    setForm((f) => ({ ...f, forms: [...f.forms, created] }));
-    setActiveForm(formKey(created));
-  };
-
-  const removeActiveForm = () => {
-    if (activeEntry.key === 'main') return;
-    if (!confirm(`Видалити «${activeEntry.label}»?`)) return;
-    setForm((f) => ({ ...f, forms: f.forms.filter((x) => formKey(x) !== activeEntry.key) }));
-    setActiveForm('main');
-  };
-  const hasForm = (kind) => form.forms.some((f) => f.kind === kind);
-
-  const changeFormMode = (mode) => {
-    if (mode === formMode) return;
-    const keep = (f) => (mode === 'tiered' ? f.kind !== 'alternative' : f.kind === 'alternative');
-    const dropped = form.forms.filter((f) => !keep(f));
-    if (dropped.length && !confirm(`Змінити тип форм? Буде видалено форм: ${dropped.length}.`)) return;
-    setForm((f) => ({ ...f, forms: f.forms.filter(keep) }));
-    setFormMode(mode);
-    setActiveForm('main');
-  };
 
   const reconcileCollections = async (itemId) => {
     const before = initialCollectionIds.current;
@@ -374,79 +329,13 @@ export default function SpellForm() {
 
         {/* — Форми — */}
         <FormSection title="Форми">
-          <p className="mb-3 text-xs text-text-dim">
-            Спершу обери тип форм — разом їх поєднувати не можна. Механіка й описи нижче редагуються для обраної
-            форми; нова форма починається як копія основної.
-          </p>
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            {[
-              ['alternative', 'Основна + альтернативні'],
-              ['tiered', 'Рівневі: примітивна · повноцінна · довершена'],
-            ].map(([mode, label]) => (
-              <button
-                key={mode} type="button"
-                onClick={() => changeFormMode(mode)}
-                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  formMode === mode ? 'border-gold bg-gold/10 text-gold' : 'border-border text-text-dim'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-1.5">
-            {allForms.map((f) => (
-              <button
-                key={f.key} type="button"
-                onClick={() => setActiveForm(f.key)}
-                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeEntry.key === f.key ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {formMode === 'tiered' && !hasForm('primitive') && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('primitive')}>
-                <Plus size={14} /> {FORM_TIERS.primitive.label}
-              </Button>
-            )}
-            {formMode === 'tiered' && !hasForm('perfected') && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('perfected')}>
-                <Plus size={14} /> {FORM_TIERS.perfected.label}
-              </Button>
-            )}
-            {formMode === 'alternative' && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => addForm('alternative')}>
-                <Plus size={14} /> Альтернативна форма
-              </Button>
-            )}
-            {activeEntry.key !== 'main' && (
-              <Button type="button" variant="danger" size="sm" onClick={removeActiveForm}>
-                <Trash2 size={14} /> Видалити «{activeEntry.label}»
-              </Button>
-            )}
-          </div>
-          {activeEntry.key === 'main' && formMode === 'alternative' && (
-            <Field label="Назва форми" className="mt-4">
-              <input
-                type="text" className={inputClass} value={form.main_form_name}
-                onChange={set('main_form_name')}
-                maxLength={100} placeholder={DEFAULT_MAIN_FORM_NAME}
-              />
-            </Field>
-          )}
-          {activeEntry.kind === 'alternative' && (
-            <Field label="Назва форми" className="mt-4">
-              <input
-                type="text" className={inputClass} value={current.name}
-                onChange={(e) => patchForm({ name: e.target.value })}
-                maxLength={100} placeholder="напр. Крижана форма"
-              />
-            </Field>
-          )}
+          <EntryFormsSection
+            forms={formsEditor}
+            mainFormName={form.main_form_name}
+            onMainFormNameChange={set('main_form_name')}
+            fieldsHint="Механіка й описи нижче"
+            altNamePlaceholder="напр. Крижана форма"
+          />
         </FormSection>
 
         {/* — Механіка — */}
@@ -563,15 +452,6 @@ export default function SpellForm() {
             npcs={npcs}
             label="Творець"
             hint="Лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне (напр. ім'я архімага, що винайшов це заклинання)"
-          />
-        </FormSection>
-
-        {/* — Вимоги дерева розвитку — */}
-        <FormSection title="Вимоги дерева розвитку" collapsible defaultOpen={false}>
-          <NodePrerequisitePicker
-            nodes={nodes}
-            value={form}
-            onChange={(next) => setForm((f) => ({ ...f, ...next }))}
           />
         </FormSection>
 

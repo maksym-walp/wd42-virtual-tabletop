@@ -6,7 +6,7 @@ import useSpellKinds from '../../hooks/useSpellKinds';
 import { EQUIPMENT_TYPES, ARMOR_WEIGHTS, weaponModifierLabel } from '../../constants/equipment';
 import { RARITIES } from '../../constants/artifacts';
 import { ARCHETYPES } from '../../constants/characterSheet';
-import { formatDuration as formatAbilityDuration } from '../../constants/abilities';
+import { formatDuration as formatAbilityDuration, abilityForms } from '../../constants/abilities';
 import { STAT_BLOCK_KINDS } from '../../constants/statBlocks';
 import { htmlToPreviewText } from '../../utils/richText';
 import CroppedImage from '../ui/CroppedImage';
@@ -57,8 +57,9 @@ function PreviewCard({ href, image, imageCrop, badges = [], title, subtitle, sta
       </div>
       {shownStats.length > 0 && (
         <div className="grid grid-cols-2 gap-px border-y border-border bg-border">
-          {shownStats.map((s) => (
-            <div key={s.label} className="flex flex-col gap-0.5 bg-surface px-3 py-1.5">
+          {shownStats.map((s, i) => (
+            // Odd count: the last cell spans both columns instead of leaving an empty bg-border gap.
+            <div key={s.label} className={`flex flex-col gap-0.5 bg-surface px-3 py-1.5 ${i === shownStats.length - 1 && shownStats.length % 2 ? 'col-span-2' : ''}`}>
               <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-text-dim">{s.label}</span>
               <span className="text-sm font-semibold text-text">{s.value}</span>
             </div>
@@ -86,7 +87,7 @@ export function SpellPreview({ spell }) {
       href={`/spellbook/${spell.id}`}
       image={spell.image_url}
       imageCrop={spell.image_crop}
-      badges={[natureLabels(spell.nature), spellKindsMap[spell.spell_kind]?.label]}
+      badges={[natureLabels(spell.nature), spellKindsMap[spell.spell_kind]?.label, spell.form_label]}
       title={spell.name}
       subtitle={spell.owner_username ? `@${spell.owner_username}` : null}
       stats={[
@@ -97,7 +98,7 @@ export function SpellPreview({ spell }) {
         { label: 'Тривалість', value: formatSpellDuration(spell.duration_value, spell.duration_unit) },
         { label: 'Дальність', value: spell.range_desc },
       ]}
-      chips={forms.length > 1 ? forms.map((f) => f.label) : []}
+      chips={forms.length > 1 && !spell.form_label ? forms.map((f) => f.label) : []}
       description={spell.mechanical_desc || spell.narrative_desc}
     />
   );
@@ -126,18 +127,21 @@ export function EquipmentPreview({ item, artifact = false }) {
   );
 }
 
+// form_label — прев'ю конкретної форми (abilityWithForm), без переліку форм.
 export function AbilityPreview({ ability }) {
+  const forms = abilityForms(ability);
   return (
     <PreviewCard
       href={`/abilities/${ability.id}`}
       image={ability.image_url}
       imageCrop={ability.image_crop}
-      badges={[...(ability.archetypes ?? []).map((a) => ARCHETYPES[a]?.label ?? a), ability.is_maneuver && 'Маневр']}
+      badges={[...(ability.archetypes ?? []).map((a) => ARCHETYPES[a]?.label ?? a), ability.is_maneuver && 'Маневр', ability.form_label]}
       title={ability.name}
       subtitle={ability.owner_username ? `@${ability.owner_username}` : null}
       stats={ability.is_maneuver
         ? [{ label: 'Тривалість', value: formatAbilityDuration(ability.duration_value, ability.duration_unit) }]
         : []}
+      chips={forms.length > 1 && !ability.form_label ? forms.map((f) => f.label) : []}
       description={ability.mechanical_desc || ability.narrative_desc}
     />
   );

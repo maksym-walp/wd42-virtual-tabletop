@@ -4,11 +4,11 @@ import skillTreeApi from '../api/skillTree';
 import { isIconUrl } from '../constants/maps';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import {
-  computeLayout, elbowPath, computeFitTransform, ancestorClosure,
-  computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y,
+  computeLayout, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
 import Sheet from './ui/Sheet';
 import SmartTextReader from './SmartTextReader';
+import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from './NodeGrants';
 
 const TREE_NODE_R = 22;
 const TREE_ARROW_GAP = 5;
@@ -54,9 +54,7 @@ export default function DevelopmentTree({
   }, [archetype]);
 
   const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
-  const { levels, positions } = layout;
-  const edgeLanes = useMemo(() => computeEdgeLanes(edges, levels, positions), [edges, levels, positions]);
-  const entryOffsets = useMemo(() => computeEntryOffsets(edges, positions), [edges, positions]);
+  const { positions } = layout;
   const highlightSet = selectedNode ? ancestorClosure(selectedNode.id, edges) : null;
 
   useEffect(() => {
@@ -133,7 +131,7 @@ export default function DevelopmentTree({
     const r = TREE_NODE_R * transform.k;
     const cx = transform.x + pos.x * transform.k;
     const cy = transform.y + pos.y * transform.k;
-    setHoverLabel({ title: node.title, left: cx + r + 10, nodeTop: cy - r, nodeBottom: cy + r });
+    setHoverLabel({ node, left: cx + r + 10, nodeLeft: cx - r - 10, nodeTop: cy - r, nodeBottom: cy + r });
   };
   const handleNodeLeave = () => setHoverLabel(null);
 
@@ -141,14 +139,8 @@ export default function DevelopmentTree({
     const s = positions.get(edge.source_id);
     const d = positions.get(edge.target_id);
     if (!s || !d) return null;
-    const sLevel = levels[edge.source_id] ?? 1;
-    const dLevel = levels[edge.target_id] ?? 1;
-    const x1 = s.x, y1 = s.y - TREE_NODE_R;
-    const x2 = d.x + (entryOffsets.get(edge.id) ?? 0), y2 = d.y + TREE_NODE_R + TREE_ARROW_GAP;
-    const midY = dLevel - sLevel > 1
-      ? y1 - LEVEL_SPACING_Y / 2
-      : y1 - (edgeLanes.get(edge.source_id) ?? 0.5) * (y1 - y2);
-    return { path: elbowPath(x1, y1, x2, y2, midY) };
+    const path = straightEdgePath(s, d, TREE_NODE_R, TREE_NODE_R + TREE_ARROW_GAP);
+    return path ? { path } : null;
   };
 
   const commitBudget = () => {
@@ -288,7 +280,7 @@ export default function DevelopmentTree({
           </g>
         </svg>
 
-        {hoverLabel && <HoverLabel hoverLabel={hoverLabel} />}
+        {hoverLabel && <HoverLabel hoverLabel={hoverLabel} catalog={catalog} />}
 
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-text-dim">
@@ -314,49 +306,43 @@ export default function DevelopmentTree({
   );
 }
 
-function HoverLabel({ hoverLabel }) {
-  const { title, left, nodeTop, nodeBottom } = hoverLabel;
+// Name plus what the node gives (effects, granted/unlocked abilities, opened
+// spell traditions/complexity), so the tree can be scanned without opening
+// every node.
+function HoverLabel({ hoverLabel, catalog }) {
+  const { node, left, nodeLeft, nodeTop, nodeBottom } = hoverLabel;
   const elRef = useRef(null);
   const [placement, setPlacement] = useState('above');
+  const [side, setSide] = useState('right');
 
+  // Also flips to the node's left side when the right would run past the
+  // canvas edge (overflow-hidden) — e.g. for the rightmost nodes.
   useLayoutEffect(() => {
-    const height = elRef.current?.offsetHeight ?? 0;
+    const el = elRef.current;
+    const height = el?.offsetHeight ?? 0;
+    const width = el?.offsetWidth ?? 0;
+    const canvasWidth = el?.offsetParent?.clientWidth ?? Infinity;
     setPlacement(nodeTop - height < 8 ? 'below' : 'above');
-  }, [nodeTop]);
+    setSide(left + width > canvasWidth - 8 && nodeLeft - width >= 8 ? 'left' : 'right');
+  }, [node.id, nodeTop, left, nodeLeft]);
 
-  const style = placement === 'above'
-    ? { left, top: nodeTop, transform: 'translateY(-100%)' }
-    : { left, top: nodeBottom };
+  const style = {
+    left: side === 'right' ? left : nodeLeft,
+    top: placement === 'above' ? nodeTop : nodeBottom,
+    transform: `${side === 'left' ? 'translateX(-100%) ' : ''}${placement === 'above' ? 'translateY(-100%)' : ''}`,
+  };
 
   return (
     <div
       ref={elRef}
-      className="pointer-events-none absolute z-20 max-w-[200px] rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text shadow-lg"
+      className="pointer-events-none absolute z-20 w-max max-w-[260px] rounded-md border border-border bg-surface px-2.5 py-1.5 shadow-lg"
       style={style}
     >
-      {title}
+      <p className="text-xs font-semibold text-text">{node.title}</p>
+      <NodeGainsSummary node={node} catalog={catalog} />
     </div>
   );
 }
-
-// Resolve a node_grants entry to a display name from the loaded catalog.
-function grantLabel(grant, catalog) {
-  const pools = {
-    ability: catalog.abilities,
-    spell: catalog.spells,
-    ability_collection: catalog.abilityCollections,
-    spell_collection: catalog.spellCollections,
-  };
-  const hit = (pools[grant.item_kind] || []).find((x) => x.id === grant.item_id);
-  return hit?.name || '—';
-}
-
-const GRANT_KIND_LABEL = {
-  ability: 'вміння',
-  spell: 'заклинання',
-  ability_collection: 'колекція вмінь',
-  spell_collection: 'колекція заклинань',
-};
 
 function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUnlock, onClose, catalog }) {
   const prereqs = edges
@@ -400,21 +386,22 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
       {grantedItems.length > 0 && (
         <div className="mt-2 rounded-md border border-sage/30 bg-sage/5 p-3">
           <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Додає автоматично</p>
-          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
-            {grantedItems.map((g, i) => (
-              <li key={i}>{grantLabel(g, catalog)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>
-            ))}
-          </ul>
+          <GrantList grants={grantedItems} catalog={catalog} />
         </div>
       )}
 
       {unlockItems.length > 0 && (
         <div className="mt-2 rounded-md border border-border bg-bg p-3">
           <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Робить доступним</p>
-          <ul className="mt-1 list-inside list-disc text-sm leading-relaxed text-text-muted">
-            {unlockItems.map((g, i) => (
-              <li key={i}>{grantLabel(g, catalog)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>
-            ))}
+          <GrantList grants={unlockItems} catalog={catalog} />
+        </div>
+      )}
+
+      {nodeSpellAccessLines(node, catalog).length > 0 && (
+        <div className="mt-2 rounded-md border border-border bg-bg p-3">
+          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Відкриває магію</p>
+          <ul className="list-disc space-y-0.5 pl-4 text-sm leading-relaxed text-text-muted">
+            {nodeSpellAccessLines(node, catalog).map((line) => <li key={line}>{line}</li>)}
           </ul>
         </div>
       )}

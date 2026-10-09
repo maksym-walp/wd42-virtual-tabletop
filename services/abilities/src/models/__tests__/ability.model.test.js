@@ -114,7 +114,7 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, false, null]);
+    expect(params).toEqual(['u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, false, null, '[]', null]);
   });
 
   it('inserts lore_creator/lore_creator_npc_id when provided', async () => {
@@ -123,13 +123,13 @@ describe('AbilityModel.create', () => {
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/lore_creator, lore_creator_npc_id/);
-    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null]);
+    expect(params).toEqual(['u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null, '[]', null]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.create('u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null]);
+    expect(params).toEqual(['u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null, '[]', null]);
   });
 });
 
@@ -144,7 +144,7 @@ describe('AbilityModel.update', () => {
     expect(sql).toMatch(/is_maneuver=\$11, duration_value=\$12, duration_unit=\$13/);
     expect(sql).toMatch(/lore_creator=\$14, lore_creator_npc_id=\$15/);
     expect(sql).toMatch(/\$16 = true/);
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true, null]);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', ['warrior'], 'опис', null, true, ['n1'], 'and', 'img.png', true, 3, 'action', null, null, true, null, '[]', null]);
   });
 
   it('updates lore_creator/lore_creator_npc_id when provided', async () => {
@@ -152,13 +152,13 @@ describe('AbilityModel.update', () => {
       name: 'Розсічення', lore_creator: 'Легендарний коваль', lore_creator_npc_id: 'npc-1',
     });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null]);
+    expect(params).toEqual(['a1', 'u1', 'Розсічення', [], null, null, false, [], 'or', null, false, null, 'instant', 'Легендарний коваль', 'npc-1', false, null, '[]', null]);
   });
 
   it('defaults is_maneuver to false, duration_unit to instant, and lore fields to null when omitted', async () => {
     await AbilityModel.update('a1', 'u1', { name: 'Вміння' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null]);
+    expect(params).toEqual(['a1', 'u1', 'Вміння', [], null, null, false, [], 'or', null, false, null, 'instant', null, null, false, null, '[]', null]);
   });
 });
 
@@ -174,13 +174,13 @@ describe('AbilityModel.bulkImport', () => {
 
     expect(result).toBe(2);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12\), \(\$13, \$14, \$15, \$16, \$17, \$18, \$19, \$20, \$21, \$22, \$23, \$24\)/);
+    expect(sql).toMatch(/INSERT INTO abilities\.entries \(user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, forms, main_form_name\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14\), \(\$15, \$16, \$17, \$18, \$19, \$20, \$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28\)/);
     expect(sql).not.toMatch(/prerequisite_node_ids/);
     expect(sql).not.toMatch(/prerequisite_logic/);
     expect(sql).not.toMatch(/image_url/);
     expect(params).toEqual([
-      'importer-1', 'Удар', ['warrior'], 'опис', null, true, true, 2, 'action', 'Коваль', 'npc-1', false,
-      'importer-1', 'Ривок', [], null, null, false, false, null, 'instant', null, null, false,
+      'importer-1', 'Удар', ['warrior'], 'опис', null, true, true, 2, 'action', 'Коваль', 'npc-1', false, '[]', null,
+      'importer-1', 'Ривок', [], null, null, false, false, null, 'instant', null, null, false, '[]', null,
     ]);
   });
 
@@ -199,6 +199,38 @@ describe('AbilityModel.bulkImport', () => {
 
     expect(result).toBe(1);
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['importer-1', 'Валідне', [], null, null, false, false, null, 'instant', null, null, false]);
+    expect(params).toEqual(['importer-1', 'Валідне', [], null, null, false, false, null, 'instant', null, null, false, '[]', null]);
+  });
+});
+
+describe('normalizeForms', () => {
+  const { normalizeForms, hasMixedForms } = AbilityModel;
+
+  it('whitelists form fields, keeps one form per tier and ids alternatives', () => {
+    const forms = normalizeForms([
+      { kind: 'primitive', mechanical_desc: 'слабше', junk: 1 },
+      { kind: 'primitive', mechanical_desc: 'дубль' },
+      { kind: 'bogus' },
+    ]);
+    expect(forms).toEqual([{
+      kind: 'primitive', id: 'primitive', name: null, duration_value: null, duration_unit: 'instant',
+      mechanical_desc: 'слабше', narrative_desc: null, lore_creator: null, lore_creator_npc_id: null,
+    }]);
+  });
+
+  it('keeps a valid alternative id and generates one otherwise', () => {
+    const id = '0b6f3d4e-1c2a-4b5d-8e9f-0123456789ab';
+    const [kept, generated] = normalizeForms([
+      { kind: 'alternative', id, name: ' Шквал ' },
+      { kind: 'alternative', id: 'nope' },
+    ]);
+    expect(kept).toMatchObject({ id, name: 'Шквал' });
+    expect(generated.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(generated.name).toBe('Альтернативна форма');
+  });
+
+  it('detects tier and alternative forms mixed together', () => {
+    expect(hasMixedForms([{ kind: 'primitive' }, { kind: 'alternative' }])).toBe(true);
+    expect(hasMixedForms([{ kind: 'alternative' }])).toBe(false);
   });
 });

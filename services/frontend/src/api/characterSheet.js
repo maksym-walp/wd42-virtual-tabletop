@@ -131,8 +131,14 @@ const characterApi = {
     return data.abilities;
   },
 
-  async addAbility(characterId, abilityId) {
-    const { data } = await api.post(`${BASE}/${characterId}/abilities`, { ability_id: abilityId });
+  // progress — { form_tier?, primary_form?, mastered_forms? }, як у addSpell.
+  async addAbility(characterId, abilityId, progress = {}) {
+    const { data } = await api.post(`${BASE}/${characterId}/abilities`, { ability_id: abilityId, ...progress });
+    return data.ability;
+  },
+
+  async patchAbility(characterId, abilityId, payload) {
+    const { data } = await api.patch(`${BASE}/${characterId}/abilities/${abilityId}`, payload);
     return data.ability;
   },
 

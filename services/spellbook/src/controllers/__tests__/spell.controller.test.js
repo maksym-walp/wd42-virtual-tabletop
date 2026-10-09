@@ -190,8 +190,6 @@ describe('SpellController.export', () => {
       image_url: '/uploads/spells/s1.png',
       created_at: '2026-01-01', updated_at: '2026-01-02',
       is_owner: true, owner_username: 'gm', is_canonical: true,
-      prerequisite_node_ids: ['n1'], prerequisite_logic: 'and',
-      prerequisite_nodes: [{ id: 'n1', title: 'Node' }],
       traditions: [{ id: 't1', name: 'Fire' }],
     }]);
     const req = mockReq({ query: { scope: 'canonical' } });

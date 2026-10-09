@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { NATURE_TYPES, RITUAL_TYPES, SPELL_COMPLEXITIES, formatDuration, spellForms } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
-import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
@@ -23,13 +22,15 @@ export default function SpellView() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
-  const [activeForm, setActiveForm] = useState('main');
+  // ?form=<key> — відкрити одразу конкретну форму (посилання з дерева розвитку).
+  const [searchParams] = useSearchParams();
+  const [activeForm, setActiveForm] = useState(searchParams.get('form') || 'main');
 
   useEffect(() => {
     api.get(`/api/spellbook/${id}`)
       .then(({ data }) => {
         setSpell(data.spell);
-        setActiveForm('main');
+        setActiveForm(searchParams.get('form') || 'main');
         recordView({ type: 'spell', id, name: data.spell.name, href: `/spellbook/${id}`, image_url: data.spell.image_url, image_crop: data.spell.image_crop });
       })
       .catch(() => navigate('/spellbook', { replace: true }))
@@ -212,19 +213,6 @@ export default function SpellView() {
           {shown.mechanical_desc && (
             <Section title="Механічний опис">
               <SmartTextReader text={shown.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
-            </Section>
-          )}
-
-          {spell.prerequisite_nodes?.length > 0 && (
-            <Section title="Вимоги дерева розвитку">
-              <div className="flex flex-col gap-1.5">
-                {spell.prerequisite_nodes.map((n) => (
-                  <span key={n.id} className="flex items-center gap-1.5 text-sm text-text">
-                    <ReqBadge type={spell.prerequisite_logic === 'and' ? 'required' : 'optional'} />
-                    {n.title}
-                  </span>
-                ))}
-              </div>
             </Section>
           )}
 

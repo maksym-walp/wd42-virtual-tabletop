@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { TreePine } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import equipmentApi from '../api/equipment';
-import spellbookApi from '../api/spellbook';
+import traditionsApi from '../api/traditions';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import DevelopmentTree from '../components/DevelopmentTree';
@@ -91,7 +91,7 @@ export default function CharacterNew() {
   const [experiencePoints, setExperiencePoints] = useState(10);
   const [treeProgress, setTreeProgress] = useState([]);
   const [treeCatalog, setTreeCatalog] = useState({
-    abilities: [], spells: [], abilityCollections: [], spellCollections: [],
+    abilities: [], abilityCollections: [], traditions: [],
   });
 
   // Step 3 — vitals
@@ -186,13 +186,12 @@ export default function CharacterNew() {
   useEffect(() => {
     if (step !== 5 || !characterId) return;
     Promise.all([
-      spellbookApi.getAll().catch(() => []),
       abilitiesApi.getAll().catch(() => []),
       createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
-      createCollectionsApi('/api/spellbook/collections/').getAll().catch(() => []),
+      traditionsApi.getAll().catch(() => []),
       characterApi.getSheet(characterId).then((s) => s.tree || []).catch(() => []),
-    ]).then(([spells, abilities, abilityCollections, spellCollections, tree]) => {
-      setTreeCatalog({ spells, abilities, abilityCollections, spellCollections });
+    ]).then(([abilities, abilityCollections, traditions, tree]) => {
+      setTreeCatalog({ abilities, abilityCollections, traditions });
       setTreeProgress(tree);
     });
   }, [step, characterId]);

@@ -5,8 +5,8 @@
 // repurposed as a manual tie-break rank within its sibling cluster (see
 // `computeLayout`), and `pos_y` is unused.
 
-export const LEVEL_SPACING_Y = 180; // vertical gap between prerequisite levels
-export const MIN_SLOT_SPACING_X = 190; // *minimum* horizontal gap between any two nodes on the same level — never a cap, nodes spread further apart than this whenever their subtrees need the room
+export const LEVEL_SPACING_Y = 220; // vertical gap between prerequisite levels
+export const MIN_SLOT_SPACING_X = 160; // *minimum* horizontal gap between any two nodes on the same level — never a cap, nodes spread further apart than this whenever their subtrees need the room
 
 // A node's level is derived from the graph, not stored: root = 1, otherwise
 // 1 + the deepest prerequisite's level (handles require_both multi-parent nodes).
@@ -249,118 +249,19 @@ export function reorderCluster(clusterNodes, draggedId, dropIndex) {
   return changed;
 }
 
-// Orthogonal ("elbow") SVG path between two points: straight if already
-// vertically aligned, otherwise a vertical-horizontal-vertical dogleg via
-// `midY` (defaults to the true midpoint). Because y is always level-derived,
-// every ordinary edge between the same pair of adjacent levels bends at the
-// identical height by default — a clean shared-bus look when there's exactly
-// one source feeding the row. Callers pass an explicit `midY` — see
-// `computeEdgeLanes` below for the case where that default isn't safe, and
-// for edges that skip levels, where the bend needs to avoid an unrelated
-// intermediate level's node row instead.
-export function elbowPath(x1, y1, x2, y2, midY) {
-  if (Math.abs(x1 - x2) < 0.5) return `M${x1},${y1} L${x2},${y2}`;
-  const m = midY ?? (y1 + y2) / 2;
-  return `M${x1},${y1} L${x1},${m} L${x2},${m} L${x2},${y2}`;
-}
-
-// The default shared bus height (true midpoint between two adjacent levels)
-// only reads cleanly when nothing else's path crosses through the same
-// horizontal stretch. A source only risks that when its own combined
-// horizontal reach (from itself out to the farthest child) actually
-// *overlaps* another source's — sharing a single target isn't enough by
-// itself: two sources on opposite sides of a shared target (one entirely
-// left of it, one entirely right) never cross each other's territory, so
-// forcing them apart just adds an unnecessary step in height. This assigns
-// lanes via interval scheduling ("minimum platforms"): sources are sorted
-// by where their span starts, and each reuses the lowest-numbered lane
-// whose previous occupant's span has already ended — so genuinely
-// non-overlapping sources (whether on opposite sides of one target, or
-// simply unrelated and spatially far apart, like independent sibling
-// clusters) always settle back onto lane 0, the plain default height,
-// instead of accumulating an ever-growing lane count across the level.
-// Only sources that would actually cross paths end up on different lanes.
-// Lane -> fraction is a fixed step outward from 0.5 in both directions
-// (lane 1 just before center, lane 2 just after, lane 3 further before,
-// …), independent of how many lanes anything else on the canvas needed, so
-// one cluster's spread never depends on an unrelated cluster's.
-//
-// Returns a Map of source node id -> fraction; callers compute their own
-// actual `midY = y1 - frac * (y1 - y2)` from their own (node-radius-adjusted)
-// y1/y2, since node radius/arrow-gap constants live page-side, not here.
-// Skip-level edges aren't included — they use their own jog-near-source
-// rule instead.
-const LANE_STEP = 0.12;
-function laneToFraction(lane) {
-  if (lane === 0) return 0.5;
-  const magnitude = Math.ceil(lane / 2);
-  const sign = lane % 2 === 1 ? -1 : 1;
-  return Math.min(0.9, Math.max(0.1, 0.5 + sign * magnitude * LANE_STEP));
-}
-
-export function computeEdgeLanes(edges, levels, positions) {
-  const sourcesByLevel = new Map(); // source level -> Set of source ids
-  const targetsOf = new Map(); // source id -> Set of target ids (adjacent-level edges only)
-  edges.forEach((e) => {
-    const sLevel = levels[e.source_id] ?? 1;
-    const dLevel = levels[e.target_id] ?? 1;
-    if (dLevel - sLevel !== 1) return;
-    if (!sourcesByLevel.has(sLevel)) sourcesByLevel.set(sLevel, new Set());
-    sourcesByLevel.get(sLevel).add(e.source_id);
-    if (!targetsOf.has(e.source_id)) targetsOf.set(e.source_id, new Set());
-    targetsOf.get(e.source_id).add(e.target_id);
-  });
-
-  const laneFractionOf = new Map();
-  sourcesByLevel.forEach((sourceIds) => {
-    // A source's own multiple children always share its one lane (a
-    // parent's own fan-out is a legitimate single trunk) — only the
-    // source's combined reach, not each individual edge, competes for lanes.
-    const spanOf = (sid) => {
-      const xs = [positions.get(sid)?.x ?? 0, ...[...targetsOf.get(sid)].map((tid) => positions.get(tid)?.x ?? 0)];
-      return [Math.min(...xs), Math.max(...xs)];
-    };
-    const sorted = [...sourceIds].sort((a, b) => spanOf(a)[0] - spanOf(b)[0]);
-
-    const laneEnds = []; // lane index -> x its current occupant's span ends at
-    sorted.forEach((sid) => {
-      const [start, end] = spanOf(sid);
-      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start); // "<=": merely touching isn't overlapping
-      if (lane === -1) { lane = laneEnds.length; laneEnds.push(end); }
-      else { laneEnds[lane] = end; }
-      laneFractionOf.set(sid, laneToFraction(lane));
-    });
-  });
-  return laneFractionOf;
-}
-
-// Lanes alone don't fully solve a subtler ambiguity: a bent edge's final
-// approach into a shared target can land on the *exact same x* as an
-// unrelated straight-line edge that happens to pass through that column
-// (e.g. sibling A has only target C, sibling B has both C and D — B's bent
-// path into C can end up pixel-identical to A's straight vertical for that
-// stretch, and the horizontal bend can land right on A's column too,
-// together reading as one connected rectangle that implies A also reaches
-// D, which isn't true). Spreads a target's incoming edges' arrival x
-// slightly apart instead of funneling them all through dead-center; a
-// target with only one incoming edge is untouched (arrives dead-center, the
-// clean common case). Returns a Map of edge id -> x offset to add to the
-// target's x.
-export function computeEntryOffsets(edges, positions, spacing = 10) {
-  const byTarget = new Map();
-  edges.forEach((e) => {
-    if (!byTarget.has(e.target_id)) byTarget.set(e.target_id, []);
-    byTarget.get(e.target_id).push(e);
-  });
-
-  const offsetOf = new Map();
-  byTarget.forEach((list) => {
-    if (list.length < 2) return;
-    const sorted = [...list].sort((a, b) => (positions.get(a.source_id)?.x ?? 0) - (positions.get(b.source_id)?.x ?? 0));
-    const n = sorted.length;
-    sorted.forEach((e, i) => offsetOf.set(e.id, (i - (n - 1) / 2) * spacing));
-  });
-  return offsetOf;
+// Straight SVG path between two node circles, trimmed so it starts on the
+// source circle's edge and ends `endGap` short of the target's (room for the
+// arrowhead). Straight lines don't need the shared-bus routing the old
+// orthogonal edges did (lanes, entry offsets), which is what lets the layout
+// spacing above stay compact.
+export function straightEdgePath(s, d, startGap, endGap) {
+  const dx = d.x - s.x;
+  const dy = d.y - s.y;
+  const len = Math.hypot(dx, dy);
+  if (len <= startGap + endGap) return null; // overlapping nodes — nothing sensible to draw
+  const ux = dx / len;
+  const uy = dy / len;
+  return `M${s.x + ux * startGap},${s.y + uy * startGap} L${d.x - ux * endGap},${d.y - uy * endGap}`;
 }
 
 // Bounding-box "fit to view" transform for the pan/zoom `{x, y, k}` state.

@@ -6,6 +6,7 @@ jest.mock('../../models/equipment.model');
 jest.mock('../../models/ability.model');
 jest.mock('../../models/ritual-tracker.model');
 jest.mock('../../models/campaign-access.model');
+jest.mock('../../models/spell-access.model');
 jest.mock('../authorize-character-write');
 
 const CharacterModel = require('../../models/character.model');
@@ -16,6 +17,7 @@ const EquipmentModel = require('../../models/equipment.model');
 const AbilityModel = require('../../models/ability.model');
 const RitualTrackerModel = require('../../models/ritual-tracker.model');
 const { isCampaignGmForCharacter } = require('../../models/campaign-access.model');
+const { treeSpellAccess } = require('../../models/spell-access.model');
 const authorizeCharacterWrite = require('../authorize-character-write');
 const CharacterController = require('../character.controller');
 
@@ -37,6 +39,7 @@ function mockAggregationModels() {
   AbilityModel.findAll.mockResolvedValue(['ability-x']);
   RitualTrackerModel.findAll.mockResolvedValue(['ritual-x']);
   CharacterModel.findOwnerUsername.mockResolvedValue('ownerName');
+  treeSpellAccess.mockResolvedValue({ traditions: ['t1'], maxComplexity: 'medium' });
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -141,6 +144,7 @@ describe('CharacterController.getSheet', () => {
     expect(payload.character).toEqual({ id: 'c1', user_id: 'owner-1', is_public: false, owner_username: 'ownerName' });
     expect(payload.skills).toEqual(['skill-x']);
     expect(payload.spells).toEqual(['spell-x']);
+    expect(payload.spell_access).toEqual({ traditions: ['t1'], max_complexity: 'medium' });
     expect(payload.tree).toEqual(['tree-x']);
     expect(payload.equipment).toEqual(['equip-x']);
     expect(payload.abilities).toEqual(['ability-x']);

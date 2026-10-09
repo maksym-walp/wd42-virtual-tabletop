@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
 const { serializeImageCrop } = require('../utils/image-crop');
@@ -17,6 +18,61 @@ const prereqNodesSelect = (alias) => `COALESCE(
 // GM/admin", which made those records impossible to un-mark — see
 // migration 83.
 const IS_CANONICAL_EXPR = 'a.is_canonical';
+
+const TIER_KINDS = ['primitive', 'perfected'];
+const FORM_KINDS = [...TIER_KINDS, 'alternative'];
+const DURATION_UNITS = ['instant', 'action', 'seconds', 'minutes', 'hours', 'days', 'permanent'];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Форми вміння — та сама модель, що й у заклинань (spellbook
+// normalizeForms). Колонки самого рядка entries — основна форма (при
+// рівневих формах — «Повноцінна»); entries.forms (JSONB) — додаткові:
+// рівневі 'primitive'/'perfected' (не більше однієї кожного виду, id = kind)
+// та альтернативні 'alternative' з власною назвою (id — uuid; наявний
+// зберігається, бо на нього посилаються лист персонажа й вузли дерева).
+// Білий список полів, щоб у JSONB не потрапляло сміття з тіла запиту.
+// is_maneuver/archetypes — властивості вміння загалом, не форми.
+function normalizeForms(forms) {
+  if (!Array.isArray(forms)) return [];
+  const seenTiers = new Set();
+  return forms
+    .filter((form) => form && typeof form === 'object' && FORM_KINDS.includes(form.kind))
+    .filter((form) => {
+      if (!TIER_KINDS.includes(form.kind)) return true;
+      if (seenTiers.has(form.kind)) return false;
+      seenTiers.add(form.kind);
+      return true;
+    })
+    .map((form) => ({
+      kind: form.kind,
+      id: form.kind === 'alternative'
+        ? (UUID_RE.test(form.id ?? '') ? form.id : crypto.randomUUID())
+        : form.kind,
+      name: form.kind === 'alternative' ? (String(form.name ?? '').trim() || 'Альтернативна форма') : null,
+      duration_value: form.duration_value === '' || form.duration_value == null ? null : Number(form.duration_value),
+      duration_unit: DURATION_UNITS.includes(form.duration_unit) ? form.duration_unit : 'instant',
+      mechanical_desc: form.mechanical_desc || null,
+      narrative_desc: form.narrative_desc || null,
+      lore_creator: form.lore_creator || null,
+      lore_creator_npc_id: form.lore_creator_npc_id || null,
+    }));
+}
+
+// Вміння має або рівневі форми, або альтернативні — не обидва типи разом.
+// Контролер відхиляє такий запит; bulkImport натомість відкидає
+// альтернативні, щоб не валити весь імпорт.
+function hasMixedForms(forms) {
+  if (!Array.isArray(forms)) return false;
+  const kinds = forms.filter((f) => f && typeof f === 'object').map((f) => f.kind);
+  return kinds.includes('alternative') && kinds.some((k) => TIER_KINDS.includes(k));
+}
+
+const normalizeMainFormName = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+function serializeForms(forms) {
+  const normalized = normalizeForms(forms);
+  return JSON.stringify(hasMixedForms(normalized) ? normalized.filter((f) => f.kind !== 'alternative') : normalized);
+}
 
 const AbilityModel = {
   async findAll(userId, { search, sort, archetype, scope, limit, is_maneuver } = {}, isAdmin = false) {
@@ -84,18 +140,21 @@ const AbilityModel = {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop,
+      forms, main_form_name,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
          (user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
-          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
+          is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop,
+          forms, main_form_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,$18)
        RETURNING *`,
       [
         userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null,
         is_canonical ?? false, serializeImageCrop(image_url ? image_crop : null),
+        serializeForms(forms), normalizeMainFormName(main_form_name),
       ]
     );
     return rows[0];
@@ -105,6 +164,7 @@ const AbilityModel = {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, image_crop,
+      forms, main_form_name,
     } = data;
 
     const { rows } = await pool.query(
@@ -112,13 +172,15 @@ const AbilityModel = {
        SET name=$3, archetypes=$4, mechanical_desc=$5, narrative_desc=$6, is_public=$7,
            prerequisite_node_ids=$8, prerequisite_logic=$9, image_url=$10,
            is_maneuver=$11, duration_value=$12, duration_unit=$13,
-           lore_creator=$14, lore_creator_npc_id=$15, image_crop=$17::jsonb, updated_at=NOW()
+           lore_creator=$14, lore_creator_npc_id=$15, image_crop=$17::jsonb,
+           forms=$18::jsonb, main_form_name=$19, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $16 = true)
        RETURNING *`,
       [
         id, userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         serializeImageCrop(image_url ? image_crop : null),
+        serializeForms(forms), normalizeMainFormName(main_form_name),
       ]
     );
     return rows[0] || null;
@@ -175,6 +237,7 @@ const AbilityModel = {
     const columns = [
       'user_id', 'name', 'archetypes', 'mechanical_desc', 'narrative_desc', 'is_public',
       'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id', 'is_canonical',
+      'forms', 'main_form_name',
     ];
 
     const values = [];
@@ -193,6 +256,8 @@ const AbilityModel = {
         record.lore_creator ?? null,
         record.lore_creator_npc_id ?? null,
         isCanonical,
+        serializeForms(record.forms),
+        normalizeMainFormName(record.main_form_name),
       );
       return `(${columns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
     });
@@ -206,3 +271,5 @@ const AbilityModel = {
 };
 
 module.exports = AbilityModel;
+module.exports.normalizeForms = normalizeForms;
+module.exports.hasMixedForms = hasMixedForms;

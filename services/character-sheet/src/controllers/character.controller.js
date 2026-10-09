@@ -7,6 +7,7 @@ const AbilityModel = require('../models/ability.model');
 const RitualTrackerModel = require('../models/ritual-tracker.model');
 const authorizeCharacterWrite = require('./authorize-character-write');
 const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
+const { treeSpellAccess } = require('../models/spell-access.model');
 
 const CharacterController = {
   async list(req, res) {
@@ -51,7 +52,7 @@ const CharacterController = {
     // edit menu.
     const isGmViewer = !isOwner && (isCampaignGm || isAdmin);
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -59,6 +60,7 @@ const CharacterController = {
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
+      treeSpellAccess(char.id),
     ]);
 
     // is_owner drives all edit UI on the frontend — a campaign GM or an admin
@@ -67,8 +69,12 @@ const CharacterController = {
     res.json({
       character: { ...char, owner_username },
       skills, spells, tree, equipment, abilities, rituals,
+      // Що дерево відкрило для заклинань: { traditions, max_complexity }.
+      spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
       is_owner: isOwner || isCampaignGm || isAdmin,
       is_gm: isGmViewer,
+      // Може давати заклинання поза правилами доступності (див. isSpellMaster).
+      is_spell_master: isGM || isAdmin || isCampaignGm,
     });
   },
 
@@ -76,7 +82,7 @@ const CharacterController = {
     const char = await CharacterModel.findPublicById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено або він приватний' });
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -84,9 +90,14 @@ const CharacterController = {
       AbilityModel.findAll(char.id),
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
+      treeSpellAccess(char.id),
     ]);
 
-    res.json({ character: { ...char, owner_username }, skills, spells, tree, equipment, abilities, rituals, is_owner: false, is_gm: false });
+    res.json({
+      character: { ...char, owner_username }, skills, spells, tree, equipment, abilities, rituals,
+      spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
+      is_owner: false, is_gm: false, is_spell_master: false,
+    });
   },
 
   async update(req, res) {

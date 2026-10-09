@@ -5,7 +5,7 @@ import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import npcsApi from '../api/npcs';
 import { ARCHETYPES } from '../constants/characterSheet';
-import { DURATION_UNITS } from '../constants/abilities';
+import { DURATION_UNITS, ABILITY_FORM_FIELDS, pickAbilityFormFields, abilityFormMode } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -16,6 +16,8 @@ import NodePrerequisitePicker from '../components/NodePrerequisitePicker';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 import AuthorField from '../components/AuthorField';
+import EntryFormsSection from '../components/EntryFormsSection';
+import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
 
 const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
@@ -27,7 +29,37 @@ const EMPTY = {
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '', image_crop: null,
   collectionIds: [],
+  // Додаткові форми — { kind, id, name } + повні знімки ABILITY_FORM_FIELDS;
+  // основна форма — це поля вище (main_form_name — її назва, лише для
+  // вмінь з альтернативними формами).
+  main_form_name: '',
+  forms: [],
 };
+
+// Серверна форма → стан редактора ('' замість null для інпутів).
+function formToState(src) {
+  return {
+    ...src,
+    mechanical_desc: src.mechanical_desc || '',
+    narrative_desc: src.narrative_desc || '',
+    lore_creator: src.lore_creator || '',
+    lore_creator_npc_id: src.lore_creator_npc_id ?? null,
+    duration_value: src.duration_value ?? '',
+    duration_unit: src.duration_unit || 'instant',
+  };
+}
+
+// Нова форма починається як копія основної. Альтернативна отримує uuid
+// одразу: сервер його зберігає, на нього посилаються лист персонажа й
+// вузли дерева розвитку.
+function newForm(kind, source) {
+  return {
+    ...pickAbilityFormFields(source),
+    kind,
+    id: kind === 'alternative' ? newAlternativeFormId() : kind,
+    name: kind === 'alternative' ? 'Нова форма' : null,
+  };
+}
 
 export default function AbilityForm() {
   const { id } = useParams();
@@ -47,6 +79,8 @@ export default function AbilityForm() {
   const membershipInitialized = useRef(false);
 
   const [npcs, setNpcs] = useState([]);
+  const formsEditor = useEntryForms({ form, setForm, fields: ABILITY_FORM_FIELDS, newForm });
+  const { activeEntry, current, patchForm, setFormMode } = formsEditor;
 
   useEffect(() => {
     skillTreeApi.getNodes().then(setNodes).catch(() => {});
@@ -80,7 +114,10 @@ export default function AbilityForm() {
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
           image_url: a.image_url || '', image_crop: a.image_crop || null,
+          main_form_name: a.main_form_name || '',
+          forms: (a.forms || []).map(formToState),
         }));
+        setFormMode(abilityFormMode(a));
       })
       .catch(() => navigate('/abilities'))
       .finally(() => setLoading(false));
@@ -95,6 +132,9 @@ export default function AbilityForm() {
   }, [isEdit, loading, collectionsLoaded, collections, id]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  // Поля, що відрізняються між формами, читаються й пишуться через активну форму.
+  const setL = (field) => (e) => patchForm({ [field]: e.target.value });
+  const formSuffix = form.forms.length ? ` · ${activeEntry.label}` : '';
 
   const reconcileCollections = async (itemId) => {
     const before = initialCollectionIds.current;
@@ -123,10 +163,15 @@ export default function AbilityForm() {
     setSaving(true);
     setError('');
     try {
-      const { collectionIds, ...rest } = form;
+      const serializeForm = (src) => ({
+        ...pickAbilityFormFields(src),
+        duration_value: src.duration_value === '' || src.duration_value == null ? null : Number(src.duration_value),
+      });
+      const { collectionIds, forms, ...rest } = form;
       const payload = {
         ...rest,
-        duration_value: form.duration_value === '' ? null : Number(form.duration_value),
+        ...serializeForm(form),
+        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id, name: f.name })),
         image_url: form.image_url || null,
         image_crop: form.image_url ? (form.image_crop || null) : null,
       };
@@ -193,22 +238,6 @@ export default function AbilityForm() {
             Може бути використано як маневр (дія в бою)
           </label>
 
-          <Field label="Тривалість" className="mb-4">
-            <div className="flex gap-2">
-              {form.duration_unit !== 'instant' && form.duration_unit !== 'permanent' && (
-                <input
-                  type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={form.duration_value}
-                  onChange={set('duration_value')}
-                />
-              )}
-              <select className={`${inputClass} min-w-0 flex-1`} value={form.duration_unit} onChange={set('duration_unit')}>
-                {Object.entries(DURATION_UNITS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-          </Field>
-
           <ImageUploadField
             value={form.image_url}
             onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
@@ -218,26 +247,51 @@ export default function AbilityForm() {
           />
         </FormSection>
 
-        <FormSection title="Описи">
+        <FormSection title="Форми">
+          <EntryFormsSection
+            forms={formsEditor}
+            mainFormName={form.main_form_name}
+            onMainFormNameChange={set('main_form_name')}
+            fieldsHint="Тривалість, описи й автор нижче"
+            altNamePlaceholder="напр. Шквал ударів"
+          />
+        </FormSection>
+
+        <FormSection title={`Механіка й описи${formSuffix}`}>
+          <Field label="Тривалість" className="mb-4">
+            <div className="flex gap-2">
+              {current.duration_unit !== 'instant' && current.duration_unit !== 'permanent' && (
+                <input
+                  type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={current.duration_value}
+                  onChange={setL('duration_value')}
+                />
+              )}
+              <select className={`${inputClass} min-w-0 flex-1`} value={current.duration_unit} onChange={setL('duration_unit')}>
+                {Object.entries(DURATION_UNITS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+          </Field>
           <SmartTextarea
             label="Механічний опис" className="mb-4"
-            value={form.mechanical_desc} onChange={set('mechanical_desc')}
+            value={current.mechanical_desc} onChange={setL('mechanical_desc')}
             rows={4}
             placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
           />
           <SmartTextarea
             label="Наративний опис"
-            value={form.narrative_desc} onChange={set('narrative_desc')}
+            value={current.narrative_desc} onChange={setL('narrative_desc')}
             rows={3}
             placeholder="Як це виглядає та відчувається у світі гри..."
           />
         </FormSection>
 
-        <FormSection title="Автор">
+        <FormSection title={`Автор${formSuffix}`}>
           <AuthorField
-            name={form.lore_creator}
-            npcId={form.lore_creator_npc_id}
-            onChange={({ name, npc_id }) => setForm((f) => ({ ...f, lore_creator: name, lore_creator_npc_id: npc_id }))}
+            name={current.lore_creator}
+            npcId={current.lore_creator_npc_id}
+            onChange={({ name, npc_id }) => patchForm({ lore_creator: name, lore_creator_npc_id: npc_id })}
             npcs={npcs}
             label="Творець"
             hint="Необов'язкове лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне"

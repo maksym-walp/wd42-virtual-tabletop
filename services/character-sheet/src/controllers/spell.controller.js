@@ -1,43 +1,18 @@
 const SpellProgressModel = require('../models/spell.model');
-const { checkPrerequisites, isVisibleToUser } = require('../models/prerequisite.model');
+const { isVisibleToUser } = require('../models/prerequisite.model');
+const { checkSpellAccess, isSpellMaster } = require('../models/spell-access.model');
+const { resolveFormProgress } = require('../models/form-progress');
 const authorizeCharacterWrite = require('./authorize-character-write');
 
-// Перевіряє й нормалізує поля освоєння форм з тіла запиту проти форм
-// самого заклинання. Повертає { error } або { progress } лише з переданими
-// полями (для add — із дефолтами):
-//   form_tier      — 'full' або наявна рівнева форма; лише для заклинань
-//                    з рівневими формами (при add типово — найнижча);
-//   primary_form   — 'main' або id альтернативної форми;
-//   mastered_forms — ключі з того самого набору; невідомі тихо відкидаються.
-async function resolveFormProgress(spellId, body, { isAdd = false } = {}) {
+// Поля освоєння форм (form_tier/primary_form/mastered_forms) перевіряє
+// resolveFormProgress (form-progress.js) — проти форм самого заклинання й
+// форм, які персонажу відкрило дерево розвитку (традиції + складність, див.
+// spell-access.model.js). allowedForms: null — без обмежень (майстер або
+// заклинання, видане майстром).
+async function resolveSpellForms(spellId, body, { isAdd = false, allowedForms = null, current = null } = {}) {
   const keys = await SpellProgressModel.formKeys(spellId);
   if (!keys) return { error: 'Заклинання не знайдено' };
-  const tiers = keys.tierKinds.length ? ['primitive', 'full', 'perfected'].filter((t) => t === 'full' || keys.tierKinds.includes(t)) : [];
-  const formIds = ['main', ...keys.altIds];
-  const progress = {};
-
-  if (body.form_tier !== undefined) {
-    if (!tiers.includes(body.form_tier)) return { error: 'Некоректна рівнева форма' };
-    progress.form_tier = body.form_tier;
-  } else if (isAdd) {
-    progress.form_tier = tiers[0] ?? null;
-  }
-
-  if (body.primary_form !== undefined) {
-    if (!formIds.includes(body.primary_form)) return { error: 'Некоректна основна форма' };
-    progress.primary_form = body.primary_form;
-  } else if (isAdd) {
-    progress.primary_form = 'main';
-  }
-
-  if (body.mastered_forms !== undefined) {
-    if (!Array.isArray(body.mastered_forms)) return { error: 'mastered_forms має бути масивом' };
-    progress.mastered_forms = [...new Set(body.mastered_forms)].filter((f) => formIds.includes(f));
-  } else if (isAdd) {
-    progress.mastered_forms = [progress.primary_form];
-  }
-
-  return { progress };
+  return resolveFormProgress(keys, body, { isAdd, allowed: allowedForms, current });
 }
 
 const SpellController = {
@@ -53,11 +28,20 @@ const SpellController = {
     if (!await isVisibleToUser('spellbook.spells', spell_id, req.user.sub)) {
       return res.status(404).json({ message: 'Заклинання не знайдено' });
     }
-    const { met, missing } = await checkPrerequisites(req.params.id, 'spellbook.spells', spell_id);
-    if (!met) return res.status(403).json({ message: 'Не виконано вимоги дерева розвитку', missing_node_ids: missing });
-    const { error, progress } = await resolveFormProgress(spell_id, req.body, { isAdd: true });
+    // Майстер дає заклинання поза правилами доступності — і такий запис
+    // лишається поза ними й надалі (gm_granted).
+    const master = await isSpellMaster(req, req.params.id);
+    let allowedForms = null;
+    if (!master) {
+      const access = await checkSpellAccess(req.params.id, spell_id);
+      if (!access.met) {
+        return res.status(403).json({ message: 'Традицію чи складність заклинання ще не відкрито на дереві розвитку', missing: access.missing });
+      }
+      allowedForms = access.allowedForms;
+    }
+    const { error, progress } = await resolveSpellForms(spell_id, req.body, { isAdd: true, allowedForms });
     if (error) return res.status(400).json({ message: error });
-    const entry = await SpellProgressModel.add(req.params.id, spell_id, progress);
+    const entry = await SpellProgressModel.add(req.params.id, spell_id, { ...progress, gm_granted: master });
     res.status(201).json({ spell: entry });
   },
 
@@ -66,7 +50,10 @@ const SpellController = {
     const { mastered, cast_count, form_tier, primary_form, mastered_forms } = req.body;
     let progress = {};
     if (form_tier !== undefined || primary_form !== undefined || mastered_forms !== undefined) {
-      const resolved = await resolveFormProgress(req.params.spellId, { form_tier, primary_form, mastered_forms });
+      const current = await SpellProgressModel.findOne(req.params.id, req.params.spellId);
+      const exempt = current?.gm_granted || await isSpellMaster(req, req.params.id);
+      const allowedForms = exempt ? null : (await checkSpellAccess(req.params.id, req.params.spellId)).allowedForms;
+      const resolved = await resolveSpellForms(req.params.spellId, { form_tier, primary_form, mastered_forms }, { allowedForms, current });
       if (resolved.error) return res.status(400).json({ message: resolved.error });
       progress = resolved.progress;
     }

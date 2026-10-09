@@ -7,10 +7,13 @@ import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
 import abilitiesApi from '../api/abilities';
+import traditionsApi from '../api/traditions';
 import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
+import { spellAccessFor, missingAccessLabel } from '../utils/spellAccess';
 import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellVariantForms, spellForCharacter } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
+import { abilityTiers, abilityVariantForms, abilityForCharacter } from '../constants/abilities';
 import {
   ARCHETYPES, RACES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
@@ -83,7 +86,7 @@ export default function CharacterSheet({ publicView = false }) {
   const [allEquipment, setAllEquipment] = useState([]);
   const [allAbilities, setAllAbilities] = useState([]);
   const [allAbilityCollections, setAllAbilityCollections] = useState([]);
-  const [allSpellCollections, setAllSpellCollections] = useState([]);
+  const [allTraditions, setAllTraditions] = useState([]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName]     = useState('');
   const [editingDefense, setEditingDefense]         = useState(false);
@@ -105,16 +108,15 @@ export default function CharacterSheet({ publicView = false }) {
       : characterApi.getSheet(id);
     const noop = Promise.resolve([]);
     const abilityCollectionsApi = createCollectionsApi('/api/abilities/collections/');
-    const spellCollectionsApi = createCollectionsApi('/api/spellbook/collections/');
     Promise.all([
       fetchSheet,
       publicView ? noop : (spellbookApi?.getAll?.() ?? noop),
       publicView ? noop : (equipmentApi?.getAll?.() ?? noop),
       publicView ? noop : (abilitiesApi?.getAll?.() ?? noop),
       publicView ? noop : abilityCollectionsApi.getAll().catch(() => []),
-      publicView ? noop : spellCollectionsApi.getAll().catch(() => []),
+      publicView ? noop : traditionsApi.getAll().catch(() => []),
     ])
-      .then(([sheet, spells, equipmentCatalog, abilityCatalog, abilityCollections, spellCollections]) => {
+      .then(([sheet, spells, equipmentCatalog, abilityCatalog, abilityCollections, traditions]) => {
         setData(sheet);
         recordView({
           type: 'character', id, name: sheet.character.name,
@@ -127,7 +129,7 @@ export default function CharacterSheet({ publicView = false }) {
         setAllEquipment(Array.isArray(equipmentCatalog) ? equipmentCatalog : []);
         setAllAbilities(Array.isArray(abilityCatalog) ? abilityCatalog : []);
         setAllAbilityCollections(Array.isArray(abilityCollections) ? abilityCollections : []);
-        setAllSpellCollections(Array.isArray(spellCollections) ? spellCollections : []);
+        setAllTraditions(Array.isArray(traditions) ? traditions : []);
       })
       .catch(() => setError('Не вдалось завантажити лист персонажа'))
       .finally(() => setLoading(false));
@@ -261,9 +263,13 @@ export default function CharacterSheet({ publicView = false }) {
     await characterApi.removeEquipment(id, equipmentId);
     setData(prev => ({ ...prev, equipment: prev.equipment.filter(e => e.equipment_id !== equipmentId) }));
   };
-  const addAbility    = async (abilityId) => {
-    const ability = await characterApi.addAbility(id, abilityId);
+  const addAbility    = async (abilityId, progress = {}) => {
+    const ability = await characterApi.addAbility(id, abilityId, progress);
     if (ability) setData(prev => ({ ...prev, abilities: [...prev.abilities, ability] }));
+  };
+  const patchAbility  = async (abilityId, patch) => {
+    const updated = await characterApi.patchAbility(id, abilityId, patch);
+    setData(prev => ({ ...prev, abilities: prev.abilities.map(a => a.ability_id === abilityId ? updated : a) }));
   };
   const removeAbility = async (abilityId) => {
     await characterApi.removeAbility(id, abilityId);
@@ -587,7 +593,9 @@ export default function CharacterSheet({ publicView = false }) {
             onAddSpell={addSpell}
             onPatchSpell={patchSpell}
             onRemoveSpell={removeSpell}
-            unlockedNodeIds={unlockedNodeIds}
+            spellAccess={data.spell_access}
+            isSpellMaster={!!data.is_spell_master}
+            traditions={allTraditions}
           />
         )}
         {tab === 'magic' && c.archetype === 'spellcaster' && (
@@ -607,6 +615,7 @@ export default function CharacterSheet({ publicView = false }) {
           <AbilitiesTab
             abilities={abilities} allAbilities={allAbilities} archetype={c.archetype} is_owner={is_owner}
             onAdd={addAbility}
+            onPatch={patchAbility}
             onRemove={removeAbility}
             unlockedNodeIds={unlockedNodeIds}
           />
@@ -633,9 +642,8 @@ export default function CharacterSheet({ publicView = false }) {
             onExperienceChange={(v) => patchCharacter({ experience_points: v })}
             catalog={{
               abilities: allAbilities,
-              spells: allSpells,
               abilityCollections: allAbilityCollections,
-              spellCollections: allSpellCollections,
+              traditions: allTraditions,
             }}
           />
         )}
@@ -1350,7 +1358,10 @@ function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, 
 
 // ── MagicTab ──────────────────────────────────────────────────────────────────
 
-function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, unlockedNodeIds }) {
+// spellAccess — що дерево відкрило для заклинань (традиції + складність,
+// див. utils/spellAccess.js); isSpellMaster — глядач-майстер дає заклинання
+// поза цими правилами.
+function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, spellAccess, isSpellMaster, traditions = [] }) {
   const [spellSearch, setSpellSearch] = useState('');
   const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
@@ -1360,6 +1371,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
   const [editingMaxSpells, setEditingMaxSpells] = useState(false);
   const [maxSpellsDraft, setMaxSpellsDraft] = useState(maxKnownSpells);
 
+  const traditionNameOf = (id) => traditions.find(t => t.id === id)?.name;
   const knownIds   = new Set(spells.map(s => s.spell_id));
   const filteredAll = allSpells.filter(s =>
     !knownIds.has(s.id) &&
@@ -1459,7 +1471,11 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
             <div className="max-h-[180px] overflow-y-auto">
               {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних заклинань</p>}
               {filteredAll.map(s => {
-                const met = prereqMet(s, unlockedNodeIds);
+                const access = spellAccessFor(s, spellAccess);
+                const met = access.met || isSpellMaster;
+                // Рівневі форми, які дерево відкрило (майстру — усі).
+                const tierOpen = (t) => isSpellMaster || access.allowedForms === null
+                  || access.allowedForms.includes(t === 'full' ? 'main' : t);
                 const tiers = spellTiers(s);
                 const add = (progress) => { onAddSpell(s.id, progress); setShowPicker(false); setTierPickFor(null); };
                 return (
@@ -1471,12 +1487,18 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
                           {tiers.length > 0 && <em className="ml-1 text-xs text-text-dim">· рівневі форми</em>}
                           {s.is_canonical && <CanonBadge className="ml-1.5" />}
                         </span>
-                        {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(s)}</span>}
+                        {!access.met && (
+                          <span className="text-xs text-text-dim">
+                            {missingAccessLabel(access.missing, traditionNameOf)}
+                            {isSpellMaster && <span className="text-gold"> · майстер може видати</span>}
+                          </span>
+                        )}
                       </div>
                       <button
                         className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => (tiers.length ? setTierPickFor(tierPickFor === s.id ? null : s.id) : add({}))}
                         disabled={atMaxSpells || !met}
+                        title={!access.met && isSpellMaster ? 'Майстер дає заклинання поза правилами дерева розвитку' : undefined}
                       >{tierPickFor === s.id ? '✕' : '+'}</button>
                     </div>
                     {tierPickFor === s.id && (
@@ -1485,8 +1507,10 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
                         {tiers.map(t => (
                           <button
                             key={t}
-                            className="min-h-8 rounded border border-accent/60 px-2.5 py-1 text-xs font-semibold text-accent"
+                            className="min-h-8 rounded border border-accent/60 px-2.5 py-1 text-xs font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-40"
                             onClick={() => add({ form_tier: t })}
+                            disabled={!tierOpen(t)}
+                            title={tierOpen(t) ? undefined : 'Складність цієї форми ще не відкрито на дереві розвитку'}
                           >{FORM_TIERS[t].label}</button>
                         ))}
                       </div>
@@ -1502,7 +1526,8 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
           {spells.length === 0 && <p className="my-2 text-sm text-text-dim">Заклинань ще немає</p>}
           {spells.map(entry => {
             const spell = entry.spell || allSpells.find(s => s.id === entry.spell_id);
-            const met = !spell || prereqMet(spell, unlockedNodeIds);
+            // Заклинання від майстра правила доступності не обмежують.
+            const met = !spell || entry.gm_granted || spellAccessFor(spell, spellAccess).met;
             return (
               <SpellEntry key={entry.spell_id} entry={entry} spell={spell}
                 is_owner={is_owner} met={met}
@@ -1544,19 +1569,8 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
   const [showForms, setShowForms] = useState(false);
   const tiers = baseSpell ? spellTiers(baseSpell) : [];
   const variants = baseSpell ? spellVariantForms(baseSpell) : [];
-  const masteredForms = entry.mastered_forms ?? ['main'];
-  const primaryForm = variants.some(f => f.key === entry.primary_form) ? entry.primary_form : 'main';
   // Показуємо поля форми, якою персонаж користується (див. spellForCharacter).
   const spell = baseSpell && spellForCharacter(baseSpell, entry);
-
-  const setPrimary = (key) => onPatch({
-    primary_form: key,
-    // Основною обирають освоєну форму — позначаємо її освоєною разом.
-    mastered_forms: masteredForms.includes(key) ? masteredForms : [...masteredForms, key],
-  });
-  const toggleMastered = (key) => onPatch({
-    mastered_forms: masteredForms.includes(key) ? masteredForms.filter(k => k !== key) : [...masteredForms, key],
-  });
 
   return (
     <>
@@ -1567,7 +1581,8 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
             {[(tiers.length > 0 || variants.length > 1) && spell?.form_label, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
-          {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
+          {entry.gm_granted && <span className="text-xs text-gold">від майстра</span>}
+          {!met && <span className="text-xs text-danger">⚠ традицію чи складність більше не відкрито на дереві розвитку</span>}
         </div>
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           {is_owner && tiers.length > 0 && (
@@ -1605,38 +1620,62 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
         </div>
       </div>
       {showForms && variants.length > 1 && (
-        <div className="mb-2 rounded-md border border-border bg-bg px-3 py-2">
-          <div className="mb-1 grid grid-cols-[1fr_auto_auto] gap-x-4 text-[0.65rem] uppercase tracking-wide text-text-dim">
-            <span>Форма</span><span>основна</span><span>освоєно</span>
-          </div>
-          {variants.map(f => (
-            <div key={f.key} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-border/50 py-1.5 text-sm text-text">
-              <span>{f.label}</span>
-              <input
-                type="radio"
-                name={`primary-form-${entry.spell_id}`}
-                className="h-5 w-5 justify-self-center accent-accent"
-                checked={primaryForm === f.key}
-                disabled={!is_owner}
-                onChange={() => is_owner && setPrimary(f.key)}
-                aria-label={`Основна форма: ${f.label}`}
-              />
-              <input
-                type="checkbox"
-                className="h-5 w-5 justify-self-center accent-sage"
-                checked={masteredForms.includes(f.key)}
-                disabled={!is_owner}
-                onChange={() => is_owner && toggleMastered(f.key)}
-                aria-label={`Освоєно: ${f.label}`}
-              />
-            </div>
-          ))}
-        </div>
+        <FormsProgressPanel
+          variants={variants} entry={entry} radioName={`primary-form-${entry.spell_id}`}
+          is_owner={is_owner} onPatch={onPatch}
+        />
       )}
       {showModal && spell && (
         <SpellDetailModal spell={spell} spellId={entry.spell_id} onClose={() => setShowModal(false)} />
       )}
     </>
+  );
+}
+
+// Альтернативні форми заклинання / вміння в листі: яка основна для персонажа
+// й які освоєні. Форми, яких дерево розвитку персонажу не відкрило, сервер
+// не дає ні обрати, ні позначити.
+function FormsProgressPanel({ variants, entry, radioName, is_owner, onPatch }) {
+  const masteredForms = entry.mastered_forms ?? ['main'];
+  const primaryForm = variants.some(f => f.key === entry.primary_form) ? entry.primary_form : 'main';
+
+  const setPrimary = (key) => onPatch({
+    primary_form: key,
+    // Основною обирають освоєну форму — позначаємо її освоєною разом.
+    mastered_forms: masteredForms.includes(key) ? masteredForms : [...masteredForms, key],
+  });
+  const toggleMastered = (key) => onPatch({
+    mastered_forms: masteredForms.includes(key) ? masteredForms.filter(k => k !== key) : [...masteredForms, key],
+  });
+
+  return (
+    <div className="mb-2 rounded-md border border-border bg-bg px-3 py-2">
+      <div className="mb-1 grid grid-cols-[1fr_auto_auto] gap-x-4 text-[0.65rem] uppercase tracking-wide text-text-dim">
+        <span>Форма</span><span>основна</span><span>освоєно</span>
+      </div>
+      {variants.map(f => (
+        <div key={f.key} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-border/50 py-1.5 text-sm text-text">
+          <span>{f.label}</span>
+          <input
+            type="radio"
+            name={radioName}
+            className="h-5 w-5 justify-self-center accent-accent"
+            checked={primaryForm === f.key}
+            disabled={!is_owner}
+            onChange={() => is_owner && setPrimary(f.key)}
+            aria-label={`Основна форма: ${f.label}`}
+          />
+          <input
+            type="checkbox"
+            className="h-5 w-5 justify-self-center accent-sage"
+            checked={masteredForms.includes(f.key)}
+            disabled={!is_owner}
+            onChange={() => is_owner && toggleMastered(f.key)}
+            aria-label={`Освоєно: ${f.label}`}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1845,10 +1884,11 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
 // scoped to catalog entries whose `archetypes` checkboxes include this
 // character's archetype, enforcing the per-archetype restriction set when
 // the ability was created.
-function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onRemove, unlockedNodeIds }) {
+function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onPatch, onRemove, unlockedNodeIds }) {
   const [search, setSearch]         = useState('');
   const [scope, setScope]           = useState('');
   const [showPicker, setShowPicker] = useState(false);
+  const [tierPickFor, setTierPickFor] = useState(null); // ability id whose "which tier?" choice is open
 
   const relevant    = allAbilities.filter(a => (a.archetypes || []).includes(archetype));
   const knownIds    = new Set(abilities.map(a => a.ability_id));
@@ -1879,17 +1919,37 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
             {filteredAll.length === 0 && <p className="my-2 text-sm text-text-dim">Немає доступних вмінь</p>}
             {filteredAll.map(a => {
               const met = prereqMet(a, unlockedNodeIds);
+              const tiers = abilityTiers(a);
+              const add = (progress) => { onAdd(a.id, progress); setShowPicker(false); setTierPickFor(null); };
               return (
-                <div key={a.id} className="flex items-center justify-between border-b border-bg py-1.5 text-sm text-text-muted">
-                  <div className="flex flex-col">
-                    <span>{a.name}{a.is_canonical && <CanonBadge className="ml-1.5" />}</span>
-                    {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(a)}</span>}
+                <div key={a.id} className="border-b border-bg py-1.5 text-sm text-text-muted">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span>
+                        {a.name}
+                        {tiers.length > 0 && <em className="ml-1 text-xs text-text-dim">· рівневі форми</em>}
+                        {a.is_canonical && <CanonBadge className="ml-1.5" />}
+                      </span>
+                      {!met && <span className="text-xs text-text-dim">{missingPrereqLabel(a)}</span>}
+                    </div>
+                    <button
+                      className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!met}
+                      onClick={() => (tiers.length ? setTierPickFor(tierPickFor === a.id ? null : a.id) : add({}))}
+                    >{tierPickFor === a.id ? '✕' : '+'}</button>
                   </div>
-                  <button
-                    className="min-h-9 rounded border border-border px-2.5 py-1.5 text-sm text-accent disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={!met}
-                    onClick={() => { onAdd(a.id); setShowPicker(false); }}
-                  >+</button>
+                  {tierPickFor === a.id && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-text-dim">Яку форму вже освоїв персонаж?</span>
+                      {tiers.map(t => (
+                        <button
+                          key={t}
+                          className="min-h-8 rounded border border-accent/60 px-2.5 py-1 text-xs font-semibold text-accent"
+                          onClick={() => add({ form_tier: t })}
+                        >{FORM_TIERS[t].label}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1902,20 +1962,72 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onR
         const a = entry.ability || allAbilities.find(x => x.id === entry.ability_id);
         const met = !a || prereqMet(a, unlockedNodeIds);
         return (
-          <div key={entry.ability_id} className="mb-1.5 flex items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
-            <Link to={a ? `/abilities/${a.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
-              <span className="text-sm text-text">{a?.name ?? '(невідоме)'}</span>
-              {(a?.narrative_desc || a?.mechanical_desc) && (
-                <span className="text-xs text-text-dim">{htmlToPreviewText(a.narrative_desc || a.mechanical_desc)}</span>
-              )}
-              {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
-            </Link>
-            {is_owner && (
-              <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={() => onRemove(entry.ability_id)}>✕</button>
-            )}
-          </div>
+          <AbilityEntry key={entry.ability_id} entry={entry} ability={a}
+            is_owner={is_owner} met={met}
+            onPatch={patch => onPatch(entry.ability_id, patch)}
+            onRemove={() => onRemove(entry.ability_id)}
+          />
         );
       })}
+    </div>
+  );
+}
+
+// Рядок вміння в листі — з формами так само, як SpellEntry: рівнева форма,
+// до якої дійшов персонаж, і альтернативні (основна / освоєні).
+function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPatch, onRemove }) {
+  const [showForms, setShowForms] = useState(false);
+  const tiers = baseAbility ? abilityTiers(baseAbility) : [];
+  const variants = baseAbility ? abilityVariantForms(baseAbility) : [];
+  // Поля (описи, тривалість) — з форми, якою персонаж користується.
+  const a = baseAbility && abilityForCharacter(baseAbility, entry);
+  const hasForms = tiers.length > 0 || variants.length > 1;
+  const href = a ? `/abilities/${a.id}${hasForms ? `?form=${encodeURIComponent(a.form_key)}` : ''}` : '#';
+
+  return (
+    <div className="mb-1.5 rounded-md border border-border bg-bg px-3 py-2.5">
+      <div className="flex items-start gap-3">
+        <Link to={href} className="flex flex-1 flex-col gap-0.5">
+          <span className="text-sm text-text">
+            {a?.name ?? '(невідоме)'}
+            {hasForms && <span className="text-xs text-text-dim"> · {a.form_label}</span>}
+          </span>
+          {(a?.narrative_desc || a?.mechanical_desc) && (
+            <span className="text-xs text-text-dim">{htmlToPreviewText(a.narrative_desc || a.mechanical_desc)}</span>
+          )}
+          {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
+        </Link>
+        <div className="flex items-center gap-2">
+          {is_owner && tiers.length > 0 && (
+            <select
+              className="min-h-9 rounded border border-border bg-bg px-1.5 text-xs text-text"
+              value={entry.form_tier ?? 'full'}
+              onChange={e => onPatch({ form_tier: e.target.value })}
+              title="Рівнева форма, яку освоїв персонаж"
+            >
+              {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
+            </select>
+          )}
+          {variants.length > 1 && (
+            <button
+              className={`min-h-9 rounded border px-2 text-xs ${showForms ? 'border-accent text-accent' : 'border-border text-text-dim'}`}
+              onClick={() => setShowForms(o => !o)}
+              title="Альтернативні форми"
+            >Форми {showForms ? '▴' : '▾'}</button>
+          )}
+          {is_owner && (
+            <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={onRemove}>✕</button>
+          )}
+        </div>
+      </div>
+      {showForms && variants.length > 1 && (
+        <div className="mt-2">
+          <FormsProgressPanel
+            variants={variants} entry={entry} radioName={`primary-form-ability-${entry.ability_id}`}
+            is_owner={is_owner} onPatch={onPatch}
+          />
+        </div>
+      )}
     </div>
   );
 }

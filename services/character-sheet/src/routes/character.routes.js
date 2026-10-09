@@ -55,6 +55,7 @@ router.delete('/:id/equipment/:equipmentId', wrap(EquipmentController.remove));
 // Abilities (вміння, all archetypes) — references abilities.entries catalog
 router.get('/:id/abilities',               wrap(AbilityController.list));
 router.post('/:id/abilities',              wrap(AbilityController.add));
+router.patch('/:id/abilities/:abilityId',  wrap(AbilityController.patch));
 router.delete('/:id/abilities/:abilityId', wrap(AbilityController.remove));
 
 // Ritual trackers (spellcaster)

@@ -1,8 +1,10 @@
 const pool = require('../config/db');
+const { formKeys } = require('./form-progress');
 
-const prereqNodesSelect = `COALESCE(
-    (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
-     FROM skill_tree.nodes n WHERE n.id = ANY(sp.prerequisite_node_ids)),
+// Традиції заклинання — для перевірки доступності на клієнті (див.
+// spell-access.model.js).
+const traditionIdsSelect = `COALESCE(
+    (SELECT jsonb_agg(ts.tradition_id) FROM spellbook.tradition_spells ts WHERE ts.spell_id = sp.id),
     '[]'::jsonb
   )`;
 
@@ -18,9 +20,7 @@ const SpellProgressModel = {
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,
                 'duration_value', sp.duration_value, 'duration_unit', sp.duration_unit,
                 'range_desc', sp.range_desc, 'components', sp.components, 'is_public', sp.is_public,
-                'prerequisite_node_ids', sp.prerequisite_node_ids,
-                'prerequisite_logic', sp.prerequisite_logic,
-                'prerequisite_nodes', ${prereqNodesSelect}
+                'tradition_ids', ${traditionIdsSelect}
               ) END AS spell
        FROM character_sheet.known_spells ks
        LEFT JOIN spellbook.spells sp ON sp.id = ks.spell_id
@@ -31,31 +31,28 @@ const SpellProgressModel = {
     return rows;
   },
 
-  // Які форми має заклинання (spellbook.spells.forms) — для перевірки
-  // form_tier/primary_form/mastered_forms: tierKinds — наявні додаткові
-  // рівневі форми ('primitive'/'perfected'), altIds — id альтернативних.
-  // null, якщо заклинання не існує.
-  async formKeys(spellId) {
-    const { rows } = await pool.query(
-      `SELECT COALESCE(array_agg(f->>'kind') FILTER (WHERE f->>'kind' IN ('primitive', 'perfected')), '{}') AS tier_kinds,
-              COALESCE(array_agg(f->>'id') FILTER (WHERE f->>'kind' = 'alternative'), '{}') AS alt_ids
-       FROM spellbook.spells s
-       LEFT JOIN LATERAL jsonb_array_elements(s.forms) f ON true
-       WHERE s.id = $1
-       GROUP BY s.id`,
-      [spellId]
-    );
-    if (!rows[0]) return null;
-    return { tierKinds: rows[0].tier_kinds, altIds: rows[0].alt_ids };
+  // Які форми має заклинання — див. form-progress.js. null, якщо його не існує.
+  formKeys(spellId) {
+    return formKeys('spellbook.spells', spellId);
   },
 
-  async add(characterId, spellId, { form_tier = null, primary_form = 'main', mastered_forms = ['main'] } = {}) {
+  async findOne(characterId, spellId) {
     const { rows } = await pool.query(
-      `INSERT INTO character_sheet.known_spells (character_id, spell_id, form_tier, primary_form, mastered_forms)
-       VALUES ($1, $2, $3, $4, $5)
+      `SELECT * FROM character_sheet.known_spells WHERE character_id = $1 AND spell_id = $2`,
+      [characterId, spellId]
+    );
+    return rows[0] || null;
+  },
+
+  // gm_granted — заклинання дав майстер: правила доступності (традиції й
+  // складність з дерева) для цього запису не діють.
+  async add(characterId, spellId, { form_tier = null, primary_form = 'main', mastered_forms = ['main'], gm_granted = false } = {}) {
+    const { rows } = await pool.query(
+      `INSERT INTO character_sheet.known_spells (character_id, spell_id, form_tier, primary_form, mastered_forms, gm_granted)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (character_id, spell_id) DO NOTHING
        RETURNING *`,
-      [characterId, spellId, form_tier, primary_form, mastered_forms]
+      [characterId, spellId, form_tier, primary_form, mastered_forms, gm_granted]
     );
     return rows[0] || null;
   },
@@ -83,9 +80,7 @@ const SpellProgressModel = {
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,
                 'duration_value', sp.duration_value, 'duration_unit', sp.duration_unit,
                 'range_desc', sp.range_desc, 'components', sp.components, 'is_public', sp.is_public,
-                'prerequisite_node_ids', sp.prerequisite_node_ids,
-                'prerequisite_logic', sp.prerequisite_logic,
-                'prerequisite_nodes', ${prereqNodesSelect}
+                'tradition_ids', ${traditionIdsSelect}
               ) END AS spell
        FROM updated ks
        LEFT JOIN spellbook.spells sp ON sp.id = ks.spell_id`,

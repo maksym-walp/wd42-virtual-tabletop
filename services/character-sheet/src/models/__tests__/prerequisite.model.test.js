@@ -21,7 +21,7 @@ describe('checkPrerequisites', () => {
 
     const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
 
-    expect(result).toEqual({ met: true, missing: [] });
+    expect(result).toEqual({ met: true, missing: [], allowedForms: null });
     expect(pool.query).toHaveBeenCalledTimes(2); // tree_progress lookup skipped
   });
 
@@ -32,7 +32,7 @@ describe('checkPrerequisites', () => {
 
     const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
 
-    expect(result).toEqual({ met: true, missing: [] });
+    expect(result).toEqual({ met: true, missing: [], allowedForms: null });
   });
 
   it('is met when the item itself is not found', async () => {
@@ -40,7 +40,7 @@ describe('checkPrerequisites', () => {
 
     const result = await checkPrerequisites('c1', 'abilities.entries', 'missing-item');
 
-    expect(result).toEqual({ met: true, missing: [] });
+    expect(result).toEqual({ met: true, missing: [], allowedForms: null });
   });
 
   it("'and' logic requires every prerequisite node to be unlocked", async () => {
@@ -63,7 +63,7 @@ describe('checkPrerequisites', () => {
 
     const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
 
-    expect(result).toEqual({ met: true, missing: [] });
+    expect(result).toEqual({ met: true, missing: [], allowedForms: null });
   });
 
   it("'or' logic is unmet when none of the prerequisite nodes are unlocked", async () => {
@@ -177,5 +177,58 @@ describe('isVisibleToUser', () => {
     expect(sql).toMatch(/user_id = \$2/);
     expect(sql).toMatch(/is_public = true/);
     expect(params).toEqual(['ability1', 'user-9']);
+  });
+});
+
+describe('checkPrerequisites allowedForms', () => {
+  const entry = { rows: [{ prerequisite_node_ids: [], prerequisite_logic: 'or' }] };
+
+  it('is the union of form keys from unlocked form-specific links', async () => {
+    pool.query
+      .mockResolvedValueOnce(entry)
+      .mockResolvedValueOnce({ rows: [
+        { node_id: 'g1', form_key: 'primitive' },
+        { node_id: 'g2', form_key: 'perfected' },
+        { node_id: 'g3', form_key: 'main' },
+      ] })
+      .mockResolvedValueOnce({ rows: [{ node_id: 'g1' }, { node_id: 'g2' }] });
+
+    const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
+
+    expect(result.met).toBe(true);
+    expect(result.allowedForms).toEqual(['primitive', 'perfected']);
+  });
+
+  it('is null (every form) once any unlocked link covers the whole entry', async () => {
+    pool.query
+      .mockResolvedValueOnce(entry)
+      .mockResolvedValueOnce({ rows: [{ node_id: 'g1', form_key: 'primitive' }, { node_id: 'g2', form_key: null }] })
+      .mockResolvedValueOnce({ rows: [{ node_id: 'g1' }, { node_id: 'g2' }] });
+
+    const result = await checkPrerequisites('c1', 'spellbook.spells', 'item1');
+
+    expect(result.allowedForms).toBeNull();
+  });
+
+  it('is null when the entry\'s own prerequisites are met, whatever the links say', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ prerequisite_node_ids: ['n1'], prerequisite_logic: 'or' }] })
+      .mockResolvedValueOnce({ rows: [{ node_id: 'g1', form_key: 'primitive' }] })
+      .mockResolvedValueOnce({ rows: [{ node_id: 'n1' }, { node_id: 'g1' }] });
+
+    const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
+
+    expect(result.allowedForms).toBeNull();
+  });
+
+  it('is empty when nothing is unlocked', async () => {
+    pool.query
+      .mockResolvedValueOnce(entry)
+      .mockResolvedValueOnce({ rows: [{ node_id: 'g1', form_key: 'primitive' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await checkPrerequisites('c1', 'abilities.entries', 'item1');
+
+    expect(result).toEqual({ met: false, missing: ['g1'], allowedForms: [] });
   });
 });

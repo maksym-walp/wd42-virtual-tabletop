@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
-import { formatDuration } from '../constants/abilities';
+import { formatDuration, abilityForms } from '../constants/abilities';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
@@ -25,11 +25,15 @@ export default function AbilityView() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
+  // ?form=<key> — відкрити одразу конкретну форму (посилання з дерева розвитку).
+  const [searchParams] = useSearchParams();
+  const [activeForm, setActiveForm] = useState(searchParams.get('form') || 'main');
 
   useEffect(() => {
     api.get(`/api/abilities/${id}`)
       .then(({ data }) => {
         setAbility(data.ability);
+        setActiveForm(searchParams.get('form') || 'main');
         recordView({ type: 'ability', id, name: data.ability.name, href: `/abilities/${id}`, image_url: data.ability.image_url, image_crop: data.ability.image_crop });
       })
       .catch(() => navigate('/abilities', { replace: true }))
@@ -70,6 +74,9 @@ export default function AbilityView() {
 
   const isAdmin = user?.role === 'admin';
   const canManageCanonical = isAdmin || user?.role === 'game_master';
+  const forms = abilityForms(ability);
+  // Поля форми (тривалість, описи, автор) — з обраної форми; решта — з ability.
+  const shown = forms.find((f) => f.key === activeForm) ?? forms.find((f) => f.key === 'main');
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
@@ -96,7 +103,7 @@ export default function AbilityView() {
           ))}
           {ability.is_maneuver && (
             <span className="rounded border border-gold/60 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-gold">
-              Маневр · {formatDuration(ability.duration_value, ability.duration_unit)}
+              Маневр · {formatDuration(shown.duration_value, shown.duration_unit)}
             </span>
           )}
           <span className={`text-xs italic ${ability.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
@@ -116,24 +123,42 @@ export default function AbilityView() {
           onChangeOwner={isAdmin ? handleSetOwner : undefined}
         />
 
-        {ability.mechanical_desc && (
+        {forms.length > 1 && (
+          <Section title="Форми">
+            <div className="flex flex-wrap gap-1.5">
+              {forms.map((f) => (
+                <button
+                  key={f.key} type="button"
+                  onClick={() => setActiveForm(f.key)}
+                  className={`rounded border px-3 py-1 text-xs font-semibold transition-colors ${
+                    shown.key === f.key ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {shown.mechanical_desc && (
           <Section title="Механічний опис">
-            <SmartTextReader text={ability.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
+            <SmartTextReader text={shown.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
           </Section>
         )}
 
-        {ability.narrative_desc && (
+        {shown.narrative_desc && (
           <Section title="Наративний опис">
-            <SmartTextReader text={ability.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+            <SmartTextReader text={shown.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
           </Section>
         )}
 
-        {ability.lore_creator && (
+        {shown.lore_creator && (
           <Section title="Творець">
             <p className="text-[0.95rem] text-text">
-              {ability.lore_creator_npc_id
-                ? <Link to={`/npcs/${ability.lore_creator_npc_id}`} className="text-accent hover:underline">{ability.lore_creator}</Link>
-                : ability.lore_creator}
+              {shown.lore_creator_npc_id
+                ? <Link to={`/npcs/${shown.lore_creator_npc_id}`} className="text-accent hover:underline">{shown.lore_creator}</Link>
+                : shown.lore_creator}
             </p>
           </Section>
         )}

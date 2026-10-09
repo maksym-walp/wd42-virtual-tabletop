@@ -88,7 +88,9 @@ export const COLLECTION_DOMAINS = {
     itemIdField: 'spell_id',
     itemLink: (item) => `/spellbook/${item.id}`,
     itemMeta: (item) => natureLabels(item.nature),
-    supportsPrerequisites: true,
+    // Spells depend on the tree only through opened traditions and
+    // complexity (character-sheet spell-access.model.js), not on nodes.
+    supportsPrerequisites: false,
     // Traditions used to be a plain button off to the side, linking out to
     // what felt like a separate page — now it's a tab alongside Колекції,
     // same reasoning as equipment/compendium's multi-tab override below.

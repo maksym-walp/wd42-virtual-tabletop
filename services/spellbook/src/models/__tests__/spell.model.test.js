@@ -109,15 +109,14 @@ describe('SpellModel.create', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public, prerequisite_node_ids, prerequisite_logic,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop\)/);
-    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19,\$20,\$21::jsonb,\$22,\$23,\$24::jsonb\)/);
+    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop\)/);
+    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19::jsonb,\$20,\$21,\$22::jsonb\)/);
     expect(params).toEqual([
       'u1', 'Вогняна куля', [], 'utility',
       undefined, undefined,
       0, 1, 'impossible',
       null, 'instant',
       null, '[]', false,
-      [], 'or',
       null, 'Стара Мірна', 'npc-1',
       null, '[]', null, false,
       null,
@@ -128,39 +127,39 @@ describe('SpellModel.create', () => {
     pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
     const crop = { x: 50, y: 20, zoom: 1.5, ratio: 0.75 };
     await SpellModel.create('u1', { name: 'X', image_url: '/uploads/a.png', image_crop: crop });
-    expect(pool.query.mock.calls[0][1][23]).toBe(JSON.stringify(crop));
+    expect(pool.query.mock.calls[0][1][21]).toBe(JSON.stringify(crop));
     await SpellModel.create('u1', { name: 'X', image_crop: crop });
-    expect(pool.query.mock.calls[1][1][23]).toBeNull();
+    expect(pool.query.mock.calls[1][1][21]).toBeNull();
   });
 
   it('defaults lore_creator_npc_id to null when omitted', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
     await SpellModel.create('u1', { name: 'Вогняна куля' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params[17]).toBeNull(); // lore_creator
-    expect(params[18]).toBeNull(); // lore_creator_npc_id
+    expect(params[15]).toBeNull(); // lore_creator
+    expect(params[16]).toBeNull(); // lore_creator_npc_id
   });
 });
 
 describe('SpellModel.update', () => {
-  it('writes lore_creator_npc_id, shifting the isAdmin param to $21', async () => {
+  it('writes lore_creator_npc_id, with the isAdmin param at $19', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
     await SpellModel.update('s1', 'u1', {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     }, true);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/image_url=\$18, lore_creator=\$19, lore_creator_npc_id=\$20,\s*complexity=\$22, forms=\$23::jsonb, main_form_name=\$24, image_crop=\$25::jsonb, updated_at=NOW\(\)/);
-    expect(sql).toMatch(/WHERE id=\$1 AND \(user_id=\$2 OR \$21 = true\)/);
-    expect(params[19]).toBe('npc-1'); // lore_creator_npc_id ($20)
-    expect(params[20]).toBe(true);    // isAdmin ($21)
-    expect(params).toHaveLength(25);
+    expect(sql).toMatch(/image_url=\$16, lore_creator=\$17, lore_creator_npc_id=\$18,\s*complexity=\$20, forms=\$21::jsonb, main_form_name=\$22, image_crop=\$23::jsonb, updated_at=NOW\(\)/);
+    expect(sql).toMatch(/WHERE id=\$1 AND \(user_id=\$2 OR \$19 = true\)/);
+    expect(params[17]).toBe('npc-1'); // lore_creator_npc_id ($18)
+    expect(params[18]).toBe(true);    // isAdmin ($19)
+    expect(params).toHaveLength(23);
   });
 
   it('defaults lore_creator_npc_id to null when omitted', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
     await SpellModel.update('s1', 'u1', { name: 'Вогняна куля' }, false);
     const [, params] = pool.query.mock.calls[0];
-    expect(params[19]).toBeNull();
+    expect(params[17]).toBeNull();
   });
 });
 
@@ -240,15 +239,15 @@ describe('SpellModel.findAll complexity filter', () => {
 });
 
 describe('SpellModel complexity and forms on write', () => {
-  it('create writes complexity and normalized forms as $20/$21', async () => {
+  it('create writes complexity and normalized forms as $18/$19', async () => {
     await SpellModel.create('u1', {
       name: 'X', complexity: 'complex',
       forms: [{ kind: 'primitive', energy_cost: '5', complexity: 'bogus', extra: 'drop me' }],
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/\$20,\$21::jsonb,\$22,\$23,\$24::jsonb\)/);
-    expect(params[19]).toBe('complex');
-    const forms = JSON.parse(params[20]);
+    expect(sql).toMatch(/\$18,\$19::jsonb,\$20,\$21,\$22::jsonb\)/);
+    expect(params[17]).toBe('complex');
+    const forms = JSON.parse(params[18]);
     expect(forms).toHaveLength(1);
     expect(forms[0]).toMatchObject({ kind: 'primitive', id: 'primitive', name: null, energy_cost: 5, complexity: null, action_time: 1, components: [] });
     expect(forms[0]).not.toHaveProperty('extra');
@@ -257,10 +256,10 @@ describe('SpellModel complexity and forms on write', () => {
   it('update writes complexity/forms after the isAdmin param', async () => {
     await SpellModel.update('s1', 'u1', { name: 'X', complexity: 'nope' }, false);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/complexity=\$22, forms=\$23::jsonb/);
-    expect(params[20]).toBe(false);
-    expect(params[21]).toBeNull();
-    expect(params[22]).toBe('[]');
+    expect(sql).toMatch(/complexity=\$20, forms=\$21::jsonb/);
+    expect(params[18]).toBe(false);
+    expect(params[19]).toBeNull();
+    expect(params[20]).toBe('[]');
   });
 });
 
@@ -311,9 +310,9 @@ describe('hasMixedForms', () => {
 describe('SpellModel main_form_name', () => {
   it('trims the name on create and blanks an empty one on update', async () => {
     await SpellModel.create('u1', { name: 'X', main_form_name: '  Вогняна  ' });
-    expect(pool.query.mock.calls[0][1][21]).toBe('Вогняна');
+    expect(pool.query.mock.calls[0][1][19]).toBe('Вогняна');
     await SpellModel.update('s1', 'u1', { name: 'X', main_form_name: '   ' }, false);
-    expect(pool.query.mock.calls[1][1][23]).toBeNull();
+    expect(pool.query.mock.calls[1][1][21]).toBeNull();
   });
 
   it('bulkImport drops alternative forms from a record that mixes form types', async () => {

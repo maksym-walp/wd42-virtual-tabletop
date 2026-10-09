@@ -1,57 +1,70 @@
 const pool = require('../config/db');
+const { formKeys, progressForKeys } = require('./form-progress');
 
-// Expand a node's grant links (mode='grant') into concrete catalog ids and
+// form_tier rank for the ON CONFLICT merge below — NULL on an existing row
+// of a tiered entry reads as the main ('full') form, same as on the sheet.
+const higherTierSql = (table) => `CASE
+    WHEN EXCLUDED.form_tier IS NULL THEN ${table}.form_tier
+    WHEN array_position(ARRAY['primitive','full','perfected'], EXCLUDED.form_tier)
+       > array_position(ARRAY['primitive','full','perfected'], COALESCE(${table}.form_tier, 'full'))
+      THEN EXCLUDED.form_tier
+    ELSE COALESCE(${table}.form_tier, 'full')
+  END`;
+
+// Union keeping the existing order, new keys appended.
+const mergeFormsSql = (table) =>
+  `${table}.mastered_forms || ARRAY(SELECT unnest(EXCLUDED.mastered_forms) EXCEPT SELECT unnest(${table}.mastered_forms))`;
+
+// Expand a node's grant links (mode='grant') into concrete abilities and
 // insert them into the character's sheet. Collections are resolved to their
-// members. Runs on the caller's open transaction client. Visibility and the
-// entries' own prerequisites are intentionally NOT checked — the GM wired
-// the link on purpose.
+// members (every form). Spells are never granted by nodes — a node opens
+// spell traditions / complexity instead (spell-access.model.js). A link's form_key (null = every form) decides which
+// forms the character gets — see progressForKeys; an entry already on the
+// sheet keeps its own choices and only gains the new forms (higher tier,
+// more mastered forms). Runs on the caller's open transaction client.
+// Visibility and the entries' own prerequisites are intentionally NOT
+// checked — the GM wired the link on purpose.
 async function applyGrants(client, characterId, nodeId) {
   const { rows: grants } = await client.query(
-    `SELECT item_kind, item_id FROM skill_tree.node_grants
+    `SELECT item_kind, item_id, form_key FROM skill_tree.node_grants
      WHERE node_id = $1 AND mode = 'grant'`,
     [nodeId]
   );
 
-  const abilityIds = new Set();
-  const spellIds = new Set();
+  // ability id -> null (every form) | Set of form keys
+  const wanted = new Map();
+  const want = (id, formKey) => {
+    if (wanted.has(id) && wanted.get(id) === null) return;
+    if (formKey == null) { wanted.set(id, null); return; }
+    wanted.set(id, (wanted.get(id) || new Set()).add(formKey));
+  };
 
   for (const g of grants) {
-    if (g.item_kind === 'ability') abilityIds.add(g.item_id);
-    else if (g.item_kind === 'spell') spellIds.add(g.item_id);
+    if (g.item_kind === 'ability') want(g.item_id, g.form_key);
     else if (g.item_kind === 'ability_collection') {
       const { rows } = await client.query(
         `SELECT item_id, item_kind FROM abilities.collection_items WHERE collection_id = $1`,
         [g.item_id]
       );
-      for (const it of rows) {
-        abilityIds.add(it.item_id);
-      }
-    } else if (g.item_kind === 'spell_collection') {
-      const { rows } = await client.query(
-        `SELECT spell_id FROM spellbook.collection_items WHERE collection_id = $1`,
-        [g.item_id]
-      );
-      for (const it of rows) spellIds.add(it.spell_id);
+      for (const it of rows) want(it.item_id, null);
     }
   }
 
   const granted = { abilities: [], spells: [] };
 
-  for (const id of abilityIds) {
+  for (const [id, keys] of wanted) {
+    const fk = (await formKeys('abilities.entries', id, client)) ?? { tierKinds: [], altIds: [] };
+    const p = progressForKeys(keys ? [...keys] : null, fk);
     const { rows } = await client.query(
-      `INSERT INTO character_sheet.abilities (character_id, ability_id) VALUES ($1, $2)
-       ON CONFLICT (character_id, ability_id) DO NOTHING RETURNING *`,
-      [characterId, id]
+      `INSERT INTO character_sheet.abilities AS abilities (character_id, ability_id, form_tier, primary_form, mastered_forms)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (character_id, ability_id) DO UPDATE
+         SET form_tier = ${higherTierSql('abilities')},
+             mastered_forms = ${mergeFormsSql('abilities')}
+       RETURNING *`,
+      [characterId, id, p.form_tier, p.primary_form, p.mastered_forms]
     );
     if (rows[0]) granted.abilities.push(rows[0]);
-  }
-  for (const id of spellIds) {
-    const { rows } = await client.query(
-      `INSERT INTO character_sheet.known_spells (character_id, spell_id) VALUES ($1, $2)
-       ON CONFLICT (character_id, spell_id) DO NOTHING RETURNING *`,
-      [characterId, id]
-    );
-    if (rows[0]) granted.spells.push(rows[0]);
   }
 
   return granted;

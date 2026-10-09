@@ -4,24 +4,26 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
-import spellbookApi from '../api/spellbook';
 import abilitiesApi from '../api/abilities';
 import { createCollectionsApi } from '../api/collections';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import NodeGrantsPicker from '../components/NodeGrantsPicker';
+import NodeSpellAccessPicker from '../components/NodeSpellAccessPicker';
+import traditionsApi from '../api/traditions';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { isIconUrl } from '../constants/maps';
 import { useTheme } from '../context/ThemeContext';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import {
-  computeLayout, reorderCluster, elbowPath, computeFitTransform, ancestorClosure, computeEdgeLanes, computeEntryOffsets, LEVEL_SPACING_Y,
+  computeLayout, reorderCluster, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextarea from '../components/ui/SmartTextarea';
+import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from '../components/NodeGrants';
 import SmartTextReader from '../components/SmartTextReader';
 
 const NODE_R = 24;
@@ -40,21 +42,21 @@ export default function SkillTree() {
   const [edges, setEdges] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Catalogs offered by the node form's "видає / робить доступним" picker.
+  // Catalogs offered by the node form's "видає / робить доступним" picker and
+  // its spell-traditions picker — also resolve names/cards for everyone in
+  // view mode.
   const [grantCatalogs, setGrantCatalogs] = useState({
-    abilities: [], spells: [], abilityCollections: [], spellCollections: [],
+    abilities: [], abilityCollections: [], traditions: [],
   });
   useEffect(() => {
-    if (!isGM) return;
     Promise.all([
       abilitiesApi.getAll().catch(() => []),
-      spellbookApi.getAll().catch(() => []),
       createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
-      createCollectionsApi('/api/spellbook/collections/').getAll().catch(() => []),
-    ]).then(([abilities, spells, abilityCollections, spellCollections]) => {
-      setGrantCatalogs({ abilities, spells, abilityCollections, spellCollections });
+      traditionsApi.getAll().catch(() => []),
+    ]).then(([abilities, abilityCollections, traditions]) => {
+      setGrantCatalogs({ abilities, abilityCollections, traditions });
     });
-  }, [isGM]);
+  }, []);
 
   const [activeArchetype, setActiveArchetype] = useState('fighter');
   const [importPrompt, setImportPrompt] = useState(null); // { data } — partial-node import awaiting a parent choice
@@ -151,32 +153,14 @@ export default function SkillTree() {
     if (fit) setTransform(fit);
   };
 
-  // Different sources feeding the same pair of levels would otherwise all
-  // bend at the identical shared-bus height and become visually indistinct
-  // from each other — this gives each source its own lane within the gap.
-  const edgeLanes = useMemo(() => computeEdgeLanes(edges, levels, positions), [edges, levels, positions]);
-  // A target with 2+ incoming edges gets each one's arrival x spread apart
-  // slightly, so a bent edge's final approach never perfectly overlaps an
-  // unrelated straight-line edge that happens to share that column.
-  const entryOffsets = useMemo(() => computeEntryOffsets(edges, positions), [edges, positions]);
-
-  // Orthogonal edge path between two node circles (tree grows upward: source
-  // exits at its top, target is entered at its bottom). Edges that skip a
-  // level (possible with require_both parents at very different levels) bend
-  // near the source instead of at the true midpoint, so the jog doesn't cut
-  // through an unrelated intermediate level's node row.
+  // Straight edge between two node circles, trimmed to their rims (tree
+  // grows upward, but the line just follows the actual direction).
   const edgePathFor = (edge) => {
     const s = positions.get(edge.source_id);
     const d = positions.get(edge.target_id);
     if (!s || !d) return null;
-    const sLevel = levels[edge.source_id] ?? 1;
-    const dLevel = levels[edge.target_id] ?? 1;
-    const x1 = s.x, y1 = s.y - NODE_R;
-    const x2 = d.x + (entryOffsets.get(edge.id) ?? 0), y2 = d.y + NODE_R + ARROW_GAP;
-    const midY = dLevel - sLevel > 1
-      ? y1 - LEVEL_SPACING_Y / 2
-      : y1 - (edgeLanes.get(edge.source_id) ?? 0.5) * (y1 - y2);
-    return { path: elbowPath(x1, y1, x2, y2, midY) };
+    const path = straightEdgePath(s, d, NODE_R, NODE_R + ARROW_GAP);
+    return path ? { path } : null;
   };
 
   // ── Pan/zoom (mouse-drag/wheel or touch-drag/pinch) ────────────────
@@ -286,7 +270,7 @@ export default function SkillTree() {
     const r = NODE_R * transform.k;
     const cx = transform.x + pos.x * transform.k;
     const cy = transform.y + pos.y * transform.k;
-    setTooltip({ node, left: cx + r + 10, nodeTop: cy - r, nodeBottom: cy + r });
+    setTooltip({ node, left: cx + r + 10, nodeLeft: cx - r - 10, nodeTop: cy - r, nodeBottom: cy + r });
   };
 
   const handleNodeLeave = () => setTooltip(null);
@@ -334,7 +318,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], grants: [],
+      effect: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
     });
@@ -349,7 +333,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], grants: [],
+      effect: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
@@ -362,7 +346,9 @@ export default function SkillTree() {
       enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
       narrative_condition: n.narrative_condition || [],
       effect: n.effect || [],
-      grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode })),
+      grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode, form_key: g.form_key ?? null })),
+      unlocks_traditions: n.unlocks_traditions || [],
+      unlocks_complexity: n.unlocks_complexity ?? null,
       archetype: n.archetype || activeArchetype,
       require_both: n.require_both || false,
     });
@@ -705,7 +691,7 @@ export default function SkillTree() {
 
         {/* Hover tooltip — the only place a node's name/details show now */}
         {tooltip && (
-          <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} />
+          <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} catalog={grantCatalogs} />
         )}
 
         {nodes.length === 0 && (
@@ -901,41 +887,43 @@ function MenuAction({ icon: Icon, label, onClick, danger }) {
 // above would clip past the canvas's top edge (overflow-hidden on the
 // container), which needs the tooltip's real rendered height, hence the
 // measure-then-place effect.
-function Tooltip({ tooltip, nodes, edges }) {
-  const { node, left, nodeTop, nodeBottom } = tooltip;
+function Tooltip({ tooltip, nodes, edges, catalog }) {
+  const { node, left, nodeLeft, nodeTop, nodeBottom } = tooltip;
   const elRef = useRef(null);
   const [placement, setPlacement] = useState('above');
+  const [side, setSide] = useState('right');
 
+  // Also flips to the node's left side when the right would run past the
+  // canvas edge (overflow-hidden) — e.g. for the rightmost nodes.
   useLayoutEffect(() => {
-    const height = elRef.current?.offsetHeight ?? 0;
+    const el = elRef.current;
+    const height = el?.offsetHeight ?? 0;
+    const width = el?.offsetWidth ?? 0;
+    const canvasWidth = el?.offsetParent?.clientWidth ?? Infinity;
     setPlacement(nodeTop - height < 8 ? 'below' : 'above');
-  }, [node.id, nodeTop]);
+    setSide(left + width > canvasWidth - 8 && nodeLeft - width >= 8 ? 'left' : 'right');
+  }, [node.id, nodeTop, left, nodeLeft]);
 
   const prereqs = edges
     .filter((e) => e.target_id === node.id)
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
     .filter((x) => x.node);
 
-  const style = placement === 'above'
-    ? { left, top: nodeTop, transform: 'translateY(-100%)' }
-    : { left, top: nodeBottom };
+  const style = {
+    left: side === 'right' ? left : nodeLeft,
+    top: placement === 'above' ? nodeTop : nodeBottom,
+    transform: `${side === 'left' ? 'translateX(-100%) ' : ''}${placement === 'above' ? 'translateY(-100%)' : ''}`,
+  };
 
   return (
     <div
       ref={elRef}
-      className="absolute z-30 max-w-[260px] rounded-lg border border-border bg-surface p-3 shadow-xl"
+      className="absolute z-30 w-max max-w-[260px] rounded-lg border border-border bg-surface p-3 shadow-xl"
       style={{ ...style, pointerEvents: 'none' }}
     >
       <p className="mb-1 font-display text-sm text-accent">{node.title}</p>
       {node.description && <SmartTextReader text={node.description} className="text-xs leading-relaxed text-text-dim" />}
-      {node.effect?.length > 0 && (
-        <div className="mt-2">
-          <TtLabel>Ефект</TtLabel>
-          <ul className="list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-text-muted">
-            {node.effect.map((item, i) => <li key={i}>{item}</li>)}
-          </ul>
-        </div>
-      )}
+      <NodeGainsSummary node={node} catalog={catalog} />
       {prereqs.length > 0 && (
         <div className="mt-2">
           <TtLabel>Вимоги</TtLabel>
@@ -972,19 +960,6 @@ function TtBadge({ children }) {
   return <span className="inline-block rounded bg-bg px-2 py-0.5 text-xs text-text-dim">{children}</span>;
 }
 // ── Node detail panel (view mode / non-GM click) ────────────────────
-const GRANT_KIND_LABEL = {
-  ability: 'вміння', spell: 'заклинання',
-  ability_collection: 'колекція вмінь', spell_collection: 'колекція заклинань',
-};
-
-function grantName(grant, cat = {}) {
-  const pools = {
-    ability: cat.abilities, spell: cat.spells,
-    ability_collection: cat.abilityCollections, spell_collection: cat.spellCollections,
-  };
-  return (pools[grant.item_kind] || []).find((x) => x.id === grant.item_id)?.name || '—';
-}
-
 function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onDelete, onClose }) {
   const prereqEdges = edges.filter((e) => e.target_id === node.id);
   const prereqs = prereqEdges
@@ -1032,16 +1007,20 @@ function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onD
 
       {grantsGrant.length > 0 && (
         <InfoBlock label="Додає автоматично">
-          <ul className="list-disc space-y-1 pl-4">
-            {grantsGrant.map((g, i) => <li key={i}>{grantName(g, grantCatalogs)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>)}
-          </ul>
+          <GrantList grants={grantsGrant} catalog={grantCatalogs} />
         </InfoBlock>
       )}
 
       {grantsUnlock.length > 0 && (
         <InfoBlock label="Робить доступним">
+          <GrantList grants={grantsUnlock} catalog={grantCatalogs} />
+        </InfoBlock>
+      )}
+
+      {nodeSpellAccessLines(node, grantCatalogs).length > 0 && (
+        <InfoBlock label="Відкриває магію">
           <ul className="list-disc space-y-1 pl-4">
-            {grantsUnlock.map((g, i) => <li key={i}>{grantName(g, grantCatalogs)} <span className="text-text-dim">({GRANT_KIND_LABEL[g.item_kind]})</span></li>)}
+            {nodeSpellAccessLines(node, grantCatalogs).map((line) => <li key={line}>{line}</li>)}
           </ul>
         </InfoBlock>
       )}
@@ -1272,7 +1251,7 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
         />
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння, заклинання</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння</span>
           <p className="text-xs text-text-dim">
             «🎁 Видавати» — відкриття вузла одразу додає запис у лист персонажа.
             «🔓 Доступним» — лише дозволяє додати його вручну.
@@ -1281,6 +1260,21 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
             catalogs={grantCatalogs}
             value={form.grants || []}
             onChange={(grants) => onChange((f) => ({ ...f, grants }))}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Магія</span>
+          <p className="text-xs text-text-dim">
+            Окремі заклинання вузли не видають: персонаж може вивчити заклинання, коли на дереві відкрито
+            хоч одну з його традицій і його складність.
+          </p>
+          <NodeSpellAccessPicker
+            traditions={grantCatalogs.traditions}
+            value={form}
+            onChange={(next) => onChange((f) => ({
+              ...f, unlocks_traditions: next.unlocks_traditions, unlocks_complexity: next.unlocks_complexity,
+            }))}
           />
         </div>
 

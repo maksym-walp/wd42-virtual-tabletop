@@ -68,6 +68,46 @@ describe('TreeProgressModel.unlock', () => {
     expect(result.granted.abilities).toEqual([{ character_id: 'c1', ability_id: 'a1' }]);
   });
 
+  it('grants only the linked form, merging into an entry already on the sheet', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('INSERT INTO character_sheet.tree_progress')) return Promise.resolve({ rows: [{ id: 'p1' }] });
+      if (sql.includes('FROM skill_tree.node_grants')) {
+        return Promise.resolve({ rows: [{ item_kind: 'ability', item_id: 'a1', form_key: 'primitive' }] });
+      }
+      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: ['primitive', 'perfected'], alt_ids: [] }] });
+      if (sql.includes('INSERT INTO character_sheet')) return Promise.resolve({ rows: [{ ok: true }] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    await TreeProgressModel.unlock('c1', 'n1');
+
+    const ability = client.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO character_sheet.abilities'));
+    expect(ability[0]).toMatch(/ON CONFLICT \(character_id, ability_id\) DO UPDATE/);
+    expect(ability[1]).toEqual(['c1', 'a1', 'primitive', 'main', ['main']]);
+  });
+
+  it('grants every form for collection members, and never touches spells', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('INSERT INTO character_sheet.tree_progress')) return Promise.resolve({ rows: [{ id: 'p1' }] });
+      if (sql.includes('FROM skill_tree.node_grants')) {
+        return Promise.resolve({ rows: [
+          { item_kind: 'ability', item_id: 'a1', form_key: 'main' },
+          { item_kind: 'ability_collection', item_id: 'col1', form_key: null },
+        ] });
+      }
+      if (sql.includes('FROM abilities.collection_items')) return Promise.resolve({ rows: [{ item_id: 'a1' }] });
+      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: [], alt_ids: ['alt-1'] }] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    await TreeProgressModel.unlock('c1', 'n1');
+
+    const inserts = client.query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO character_sheet.abilities'));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0][1]).toEqual(['c1', 'a1', null, 'main', ['main', 'alt-1']]);
+    expect(client.query.mock.calls.some(([sql]) => sql.includes('known_spells'))).toBe(false);
+  });
+
   it('charges the spend on a fresh unlock', async () => {
     client.query.mockImplementation((sql) => {
       if (sql.includes('INSERT INTO character_sheet.tree_progress')) return Promise.resolve({ rows: [{ id: 'p1' }] });
