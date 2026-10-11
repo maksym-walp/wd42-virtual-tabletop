@@ -1,7 +1,7 @@
 const CollectionModel = require('../models/collection.model');
 const SpellModel = require('../models/spell.model');
 const { sanitizeForExport } = require('./spell.controller');
-const { canonicalOnCreate } = require('../middleware/auth.middleware');
+const { canonicalOnCreate, CANONICAL_ROLES } = require('../middleware/auth.middleware');
 
 // Поля колекції, яких немає (чи не має бути) в експортованому JSON — та сама
 // логіка, що й для записів у каталозі: зображення лежить на диску конкретного
@@ -16,6 +16,26 @@ function sanitizeCollectionForExport(collection, items) {
   const clean = { ...collection };
   for (const field of COLLECTION_EXPORT_OMIT_FIELDS) delete clean[field];
   return { ...clean, items };
+}
+
+function validateImportPayload(payload) {
+  if (!payload.length) return 'Очікується обʼєкт колекції або непорожній масив';
+  for (const data of payload) {
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !data.name) {
+      return 'Кожна колекція має бути обʼєктом із полем name';
+    }
+    if (data.items == null) continue;
+    if (!Array.isArray(data.items)) return `Колекція «${data.name}»: items має бути масивом`;
+    for (const item of data.items) {
+      if (!item || typeof item !== 'object' || !item.name) {
+        return `Колекція «${data.name}»: кожен запис у items має мати name`;
+      }
+      if (SpellModel.hasMixedForms(item.forms)) {
+        return `Колекція «${data.name}», «${item.name}»: заклинання не може мати одночасно рівневі й альтернативні форми`;
+      }
+    }
+  }
+  return null;
 }
 
 const CollectionController = {
@@ -43,6 +63,46 @@ const CollectionController = {
       (collection.items || []).map((item) => SpellModel.findById(item.id, req.user.sub, isAdmin))
     );
     res.json(sanitizeCollectionForExport(collection, records.filter(Boolean).map(sanitizeForExport)));
+  },
+
+  // Імпорт раніше експортованої колекції (один обʼєкт або масив) разом із
+  // вкладеними записами (`items`, формат експорту каталогу). Колекцію може
+  // імпортувати будь-хто; вкладені записи — лише ГМ/адмін (як і каталожний
+  // імпорт, вони стають канонічними), решті `items` пропускається.
+  async import(req, res) {
+    const payload = Array.isArray(req.body) ? req.body : [req.body];
+    const problem = validateImportPayload(payload);
+    if (problem) return res.status(400).json({ message: problem });
+
+    const canImportItems = CANONICAL_ROLES.includes(req.user.role);
+    const collections = [];
+    let importedItems = 0;
+    let itemsSkipped = 0;
+
+    for (const data of payload) {
+      const items = data.items ?? [];
+      const collection = await CollectionModel.create(req.user.sub, {
+        name: data.name,
+        description: data.description,
+        is_public: data.is_public,
+        is_canonical: canonicalOnCreate(req),
+      });
+      if (!canImportItems) {
+        itemsSkipped += items.length;
+      } else if (items.length) {
+        try {
+          const ids = await SpellModel.importMany(req.user.sub, items, true);
+          await CollectionModel.addItemsUnchecked(collection.id, ids);
+          importedItems += ids.length;
+        } catch (err) {
+          await CollectionModel.discard(collection.id);
+          throw err;
+        }
+      }
+      collections.push(collection);
+    }
+
+    res.status(201).json({ collections, imported_items: importedItems, items_skipped: itemsSkipped });
   },
 
   async getPublic(req, res) {

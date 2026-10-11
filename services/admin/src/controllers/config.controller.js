@@ -2,11 +2,11 @@ const ConfigModel = require('../models/config.model');
 
 // Набір типів зброї (weapon_types), особливостей зброї (weapon_grips),
 // видів заклинань (spell_kinds), станів персонажа (conditions) і валют
-// (currencies). equipment/spellbook/character-sheet читають їх напряму
+// (currencies) і форм магії (magic_forms). equipment/spellbook/character-sheet читають їх напряму
 // через cross-schema SQL (equipment's getWeaponOptions, spellbook's
 // getKindOptions, character-sheet's GET /config), тож цей HTTP API
 // обслуговує лише саму адмін-панель.
-const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies'];
+const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies', 'magic_forms'];
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 
@@ -87,7 +87,28 @@ function validateCurrencies(value) {
   return null;
 }
 
-const VALIDATORS = { conditions: validateConditions, currencies: validateCurrencies };
+// Форми магії: набір ключів фіксований (CHECK spells_nature_check у БД,
+// міграція 93) — адмін редагує лише назви й описи, не додає/видаляє/
+// перейменовує ключі.
+const MAGIC_FORM_KEYS = ['arcana', 'elemental', 'integral', 'pact', 'nature', 'blight'];
+
+function validateMagicForms(value) {
+  const base = validateValue(value);
+  if (base) return base;
+  const keys = value.map((entry) => entry.key);
+  const missing = MAGIC_FORM_KEYS.filter((key) => !keys.includes(key));
+  const unknown = keys.filter((key) => !MAGIC_FORM_KEYS.includes(key));
+  if (missing.length || unknown.length) {
+    return `набір форм магії фіксований: ${MAGIC_FORM_KEYS.join(', ')}`;
+  }
+  for (const entry of value) {
+    const descError = validateDescription(entry);
+    if (descError) return descError;
+  }
+  return null;
+}
+
+const VALIDATORS = { conditions: validateConditions, currencies: validateCurrencies, magic_forms: validateMagicForms };
 
 const ConfigController = {
   async list(req, res) {

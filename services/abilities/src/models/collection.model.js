@@ -162,6 +162,25 @@ const CollectionModel = {
     return rows[0] || { collection_id: collectionId, ability_id: itemId };
   },
 
+  // Імпорт колекції: записи щойно створені імпортером, тож перевірки
+  // видимості/власності, як в addItem, не потрібні.
+  async addItemsUnchecked(collectionId, itemIds) {
+    if (!itemIds.length) return 0;
+    const { rowCount } = await pool.query(
+      `INSERT INTO abilities.collection_items (collection_id, ability_id)
+       SELECT $1, UNNEST($2::uuid[])
+       ON CONFLICT (collection_id, ability_id) DO NOTHING`,
+      [collectionId, itemIds]
+    );
+    return rowCount;
+  },
+
+  // Прибирання колекції, створеної імпортом, якщо вкладені записи не
+  // вдалося імпортувати — без кошика, бо користувач її ще не бачив.
+  async discard(id) {
+    await pool.query(`DELETE FROM abilities.collections WHERE id = $1`, [id]);
+  },
+
   async removeItem(collectionId, userId, itemId, isAdmin = false) {
     const { rowCount } = await pool.query(
       `DELETE FROM abilities.collection_items ci

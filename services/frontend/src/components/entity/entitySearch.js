@@ -2,17 +2,26 @@ import { useEffect, useState } from 'react';
 import api from '../../api/client';
 import npcsApi from '../../api/npcs';
 import bestiaryApi from '../../api/bestiary';
+import characterApi from '../../api/characterSheet';
+import chronologyApi from '../../api/chronology';
+import mapsApi from '../../api/maps';
 import { COLLECTION_DOMAINS } from '../../collectionsDomains';
 import { natureLabels } from '../../constants/spellbook';
 import { EQUIPMENT_TYPES } from '../../constants/equipment';
-import { cached } from './entityCache';
+import { ARCHETYPES, RACES } from '../../constants/characterSheet';
+import { calendarEvents } from './entityRegistry';
+import { cached } from './memoCache';
 
 // Пошук записів для пікера в тулбарі й автодоповнення «@». Результат —
 // { kind, id, name, meta }, де kind — ключ із ENTITY_KINDS.
 
+// Збіги з початку назви — першими, далі решта входжень.
 const filterByName = (items, q, limit) => {
   const needle = q.trim().toLowerCase();
-  return (needle ? items.filter((i) => i.name?.toLowerCase().includes(needle)) : items).slice(0, limit);
+  if (!needle) return items.slice(0, limit);
+  const hits = items.filter((i) => i.name?.toLowerCase().includes(needle));
+  const starts = (i) => i.name.toLowerCase().startsWith(needle);
+  return [...hits.filter(starts), ...hits.filter((i) => !starts(i))].slice(0, limit);
 };
 
 const COLLECTION_KINDS = {
@@ -65,12 +74,42 @@ export const ENTITY_SERVICES = [
     },
   },
   {
+    key: 'characters',
+    label: 'Персонажі',
+    // Власні та з кампаній, де користувач майстер, + публічні персонажі спільноти.
+    async search(q, limit) {
+      const all = await cached('list:characters', async () => {
+        const settled = await Promise.allSettled([
+          characterApi.list({ includeGmCampaigns: true }),
+          characterApi.listCommunity(),
+        ]);
+        const byId = new Map();
+        for (const r of settled) {
+          if (r.status === 'fulfilled') for (const c of r.value) if (!byId.has(c.id)) byId.set(c.id, c);
+        }
+        return [...byId.values()];
+      });
+      return filterByName(all, q, limit).map((c) => ({
+        kind: 'character',
+        id: c.id,
+        name: c.name,
+        meta: [ARCHETYPES[c.archetype]?.label, RACES[c.race]?.label].filter(Boolean).join(' · '),
+      }));
+    },
+  },
+  {
     key: 'npcs',
-    label: 'НІПи',
+    label: 'НІПи та фракції',
     // Бекенд не вміє пошук за назвою — беремо весь (кешований) список.
     async search(q, limit) {
-      const all = await cached('list:npcs', () => npcsApi.list());
-      return filterByName(all, q, limit).map((n) => ({ kind: 'npc', id: n.id, name: n.name, meta: 'НІП' }));
+      const [npcs, factions] = await Promise.all([
+        cached('list:npcs', () => npcsApi.list()),
+        cached('list:factions', () => npcsApi.listFactions()),
+      ]);
+      return [
+        ...filterByName(npcs, q, limit).map((n) => ({ kind: 'npc', id: n.id, name: n.name, meta: 'НІП' })),
+        ...filterByName(factions, q, limit).map((f) => ({ kind: 'faction', id: f.id, name: f.name, meta: 'Фракція' })),
+      ];
     },
   },
   {
@@ -81,13 +120,43 @@ export const ENTITY_SERVICES = [
       return filterByName(all, q, limit).map((c) => ({ kind: 'creature', id: c.id, name: c.name, meta: 'Істота' }));
     },
   },
+  {
+    key: 'maps',
+    label: 'Локації',
+    async search(q, limit) {
+      const all = await cached('list:locations', () => mapsApi.listLocations());
+      return filterByName(all, q, limit).map((l) => ({
+        kind: 'location', id: l.id, name: l.name, meta: (l.types || []).join(' · ') || 'Локація',
+      }));
+    },
+  },
+  {
+    key: 'chronology',
+    label: 'Події',
+    // Події — по кожному календарю окремо (лише глобальні лор-події; події
+    // кампаній сюди не входять — на них можна послатися вставкою URL).
+    async search(q, limit) {
+      const calendars = await cached('list:calendars', () => chronologyApi.list());
+      const groups = await Promise.allSettled(calendars.map(async (cal) => {
+        const events = await calendarEvents(cal.id, null);
+        return filterByName(events, q, limit).map((e) => ({ kind: 'event', id: `${cal.id}:${e.id}`, name: e.name, meta: cal.name }));
+      }));
+      return groups.flatMap((g) => (g.status === 'fulfilled' ? g.value : [])).slice(0, limit);
+    },
+  },
   { key: 'collections', label: 'Колекції', search: searchCollections },
 ];
 
 export async function searchEntities(query, serviceKeys, limit) {
   const services = ENTITY_SERVICES.filter((s) => serviceKeys.includes(s.key));
   const groups = await Promise.allSettled(services.map((s) => s.search(query, limit)));
-  return groups.flatMap((g) => (g.status === 'fulfilled' ? g.value : []));
+  const found = groups.flatMap((g) => (g.status === 'fulfilled' ? g.value : []));
+  // Назви, що починаються із запиту, — вперед (інакше «@Ел» тоне в збігах
+  // всередині слів із перших сервісів); порядок сервісів зберігається.
+  const needle = query.trim().toLowerCase();
+  if (!needle) return found;
+  const rank = (r) => (r.name?.toLowerCase().startsWith(needle) ? 0 : 1);
+  return found.map((r, i) => [r, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([r]) => r);
 }
 
 const ALL_KEYS = ENTITY_SERVICES.map((s) => s.key);

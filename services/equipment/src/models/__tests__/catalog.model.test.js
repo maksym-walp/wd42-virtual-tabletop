@@ -428,6 +428,28 @@ describe('UnionModel.bulkImport', () => {
   });
 });
 
+describe('UnionModel.importMany', () => {
+  it('returns { id, type } in input order even though inserts are grouped by kind', async () => {
+    pool.query.mockImplementation(async (sql) => {
+      if (sql.includes('equipment.weapons')) return { rows: [{ id: 'w1' }, { id: 'w2' }] };
+      return { rows: [{ id: 'i1' }] };
+    });
+
+    const created = await UnionModel.importMany('importer', [
+      { type: 'weapon', name: 'Меч' },
+      { type: 'item', name: 'Мотузка' },
+      { type: 'weapon', name: 'Лук' },
+      { type: 'nope', name: 'Ghost' },
+    ]);
+
+    expect(created).toEqual([
+      { id: 'w1', type: 'weapon' }, { id: 'i1', type: 'item' }, { id: 'w2', type: 'weapon' },
+    ]);
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    expect(pool.query.mock.calls.every(([sql]) => / RETURNING id$/.test(sql))).toBe(true);
+  });
+});
+
 describe('artifact kind', () => {
   it('queries equipment.artifacts and sorts rarity by its in-world scale', async () => {
     await ArtifactModel.findAll('u1', { sort: 'rarity' });

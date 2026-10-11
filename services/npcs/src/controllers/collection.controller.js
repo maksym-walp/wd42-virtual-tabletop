@@ -1,7 +1,8 @@
 const CollectionModel = require('../models/collection.model');
 const NpcModel = require('../models/npc.model');
 const { present } = require('./npc.controller');
-const { isAdmin } = require('./access');
+const { isAdmin, canCreate } = require('./access');
+const { parseImportRecords } = require('./npc.controller');
 
 // Поля, яких немає (чи не має бути) в експортованому JSON: зображення лежить
 // на диску конкретного деплою, решта — службові/обчислені чи прив'язані до
@@ -14,6 +15,17 @@ function sanitizeForExport(row) {
   const clean = { ...row };
   for (const field of EXPORT_OMIT_FIELDS) delete clean[field];
   return clean;
+}
+
+function validateImportPayload(payload) {
+  if (!payload.length) return 'Очікується обʼєкт колекції або непорожній масив';
+  for (const data of payload) {
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !data.name) {
+      return 'Кожна колекція має бути обʼєктом із полем name';
+    }
+    if (data.items != null && !Array.isArray(data.items)) return `Колекція «${data.name}»: items має бути масивом`;
+  }
+  return null;
 }
 
 const CollectionController = {
@@ -42,6 +54,50 @@ const CollectionController = {
       .filter((record) => record && (record.is_public || record.created_by === req.user.sub || isAdmin(req.user)))
       .map((record) => sanitizeForExport(present(record, req.user)));
     res.json({ ...sanitizeForExport(collection), items });
+  },
+
+  // Імпорт раніше експортованої колекції (один обʼєкт або масив) разом із
+  // вкладеними записами (`items`, формат експорту каталогу). Колекцію може
+  // імпортувати будь-хто; вкладені записи — лише ГМ/адмін (як і створення
+  // записів у каталозі), решті `items` пропускається.
+  async import(req, res) {
+    const payload = Array.isArray(req.body) ? req.body : [req.body];
+    const problem = validateImportPayload(payload);
+    if (problem) return res.status(400).json({ message: problem });
+
+    const canImportItems = canCreate(req.user);
+    const parsed = payload.map((data) => (canImportItems && data.items?.length ? parseImportRecords(data.items) : { fieldsList: [] }));
+    const invalid = parsed.findIndex((p) => p.error);
+    if (invalid !== -1) {
+      return res.status(400).json({ message: `Колекція «${payload[invalid].name}»: ${parsed[invalid].error}` });
+    }
+
+    const collections = [];
+    let importedItems = 0;
+    let itemsSkipped = 0;
+
+    for (const [index, data] of payload.entries()) {
+      const collection = await CollectionModel.create(req.user.sub, {
+        name: data.name,
+        description: data.description,
+        is_public: data.is_public,
+      });
+      if (!canImportItems) {
+        itemsSkipped += data.items?.length ?? 0;
+      } else if (parsed[index].fieldsList.length) {
+        try {
+          const ids = await NpcModel.importMany(req.user.sub, parsed[index].fieldsList);
+          await CollectionModel.addItemsUnchecked(collection.id, ids);
+          importedItems += ids.length;
+        } catch (err) {
+          await CollectionModel.discard(collection.id);
+          throw err;
+        }
+      }
+      collections.push(collection);
+    }
+
+    res.status(201).json({ collections, imported_items: importedItems, items_skipped: itemsSkipped });
   },
 
   async getPublic(req, res) {

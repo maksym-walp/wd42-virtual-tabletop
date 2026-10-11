@@ -2,26 +2,50 @@ import {
   FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFields, hasTierForms, formModeOf, mainFormLabel,
   entryTiers, entryForms, entryVariantForms, entryForCharacter, entryWithForm,
 } from './forms';
+import { DURATION_UNITS, formatDuration } from './duration';
 
-// No per-nature accent color — nature is conveyed by its label, not a hue
-// (colors are reserved for archetype badges, which map to one specific archetype).
+// «Форма магії» (колонка spells.nature). Набір ключів фіксований (CHECK у
+// БД, міграція 93); назви й описи редагує адмін (admin.site_configs,
+// magic_forms) і вони підвантажуються через hooks/useMagicForms.js — тут
+// лише початкові назви, доки відповіді ще немає. Колір форми не потрібен:
+// форма передається назвою (кольори зарезервовані за бейджами архетипів).
 export const NATURE_TYPES = {
   arcana:    { label: 'Аркана' },
-  elemental: { label: 'Стихійна' },
-  integral:  { label: 'Інтегральна' },
-  infernal:  { label: 'Інфернальна' },
+  elemental: { label: 'Стихії' },
+  integral:  { label: 'Інтеграл' },
+  pact:      { label: 'Пакт' },
+  nature:    { label: 'Природа' },
   blight:    { label: 'Скверна' },
 };
+
+// Серверні назви/описи форм магії (масив {key,label,description}) —
+// виставляє useMagicForms, коли вони завантажились чи змінились у адмінці.
+// Модульний стан, щоб natureLabels/primaryNature, які викликаються і поза
+// компонентами (пошук, меню колекцій), теж віддавали відредаговані назви.
+let magicFormsOverride = null;
+
+export function setMagicForms(list) {
+  magicFormsOverride = Array.isArray(list) ? list : null;
+}
+
+// { label, description } форми за ключем; невідомий ключ показується як є.
+export function magicFormInfo(key) {
+  const fromServer = magicFormsOverride?.find((f) => f.key === key);
+  return {
+    label: fromServer?.label || NATURE_TYPES[key]?.label || key,
+    description: fromServer?.description || '',
+  };
+}
 
 // A spell can have multiple natures at once — this reads the first entry as
 // the "primary" one wherever the UI only has room for a single label (card
 // headers), and natureLabels() below joins all of them for full-text display.
 export function primaryNature(nature) {
-  return NATURE_TYPES[nature?.[0]] || NATURE_TYPES.arcana;
+  return magicFormInfo(nature?.[0] ?? 'arcana');
 }
 
 export function natureLabels(nature) {
-  return (nature || []).map((n) => NATURE_TYPES[n]?.label ?? n).join(', ');
+  return (nature || []).map((n) => magicFormInfo(n).label).join(', ');
 }
 
 export const COMPONENT_UNITS = ['шт.', 'г', 'мг', 'унції', 'краплі', 'щіпки', 'флакони', 'жмені', 'пучки'];
@@ -33,14 +57,7 @@ export const RITUAL_TYPES = {
   required:   { label: 'Необхідний', symbol: '✦' },
 };
 
-export const DURATION_UNITS = {
-  instant:   'Мить',
-  seconds:   'сек.',
-  minutes:   'хв.',
-  hours:     'год.',
-  days:      'дн.',
-  permanent: 'Постійно',
-};
+export { DURATION_UNITS, formatDuration };
 
 // Початковий набір видів заклинань — актуальний список редагується з
 // адмін-панелі (spell_kinds) і читається через hooks/useSpellKinds.js; ця
@@ -59,11 +76,6 @@ export const ACTION_OPTIONS = [
   { value: 2, label: '2 дії'  },
   { value: 3, label: '3 дії'  },
 ];
-
-export function formatDuration(value, unit) {
-  if (!unit || unit === 'instant' || unit === 'permanent') return DURATION_UNITS[unit] || '—';
-  return `${value ?? '?'} ${DURATION_UNITS[unit]}`;
-}
 
 export const SPELL_COMPLEXITIES = {
   primitive: { label: 'Примітивне' },

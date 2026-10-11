@@ -12,6 +12,7 @@ router.use(requireAuth);
 
 router.get('/', wrap(CollectionController.list));
 router.post('/', wrap(CollectionController.create));
+router.post('/import', wrap(CollectionController.import));
 router.get('/:id/export', wrap(CollectionController.export));
 router.get('/:id', wrap(CollectionController.getOne));
 router.put('/:id', wrap(CollectionController.update));

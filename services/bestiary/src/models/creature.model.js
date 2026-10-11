@@ -40,6 +40,18 @@ const CreatureModel = {
     return rows[0];
   },
 
+  // Імпорт зі списку вже перевірених parseBody полів: створює записи по
+  // одному (стат-блок має багато колонок, multi-row INSERT тут нічого не
+  // виграє) і повертає id у порядку вхідних даних.
+  async importMany(createdBy, fieldsList) {
+    const ids = [];
+    for (const fields of fieldsList) {
+      const row = await CreatureModel.create({ createdBy, ...fields });
+      ids.push(row.id);
+    }
+    return ids;
+  },
+
   async findAll(userId, isAdmin) {
     const { rows } = await pool.query(
       `SELECT c.*, (c.created_by = $1) AS is_owner, ${HEALTH_DIE_SELECT}

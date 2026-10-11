@@ -1,6 +1,8 @@
 jest.mock('../../models/collection.model');
+jest.mock('../../models/npc.model');
 
 const CollectionModel = require('../../models/collection.model');
+const NpcModel = require('../../models/npc.model');
 const CollectionController = require('../collection.controller');
 
 function mockRes() {
@@ -114,5 +116,56 @@ describe('CollectionController.addItem / removeItem', () => {
     const res = mockRes();
     await CollectionController.removeItem(mockReq({ params: { id: 'c1', entryId: 'e1' } }), res);
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
+  });
+});
+
+describe('CollectionController.import', () => {
+  const ATTRS = { dexterity: 3, body: 4, intelligence: 2, wisdom: 5, charisma: 1 };
+  const exported = { name: 'Табір', description: 'опис', is_public: true, items: [{ id: 'old', name: 'Один', ...ATTRS }, { id: 'old2', name: 'Два', ...ATTRS }] };
+
+  it('400 without a collection name', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { items: [] } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('400 and nothing created when a nested record is invalid', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { name: 'К', items: [{ name: 'Без атрибутів' }] } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('lets a game master import the collection with its nested records', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    NpcModel.importMany.mockResolvedValue(['r1', 'r2']);
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: exported }), res);
+
+    expect(NpcModel.importMany.mock.calls[0][0]).toBe('u1');
+    expect(CollectionModel.addItemsUnchecked).toHaveBeenCalledWith('c-new', ['r1', 'r2']);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 2, items_skipped: 0 });
+  });
+
+  it('imports only the shell for a regular user and reports skipped items', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: [exported], user: { sub: 'p1', role: 'user' } }), res);
+
+    expect(NpcModel.importMany).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 0, items_skipped: 2 });
+  });
+
+  it('discards the new collection and rethrows when importing records fails', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const err = new Error('db down');
+    NpcModel.importMany.mockRejectedValue(err);
+
+    await expect(CollectionController.import(mockReq({ body: exported }), mockRes())).rejects.toBe(err);
+    expect(CollectionModel.discard).toHaveBeenCalledWith('c-new');
   });
 });

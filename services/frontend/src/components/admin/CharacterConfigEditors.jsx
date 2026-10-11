@@ -4,6 +4,7 @@ import adminApi from '../../api/admin';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 import { invalidateCharacterConfig } from '../../hooks/useCharacterConfig';
+import { invalidateMagicForms } from '../../hooks/useMagicForms';
 
 // Редактори конфігів листа персонажа (стани, валюти). Їхні записи мають
 // більше полів, ніж {key, label} звичайного ConfigCard, тож окремі картки.
@@ -53,7 +54,9 @@ function ConfigShell({ title, hint, children, saving, error, onSave, onAdd, addL
         {hint && <p className="text-xs text-text-dim">{hint}</p>}
         {children}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onAdd}><Plus size={14} /> {addLabel}</Button>
+          {onAdd ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onAdd}><Plus size={14} /> {addLabel}</Button>
+          ) : <span />}
           <Button type="button" size="sm" disabled={saving} onClick={onSave}>
             {saving ? 'Збереження...' : 'Зберегти'}
           </Button>
@@ -64,7 +67,9 @@ function ConfigShell({ title, hint, children, saving, error, onSave, onAdd, addL
   );
 }
 
-function useSave(configKey, value, validate, onSaved) {
+// afterSave — скинути кеш фронтенду, що читає цей конфіг (за замовчуванням —
+// кеш конфігів листа персонажа).
+function useSave(configKey, value, validate, onSaved, afterSave = invalidateCharacterConfig) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const save = async () => {
@@ -75,7 +80,7 @@ function useSave(configKey, value, validate, onSaved) {
     setError('');
     try {
       const saved = await adminApi.updateConfig(configKey, stripped);
-      invalidateCharacterConfig();
+      afterSave(saved.value);
       onSaved(saved);
     } catch (err) {
       setError(err.response?.data?.message || 'Помилка збереження');
@@ -158,6 +163,48 @@ export function ConditionsConfigCard({ config, onChange, onSaved }) {
             aria-label="Видалити стан" className="shrink-0 self-start rounded-lg p-2 text-text-dim hover:text-danger">
             <X size={16} />
           </button>
+        </div>
+      ))}
+    </ConfigShell>
+  );
+}
+
+// ── Форми магії ──────────────────────────────────────────────────────────────
+
+function validateMagicForms(value) {
+  if (value.some((f) => !f.label?.trim())) return 'Кожна форма магії має мати назву';
+  if (value.some((f) => (f.description ?? '').length > 2000)) return 'Опис форми магії — не довше 2000 символів';
+  return null;
+}
+
+// Набір форм фіксований (його визначає CHECK у БД), тож без додавання,
+// видалення, перетягування й зміни key — лише назва й опис, який гравці
+// бачать при наведенні на форму магії заклинання.
+export function MagicFormsConfigCard({ config, onChange, onSaved }) {
+  const value = config.value;
+  const { saving, error, save } = useSave('magic_forms', value, validateMagicForms, onSaved, invalidateMagicForms);
+  const update = (rowId, patch) => onChange(value.map((f) => (f._rowId === rowId ? { ...f, ...patch } : f)));
+
+  return (
+    <ConfigShell
+      title="Форми магії"
+      hint="Назва й опис кожної форми магії заклинань. Опис показується при наведенні на форму. Набір форм фіксований; key (службова назва) змінити не можна."
+      saving={saving}
+      error={error}
+      onSave={save}
+    >
+      {value.map((f) => (
+        <div key={f._rowId} className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+            <input className={inputClass} placeholder="Назва" value={f.label}
+              onChange={(e) => update(f._rowId, { label: e.target.value })} />
+            <input className={keyInputClass} value={f.key} readOnly aria-label="key" />
+          </div>
+          <textarea
+            rows={3} className={inputClass} placeholder="Опис форми магії — його побачать гравці при наведенні"
+            value={f.description ?? ''}
+            onChange={(e) => update(f._rowId, { description: e.target.value })}
+          />
         </div>
       ))}
     </ConfigShell>

@@ -1,4 +1,5 @@
 import { DURATION_UNITS } from '../constants/abilities';
+import { COMPONENT_UNITS } from '../constants/spellbook';
 
 // Шаблон для POST /api/abilities/import — з коментарями (JSONC), той самий
 // прийом, що й у equipmentImportTemplate.js. На відміну від спорядження,
@@ -6,6 +7,7 @@ import { DURATION_UNITS } from '../constants/abilities';
 // статичні), тому параметрів функція не приймає.
 export function buildAbilitiesImportTemplate() {
   const durationUnitList = Object.entries(DURATION_UNITS).map(([k, v]) => `${k} (${v})`).join(', ');
+  const unitList = COMPONENT_UNITS.join(', ');
 
   return `// Шаблон імпорту вмінь для POST /api/abilities/import.
 // Масив об'єктів — кожен є окремим вмінням. Поле "id" ігнорується (нові
@@ -22,6 +24,11 @@ export function buildAbilitiesImportTemplate() {
 //   is_maneuver           — true / false — чи може використовуватись як маневр / дія в бою
 //   duration_value        — число або null (має сенс лише коли duration_unit не "instant"/"permanent")
 //   duration_unit         — один з: ${durationUnitList}
+//   components            — масив об'єктів { item_id, name, quantity, unit } (як у заклинань):
+//                             item_id  — uuid предмета спорядження або null
+//                             name     — рядок, обов'язково
+//                             quantity — число
+//                             unit     — рядок, напр. одна з: ${unitList} (або довільна своя)
 //   lore_creator          — рядок або null — вільний текст, ім'я лорного автора/винахідника вміння
 //   lore_creator_npc_id   — uuid або null — id НІПа (сервіс npcs), якщо творець
 //                           прив'язаний до конкретного НІПа. Не обов'язково: якщо такого id немає
@@ -30,7 +37,7 @@ export function buildAbilitiesImportTemplate() {
 //                           з kind: "primitive" (Примітивна) / "perfected" (Довершена) — рівневі, не більше
 //                           однієї кожного виду (тоді основна вважається Повноцінною) — або "alternative"
 //                           (альтернативна, потрібне ще "name"), та тими самими полями: duration_value,
-//                           duration_unit, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id.
+//                           duration_unit, components, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id.
 //                           Порожній масив — лише основна форма. Рівневі й альтернативні форми в одному
 //                           вмінні не поєднуються: якщо є обидва типи, альтернативні буде відкинуто.
 //   main_form_name        — рядок або null — назва основної форми (лише для вмінь з альтернативними
@@ -45,7 +52,10 @@ export function buildAbilitiesImportTemplate() {
     "is_public": true,
     "is_maneuver": true,
     "duration_value": 2,
-    "duration_unit": "action",
+    "duration_unit": "round",
+    "components": [
+      { "item_id": null, "name": "Гострий клинок", "quantity": 1, "unit": "шт." }
+    ],
     "lore_creator": "Майстер клинка Освальд",
     "lore_creator_npc_id": null,
     "main_form_name": null,
@@ -55,6 +65,7 @@ export function buildAbilitiesImportTemplate() {
         "name": "Подвійний випад",
         "duration_value": 1,
         "duration_unit": "action",
+        "components": [],
         "mechanical_desc": "Два швидкі випади поспіль — друга атака зі штрафом -2.",
         "narrative_desc": null,
         "lore_creator": "Майстер клинка Освальд",

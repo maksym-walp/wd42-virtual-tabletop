@@ -5,24 +5,27 @@ import adminApi from '../api/admin';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
-import { ConditionsConfigCard, CurrenciesConfigCard } from '../components/admin/CharacterConfigEditors';
+import { ConditionsConfigCard, CurrenciesConfigCard, MagicFormsConfigCard } from '../components/admin/CharacterConfigEditors';
 
 // Список сихронізований із services/admin's ALLOWED_KEYS — типи й
 // особливості зброї (читає equipment, useWeaponOptions на фронті) та види
 // заклинань (читає spellbook, useSpellKinds на фронті), стани й валюти
-// персонажа (читає character-sheet, useCharacterConfig на фронті).
+// персонажа (читає character-sheet, useCharacterConfig на фронті), форми магії
+// заклинань (читає spellbook, useMagicForms на фронті).
 const CONFIG_LABELS = {
   weapon_types: 'Типи зброї',
   weapon_grips: 'Особливості зброї',
   spell_kinds: 'Види заклинань',
   conditions: 'Стани персонажа',
   currencies: 'Валюти',
+  magic_forms: 'Форми магії',
 };
 
 // Конфіги з полями понад {key, label} мають власні редактори.
 const CONFIG_EDITORS = {
   conditions: ConditionsConfigCard,
   currencies: CurrenciesConfigCard,
+  magic_forms: MagicFormsConfigCard,
 };
 
 // key — сире значення у записах (weapon_type/weapon_grip/spell_kind) і

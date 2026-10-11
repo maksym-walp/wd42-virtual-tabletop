@@ -6,7 +6,7 @@ import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
 import npcsApi from '../api/npcs';
 import {
-  NATURE_TYPES, RITUAL_TYPES, DURATION_UNITS,
+  RITUAL_TYPES, DURATION_UNITS,
   ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_FIELDS, pickFormFields, spellFormMode,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
@@ -17,9 +17,14 @@ import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
-import SpellComponentsField, { emptyComponentRow } from '../components/SpellComponentsField';
+import SpellComponentsField from '../components/SpellComponentsField';
+import {
+  componentsToState, cloneComponentRows, createMissingComponentItems, serializeComponentRows,
+} from '../utils/componentRows';
 import AuthorField from '../components/AuthorField';
 import useSpellKinds from '../hooks/useSpellKinds';
+import useMagicForms from '../hooks/useMagicForms';
+import Tooltip from '../components/ui/Tooltip';
 import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
 import EntryFormsSection from '../components/EntryFormsSection';
 
@@ -53,7 +58,7 @@ function formToState(src) {
     lore_creator_npc_id: src.lore_creator_npc_id ?? null,
     duration_value: src.duration_value ?? '',
     range_desc: src.range_desc || '',
-    components: (src.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
+    components: componentsToState(src.components),
   };
 }
 
@@ -67,7 +72,7 @@ function newForm(kind, source) {
     kind,
     id: kind === 'alternative' ? newAlternativeFormId() : kind,
     name: kind === 'alternative' ? 'Нова форма' : null,
-    components: source.components.map((c) => ({ ...c, key: emptyComponentRow().key })),
+    components: cloneComponentRows(source.components),
   };
 }
 
@@ -78,6 +83,7 @@ export default function SpellForm() {
   const { user } = useAuth();
   const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
   const { spellKinds } = useSpellKinds();
+  const { magicForms } = useMagicForms();
   const canManageTraditions = user?.role === 'admin' || user?.role === 'game_master';
   const kinds = domain.kindSwitch.filter((k) => k.key !== 'tradition' || canManageTraditions);
 
@@ -134,7 +140,7 @@ export default function SpellForm() {
           energy_cost: s.energy_cost, action_time: s.action_time,
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
-          components: (s.components || []).map((c) => ({ ...emptyComponentRow(), ...c })),
+          components: componentsToState(s.components),
           is_public: s.is_public,
           image_url: s.image_url || '', image_crop: s.image_crop || null,
           traditionIds,
@@ -189,33 +195,12 @@ export default function SpellForm() {
     setSaving(true);
     setError('');
     try {
-      // Quick-create flow: any component row flagged "create as new item"
-      // that isn't already linked to an equipment item gets created first,
-      // always public — never as the author's private item.
-      // Рівні часто повторюють ті самі компоненти, тож один і той самий
-      // новий предмет (за назвою) створюється лише раз на всі форми.
-      const allComponents = [form, ...form.forms].flatMap((l) => l.components);
-      const namesToCreate = [...new Set(
-        allComponents
-          .filter((c) => c.createAsNew && !c.item_id && c.name.trim())
-          .map((c) => c.name.trim())
-      )];
-      const created = await Promise.all(
-        namesToCreate.map((name) => equipmentApi.create({ name }).then((item) => [name.toLowerCase(), item.id]))
-      );
-      const createdIds = Object.fromEntries(created);
+      const createdIds = await createMissingComponentItems([form, ...form.forms].map((l) => l.components));
 
       const serializeForm = (src) => ({
         ...pickFormFields(src),
         complexity: src.complexity || null,
-        components: src.components
-          .filter((c) => c.name.trim() !== '')
-          .map((c) => ({
-            item_id: c.item_id ?? (c.createAsNew ? createdIds[c.name.trim().toLowerCase()] : null) ?? null,
-            name: c.name.trim(),
-            quantity: c.quantity || 1,
-            unit: c.unit || '',
-          })),
+        components: serializeComponentRows(src.components, createdIds),
         duration_value: src.duration_value === '' ? null : Number(src.duration_value),
         energy_cost: Number(src.energy_cost),
         action_time: Number(src.action_time),
@@ -280,18 +265,20 @@ export default function SpellForm() {
             <input type="text" className={inputClass} value={form.name} onChange={set('name')} required maxLength={200} />
           </Field>
 
-          <Field label="Природа заклинання" hint="Можна обрати декілька" className="mb-4">
+          <Field label="Форма магії" hint="Можна обрати декілька" className="mb-4">
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(NATURE_TYPES).map(([key, { label }]) => (
-                <button
-                  key={key} type="button"
-                  onClick={() => toggleNature(key)}
-                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    form.nature.includes(key) ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
-                  }`}
-                >
-                  {label}
-                </button>
+              {magicForms.map(({ key, label, description }) => (
+                <Tooltip key={key} text={description}>
+                  <button
+                    type="button"
+                    onClick={() => toggleNature(key)}
+                    className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      form.nature.includes(key) ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                </Tooltip>
               ))}
             </div>
           </Field>

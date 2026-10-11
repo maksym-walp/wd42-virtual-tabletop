@@ -10,9 +10,11 @@ import { parseJsonWithComments } from '../utils/jsonWithComments';
 // робить запит і завантаження файлу. Import відкриває меню з трьох шляхів
 // заповнити той самий onImport(parsedJson): скопіювати шаблон-документацію
 // (onTemplate), завантажити .json файл, або вставити JSON текстом.
+// hideExport ховає кнопку експорту (там, де експортувати нічого — наприклад,
+// список колекцій, які експортуються по одній зі своєї сторінки).
 // Без onExport/onImport кнопки лишаються видимими, але неактивними — саме
 // так компонент і стоїть у каталогах, де бекенд ще не підключено.
-export default function ExportImportActions({ onExport, onImport, onTemplate, className = '' }) {
+export default function ExportImportActions({ onExport, onImport, onTemplate, hideExport = false, className = '' }) {
   const fileInputRef = useRef(null);
   const menuButtonRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -91,13 +93,15 @@ export default function ExportImportActions({ onExport, onImport, onTemplate, cl
     <div className={`inline-flex shrink-0 items-center gap-1.5 ${className}`}>
       {copied && <span className="text-xs font-semibold text-sage">Скопійовано</span>}
 
-      <Button
-        type="button" variant="ghost" size="icon"
-        onClick={onExport} disabled={!onExport}
-        aria-label="Експорт" title="Експорт у JSON"
-      >
-        <Download size={16} />
-      </Button>
+      {!hideExport && (
+        <Button
+          type="button" variant="ghost" size="icon"
+          onClick={onExport} disabled={!onExport}
+          aria-label="Експорт" title="Експорт у JSON"
+        >
+          <Download size={16} />
+        </Button>
+      )}
 
       <Button
         ref={menuButtonRef}
@@ -131,7 +135,7 @@ export default function ExportImportActions({ onExport, onImport, onTemplate, cl
           rows={12}
           value={pasteText}
           onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-          placeholder="Встав сюди JSON-масив..."
+          placeholder="Встав сюди JSON..."
           autoFocus
         />
         {pasteError && <p className="mt-2 text-sm text-danger">{pasteError}</p>}

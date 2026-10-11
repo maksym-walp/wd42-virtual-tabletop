@@ -27,6 +27,17 @@ const COMPLEXITIES = ['primitive', 'simple', 'medium', 'complex', 'extreme'];
 
 const normalizeComplexity = (value) => (COMPLEXITIES.includes(value) ? value : null);
 
+const DURATION_UNITS = ['instant', 'action', 'round', 'seconds', 'minutes', 'hours', 'days', 'permanent'];
+const normalizeDurationUnit = (value) => (DURATION_UNITS.includes(value) ? value : 'instant');
+
+// «Форма магії» (колонка nature): 'infernal' перейменовано в 'pact'
+// (міграція 93) — старі експорти й клієнти ще можуть слати 'infernal'.
+const LEGACY_NATURE = { infernal: 'pact' };
+const normalizeNature = (nature) => {
+  if (!Array.isArray(nature)) return [];
+  return [...new Set(nature.map((n) => LEGACY_NATURE[n] ?? n))];
+};
+
 const TIER_KINDS = ['primitive', 'perfected'];
 const FORM_KINDS = [...TIER_KINDS, 'alternative'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,7 +72,7 @@ function normalizeForms(forms) {
       action_time: Number(form.action_time) || 1,
       ritual: form.ritual ?? 'impossible',
       duration_value: form.duration_value === '' || form.duration_value == null ? null : Number(form.duration_value),
-      duration_unit: form.duration_unit ?? 'instant',
+      duration_unit: normalizeDurationUnit(form.duration_unit),
       range_desc: form.range_desc || null,
       components: Array.isArray(form.components) ? form.components : [],
       mechanical_desc: form.mechanical_desc || null,
@@ -98,10 +109,10 @@ const JSONB_IMPORT_COLUMNS = ['components', 'forms'];
 function normalizeImportField(column, record) {
   switch (column) {
     case 'is_public': return record.is_public ?? false;
-    case 'nature': return record.nature ?? [];
+    case 'nature': return normalizeNature(record.nature);
     case 'spell_kind': return record.spell_kind ?? 'utility';
     case 'ritual': return record.ritual ?? 'impossible';
-    case 'duration_unit': return record.duration_unit ?? 'instant';
+    case 'duration_unit': return normalizeDurationUnit(record.duration_unit);
     case 'energy_cost': return record.energy_cost ?? 0;
     case 'action_time': return record.action_time ?? 1;
     case 'components': return JSON.stringify(record.components ?? []);
@@ -115,6 +126,33 @@ function normalizeImportField(column, record) {
     case 'main_form_name': return normalizeMainFormName(record.main_form_name);
     default: return record[column] ?? null;
   }
+}
+
+// Один багаторядковий INSERT на всю пачку; null — коли жоден запис не валідний.
+function buildImportInsert(userId, records, isCanonical) {
+  const rows = (records || []).filter((record) => record && record.name);
+  if (!rows.length) return null;
+
+  const values = [];
+  const tuples = rows.map((record) => {
+    const start = values.length;
+    values.push(
+      userId,
+      ...IMPORT_COLUMNS.slice(1).map((column) => (
+        column === 'is_canonical' ? isCanonical : normalizeImportField(column, record)
+      ))
+    );
+    const placeholders = IMPORT_COLUMNS.map((column, idx) => {
+      const paramIdx = start + idx + 1;
+      return JSONB_IMPORT_COLUMNS.includes(column) ? `$${paramIdx}::jsonb` : `$${paramIdx}`;
+    });
+    return `(${placeholders.join(', ')})`;
+  });
+
+  return {
+    sql: `INSERT INTO spellbook.spells (${IMPORT_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')}`,
+    values,
+  };
 }
 
 const SpellModel = {
@@ -216,10 +254,10 @@ const SpellModel = {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19::jsonb,$20,$21,$22::jsonb)
        RETURNING *`,
       [
-        userId, name, nature ?? [], spell_kind ?? 'utility',
+        userId, name, normalizeNature(nature), spell_kind ?? 'utility',
         mechanical_desc, narrative_desc,
         energy_cost ?? 0, action_time ?? 1, ritual ?? 'impossible',
-        duration_value ?? null, duration_unit ?? 'instant',
+        duration_value ?? null, normalizeDurationUnit(duration_unit),
         range_desc ?? null, JSON.stringify(components ?? []), is_public ?? false,
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
@@ -251,10 +289,10 @@ const SpellModel = {
        WHERE id=$1 AND (user_id=$2 OR $19 = true)
        RETURNING *`,
       [
-        id, userId, name, nature ?? [], spell_kind ?? 'utility',
+        id, userId, name, normalizeNature(nature), spell_kind ?? 'utility',
         mechanical_desc, narrative_desc,
         energy_cost, action_time, ritual,
-        duration_value ?? null, duration_unit, range_desc ?? null,
+        duration_value ?? null, normalizeDurationUnit(duration_unit), range_desc ?? null,
         JSON.stringify(components ?? []), is_public ?? false,
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
@@ -307,30 +345,19 @@ const SpellModel = {
   // імпортером. is_canonical — не з експорту, а з ролі імпортера
   // (isCanonical). Рядки без name пропускаються.
   async bulkImport(userId, records, isCanonical = false) {
-    const rows = (records || []).filter((record) => record && record.name);
-    if (!rows.length) return 0;
-
-    const values = [];
-    const tuples = rows.map((record) => {
-      const start = values.length;
-      values.push(
-        userId,
-        ...IMPORT_COLUMNS.slice(1).map((column) => (
-          column === 'is_canonical' ? isCanonical : normalizeImportField(column, record)
-        ))
-      );
-      const placeholders = IMPORT_COLUMNS.map((column, idx) => {
-        const paramIdx = start + idx + 1;
-        return JSONB_IMPORT_COLUMNS.includes(column) ? `$${paramIdx}::jsonb` : `$${paramIdx}`;
-      });
-      return `(${placeholders.join(', ')})`;
-    });
-
-    const { rowCount } = await pool.query(
-      `INSERT INTO spellbook.spells (${IMPORT_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')}`,
-      values
-    );
+    const insert = buildImportInsert(userId, records, isCanonical);
+    if (!insert) return 0;
+    const { rowCount } = await pool.query(insert.sql, insert.values);
     return rowCount;
+  },
+
+  // Те саме, що bulkImport, але повертає id створених заклинань у порядку
+  // вхідних даних (лише для валідних, тобто з name) — для імпорту колекцій.
+  async importMany(userId, records, isCanonical = false) {
+    const insert = buildImportInsert(userId, records, isCanonical);
+    if (!insert) return [];
+    const { rows } = await pool.query(`${insert.sql} RETURNING id`, insert.values);
+    return rows.map((row) => row.id);
   },
 
   // Види заклинань (spell_kind) редагуються з адмін-панелі — читаємо їх
@@ -338,6 +365,13 @@ const SpellModel = {
   // getWeaponOptions), а не тримаємо захардкодженими.
   async getKindOptions() {
     const { rows } = await pool.query(`SELECT value FROM admin.site_configs WHERE key = 'spell_kinds'`);
+    return rows[0]?.value || [];
+  },
+
+  // Форми магії (nature): набір ключів фіксований, адмін редагує назви й
+  // описи (admin.site_configs, ключ magic_forms).
+  async getMagicFormOptions() {
+    const { rows } = await pool.query(`SELECT value FROM admin.site_configs WHERE key = 'magic_forms'`);
     return rows[0]?.value || [];
   },
 };

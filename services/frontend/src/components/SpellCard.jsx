@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { natureLabels, SPELL_COMPLEXITIES, spellForms } from '../constants/spellbook';
+import { SPELL_COMPLEXITIES, spellForms } from '../constants/spellbook';
 import useSpellKinds from '../hooks/useSpellKinds';
 import { pluralizeUk } from '../utils/pluralize';
 import { htmlToPreviewText } from '../utils/richText';
 import AuthorBadge from './AuthorBadge';
+import MagicFormNames from './MagicFormNames';
 import { StatGrid, StatBox } from './StatGrid';
 import CroppedImage from './ui/CroppedImage';
 
@@ -41,7 +42,7 @@ export default function SpellCard({ spell, ...rest }) {
           bar) alongside the action-economy numbers, matching the equipment
           card's single stats-row layout. */}
       <StatGrid className="grid-cols-2 sm:grid-cols-4">
-        <StatBox label="Природа" value={natureLabels(spell.nature) || '—'} />
+        <StatBox label="Форма магії" value={<MagicFormNames nature={spell.nature} />} />
         <StatBox label="Вид" value={kind?.label || '—'} />
         <StatBox label="Енергія" value={spell.energy_cost} />
         <StatBox label="Дії" value={`${spell.action_time}/3`} />

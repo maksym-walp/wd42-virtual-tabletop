@@ -357,6 +357,40 @@ async function getWeaponOptions() {
 
 // Спільний список/деталь через усі чотири таблиці — для тих, кому вид наперед
 // невідомий або неважливий.
+// Записи для імпорту групуються за `type` разом із початковим індексом, щоб
+// importMany міг повернути id у порядку вхідних даних.
+function groupByKind(records) {
+  const grouped = new Map();
+  (records || []).forEach((record, index) => {
+    if (!record || !KINDS[record.type]) return;
+    if (!grouped.has(record.type)) grouped.set(record.type, []);
+    grouped.get(record.type).push({ record, index });
+  });
+  return grouped;
+}
+
+// Один багаторядковий INSERT у таблицю виду: [sql, values].
+function buildKindInsert(userId, kind, rows, isCanonical) {
+  const { table, columns } = KINDS[kind];
+  const writeColumns = ['user_id', 'is_canonical', ...COMMON_COLUMNS, ...columns];
+
+  const values = [];
+  const tuples = rows.map((row) => {
+    const start = values.length;
+    values.push(
+      userId,
+      isCanonical,
+      ...COMMON_COLUMNS.map((column) => (
+        column === 'image_url' || column === 'thumbnail_url' || column === 'image_crop' ? null : normalize(column, row)
+      )),
+      ...columns.map((column) => normalize(column, row))
+    );
+    return `(${writeColumns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
+  });
+
+  return [`INSERT INTO ${table} (${writeColumns.join(', ')}) VALUES ${tuples.join(', ')}`, values];
+}
+
 const UnionModel = {
   async findAll(userId, { search, scope, sort, dir, limit } = {}, isAdmin = false) {
     const params = [userId];
@@ -410,40 +444,25 @@ const UnionModel = {
   // лежать на диску. Рядки з невідомим/відсутнім `type` пропускаються.
   // is_canonical — з ролі імпортера, а не з файлу.
   async bulkImport(userId, records, isCanonical = false) {
-    const grouped = new Map();
-    for (const record of records) {
-      if (!record || !KINDS[record.type]) continue;
-      if (!grouped.has(record.type)) grouped.set(record.type, []);
-      grouped.get(record.type).push(record);
-    }
-
     let imported = 0;
-    for (const [kind, rows] of grouped) {
-      const { table, columns } = KINDS[kind];
-      const writeColumns = ['user_id', 'is_canonical', ...COMMON_COLUMNS, ...columns];
-
-      const values = [];
-      const tuples = rows.map((row) => {
-        const start = values.length;
-        values.push(
-          userId,
-          isCanonical,
-          ...COMMON_COLUMNS.map((column) => (
-            column === 'image_url' || column === 'thumbnail_url' || column === 'image_crop' ? null : normalize(column, row)
-          )),
-          ...columns.map((column) => normalize(column, row))
-        );
-        return `(${writeColumns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
-      });
-
-      const { rowCount } = await pool.query(
-        `INSERT INTO ${table} (${writeColumns.join(', ')}) VALUES ${tuples.join(', ')}`,
-        values
-      );
+    for (const [kind, rows] of groupByKind(records)) {
+      const { rowCount } = await pool.query(...buildKindInsert(userId, kind, rows.map((r) => r.record), isCanonical));
       imported += rowCount;
     }
-
     return imported;
+  },
+
+  // Те саме, що bulkImport, але повертає [{ id, type }] у порядку вхідних
+  // даних (пропущені записи — з невідомим type — у результат не потрапляють).
+  // Потрібно імпорту колекцій: collection_items зберігає і id, і вид запису.
+  async importMany(userId, records, isCanonical = false) {
+    const created = [];
+    for (const [kind, rows] of groupByKind(records)) {
+      const [sql, values] = buildKindInsert(userId, kind, rows.map((r) => r.record), isCanonical);
+      const { rows: inserted } = await pool.query(`${sql} RETURNING id`, values);
+      inserted.forEach((row, i) => created.push({ index: rows[i].index, id: row.id, type: kind }));
+    }
+    return created.sort((x, y) => x.index - y.index).map(({ id, type }) => ({ id, type }));
   },
 };
 

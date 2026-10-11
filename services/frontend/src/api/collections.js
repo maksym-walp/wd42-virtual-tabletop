@@ -21,6 +21,12 @@ export function createCollectionsApi(base) {
       const { data } = await api.get(`${base}${id}/export`);
       return data;
     },
+    // Імпорт колекції (обʼєкт чи масив обʼєктів) разом із вкладеними записами;
+    // повертає { collections, imported_items, items_skipped }.
+    async importMany(payload) {
+      const { data } = await api.post(`${base}import`, payload);
+      return data;
+    },
     async getPublic(id) {
       const { data } = await api.get(`${base}public/${id}`);
       return data.collection;

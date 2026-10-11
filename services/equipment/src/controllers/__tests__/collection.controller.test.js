@@ -1,6 +1,7 @@
 jest.mock('../../models/collection.model');
 
 const CollectionModel = require('../../models/collection.model');
+const { UnionModel } = require('../../models/catalog.model');
 const CollectionController = require('../collection.controller');
 
 function mockRes() {
@@ -11,7 +12,10 @@ function mockReq({ body = {}, params = {}, query = {}, user = { sub: 'user-1' } 
   return { body, params, query, user };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.spyOn(UnionModel, 'importMany').mockReset();
+});
 
 describe('CollectionController.list', () => {
   it('passes query filters through to the model and returns collections', async () => {
@@ -247,5 +251,67 @@ describe('CollectionController.removeItem', () => {
 
     expect(CollectionModel.removeItem).toHaveBeenCalledWith('c1', 'user-1', 'i1', false);
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
+  });
+});
+
+describe('CollectionController.import', () => {
+  const exported = {
+    name: 'Набір бійця', description: 'опис', is_public: true,
+    items: [{ id: 'old-1', type: 'weapon', name: 'Меч' }, { id: 'old-2', type: 'item', name: 'Мотузка' }],
+  };
+
+  it('rejects a payload without a collection name', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { items: [] } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects nested items without a name before touching the database', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { name: 'К', items: [{ type: 'item' }] }, user: { sub: 'gm-1', role: 'game_master' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects nested items with an unknown type', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { name: 'К', items: [{ name: 'X', type: 'spaceship' }] }, user: { sub: 'gm-1', role: 'game_master' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('lets a game master import the collection with its nested items as canonical', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    UnionModel.importMany.mockResolvedValue([{ id: 'e1', type: 'weapon' }, { id: 'e2', type: 'item' }]);
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: exported, user: { sub: 'gm-1', role: 'game_master' } }), res);
+
+    expect(UnionModel.importMany).toHaveBeenCalledWith('gm-1', exported.items, true);
+    expect(CollectionModel.addItemsUnchecked).toHaveBeenCalledWith('c-new', [{ id: 'e1', type: 'weapon' }, { id: 'e2', type: 'item' }]);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 2, items_skipped: 0 });
+  });
+
+  it('imports only the collection shell for a regular user and reports skipped items', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: [exported], user: { sub: 'user-1', role: 'user' } }), res);
+
+    expect(UnionModel.importMany).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 0, items_skipped: 2 });
+  });
+
+  it('discards the new collection and rethrows when importing the items fails', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const err = new Error('db down');
+    UnionModel.importMany.mockRejectedValue(err);
+
+    await expect(
+      CollectionController.import(mockReq({ body: exported, user: { sub: 'gm-1', role: 'game_master' } }), mockRes())
+    ).rejects.toBe(err);
+    expect(CollectionModel.discard).toHaveBeenCalledWith('c-new');
   });
 });

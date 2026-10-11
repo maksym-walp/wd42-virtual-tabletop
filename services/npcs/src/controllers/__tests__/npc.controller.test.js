@@ -130,3 +130,37 @@ describe('NpcController.updateHealth', () => {
     expect(NpcModel.updateRolledHealth.mock.calls).toEqual([['n1', 57], ['n1', null]]);
   });
 });
+
+describe('NpcController.import', () => {
+  it('403 for a player', async () => {
+    const res = mockRes();
+    await NpcController.import(mockReq({ body: [{ name: 'X', ...ATTRS }], user: PLAYER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(NpcModel.importMany).not.toHaveBeenCalled();
+  });
+
+  it('400 for a non-array body or an invalid record, before touching the database', async () => {
+    const res = mockRes();
+    await NpcController.import(mockReq({ body: { name: 'X' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    const res2 = mockRes();
+    await NpcController.import(mockReq({ body: [{ name: 'Ok', ...ATTRS }, { name: 'Bad', ...ATTRS, body: 9 }] }), res2);
+    expect(res2.status).toHaveBeenCalledWith(400);
+    expect(NpcModel.importMany).not.toHaveBeenCalled();
+  });
+
+  it('imports parsed records as the importer, dropping cross-deployment references and images', async () => {
+    NpcModel.importMany.mockResolvedValue(['n1', 'n2']);
+    const res = mockRes();
+    const record = { name: ' Старий ', ...ATTRS, species_id: 'sp-1', race_id: 'r-1', image_url: '/x.png', is_public: true };
+
+    await NpcController.import(mockReq({ body: [record, { name: 'Другий', ...ATTRS }] }), res);
+
+    const [userId, fieldsList] = NpcModel.importMany.mock.calls[0];
+    expect(userId).toBe('gm-1');
+    expect(fieldsList[0]).toMatchObject({ name: 'Старий', speciesId: null, raceId: null, imageUrl: null, isPublic: true });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+  });
+});

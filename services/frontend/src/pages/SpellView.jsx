@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
-import { NATURE_TYPES, RITUAL_TYPES, SPELL_COMPLEXITIES, formatDuration, spellForms } from '../constants/spellbook';
+import { RITUAL_TYPES, SPELL_COMPLEXITIES, formatDuration, spellForms } from '../constants/spellbook';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
+import useMagicForms from '../hooks/useMagicForms';
+import Tooltip from '../components/ui/Tooltip';
+import ComponentsList from '../components/ComponentsList';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
@@ -18,6 +21,7 @@ export default function SpellView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { spellKindsMap } = useSpellKinds();
+  const { magicFormsMap } = useMagicForms();
   const [spell, setSpell] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -98,15 +102,14 @@ export default function SpellView() {
           {/* Type header */}
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
             {(spell.nature || []).map((key) => {
-              const n = NATURE_TYPES[key];
+              const n = magicFormsMap[key];
               if (!n) return null;
               return (
-                <span
-                  key={key}
-                  className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim"
-                >
-                  {n.label}
-                </span>
+                <Tooltip key={key} text={n.description}>
+                  <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+                    {n.label}
+                  </span>
+                </Tooltip>
               );
             })}
             <span className={`text-xs italic ${spell.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
@@ -195,18 +198,7 @@ export default function SpellView() {
 
           {shown.components?.length > 0 && (
             <Section title="Компоненти">
-              <ul className="flex flex-col gap-1.5">
-                {shown.components.map((c, i) => {
-                  const label = [c.name, c.quantity ? `×${c.quantity}` : null, c.unit || null].filter(Boolean).join(' ');
-                  return (
-                    <li key={i} className="text-sm text-text">
-                      {c.item_id ? (
-                        <Link to={`/equipment/${c.item_id}`} className="text-accent hover:underline">{label}</Link>
-                      ) : label}
-                    </li>
-                  );
-                })}
-              </ul>
+              <ComponentsList components={shown.components} />
             </Section>
           )}
 

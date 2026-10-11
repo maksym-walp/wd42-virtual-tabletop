@@ -160,3 +160,36 @@ describe('ConfigController.update — currencies', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 });
+
+describe('ConfigController.update — magic_forms', () => {
+  const valid = ['arcana', 'elemental', 'integral', 'pact', 'nature', 'blight']
+    .map((key) => ({ key, label: key.toUpperCase(), description: `Опис ${key}` }));
+  const put = async (value) => {
+    const res = mockRes();
+    await ConfigController.update(mockReq({ params: { key: 'magic_forms' }, body: { value } }), res);
+    return res;
+  };
+
+  it('200 for the full fixed set with edited names and descriptions', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'magic_forms', value: valid });
+    const res = await put(valid);
+    expect(ConfigModel.upsert).toHaveBeenCalledWith('magic_forms', valid);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('400 when a form is missing', async () => {
+    const res = await put(valid.slice(1));
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ConfigModel.upsert).not.toHaveBeenCalled();
+  });
+
+  it('400 when an unknown form key is added', async () => {
+    const res = await put([...valid, { key: 'extra', label: 'Extra' }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a too-long description', async () => {
+    const res = await put(valid.map((e, i) => (i === 0 ? { ...e, description: 'a'.repeat(2001) } : e)));
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});

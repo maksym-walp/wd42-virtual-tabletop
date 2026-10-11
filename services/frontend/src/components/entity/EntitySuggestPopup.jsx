@@ -11,8 +11,8 @@ const MARGIN = 8;
 // підказка відкрита й є що вибрати (інакше Enter — звичайний перенос рядка).
 export default function EntitySuggestPopup({ state, editor, keyRef }) {
   const { from, to, query, rect } = state;
-  const { results: found, loading } = useEntitySearch({ query, limit: 3, minLen: 1 });
-  const results = useMemo(() => found.slice(0, 8), [found]);
+  const { results: found, loading } = useEntitySearch({ query, limit: 2, minLen: 1 });
+  const results = useMemo(() => found.slice(0, 10), [found]);
   const [index, setIndex] = useState(0);
   const elRef = useRef(null);
   const [pos, setPos] = useState(null);
@@ -52,7 +52,7 @@ export default function EntitySuggestPopup({ state, editor, keyRef }) {
     <div
       ref={elRef}
       role="listbox"
-      className="fixed z-[70] overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
+      className="fixed z-[70] max-h-72 overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
       style={{ width: POPUP_W, left: pos?.left ?? -9999, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
     >
       {results.map((r, i) => (

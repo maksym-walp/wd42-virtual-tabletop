@@ -27,6 +27,11 @@ const npcsApi = {
   async remove(id) {
     await api.delete(`${NPCS}/${id}`);
   },
+  // GM/адмін: масовий імпорт раніше експортованих НІПів. Повертає кількість.
+  async importMany(records) {
+    const { data } = await api.post(`${NPCS}/import`, records);
+    return data.imported;
+  },
   async setOwner(id, ownerUsername) {
     const { data } = await api.patch(`${NPCS}/${id}/owner`, { owner_username: ownerUsername });
     return data.npc;

@@ -6,6 +6,7 @@ import EmptyState from '../components/ui/EmptyState';
 import ScopeFilter from '../components/ScopeFilter';
 import CatalogTabs from '../components/CatalogTabs';
 import EquipmentCollectionsByType from '../components/EquipmentCollectionsByType';
+import CollectionImportActions from '../components/CollectionImportActions';
 import { htmlToPreviewText } from '../utils/richText';
 import useHoverPreview from '../hooks/useHoverPreview';
 import CatalogLayout, {
@@ -20,6 +21,7 @@ export default function CollectionsList({ domainKey }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [hovered, bindPreview] = useHoverPreview();
 
   useEffect(() => {
@@ -28,14 +30,16 @@ export default function CollectionsList({ domainKey }) {
       .then(setCollections)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, scope, domainKey]);
+  }, [search, scope, domainKey, reloadKey]);
 
   const newHref = `${domain.basePath}/collections/new`;
 
   const sidebar = (
     <>
       <CatalogTabs sidebar tabs={getDomainTabs(domainKey)} />
-      <SidebarActions newHref={newHref} newLabel="Нова колекція" />
+      <SidebarActions newHref={newHref} newLabel="Нова колекція">
+        <CollectionImportActions key={domainKey} domainKey={domainKey} onImported={() => setReloadKey((k) => k + 1)} />
+      </SidebarActions>
       <SidebarSearch value={search} onChange={setSearch} />
       <SidebarViewCount count={collections.length} forms={['колекція', 'колекції', 'колекцій']} />
       {domain.supportsCanonical !== false && (

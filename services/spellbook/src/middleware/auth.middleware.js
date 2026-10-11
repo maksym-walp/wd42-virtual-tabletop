@@ -41,4 +41,4 @@ function canonicalOnCreate(req) {
   return CANONICAL_ROLES.includes(req.user?.role) && req.body?.is_canonical !== false;
 }
 
-module.exports = { requireAuth, requireCanonicalManager, requireAdminOwner, canonicalOnCreate };
+module.exports = { requireAuth, requireCanonicalManager, requireAdminOwner, canonicalOnCreate, CANONICAL_ROLES };

@@ -1,10 +1,10 @@
-import { NATURE_TYPES, SPELL_COMPLEXITIES, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
+import { NATURE_TYPES, magicFormInfo, SPELL_COMPLEXITIES, RITUAL_TYPES, DURATION_UNITS, ACTION_OPTIONS, COMPONENT_UNITS } from '../constants/spellbook';
 
 // Шаблон для POST /api/spellbook/import — з коментарями (JSONC), той самий
 // прийом, що й у equipmentImportTemplate.js. spellKinds — види заклинань з
 // адмін-панелі (useSpellKinds), [{ key, label }].
 export function buildSpellbookImportTemplate(spellKinds) {
-  const natureList = Object.entries(NATURE_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
+  const natureList = Object.keys(NATURE_TYPES).map((k) => `${k} (${magicFormInfo(k).label})`).join(', ');
   const complexityList = Object.entries(SPELL_COMPLEXITIES).map(([k, v]) => `${k} (${v.label})`).join(', ');
   const spellKindList = spellKinds.map((k) => `${k.key} (${k.label})`).join(', ');
   const ritualList = Object.entries(RITUAL_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
@@ -20,7 +20,7 @@ export function buildSpellbookImportTemplate(spellKinds) {
 //
 // Поля:
 //   name                  — обов'язкове, рядок
-//   nature                — масив з: ${natureList}
+//   nature                — форми магії, масив з: ${natureList}
 //   spell_kind            — один з: ${spellKindList}
 //   complexity            — один з: ${complexityList}, або null
 //   mechanical_desc       — рядок або null — що відбувається механічно

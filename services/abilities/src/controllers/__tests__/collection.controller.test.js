@@ -327,3 +327,58 @@ describe('CollectionController.export', () => {
     });
   });
 });
+
+describe('CollectionController.import', () => {
+  const exported = {
+    name: 'Набір бійця', description: 'опис', is_public: true,
+    items: [{ id: 'old-1', name: 'Удар' }, { id: 'old-2', name: 'Ривок' }],
+  };
+
+  it('rejects a payload without a collection name', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { items: [] } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects nested items without a name before touching the database', async () => {
+    const res = mockRes();
+    await CollectionController.import(mockReq({ body: { name: 'К', items: [{ mechanical_desc: 'x' }] }, user: { sub: 'gm-1', role: 'game_master' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('lets a game master import the collection with its nested items as canonical', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    AbilityModel.importMany.mockResolvedValue(['a1', 'a2']);
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: exported, user: { sub: 'gm-1', role: 'game_master' } }), res);
+
+    expect(AbilityModel.importMany).toHaveBeenCalledWith('gm-1', exported.items, true);
+    expect(CollectionModel.addItemsUnchecked).toHaveBeenCalledWith('c-new', ['a1', 'a2']);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 2, items_skipped: 0 });
+  });
+
+  it('imports only the collection shell for a regular user and reports skipped items', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: [exported], user: { sub: 'user-1', role: 'user' } }), res);
+
+    expect(AbilityModel.importMany).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 0, items_skipped: 2 });
+  });
+
+  it('discards the new collection and rethrows when importing the items fails', async () => {
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    const err = new Error('db down');
+    AbilityModel.importMany.mockRejectedValue(err);
+
+    await expect(
+      CollectionController.import(mockReq({ body: exported, user: { sub: 'gm-1', role: 'game_master' } }), mockRes())
+    ).rejects.toBe(err);
+    expect(CollectionModel.discard).toHaveBeenCalledWith('c-new');
+  });
+});

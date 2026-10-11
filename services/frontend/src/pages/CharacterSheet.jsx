@@ -11,6 +11,8 @@ import traditionsApi from '../api/traditions';
 import { createCollectionsApi } from '../api/collections';
 import { recordView } from '../utils/recentlyViewed';
 import { spellAccessFor, missingAccessLabel } from '../utils/spellAccess';
+import useMagicForms from '../hooks/useMagicForms';
+import Tooltip from '../components/ui/Tooltip';
 import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellVariantForms, spellForCharacter } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import { abilityTiers, abilityVariantForms, abilityForCharacter } from '../constants/abilities';
@@ -1682,6 +1684,7 @@ function FormsProgressPanel({ variants, entry, radioName, is_owner, onPatch }) {
 // ── SpellDetailModal ──────────────────────────────────────────────────────────
 
 function SpellDetailModal({ spell, spellId, onClose }) {
+  useMagicForms(); // підвантажує відредаговані адміном назви/описи форм магії
   const type   = primaryNature(spell.nature);
   const ritual = RITUAL_TYPES[spell.ritual];
   return (
@@ -1693,7 +1696,9 @@ function SpellDetailModal({ spell, spellId, onClose }) {
       >
         <div className="flex items-center justify-between border-b border-border bg-surface-hover px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-text-dim">{type.label}</span>
+            <Tooltip text={type.description}>
+              <span className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-text-dim">{type.label}</span>
+            </Tooltip>
             <span className="font-display text-base font-bold text-gold">{spell.name}</span>
             {spell.form_label && <span className="text-xs italic text-text-dim">{spell.form_label}</span>}
           </div>

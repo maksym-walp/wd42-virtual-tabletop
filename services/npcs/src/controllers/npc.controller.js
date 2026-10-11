@@ -92,6 +92,26 @@ function parseBody(body) {
   };
 }
 
+// Імпорт зі /export-подібного JSON: посилання на довідники, що живуть в
+// іншому деплої (види, раси, народи, календарі), не мають сенсу — скидаємо їх у
+// null (id у файлі належать конкретній базі); зображення не імпортується;
+// власник — той, хто імпортує. Усі записи валідуються до першої вставки.
+const IMPORT_RESET = { species_id: null, subspecies_id: null, race_id: null, people_id: null, birth_calendar_id: null, birth_year: null, birth_month_id: null, birth_day: null, death_calendar_id: null, death_year: null, death_month_id: null, death_day: null, image_url: null, image_crop: null };
+
+function parseImportRecords(records) {
+  if (!Array.isArray(records) || !records.length) return { error: 'Очікується непорожній масив обʼєктів' };
+  const fieldsList = [];
+  for (const [index, record] of records.entries()) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { error: `Запис №${index + 1}: очікується обʼєкт` };
+    }
+    const { fields, error } = parseBody({ ...record, ...IMPORT_RESET });
+    if (error) return { error: `Запис №${index + 1}${record.name ? ` («${record.name}»)` : ''}: ${error}` };
+    fieldsList.push(fields);
+  }
+  return { fieldsList };
+}
+
 const NpcController = {
   async list(req, res) {
     const npcs = await NpcModel.findAll(req.user.sub, isAdmin(req.user));
@@ -107,6 +127,19 @@ const NpcController = {
 
     const npc = await NpcModel.create({ createdBy: req.user.sub, ...fields });
     res.status(201).json({ npc: present(npc, req.user) });
+  },
+
+  // GM/адмін: масовий імпорт раніше експортованих записів. Лоудаут, стосунки
+  // та фракції не імпортуються — лише власні поля запису.
+  async import(req, res) {
+    if (!canCreate(req.user)) {
+      return res.status(403).json({ message: 'Лише майстер гри або адміністратор може імпортувати записи' });
+    }
+    const { fieldsList, error } = parseImportRecords(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    const ids = await NpcModel.importMany(req.user.sub, fieldsList);
+    res.status(201).json({ imported: ids.length });
   },
 
   async getOne(req, res) {
@@ -166,3 +199,4 @@ const NpcController = {
 
 module.exports = NpcController;
 module.exports.present = present;
+module.exports.parseImportRecords = parseImportRecords;

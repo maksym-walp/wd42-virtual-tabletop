@@ -92,6 +92,10 @@ const SpellController = {
     res.json({ spell_kinds: await SpellModel.getKindOptions() });
   },
 
+  async magicForms(req, res) {
+    res.json({ magic_forms: await SpellModel.getMagicFormOptions() });
+  },
+
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
   async import(req, res) {
     if (!Array.isArray(req.body)) {

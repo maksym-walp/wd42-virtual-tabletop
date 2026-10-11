@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import skillTreeApi from '../api/skillTree';
 import npcsApi from '../api/npcs';
+import equipmentApi from '../api/equipment';
 import { ARCHETYPES } from '../constants/characterSheet';
 import { DURATION_UNITS, ABILITY_FORM_FIELDS, pickAbilityFormFields, abilityFormMode } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
@@ -17,14 +18,19 @@ import CollectionMembershipPicker from '../components/CollectionMembershipPicker
 import KindSwitch from '../components/KindSwitch';
 import AuthorField from '../components/AuthorField';
 import EntryFormsSection from '../components/EntryFormsSection';
+import SpellComponentsField from '../components/SpellComponentsField';
+import {
+  componentsToState, cloneComponentRows, createMissingComponentItems, serializeComponentRows,
+} from '../utils/componentRows';
 import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
 
 const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
 
 const EMPTY = {
-  name: '', archetypes: [], mechanical_desc: '', narrative_desc: '', is_public: true, is_canonical: true,
-  is_maneuver: false, duration_value: '', duration_unit: 'instant',
+  // За замовчуванням вміння доступне всім трьом архетипам — зняти зайві простіше, ніж обрати з нуля.
+  name: '', archetypes: [...ARCHETYPE_KEYS], mechanical_desc: '', narrative_desc: '', is_public: true, is_canonical: true,
+  is_maneuver: false, duration_value: '', duration_unit: 'instant', components: [],
   lore_creator: '', lore_creator_npc_id: null,
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '', image_crop: null,
@@ -46,6 +52,7 @@ function formToState(src) {
     lore_creator_npc_id: src.lore_creator_npc_id ?? null,
     duration_value: src.duration_value ?? '',
     duration_unit: src.duration_unit || 'instant',
+    components: componentsToState(src.components),
   };
 }
 
@@ -58,6 +65,7 @@ function newForm(kind, source) {
     kind,
     id: kind === 'alternative' ? newAlternativeFormId() : kind,
     name: kind === 'alternative' ? 'Нова форма' : null,
+    components: cloneComponentRows(source.components),
   };
 }
 
@@ -79,6 +87,7 @@ export default function AbilityForm() {
   const membershipInitialized = useRef(false);
 
   const [npcs, setNpcs] = useState([]);
+  const [equipmentItems, setEquipmentItems] = useState([]);
   const formsEditor = useEntryForms({ form, setForm, fields: ABILITY_FORM_FIELDS, newForm });
   const { activeEntry, current, patchForm, setFormMode } = formsEditor;
 
@@ -88,6 +97,10 @@ export default function AbilityForm() {
 
   useEffect(() => {
     npcsApi.list().then(setNpcs).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    equipmentApi.getAll().then(setEquipmentItems).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -109,6 +122,7 @@ export default function AbilityForm() {
           is_maneuver: a.is_maneuver || false,
           duration_value: a.duration_value ?? '',
           duration_unit: a.duration_unit || 'instant',
+          components: componentsToState(a.components),
           lore_creator: a.lore_creator || '',
           lore_creator_npc_id: a.lore_creator_npc_id ?? null,
           prerequisite_node_ids: a.prerequisite_node_ids || [],
@@ -163,8 +177,10 @@ export default function AbilityForm() {
     setSaving(true);
     setError('');
     try {
+      const createdIds = await createMissingComponentItems([form, ...form.forms].map((l) => l.components));
       const serializeForm = (src) => ({
         ...pickAbilityFormFields(src),
+        components: serializeComponentRows(src.components, createdIds),
         duration_value: src.duration_value === '' || src.duration_value == null ? null : Number(src.duration_value),
       });
       const { collectionIds, forms, ...rest } = form;
@@ -252,7 +268,7 @@ export default function AbilityForm() {
             forms={formsEditor}
             mainFormName={form.main_form_name}
             onMainFormNameChange={set('main_form_name')}
-            fieldsHint="Тривалість, описи й автор нижче"
+            fieldsHint="Тривалість, компоненти, описи й автор нижче"
             altNamePlaceholder="напр. Шквал ударів"
           />
         </FormSection>
@@ -272,6 +288,14 @@ export default function AbilityForm() {
                 ))}
               </select>
             </div>
+          </Field>
+          <Field label="Компоненти" className="mb-4">
+            <SpellComponentsField
+              key={activeEntry.key}
+              components={current.components}
+              onChange={(next) => patchForm({ components: next })}
+              equipmentItems={equipmentItems}
+            />
           </Field>
           <SmartTextarea
             label="Механічний опис" className="mb-4"

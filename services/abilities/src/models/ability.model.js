@@ -21,8 +21,13 @@ const IS_CANONICAL_EXPR = 'a.is_canonical';
 
 const TIER_KINDS = ['primitive', 'perfected'];
 const FORM_KINDS = [...TIER_KINDS, 'alternative'];
-const DURATION_UNITS = ['instant', 'action', 'seconds', 'minutes', 'hours', 'days', 'permanent'];
+const DURATION_UNITS = ['instant', 'action', 'round', 'seconds', 'minutes', 'hours', 'days', 'permanent'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Компоненти — {item_id, name, quantity, unit}, як у заклинань; бекенд не
+// перевіряє їхній вміст, лише що це масив.
+const normalizeComponents = (components) => (Array.isArray(components) ? components : []);
+const serializeComponents = (components) => JSON.stringify(normalizeComponents(components));
 
 // Форми вміння — та сама модель, що й у заклинань (spellbook
 // normalizeForms). Колонки самого рядка entries — основна форма (при
@@ -55,6 +60,7 @@ function normalizeForms(forms) {
       narrative_desc: form.narrative_desc || null,
       lore_creator: form.lore_creator || null,
       lore_creator_npc_id: form.lore_creator_npc_id || null,
+      components: normalizeComponents(form.components),
     }));
 }
 
@@ -72,6 +78,46 @@ const normalizeMainFormName = (value) => (typeof value === 'string' && value.tri
 function serializeForms(forms) {
   const normalized = normalizeForms(forms);
   return JSON.stringify(hasMixedForms(normalized) ? normalized.filter((f) => f.kind !== 'alternative') : normalized);
+}
+
+const IMPORT_COLUMNS = [
+  'user_id', 'name', 'archetypes', 'mechanical_desc', 'narrative_desc', 'is_public',
+  'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id', 'is_canonical',
+  'forms', 'main_form_name', 'components',
+];
+
+// Один багаторядковий INSERT на всю пачку; null — коли жоден запис не валідний.
+function buildImportInsert(userId, records, isCanonical) {
+  const valid = records.filter((record) => record && record.name);
+  if (!valid.length) return null;
+
+  const values = [];
+  const tuples = valid.map((record) => {
+    const start = values.length;
+    values.push(
+      userId,
+      record.name,
+      record.archetypes ?? [],
+      record.mechanical_desc ?? null,
+      record.narrative_desc ?? null,
+      record.is_public ?? false,
+      record.is_maneuver ?? false,
+      record.duration_value ?? null,
+      record.duration_unit ?? 'instant',
+      record.lore_creator ?? null,
+      record.lore_creator_npc_id ?? null,
+      isCanonical,
+      serializeForms(record.forms),
+      normalizeMainFormName(record.main_form_name),
+      serializeComponents(record.components),
+    );
+    return `(${IMPORT_COLUMNS.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
+  });
+
+  return {
+    sql: `INSERT INTO abilities.entries (${IMPORT_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')}`,
+    values,
+  };
 }
 
 const AbilityModel = {
@@ -140,21 +186,21 @@ const AbilityModel = {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop,
-      forms, main_form_name,
+      forms, main_form_name, components,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO abilities.entries
          (user_id, name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
           is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, is_canonical, image_crop,
-          forms, main_form_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,$18)
+          forms, main_form_name, components)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,$18,$19::jsonb)
        RETURNING *`,
       [
         userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null,
         is_canonical ?? false, serializeImageCrop(image_url ? image_crop : null),
-        serializeForms(forms), normalizeMainFormName(main_form_name),
+        serializeForms(forms), normalizeMainFormName(main_form_name), serializeComponents(components),
       ]
     );
     return rows[0];
@@ -164,7 +210,7 @@ const AbilityModel = {
     const {
       name, archetypes, mechanical_desc, narrative_desc, is_public, prerequisite_node_ids, prerequisite_logic, image_url,
       is_maneuver, duration_value, duration_unit, lore_creator, lore_creator_npc_id, image_crop,
-      forms, main_form_name,
+      forms, main_form_name, components,
     } = data;
 
     const { rows } = await pool.query(
@@ -173,14 +219,14 @@ const AbilityModel = {
            prerequisite_node_ids=$8, prerequisite_logic=$9, image_url=$10,
            is_maneuver=$11, duration_value=$12, duration_unit=$13,
            lore_creator=$14, lore_creator_npc_id=$15, image_crop=$17::jsonb,
-           forms=$18::jsonb, main_form_name=$19, updated_at=NOW()
+           forms=$18::jsonb, main_form_name=$19, components=$20::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $16 = true)
        RETURNING *`,
       [
         id, userId, name, archetypes ?? [], mechanical_desc ?? null, narrative_desc ?? null, is_public ?? false, prerequisite_node_ids ?? [], prerequisite_logic ?? 'or', image_url ?? null,
         is_maneuver ?? false, duration_value ?? null, duration_unit ?? 'instant', lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         serializeImageCrop(image_url ? image_crop : null),
-        serializeForms(forms), normalizeMainFormName(main_form_name),
+        serializeForms(forms), normalizeMainFormName(main_form_name), serializeComponents(components),
       ]
     );
     return rows[0] || null;
@@ -231,42 +277,20 @@ const AbilityModel = {
   // belong to a specific user's skill tree and are meaningless to a different
   // importer. is_canonical comes from the importer's role, not the file.
   async bulkImport(userId, records, isCanonical = false) {
-    const valid = records.filter((record) => record && record.name);
-    if (!valid.length) return 0;
-
-    const columns = [
-      'user_id', 'name', 'archetypes', 'mechanical_desc', 'narrative_desc', 'is_public',
-      'is_maneuver', 'duration_value', 'duration_unit', 'lore_creator', 'lore_creator_npc_id', 'is_canonical',
-      'forms', 'main_form_name',
-    ];
-
-    const values = [];
-    const tuples = valid.map((record) => {
-      const start = values.length;
-      values.push(
-        userId,
-        record.name,
-        record.archetypes ?? [],
-        record.mechanical_desc ?? null,
-        record.narrative_desc ?? null,
-        record.is_public ?? false,
-        record.is_maneuver ?? false,
-        record.duration_value ?? null,
-        record.duration_unit ?? 'instant',
-        record.lore_creator ?? null,
-        record.lore_creator_npc_id ?? null,
-        isCanonical,
-        serializeForms(record.forms),
-        normalizeMainFormName(record.main_form_name),
-      );
-      return `(${columns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
-    });
-
-    const { rowCount } = await pool.query(
-      `INSERT INTO abilities.entries (${columns.join(', ')}) VALUES ${tuples.join(', ')}`,
-      values
-    );
+    const insert = buildImportInsert(userId, records, isCanonical);
+    if (!insert) return 0;
+    const { rowCount } = await pool.query(insert.sql, insert.values);
     return rowCount;
+  },
+
+  // Те саме, що bulkImport, але повертає id створених записів у порядку
+  // вхідних даних (лише для валідних, тобто з name) — потрібно імпорту
+  // колекцій, щоб покласти нові записи в collection_items.
+  async importMany(userId, records, isCanonical = false) {
+    const insert = buildImportInsert(userId, records, isCanonical);
+    if (!insert) return [];
+    const { rows } = await pool.query(`${insert.sql} RETURNING id`, insert.values);
+    return rows.map((row) => row.id);
   },
 };
 

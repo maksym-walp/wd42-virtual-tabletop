@@ -160,6 +160,25 @@ const CollectionModel = {
     return rows[0] || { collection_id: collectionId, spell_id: spellId };
   },
 
+  // Імпорт колекції: заклинання щойно створені імпортером, тож перевірки
+  // видимості/власності, як в addItem, не потрібні.
+  async addItemsUnchecked(collectionId, itemIds) {
+    if (!itemIds.length) return 0;
+    const { rowCount } = await pool.query(
+      `INSERT INTO spellbook.collection_items (collection_id, spell_id)
+       SELECT $1, UNNEST($2::uuid[])
+       ON CONFLICT (collection_id, spell_id) DO NOTHING`,
+      [collectionId, itemIds]
+    );
+    return rowCount;
+  },
+
+  // Прибирання колекції, створеної імпортом, якщо вкладені заклинання не
+  // вдалося імпортувати — без кошика, бо користувач її ще не бачив.
+  async discard(id) {
+    await pool.query(`DELETE FROM spellbook.collections WHERE id = $1`, [id]);
+  },
+
   async removeItem(collectionId, userId, spellId, isAdmin = false) {
     const { rowCount } = await pool.query(
       `DELETE FROM spellbook.collection_items ci

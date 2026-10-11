@@ -6,10 +6,12 @@ import CatalogTabs from '../components/CatalogTabs';
 import ExportImportActions from '../components/ExportImportActions';
 import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
-import { NATURE_TYPES, SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels, spellForms } from '../constants/spellbook';
+import { SPELL_COMPLEXITIES, RITUAL_TYPES, formatDuration, natureLabels, spellForms } from '../constants/spellbook';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildSpellbookImportTemplate } from '../utils/spellbookImportTemplate';
 import useSpellKinds from '../hooks/useSpellKinds';
+import useMagicForms from '../hooks/useMagicForms';
+import Tooltip from '../components/ui/Tooltip';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -25,7 +27,7 @@ import { CatalogPreview, SpellPreview } from '../components/catalog/previews';
 // Колонки залежать від видів заклинань з адмін-панелі (useSpellKinds).
 const spellTableColumns = (spellKindsMap) => [
   { key: 'name', label: 'Назва', render: (s) => s.name },
-  { key: 'nature', label: 'Природа', render: (s) => natureLabels(s.nature) },
+  { key: 'nature', label: 'Форма магії', render: (s) => natureLabels(s.nature) },
   { key: 'spell_kind', label: 'Вид', render: (s) => spellKindsMap[s.spell_kind]?.label ?? s.spell_kind },
   { key: 'complexity', label: 'Складність', render: (s) => SPELL_COMPLEXITIES[s.complexity]?.label ?? '—' },
   { key: 'forms', label: 'Форми', render: (s) => spellForms(s).length },
@@ -44,6 +46,7 @@ const SORT_OPTIONS = [
 
 export default function Spellbook() {
   const { spellKinds, spellKindsMap } = useSpellKinds();
+  const { magicForms } = useMagicForms();
   const [spells, setSpells] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -146,15 +149,17 @@ export default function Spellbook() {
 
       <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
         <div>
-          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Природа</span>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Форма магії</span>
           <div className="flex flex-wrap gap-1.5">
             <FilterPill active={filter.nature.length === 0} onClick={() => setFilter((f) => ({ ...f, nature: [] }))}>
               Усі
             </FilterPill>
-            {Object.entries(NATURE_TYPES).map(([key, { label }]) => (
-              <FilterPill key={key} active={filter.nature.includes(key)} onClick={() => toggleMulti('nature', key)}>
-                {label}
-              </FilterPill>
+            {magicForms.map(({ key, label, description }) => (
+              <Tooltip key={key} text={description}>
+                <FilterPill active={filter.nature.includes(key)} onClick={() => toggleMulti('nature', key)}>
+                  {label}
+                </FilterPill>
+              </Tooltip>
             ))}
           </div>
         </div>

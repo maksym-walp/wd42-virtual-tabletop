@@ -163,6 +163,27 @@ const CollectionModel = {
     return rows[0] || { collection_id: collectionId, item_id: itemId, item_kind: kind };
   },
 
+  // Імпорт колекції: items — [{ id, type }] щойно створених імпортером
+  // записів (collection_items зберігає і вид запису), тож перевірки
+  // видимості/власності, як в addItem, не потрібні.
+  async addItemsUnchecked(collectionId, items) {
+    if (!items.length) return 0;
+    const { rowCount } = await pool.query(
+      `INSERT INTO equipment.collection_items (collection_id, item_id, item_kind)
+       SELECT $1, t.id, t.kind
+       FROM UNNEST($2::uuid[], $3::text[]) AS t(id, kind)
+       ON CONFLICT (collection_id, item_id) DO NOTHING`,
+      [collectionId, items.map((i) => i.id), items.map((i) => i.type)]
+    );
+    return rowCount;
+  },
+
+  // Прибирання колекції, створеної імпортом, якщо вкладені записи не
+  // вдалося імпортувати — без кошика, бо користувач її ще не бачив.
+  async discard(id) {
+    await pool.query(`DELETE FROM equipment.collections WHERE id = $1`, [id]);
+  },
+
   async removeItem(collectionId, userId, itemId, isAdmin = false) {
     const { rowCount } = await pool.query(
       `DELETE FROM equipment.collection_items ci

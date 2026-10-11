@@ -118,6 +118,25 @@ function createCollectionModel({ schema, recordTable, itemColumn }) {
       return rows[0] || { collection_id: collectionId, [itemColumn]: entryId };
     },
 
+    // Імпорт колекції: записи щойно створені імпортером, тож перевірки
+    // видимості/власності, як в addItem, не потрібні.
+    async addItemsUnchecked(collectionId, entryIds) {
+      if (!entryIds.length) return 0;
+      const { rowCount } = await pool.query(
+        `INSERT INTO ${schema}.collection_items (collection_id, ${itemColumn})
+         SELECT $1, UNNEST($2::uuid[])
+         ON CONFLICT (collection_id, ${itemColumn}) DO NOTHING`,
+        [collectionId, entryIds]
+      );
+      return rowCount;
+    },
+
+    // Прибирання колекції, створеної імпортом, якщо вкладені записи не
+    // вдалося імпортувати.
+    async discard(id) {
+      await pool.query(`DELETE FROM ${schema}.collections WHERE id = $1`, [id]);
+    },
+
     async removeItem(collectionId, userId, entryId, isAdmin = false) {
       const { rowCount } = await pool.query(
         `DELETE FROM ${schema}.collection_items ci

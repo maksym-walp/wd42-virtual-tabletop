@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
+import ComponentsList from '../components/ComponentsList';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -138,6 +139,18 @@ export default function AbilityView() {
                 </button>
               ))}
             </div>
+          </Section>
+        )}
+
+        {!ability.is_maneuver && shown.duration_unit && shown.duration_unit !== 'instant' && (
+          <Section title="Тривалість">
+            <p className="text-[0.95rem] text-text">{formatDuration(shown.duration_value, shown.duration_unit)}</p>
+          </Section>
+        )}
+
+        {shown.components?.length > 0 && (
+          <Section title="Компоненти">
+            <ComponentsList components={shown.components} />
           </Section>
         )}
 

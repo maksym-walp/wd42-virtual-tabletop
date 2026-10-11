@@ -26,6 +26,11 @@ const bestiaryApi = {
   async remove(id) {
     await api.delete(`${BASE}/${id}`);
   },
+  // GM/адмін: масовий імпорт раніше експортованих істот. Повертає кількість.
+  async importMany(records) {
+    const { data } = await api.post(`${BASE}/import`, records);
+    return data.imported;
+  },
   async setOwner(id, ownerUsername) {
     const { data } = await api.patch(`${BASE}/${id}/owner`, { owner_username: ownerUsername });
     return data.creature;

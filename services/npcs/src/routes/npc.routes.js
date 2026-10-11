@@ -14,6 +14,8 @@ router.use(requireAuth);
 
 router.get('/', wrap(NpcController.list));
 router.post('/', wrap(NpcController.create));
+// import мусить стояти до GET /:id-маршрутів, як і в інших каталогах.
+router.post('/import', wrap(NpcController.import));
 router.get('/:id', wrap(NpcController.getOne));
 router.patch('/:id', wrap(NpcController.update));
 router.patch('/:id/owner', wrap(NpcController.setOwner));

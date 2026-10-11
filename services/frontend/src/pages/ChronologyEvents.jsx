@@ -29,6 +29,9 @@ export default function ChronologyEvents() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const campaignId = searchParams.get('campaign_id') || null;
+  // ?event=<id> — посилання на конкретну подію (внутрішні посилання в текстах):
+  // прокручуємо до неї й підсвічуємо.
+  const highlightId = searchParams.get('event') || null;
   const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'game_master';
@@ -77,6 +80,11 @@ export default function ChronologyEvents() {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [id, campaignId]);
+
+  useEffect(() => {
+    if (loading || !highlightId) return;
+    document.getElementById(`event-${highlightId}`)?.scrollIntoView({ block: 'center' });
+  }, [loading, highlightId]);
 
   const locationsById = new Map(locations.map((l) => [l.id, l]));
   const charactersById = new Map(characterOptions.map((c) => [c.key, c.label]));
@@ -187,7 +195,7 @@ export default function ChronologyEvents() {
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-text-dim">{groupLabel}</h2>
               <EventList
                 events={groupEvents} months={months} calendar={calendar} locationsById={locationsById}
-                charactersById={charactersById} canManage={canManage}
+                charactersById={charactersById} canManage={canManage} highlightId={highlightId}
                 onOpen={openInNewTab} onEdit={setFormTarget} onDelete={handleDelete}
               />
             </div>
@@ -196,7 +204,7 @@ export default function ChronologyEvents() {
       ) : (
         <EventList
           events={sorted} months={months} calendar={calendar} locationsById={locationsById}
-          charactersById={charactersById} canManage={canManage}
+          charactersById={charactersById} canManage={canManage} highlightId={highlightId}
           onOpen={openInNewTab} onEdit={setFormTarget} onDelete={handleDelete}
         />
       )}
@@ -219,14 +227,18 @@ export default function ChronologyEvents() {
   );
 }
 
-function EventList({ events, months, calendar, locationsById, charactersById, canManage, onOpen, onEdit, onDelete }) {
+function EventList({ events, months, calendar, locationsById, charactersById, canManage, highlightId, onOpen, onEdit, onDelete }) {
   return (
     <ul className="flex flex-col gap-2">
       {events.map((e) => {
         const place = eventPlaceLabel(e, locationsById);
         const canOpen = Boolean(e.location_id) || (e.year != null && e.month_id && e.day != null);
         return (
-          <li key={e.id} className="flex items-start gap-2.5 rounded-lg border border-border bg-surface p-3">
+          <li
+            key={e.id}
+            id={`event-${e.id}`}
+            className={`flex items-start gap-2.5 rounded-lg border bg-surface p-3 ${e.id === highlightId ? 'border-accent ring-2 ring-accent/50' : 'border-border'}`}
+          >
             <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">

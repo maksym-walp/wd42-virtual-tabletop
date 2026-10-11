@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import compendiumApi from '../api/compendium';
 import { STAT_BLOCK_KINDS } from '../constants/statBlocks';
 import CatalogTabs from '../components/CatalogTabs';
+import ExportImportActions from '../components/ExportImportActions';
+import { useAuth } from '../context/AuthContext';
+import { buildNpcsImportTemplate } from '../utils/npcsImportTemplate';
+import { buildBestiaryImportTemplate } from '../utils/bestiaryImportTemplate';
 import { getDomainTabs } from '../collectionsDomains';
 import StatBlockCard from '../components/compendium/StatBlockCard';
 import { inputClass } from '../components/ui/Field';
@@ -15,10 +19,15 @@ import CatalogLayout, {
 } from '../components/catalog/CatalogLayout';
 import { CatalogPreview, StatBlockPreview } from '../components/catalog/previews';
 
+const IMPORT_TEMPLATES = { npc: buildNpcsImportTemplate, creature: buildBestiaryImportTemplate };
+
 // Shared by the НІПи (/npcs) and Бестіарій (/bestiary) services — same list
 // shape, each kind loading from its own service (constants/statBlocks.js).
 export default function StatBlockList({ kind: kindKey }) {
   const kind = STAT_BLOCK_KINDS[kindKey];
+  const { user } = useAuth();
+  const canImport = user?.role === 'admin' || user?.role === 'game_master';
+  const [reloadKey, setReloadKey] = useState(0);
   const [entries, setEntries] = useState([]);
   const [species, setSpecies] = useState([]);
   const [subspecies, setSubspecies] = useState([]);
@@ -46,7 +55,7 @@ export default function StatBlockList({ kind: kindKey }) {
       .then(setEntries)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [kindKey]);
+  }, [kindKey, reloadKey]);
 
   const speciesNameById = Object.fromEntries(species.map((s) => [s.id, s.name]));
 
@@ -60,6 +69,20 @@ export default function StatBlockList({ kind: kindKey }) {
     (!speciesId || e.species_id === speciesId) &&
     (!subspeciesId || e.subspecies_id === subspeciesId)
   );
+
+  const handleImport = async (data) => {
+    if (!Array.isArray(data)) {
+      alert('Файл має містити масив записів');
+      return;
+    }
+    try {
+      const imported = await kind.api.importMany(data);
+      alert(`Імпортовано записів: ${imported}`);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати записи');
+    }
+  };
 
   const activeFilterCount = (speciesId ? 1 : 0) + (subspeciesId ? 1 : 0);
   const showCards = view === 'cards';
@@ -76,7 +99,11 @@ export default function StatBlockList({ kind: kindKey }) {
     <>
       <CatalogTabs sidebar tabs={getDomainTabs(kind.domainKey)} />
 
-      <SidebarActions newHref={newHref} newLabel={kind.newLabel} />
+      <SidebarActions newHref={newHref} newLabel={kind.newLabel}>
+        {canImport && (
+          <ExportImportActions hideExport onImport={handleImport} onTemplate={IMPORT_TEMPLATES[kindKey]} />
+        )}
+      </SidebarActions>
 
       <SidebarSearch value={search} onChange={setSearch} />
 

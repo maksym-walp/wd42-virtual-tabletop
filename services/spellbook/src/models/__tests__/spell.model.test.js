@@ -324,3 +324,41 @@ describe('SpellModel main_form_name', () => {
     expect(JSON.parse(params[17]).map((f) => f.kind)).toEqual(['perfected']);
   });
 });
+
+describe('SpellModel.importMany', () => {
+  it('returns the new ids in input order via RETURNING id', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 's1' }, { id: 's2' }] });
+    const ids = await SpellModel.importMany('importer', [{ name: 'А' }, { name: 'Б' }]);
+    expect(ids).toEqual(['s1', 's2']);
+    expect(pool.query.mock.calls[0][0]).toMatch(/ RETURNING id$/);
+  });
+
+  it('returns [] without querying when no record is valid', async () => {
+    await expect(SpellModel.importMany('importer', [{}, null])).resolves.toEqual([]);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('magic forms and duration units', () => {
+  it('maps the legacy infernal form to pact (without duplicates) on import', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await SpellModel.bulkImport('importer', [{ name: 'X', nature: ['infernal', 'arcana', 'pact'] }]);
+    expect(pool.query.mock.calls[0][1][2]).toEqual(['pact', 'arcana']);
+  });
+
+  it('accepts round and action durations and falls back to instant for unknown units', async () => {
+    pool.query.mockResolvedValue({ rowCount: 3 });
+    await SpellModel.bulkImport('importer', [
+      { name: 'A', duration_unit: 'round' }, { name: 'B', duration_unit: 'action' }, { name: 'C', duration_unit: 'eons' },
+    ]);
+    const params = pool.query.mock.calls[0][1];
+    const unitAt = (record) => params[record * 20 + 12];
+    expect([unitAt(0), unitAt(1), unitAt(2)]).toEqual(['round', 'action', 'instant']);
+  });
+
+  it('reads magic form options from the admin site configs', async () => {
+    pool.query.mockResolvedValue({ rows: [{ value: [{ key: 'pact', label: 'Пакт', description: '' }] }] });
+    await expect(SpellModel.getMagicFormOptions()).resolves.toEqual([{ key: 'pact', label: 'Пакт', description: '' }]);
+    expect(pool.query.mock.calls[0][0]).toMatch(/key = 'magic_forms'/);
+  });
+});
