@@ -10,6 +10,11 @@
             ? stored
             : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
           document.documentElement.dataset.theme = theme;
+          var accent = localStorage.getItem('walp:accent-fx');
+          if (/^#[0-9a-fA-F]{6}$/.test(accent)) {
+            document.documentElement.dataset.accent = 'custom';
+            document.documentElement.style.setProperty('--accent-custom', accent);
+          }
         } catch (e) {
           document.documentElement.dataset.theme = 'light';
         }

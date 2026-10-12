@@ -51,7 +51,7 @@ export default function BottomNav() {
           <div className="absolute inset-x-3 bottom-full mb-2 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
             <NavLink to="/profile" className={({ isActive }) => `${POPUP_ITEM_CLASS} ${isActive ? 'text-accent' : 'text-text'}`}>
               <CircleUserRound size={20} strokeWidth={1.75} />
-              Особистий профіль
+              Налаштування
             </NavLink>
             {user.role === 'admin' && (
               <NavLink to="/admin" className={({ isActive }) => `${POPUP_ITEM_CLASS} ${isActive ? 'text-accent' : 'text-text'}`}>

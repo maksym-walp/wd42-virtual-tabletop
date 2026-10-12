@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDice } from '../context/DiceContext';
 import diceApi from '../api/dice';
 import DiceStatsGrid from '../components/DiceStatsGrid';
+import AccentPicker from '../components/AccentPicker';
 import Card from '../components/ui/Card';
 import Field, { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
@@ -73,9 +74,15 @@ export default function Profile() {
   return (
     <div className="mx-auto max-w-xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <PageHeader
-        title="Профіль"
+        title="Налаштування"
         action={<Button variant="ghost" size="sm" to={`/profile/${user.username}`}>Мій публічний профіль</Button>}
       />
+
+      <Card className="mb-4">
+        <h2 className="mb-4 font-display text-lg text-text">Вигляд</h2>
+        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">Акцентний колір</div>
+        <AccentPicker />
+      </Card>
 
       <Card className="mb-4">
         <h2 className="mb-4 font-display text-lg text-text">Обліковий запис</h2>

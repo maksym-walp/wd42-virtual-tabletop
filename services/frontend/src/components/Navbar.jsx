@@ -112,7 +112,7 @@ export default function Navbar() {
                       }
                     >
                       <CircleUserRound size={16} strokeWidth={1.75} />
-                      Особистий профіль
+                      Налаштування
                     </NavLink>
                     {user.role === 'admin' && (
                       <NavLink

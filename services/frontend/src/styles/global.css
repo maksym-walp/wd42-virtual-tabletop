@@ -60,6 +60,15 @@
   --color-node-danger-bg: #3a2420;
 }
 
+/* User-picked accent (dark theme only — light stays parchment). ThemeContext
+   sets data-accent="custom" and --accent-custom (already contrast-adjusted)
+   on <html>; with no custom accent the defaults above apply. */
+[data-theme="dark"][data-accent="custom"] {
+  --color-accent: var(--accent-custom);
+  --color-gold: var(--accent-custom);
+  --color-edge-optional: color-mix(in srgb, var(--accent-custom) 75%, #8a8478);
+}
+
 /* @layer base so utility classes (e.g. text-bg on a <Link>) can still
    override these — unlayered rules would otherwise beat every Tailwind
    utility regardless of specificity, which silently broke link-styled

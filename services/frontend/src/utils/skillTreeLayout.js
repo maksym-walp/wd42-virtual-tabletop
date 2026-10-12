@@ -418,8 +418,29 @@ export function computeStarLayout(nodes, edges) {
 // without a stored row looks like.
 export const DEFAULT_TREE_SETTINGS = { layout: 'tree', background_url: null };
 
+// A tab whose nodes carry no `is_root` flag (e.g. the root lost its flag in
+// an import) would be laid out around an arbitrary parentless node, leaving
+// the star lopsided. When exactly one parentless node actually has children,
+// lay the tab out as if that node were the root. Layout-only: the flag itself
+// (which drives unlocking) is left untouched.
+function withImplicitRoot(nodes, edges) {
+  if (nodes.some((n) => n.is_root)) return nodes;
+  const ids = new Set(nodes.map((n) => n.id));
+  const hasParent = new Set();
+  const hasChild = new Set();
+  edges.forEach((e) => {
+    if (!ids.has(e.source_id) || !ids.has(e.target_id)) return;
+    hasParent.add(e.target_id);
+    hasChild.add(e.source_id);
+  });
+  const candidates = nodes.filter((n) => !hasParent.has(n.id) && hasChild.has(n.id));
+  if (candidates.length !== 1) return nodes;
+  return nodes.map((n) => (n === candidates[0] ? { ...n, is_root: true } : n));
+}
+
 export function computeLayoutFor(mode, nodes, edges) {
-  return mode === 'star' ? computeStarLayout(nodes, edges) : computeLayout(nodes, edges);
+  const laidOut = withImplicitRoot(nodes, edges);
+  return mode === 'star' ? computeStarLayout(laidOut, edges) : computeLayout(laidOut, edges);
 }
 
 // Reassigns fresh sequential `pos_x` ranks (0,1,2,…) to every node in

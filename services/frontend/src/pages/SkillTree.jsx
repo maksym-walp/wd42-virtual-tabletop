@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch, Palette,
 } from 'lucide-react';
@@ -303,13 +303,7 @@ export default function SkillTree() {
 
   const handleNodeEnter = (node) => {
     if (dragState || connectMode) return;
-    // Anchored to the node's own screen position (not the cursor) so the
-    // tooltip can reliably sit flush against its top edge — see Tooltip.
-    const pos = positions.get(node.id) || { x: 0, y: 0 };
-    const r = NODE_R * transform.k;
-    const cx = transform.x + pos.x * transform.k;
-    const cy = transform.y + pos.y * transform.k;
-    setTooltip({ node, left: cx + r + 10, nodeLeft: cx - r - 10, nodeTop: cy - r, nodeBottom: cy + r });
+    setTooltip({ node });
   };
 
   const handleNodeLeave = () => setTooltip(null);
@@ -933,46 +927,19 @@ function MenuAction({ icon: Icon, label, onClick, danger }) {
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────
-// Prereqs live below a hovered node (the tree grows upward), so the tooltip
-// sits above it by default — its bottom edge flush with the node's top edge —
-// keeping that path visible. It only drops to below the node when sitting
-// above would clip past the canvas's top edge (overflow-hidden on the
-// container), which needs the tooltip's real rendered height, hence the
-// measure-then-place effect.
+// Pinned to the canvas's top-right corner rather than floating beside the
+// hovered node: next to the node it covered the very prerequisite chain a
+// reader is trying to follow.
 function Tooltip({ tooltip, nodes, edges, catalog }) {
-  const { node, left, nodeLeft, nodeTop, nodeBottom } = tooltip;
-  const elRef = useRef(null);
-  const [placement, setPlacement] = useState('above');
-  const [side, setSide] = useState('right');
-
-  // Also flips to the node's left side when the right would run past the
-  // canvas edge (overflow-hidden) — e.g. for the rightmost nodes.
-  useLayoutEffect(() => {
-    const el = elRef.current;
-    const height = el?.offsetHeight ?? 0;
-    const width = el?.offsetWidth ?? 0;
-    const canvasWidth = el?.offsetParent?.clientWidth ?? Infinity;
-    setPlacement(nodeTop - height < 8 ? 'below' : 'above');
-    setSide(left + width > canvasWidth - 8 && nodeLeft - width >= 8 ? 'left' : 'right');
-  }, [node.id, nodeTop, left, nodeLeft]);
+  const { node } = tooltip;
 
   const prereqs = edges
     .filter((e) => e.target_id === node.id)
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
     .filter((x) => x.node);
 
-  const style = {
-    left: side === 'right' ? left : nodeLeft,
-    top: placement === 'above' ? nodeTop : nodeBottom,
-    transform: `${side === 'left' ? 'translateX(-100%) ' : ''}${placement === 'above' ? 'translateY(-100%)' : ''}`,
-  };
-
   return (
-    <div
-      ref={elRef}
-      className="absolute z-30 w-max max-w-[260px] rounded-lg border border-border bg-surface p-3 shadow-xl"
-      style={{ ...style, pointerEvents: 'none' }}
-    >
+    <div className="pointer-events-none absolute right-3 top-3 z-30 max-h-[calc(100%-1.5rem)] w-72 max-w-[calc(100%-1.5rem)] overflow-hidden rounded-lg border border-border bg-surface p-3 shadow-xl">
       <p className="mb-1 font-display text-sm text-accent">{node.title}</p>
       {node.description && <SmartTextReader text={node.description} className="text-xs leading-relaxed text-text-dim" />}
       <NodeGainsSummary node={node} catalog={catalog} />
