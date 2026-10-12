@@ -224,10 +224,202 @@ export function computeLayout(nodes, edges) {
   });
 
   return {
+    mode: 'tree',
     levels,
     positions,
     clusterKeyOf: (id) => clusterKeyOf(id, nodeMap, parentsOf),
+    // Position along the axis siblings are ordered on — what drag-to-reorder
+    // compares (the star layout orders by angle instead).
+    sortKeyOf: (id) => positions.get(id)?.x ?? 0,
+    sortKeyAt: (p) => p.x,
   };
+}
+
+// ── Star layout ───────────────────────────────────────────────────────
+// Root in the centre, its children fan out as evenly spaced rays and every
+// descendant continues in its parent's direction (inside the parent's angular
+// sector), one ring further out per level. Like the tree layout, positions are
+// derived from the graph only; `pos_x` is just the sibling order, now read as
+// clockwise order instead of left-to-right.
+export const STAR_RING_STEP = 150; // radial distance between prerequisite levels
+export const STAR_MIN_RING_GAP = 110; // rings never get closer than this, whatever the crowding
+export const STAR_MIN_CHORD = 72; // *minimum* straight-line gap between neighbours on one ring — rings grow outward to honour it
+const STAR_START_ANGLE = -Math.PI / 2; // first ray points straight up
+const STAR_MIN_DELTA = 0.06; // rad; floor for the neighbour angle used in the ring radius, so two nodes sharing one ray can't blow it up
+const TWO_PI = Math.PI * 2;
+
+const normalizeAngle = (a) => ((a % TWO_PI) + TWO_PI) % TWO_PI;
+
+export function computeStarLayout(nodes, edges) {
+  const levels = computeLevels(nodes, edges);
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const parentsOf = new Map();
+  edges.forEach((e) => {
+    if (!nodeMap.has(e.source_id) || !nodeMap.has(e.target_id)) return;
+    if (!parentsOf.has(e.target_id)) parentsOf.set(e.target_id, []);
+    parentsOf.get(e.target_id).push(e.source_id);
+  });
+
+  const rank = (id) => nodeMap.get(id).pos_x ?? 0;
+  const byRank = (a, b) => rank(a) - rank(b);
+
+  // Every node hangs under ONE "primary" parent — the deepest one, so it sits
+  // just beyond it — which gives a plain tree to carve angular sectors from.
+  // Extra parents (require_both nodes) only pull the node's angle afterwards.
+  const primaryKids = new Map();
+  const hasParent = new Set();
+  nodes.forEach((n) => {
+    if (n.is_root) return;
+    const parents = parentsOf.get(n.id) || [];
+    if (parents.length === 0) return;
+    const best = parents.reduce((b, p) => ((levels[p] ?? 1) > (levels[b] ?? 1) ? p : b), parents[0]);
+    hasParent.add(n.id);
+    if (!primaryKids.has(best)) primaryKids.set(best, []);
+    primaryKids.get(best).push(n.id);
+  });
+  primaryKids.forEach((kids) => kids.sort(byRank));
+
+  const roots = nodes.filter((n) => n.is_root).map((n) => n.id).sort(byRank);
+  const centerId = roots.length === 1 ? roots[0] : null;
+  const orphans = nodes.filter((n) => !n.is_root && !hasParent.has(n.id)).map((n) => n.id).sort(byRank);
+  const topLevel = [...(centerId ? primaryKids.get(centerId) || [] : roots), ...orphans];
+
+  // Sector width follows the number of leaves in a subtree, so a bushy branch
+  // gets proportionally more room than a single chain.
+  const weightMemo = new Map();
+  const weightOf = (id, visiting = new Set()) => {
+    if (weightMemo.has(id)) return weightMemo.get(id);
+    if (visiting.has(id)) return 1; // cycle guard
+    visiting.add(id);
+    const kids = primaryKids.get(id) || [];
+    const w = kids.length === 0 ? 1 : kids.reduce((s, k) => s + weightOf(k, visiting), 0);
+    visiting.delete(id);
+    weightMemo.set(id, w);
+    return w;
+  };
+
+  // `sweep` = clockwise angle, in [0, 2π), measured from the start of the
+  // first top-level sector. Rays sit in the middle of their sector, so the
+  // whole picture is rotated back by half a sector to put the first ray
+  // exactly at the top (`offset`).
+  const sweep = new Map();
+  const topSpan = TWO_PI / Math.max(1, topLevel.length);
+  const offset = topSpan / 2;
+
+  const assign = (id, a0, a1) => {
+    if (sweep.has(id)) return; // cycle guard
+    sweep.set(id, (a0 + a1) / 2);
+    const kids = (primaryKids.get(id) || []).filter((k) => !sweep.has(k));
+    const total = kids.reduce((s, k) => s + weightOf(k), 0);
+    let cursor = a0;
+    kids.forEach((k) => {
+      const span = ((a1 - a0) * weightOf(k)) / total;
+      assign(k, cursor, cursor + span);
+      cursor += span;
+    });
+  };
+  topLevel.forEach((id, i) => assign(id, i * topSpan, (i + 1) * topSpan));
+  if (centerId) sweep.set(centerId, 0);
+  // Anything the walk couldn't reach (a pure prerequisite cycle) still gets a spot.
+  nodes.forEach((n) => { if (!sweep.has(n.id)) sweep.set(n.id, 0); });
+
+  // A node needing several prerequisites lands between them (circular mean),
+  // carrying its own subtree along. Shallowest first, so its parents are
+  // already final.
+  const shiftSubtree = (id, delta, visited) => {
+    (primaryKids.get(id) || []).forEach((k) => {
+      if (visited.has(k)) return;
+      visited.add(k);
+      sweep.set(k, normalizeAngle(sweep.get(k) + delta));
+      shiftSubtree(k, delta, visited);
+    });
+  };
+  const derived = new Set(); // nodes whose angle comes from several parents rather than from a sector
+  [...nodes]
+    .sort((a, b) => (levels[a.id] ?? 1) - (levels[b.id] ?? 1))
+    .forEach((n) => {
+      const parents = (parentsOf.get(n.id) || []).filter((p) => p !== centerId);
+      if (n.is_root || parents.length < 2) return;
+      const sx = parents.reduce((s, p) => s + Math.cos(sweep.get(p)), 0);
+      const sy = parents.reduce((s, p) => s + Math.sin(sweep.get(p)), 0);
+      if (Math.hypot(sx, sy) < 1e-6) return; // parents point opposite ways — no meaningful middle, keep the sector position
+      const target = normalizeAngle(Math.atan2(sy, sx));
+      const delta = target - sweep.get(n.id);
+      sweep.set(n.id, target);
+      derived.add(n.id);
+      shiftSubtree(n.id, delta, new Set([n.id]));
+    });
+
+  // Ring radii, innermost first. Each ring is at least RING_STEP further out
+  // than the previous one, and further still when its closest pair of
+  // neighbours would otherwise be nearer than MIN_CHORD.
+  const nodesByLevel = new Map();
+  nodes.forEach((n) => {
+    if (n.id === centerId) return;
+    const level = levels[n.id] ?? 1;
+    if (!nodesByLevel.has(level)) nodesByLevel.set(level, []);
+    nodesByLevel.get(level).push(n.id);
+  });
+  const radiusOf = new Map();
+  let prevRadius = centerId ? 0 : -Infinity;
+  [...nodesByLevel.keys()].sort((a, b) => a - b).forEach((level) => {
+    // Derived nodes are left out: they land wherever their parents' middle
+    // is, possibly right beside another node — they get nudged apart below
+    // instead of pushing the whole ring outward.
+    const ids = nodesByLevel.get(level).filter((id) => !derived.has(id));
+    const angles = ids.map((id) => sweep.get(id)).sort((a, b) => a - b);
+    let minDelta = TWO_PI;
+    for (let i = 1; i < angles.length; i += 1) minDelta = Math.min(minDelta, angles[i] - angles[i - 1]);
+    if (angles.length > 1) minDelta = Math.min(minDelta, TWO_PI - (angles[angles.length - 1] - angles[0]));
+    const needed = angles.length > 1 ? STAR_MIN_CHORD / (2 * Math.sin(Math.min(Math.PI, Math.max(minDelta, STAR_MIN_DELTA)) / 2)) : 0;
+    const base = (level - (centerId ? 1 : 0)) * STAR_RING_STEP;
+    const r = Math.max(base, needed, prevRadius + STAR_MIN_RING_GAP);
+    radiusOf.set(level, r);
+    prevRadius = r;
+  });
+
+  // Slide each derived node along its ring to the nearest spot that keeps
+  // MIN_CHORD from everything else on that ring.
+  const placed = new Set(nodes.filter((n) => !derived.has(n.id)).map((n) => n.id));
+  derived.forEach((id) => {
+    const level = levels[id] ?? 1;
+    const r = radiusOf.get(level) ?? 0;
+    const step = r > 0 ? STAR_MIN_CHORD / r / 2 : 0;
+    const neighbours = (nodesByLevel.get(level) || []).filter((o) => o !== id && placed.has(o));
+    const isFree = (sw) => neighbours.every((o) => 2 * r * Math.abs(Math.sin((sw - sweep.get(o)) / 2)) >= STAR_MIN_CHORD);
+    const home = sweep.get(id);
+    for (let i = 0; step > 0 && i <= 60; i += 1) {
+      const candidate = [home + i * step, home - i * step].find((sw) => isFree(sw));
+      if (candidate != null) { sweep.set(id, normalizeAngle(candidate)); break; }
+    }
+    placed.add(id);
+  });
+
+  const angleAt = (sw) => STAR_START_ANGLE + sw - offset;
+  const positions = new Map();
+  nodes.forEach((n) => {
+    if (n.id === centerId) { positions.set(n.id, { x: 0, y: 0 }); return; }
+    const r = radiusOf.get(levels[n.id] ?? 1) ?? 0;
+    const theta = angleAt(sweep.get(n.id));
+    positions.set(n.id, { x: r * Math.cos(theta), y: r * Math.sin(theta) });
+  });
+
+  return {
+    mode: 'star',
+    levels,
+    positions,
+    clusterKeyOf: (id) => clusterKeyOf(id, nodeMap, parentsOf),
+    sortKeyOf: (id) => sweep.get(id) ?? 0,
+    sortKeyAt: (p) => normalizeAngle(Math.atan2(p.y, p.x) - STAR_START_ANGLE + offset),
+  };
+}
+
+// Per-tab view settings (see skill_tree.archetype_settings) — what a tab
+// without a stored row looks like.
+export const DEFAULT_TREE_SETTINGS = { layout: 'tree', background_url: null };
+
+export function computeLayoutFor(mode, nodes, edges) {
+  return mode === 'star' ? computeStarLayout(nodes, edges) : computeLayout(nodes, edges);
 }
 
 // Reassigns fresh sequential `pos_x` ranks (0,1,2,…) to every node in

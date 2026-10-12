@@ -55,6 +55,13 @@ const characterApi = {
     return data.character;
   },
 
+  // Вибір/зняття підвиду (народу): peopleId = null знімає. Бонуси до навичок
+  // змінюються разом із ним, тож відповідь містить оновлені навички.
+  async setPeople(id, peopleId) {
+    const { data } = await api.put(`${BASE}/${id}/people`, { people_id: peopleId });
+    return data;
+  },
+
   // Skills
   async patchSkill(characterId, skillKey, payload) {
     const { data } = await api.patch(`${BASE}/${characterId}/skills/${skillKey}`, payload);

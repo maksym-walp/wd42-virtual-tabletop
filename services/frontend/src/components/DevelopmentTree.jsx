@@ -4,9 +4,10 @@ import skillTreeApi from '../api/skillTree';
 import { isIconUrl } from '../constants/maps';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import {
-  computeLayout, straightEdgePath, computeFitTransform, ancestorClosure,
+  computeLayoutFor, DEFAULT_TREE_SETTINGS, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
 import Sheet from './ui/Sheet';
+import SkillTreeBackdrop from './SkillTreeBackdrop';
 import SmartTextReader from './SmartTextReader';
 import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from './NodeGrants';
 
@@ -32,6 +33,7 @@ export default function DevelopmentTree({
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewSettings, setViewSettings] = useState(DEFAULT_TREE_SETTINGS); // this tab's layout + background
   const [selectedNode, setSelectedNode] = useState(null);
   const [hoverLabel, setHoverLabel] = useState(null);
   const panZoom = useSvgPanZoom({ initial: { x: 80, y: 80, k: 0.85 }, maxK: 3 });
@@ -47,28 +49,44 @@ export default function DevelopmentTree({
     Promise.all([
       skillTreeApi.getNodes({ archetype }),
       skillTreeApi.getEdges({ archetype }),
+      skillTreeApi.getSettings().catch(() => ({})), // cosmetic — the tree still works without it
     ])
-      .then(([n, e]) => { setNodes(n); setEdges(e); })
+      .then(([n, e, s]) => {
+        setNodes(n);
+        setEdges(e);
+        setViewSettings({ ...DEFAULT_TREE_SETTINGS, ...s[archetype] });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [archetype]);
 
-  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+  const layout = useMemo(
+    () => computeLayoutFor(viewSettings.layout, nodes, edges),
+    [viewSettings.layout, nodes, edges],
+  );
   const { positions } = layout;
+  const isStar = layout.mode === 'star';
   const highlightSet = selectedNode ? ancestorClosure(selectedNode.id, edges) : null;
 
   useEffect(() => {
     if (!pendingCenterRef.current || loading || !svgRef.current || nodes.length === 0) return;
-    const root = nodes.find((n) => n.is_root) || nodes[0];
-    const pos = positions.get(root.id) || { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
-    setTransform((t) => ({
-      ...t,
-      x: rect.width / 2 - pos.x * t.k,
-      y: rect.height / 2 - pos.y * t.k,
-    }));
+    // The star spreads in every direction, so frame all of it; the tree only
+    // needs its root brought into view.
+    const fit = isStar ? computeFitTransform(positions, rect.width, rect.height) : null;
+    if (fit) {
+      setTransform(fit);
+    } else {
+      const root = nodes.find((n) => n.is_root) || nodes[0];
+      const pos = positions.get(root.id) || { x: 0, y: 0 };
+      setTransform((t) => ({
+        ...t,
+        x: rect.width / 2 - pos.x * t.k,
+        y: rect.height / 2 - pos.y * t.k,
+      }));
+    }
     pendingCenterRef.current = false;
-  }, [nodes, loading, positions, setTransform]);
+  }, [nodes, loading, positions, isStar, setTransform]);
 
   const handleFitView = () => {
     if (!svgRef.current) return;
@@ -186,9 +204,10 @@ export default function DevelopmentTree({
         >
           <Maximize2 size={15} />
         </button>
+        <SkillTreeBackdrop url={viewSettings.background_url} />
         <svg
           ref={svgRef}
-          className="block h-full w-full select-none touch-none overscroll-contain"
+          className="relative block h-full w-full select-none touch-none overscroll-contain"
           style={{ cursor: 'grab' }}
           onPointerDown={handleSvgPointerDown}
           onPointerMove={panZoom.bind.onPointerMove}

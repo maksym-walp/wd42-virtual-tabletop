@@ -7,6 +7,7 @@ jest.mock('../../models/ability.model');
 jest.mock('../../models/ritual-tracker.model');
 jest.mock('../../models/campaign-access.model');
 jest.mock('../../models/spell-access.model');
+jest.mock('../../models/site-config.model');
 jest.mock('../authorize-character-write');
 
 const CharacterModel = require('../../models/character.model');
@@ -18,6 +19,7 @@ const AbilityModel = require('../../models/ability.model');
 const RitualTrackerModel = require('../../models/ritual-tracker.model');
 const { isCampaignGmForCharacter } = require('../../models/campaign-access.model');
 const { treeSpellAccess } = require('../../models/spell-access.model');
+const SiteConfigModel = require('../../models/site-config.model');
 const authorizeCharacterWrite = require('../authorize-character-write');
 const CharacterController = require('../character.controller');
 
@@ -77,10 +79,14 @@ describe('CharacterController.list', () => {
 });
 
 describe('CharacterController.create', () => {
+  beforeEach(() => {
+    SiteConfigModel.isCharacterRace.mockResolvedValue(true);
+  });
+
   it.each([
-    ['name', { archetype: 'fighter', race: 'human' }],
-    ['archetype', { name: 'Bob', race: 'human' }],
-    ['race', { name: 'Bob', archetype: 'fighter' }],
+    ['name', { archetype: 'fighter', race_id: 'r1' }],
+    ['archetype', { name: 'Bob', race_id: 'r1' }],
+    ['race_id', { name: 'Bob', archetype: 'fighter' }],
   ])('400s when %s is missing', async (_field, body) => {
     const req = mockReq({ body });
     const res = mockRes();
@@ -91,19 +97,99 @@ describe('CharacterController.create', () => {
     expect(CharacterModel.create).not.toHaveBeenCalled();
   });
 
+  it('400s when the race is not opened for characters', async () => {
+    SiteConfigModel.isCharacterRace.mockResolvedValue(false);
+    const res = mockRes();
+
+    await CharacterController.create(mockReq({ body: { name: 'Bob', archetype: 'fighter', race_id: 'r9' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterModel.create).not.toHaveBeenCalled();
+  });
+
   it('creates the character and returns 201', async () => {
-    const body = { name: 'Bob', archetype: 'fighter', race: 'human', skills: { evasion: 3 } };
-    CharacterModel.create.mockResolvedValue({ id: 'c1', ...body });
+    const body = { name: 'Bob', archetype: 'fighter', race_id: 'r1', skills: { evasion: 3 } };
+    CharacterModel.create.mockResolvedValue({ id: 'c1', name: 'Bob' });
     const req = mockReq({ body, user: { sub: 'u1' } });
     const res = mockRes();
 
     await CharacterController.create(req, res);
 
+    expect(SiteConfigModel.isCharacterRace).toHaveBeenCalledWith('r1');
     expect(CharacterModel.create).toHaveBeenCalledWith('u1', {
-      name: 'Bob', archetype: 'fighter', race: 'human', skills: { evasion: 3 },
+      name: 'Bob', archetype: 'fighter', raceId: 'r1', skills: { evasion: 3 },
+      peopleId: null, peopleBonus: {},
     });
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ character: { id: 'c1', ...body } });
+    expect(res.json).toHaveBeenCalledWith({ character: { id: 'c1', name: 'Bob' } });
+  });
+
+  it('passes a configured people and its bonus to the model', async () => {
+    SiteConfigModel.findCharacterPeople.mockResolvedValue({ bonus: { strength: 1 } });
+    CharacterModel.create.mockResolvedValue({ id: 'c1' });
+    const body = { name: 'Bob', archetype: 'fighter', race_id: 'r1', people_id: 'p1' };
+
+    await CharacterController.create(mockReq({ body, user: { sub: 'u1' } }), mockRes());
+
+    expect(SiteConfigModel.findCharacterPeople).toHaveBeenCalledWith('r1', 'p1');
+    expect(CharacterModel.create).toHaveBeenCalledWith('u1', expect.objectContaining({
+      raceId: 'r1', peopleId: 'p1', peopleBonus: { strength: 1 },
+    }));
+  });
+
+  it('400s when the people is not available for the race', async () => {
+    SiteConfigModel.findCharacterPeople.mockResolvedValue(null);
+    const body = { name: 'Bob', archetype: 'fighter', race_id: 'r2', people_id: 'p1' };
+    const res = mockRes();
+
+    await CharacterController.create(mockReq({ body }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterModel.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('CharacterController.setPeople', () => {
+  it('stops when the write is not authorized', async () => {
+    authorizeCharacterWrite.mockResolvedValue(null);
+
+    await CharacterController.setPeople(mockReq({ params: { id: 'c1' }, body: { people_id: 'p1' } }), mockRes());
+
+    expect(CharacterModel.setPeople).not.toHaveBeenCalled();
+  });
+
+  it('applies a people configured for the character race', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1', race_id: 'r1' });
+    SiteConfigModel.findCharacterPeople.mockResolvedValue({ bonus: { strength: 1 } });
+    CharacterModel.setPeople.mockResolvedValue({ character: { id: 'c1' }, skills: [] });
+    const res = mockRes();
+
+    await CharacterController.setPeople(mockReq({ params: { id: 'c1' }, body: { people_id: 'p1' } }), res);
+
+    expect(SiteConfigModel.findCharacterPeople).toHaveBeenCalledWith('r1', 'p1');
+    expect(CharacterModel.setPeople).toHaveBeenCalledWith('c1', 'p1', { strength: 1 });
+    expect(res.json).toHaveBeenCalledWith({ character: { id: 'c1' }, skills: [] });
+  });
+
+  it('400s for a people that is not configured for the race', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1', race_id: 'r1' });
+    SiteConfigModel.findCharacterPeople.mockResolvedValue(null);
+    const res = mockRes();
+
+    await CharacterController.setPeople(mockReq({ params: { id: 'c1' }, body: { people_id: 'p9' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterModel.setPeople).not.toHaveBeenCalled();
+  });
+
+  it('clears the people with a null people_id without a config lookup', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1', race_id: 'r1' });
+    CharacterModel.setPeople.mockResolvedValue({ character: { id: 'c1' }, skills: [] });
+
+    await CharacterController.setPeople(mockReq({ params: { id: 'c1' }, body: { people_id: null } }), mockRes());
+
+    expect(SiteConfigModel.findCharacterPeople).not.toHaveBeenCalled();
+    expect(CharacterModel.setPeople).toHaveBeenCalledWith('c1', null, {});
   });
 });
 

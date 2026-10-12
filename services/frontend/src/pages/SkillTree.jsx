@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
-  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch,
+  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch, Palette,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
@@ -16,7 +16,7 @@ import { isIconUrl } from '../constants/maps';
 import { useTheme } from '../context/ThemeContext';
 import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import {
-  computeLayout, reorderCluster, straightEdgePath, computeFitTransform, ancestorClosure,
+  computeLayoutFor, DEFAULT_TREE_SETTINGS, reorderCluster, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
@@ -25,6 +25,8 @@ import ReqBadge from '../components/ui/ReqBadge';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from '../components/NodeGrants';
 import SmartTextReader from '../components/SmartTextReader';
+import SkillTreeBackdrop from '../components/SkillTreeBackdrop';
+import SkillTreeViewSheet from '../components/SkillTreeViewSheet';
 
 const NODE_R = 24;
 const NODE_ICON_SIZE = NODE_R * 1.3; // uploaded-image icon size — stays inside the circle (half-diagonal < NODE_R)
@@ -41,6 +43,8 @@ export default function SkillTree() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [treeSettings, setTreeSettings] = useState({}); // per-tab { layout, background_url }, keyed by archetype
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
 
   // Catalogs offered by the node form's "видає / робить доступним" picker and
   // its spell-traditions picker — also resolve names/cards for everyone in
@@ -71,7 +75,7 @@ export default function SkillTree() {
   const [editMode, setEditMode] = useState(false);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSource, setConnectSource] = useState(null);
-  const [dragState, setDragState] = useState(null); // { nodeId, startClientX, startClientY, offsetX }
+  const [dragState, setDragState] = useState(null); // { nodeId, startClientX, startClientY, offsetX, offsetY }
   const [tooltip, setTooltip] = useState(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState(null); // thickens/accents the hovered edge so its clickability reads as obvious
 
@@ -85,9 +89,15 @@ export default function SkillTree() {
 
   // Layout is always fully derived from the graph — no stored pixel
   // coordinates. `pos_x` on a node is only a manual tie-break rank within its
-  // sibling cluster (see utils/skillTreeLayout.js); `pos_y` is unused.
-  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+  // sibling cluster (see utils/skillTreeLayout.js); `pos_y` is unused. The tab's
+  // saved setting picks the classic tree or the radial star.
+  const activeSettings = { ...DEFAULT_TREE_SETTINGS, ...treeSettings[activeArchetype] };
+  const layout = useMemo(
+    () => computeLayoutFor(activeSettings.layout, nodes, edges),
+    [activeSettings.layout, nodes, edges],
+  );
   const { levels, positions, clusterKeyOf } = layout;
+  const isStar = layout.mode === 'star';
 
   // Hovering or selecting a node highlights its chain of prerequisites and
   // dims everything else — skipped mid-drag/connect so it doesn't fight those.
@@ -114,9 +124,11 @@ export default function SkillTree() {
     Promise.all([
       skillTreeApi.getNodes({ archetype }),
       skillTreeApi.getEdges({ archetype }),
-    ]).then(([n, e]) => {
+      skillTreeApi.getSettings().catch(() => ({})), // view settings are cosmetic — the tree still loads without them
+    ]).then(([n, e, s]) => {
       setNodes(n);
       setEdges(e);
+      setTreeSettings(s);
     }).catch(() => setActionError('Не вдалось завантажити дерево'))
       .finally(() => setLoading(false));
   };
@@ -128,16 +140,23 @@ export default function SkillTree() {
   // graph sits away from the fixed default {x:120,y:120} origin.
   useEffect(() => {
     if (!pendingCenterRef.current || loading || !svgRef.current || nodes.length === 0) return;
-    const root = nodes.find((n) => n.is_root) || nodes[0];
-    const pos = positions.get(root.id) || { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
-    setTransform((t) => ({
-      ...t,
-      x: rect.width / 2 - pos.x * t.k,
-      y: rect.height / 2 - pos.y * t.k,
-    }));
+    // The star spreads in every direction, so frame all of it; the tree only
+    // needs its root brought into view.
+    const fit = isStar ? computeFitTransform(positions, rect.width, rect.height) : null;
+    if (fit) {
+      setTransform(fit);
+    } else {
+      const root = nodes.find((n) => n.is_root) || nodes[0];
+      const pos = positions.get(root.id) || { x: 0, y: 0 };
+      setTransform((t) => ({
+        ...t,
+        x: rect.width / 2 - pos.x * t.k,
+        y: rect.height / 2 - pos.y * t.k,
+      }));
+    }
     pendingCenterRef.current = false;
-  }, [nodes, loading, positions, setTransform]);
+  }, [nodes, loading, positions, isStar, setTransform]);
 
   const handleArchetypeChange = (archetype) => {
     setActiveArchetype(archetype);
@@ -151,6 +170,22 @@ export default function SkillTree() {
     const rect = svgRef.current.getBoundingClientRect();
     const fit = computeFitTransform(positions, rect.width, rect.height);
     if (fit) setTransform(fit);
+  };
+
+  // Saves one tab's view settings. Optimistic: the canvas switches layout or
+  // background immediately and rolls back if the PUT fails.
+  const handleViewSettingsChange = async (patch) => {
+    const archetype = activeArchetype;
+    const previous = treeSettings[archetype];
+    setTreeSettings((prev) => ({ ...prev, [archetype]: { ...DEFAULT_TREE_SETTINGS, ...prev[archetype], ...patch } }));
+    if ('layout' in patch) pendingCenterRef.current = true; // reframe once the new layout is in
+    try {
+      const saved = await skillTreeApi.updateSettings(archetype, patch);
+      setTreeSettings((prev) => ({ ...prev, [archetype]: saved }));
+    } catch {
+      setTreeSettings((prev) => ({ ...prev, [archetype]: previous }));
+      setActionError('Не вдалось зберегти налаштування вигляду');
+    }
   };
 
   // Straight edge between two node circles, trimmed to their rims (tree
@@ -185,7 +220,9 @@ export default function SkillTree() {
       const screenDist = Math.hypot(e.clientX - dragState.startClientX, e.clientY - dragState.startClientY);
       if (screenDist > DRAG_CLICK_THRESHOLD_PX) dragMovedRef.current = true;
       const dx = (e.clientX - dragState.startClientX) / transform.k;
-      setDragState((s) => (s ? { ...s, offsetX: dx } : s));
+      // The tree only reorders along x; the star lets the node follow the cursor in 2D.
+      const dy = isStar ? (e.clientY - dragState.startClientY) / transform.k : 0;
+      setDragState((s) => (s ? { ...s, offsetX: dx, offsetY: dy } : s));
       return;
     }
     panZoom.bind.onPointerMove(e);
@@ -196,20 +233,22 @@ export default function SkillTree() {
   // the two-or-more members whose rank actually moved get PATCHed.
   const endNodeDrag = async () => {
     if (!dragState) return;
-    const { nodeId, offsetX } = dragState;
+    const { nodeId, offsetX, offsetY } = dragState;
     setDragState(null);
-    if (Math.abs(offsetX) < 1) return;
+    if (Math.hypot(offsetX, offsetY ?? 0) < 1) return;
 
     const key = clusterKeyOf(nodeId);
     const clusterMembers = nodes
       .filter((n) => n.id === nodeId || clusterKeyOf(n.id) === key)
-      .sort((a, b) => (positions.get(a.id)?.x ?? 0) - (positions.get(b.id)?.x ?? 0));
+      .sort((a, b) => layout.sortKeyOf(a.id) - layout.sortKeyOf(b.id));
     if (clusterMembers.length < 2) return;
 
-    const draggedPos = positions.get(nodeId);
-    const estimatedX = (draggedPos?.x ?? 0) + offsetX;
+    // Where the node was dropped, on the axis siblings are ordered along
+    // (x in the tree, clockwise angle in the star).
+    const draggedPos = positions.get(nodeId) ?? { x: 0, y: 0 };
+    const dropKey = layout.sortKeyAt({ x: draggedPos.x + offsetX, y: draggedPos.y + (offsetY ?? 0) });
     const others = clusterMembers.filter((n) => n.id !== nodeId);
-    const dropIndex = others.filter((n) => (positions.get(n.id)?.x ?? 0) < estimatedX).length;
+    const dropIndex = others.filter((n) => layout.sortKeyOf(n.id) < dropKey).length;
 
     const changed = reorderCluster(clusterMembers, nodeId, dropIndex);
     if (changed.length === 0) return;
@@ -230,7 +269,7 @@ export default function SkillTree() {
     if (!isGM || !editMode || connectMode) return;
     e.stopPropagation();
     dragMovedRef.current = false;
-    setDragState({ nodeId: node.id, startClientX: e.clientX, startClientY: e.clientY, offsetX: 0 });
+    setDragState({ nodeId: node.id, startClientX: e.clientX, startClientY: e.clientY, offsetX: 0, offsetY: 0 });
   };
 
   const handleNodeClick = (e, node) => {
@@ -535,6 +574,7 @@ export default function SkillTree() {
                 label={connectMode ? (connectSource ? `→ ${connectSource.title}` : 'Вибери вузол') : 'Зʼєднати'}
                 onClick={() => { setConnectMode((c) => !c); setConnectSource(null); }}
               />
+              <IconBtn icon={Palette} label="Вигляд" onClick={() => setViewSheetOpen(true)} title="Розкладка та фонове зображення" />
               <IconBtn icon={Plus} label="Вузол" onClick={openNewNodeForm} primary />
               <IconBtn icon={Download} label="Експорт" onClick={handleExport} title="Експорт у JSON" />
               <label
@@ -567,9 +607,10 @@ export default function SkillTree() {
 
       {/* Canvas */}
       <div className="relative flex-1 overflow-hidden bg-surface">
+        <SkillTreeBackdrop url={activeSettings.background_url} />
         <svg
           ref={svgRef}
-          className="h-full w-full touch-none select-none overscroll-contain"
+          className="relative h-full w-full touch-none select-none overscroll-contain"
           style={{ cursor: dragState ? 'grabbing' : 'grab' }}
           onPointerDown={handleSvgPointerDown}
           onPointerMove={handleSvgPointerMove}
@@ -631,7 +672,7 @@ export default function SkillTree() {
               const pos = positions.get(node.id) || { x: 0, y: 0 };
               const isDragging = dragState?.nodeId === node.id;
               const x = pos.x + (isDragging ? dragState.offsetX : 0);
-              const y = pos.y;
+              const y = pos.y + (isDragging ? dragState.offsetY ?? 0 : 0);
               const selected = selectedNode?.id === node.id;
               const isSrc = connectSource?.id === node.id;
               const ac = ARCHETYPE_COLORS[node.archetype];
@@ -649,7 +690,7 @@ export default function SkillTree() {
                   key={node.id}
                   transform={`translate(${x},${y})`}
                   opacity={dimmed ? 0.25 : 1}
-                  style={{ cursor: editMode && !connectMode ? 'ew-resize' : 'pointer' }}
+                  style={{ cursor: editMode && !connectMode ? (isStar ? 'move' : 'ew-resize') : 'pointer' }}
                   onClick={(e) => handleNodeClick(e, node)}
                   onMouseDown={(e) => handleNodeMouseDown(e, node)}
                   onMouseEnter={() => handleNodeEnter(node)}
@@ -712,6 +753,17 @@ export default function SkillTree() {
             onEdit={openEditNodeForm}
             onDelete={handleDeleteNode}
             onClose={() => setSelectedNode(null)}
+          />
+        )}
+
+        {/* Layout + background of the active tab */}
+        {isGM && (
+          <SkillTreeViewSheet
+            open={viewSheetOpen}
+            onClose={() => setViewSheetOpen(false)}
+            tabLabel={ARCHETYPES[activeArchetype]?.label}
+            settings={activeSettings}
+            onChange={handleViewSettingsChange}
           />
         )}
 

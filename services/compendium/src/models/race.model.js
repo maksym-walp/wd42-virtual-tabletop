@@ -1,12 +1,12 @@
 const pool = require('../config/db');
 
 const RaceModel = {
-  async create({ createdBy, name, description, isPublic }) {
+  async create({ createdBy, name, description, isPublic, imageUrl }) {
     const { rows } = await pool.query(
-      `INSERT INTO compendium.races (created_by, name, description, is_public)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO compendium.races (created_by, name, description, is_public, image_url)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [createdBy, name, description ?? null, isPublic ?? false]
+      [createdBy, name, description ?? null, isPublic ?? false, imageUrl ?? null]
     );
     return rows[0];
   },
@@ -29,13 +29,13 @@ const RaceModel = {
     return rows[0] || null;
   },
 
-  async update(id, { name, description, isPublic }) {
+  async update(id, { name, description, isPublic, imageUrl }) {
     const { rows } = await pool.query(
       `UPDATE compendium.races
-       SET name = $2, description = $3, is_public = $4, updated_at = NOW()
+       SET name = $2, description = $3, is_public = $4, image_url = $5, updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, description ?? null, isPublic ?? false]
+      [id, name, description ?? null, isPublic ?? false, imageUrl ?? null]
     );
     return rows[0] || null;
   },

@@ -26,6 +26,7 @@ router.get('/config', wrap(ConfigController.getCharacterConfig));
 router.post('/',      wrap(CharacterController.create));
 router.get('/:id',    wrap(CharacterController.getSheet));
 router.put('/:id',    wrap(CharacterController.update));
+router.put('/:id/people', wrap(CharacterController.setPeople));
 router.delete('/:id', wrap(CharacterController.remove));
 router.patch('/:id/owner', requireAdmin, wrap(CharacterController.setOwner));
 router.post('/:id/duplicate', wrap(CharacterController.duplicate));

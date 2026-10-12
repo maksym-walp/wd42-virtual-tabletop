@@ -193,3 +193,85 @@ describe('ConfigController.update — magic_forms', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 });
+
+describe('ConfigController.update — character_races', () => {
+  const R1 = '7fdf6fb8-3681-462c-b8a9-d1bcca887851';
+  const R2 = 'a1b2c3d4-0000-4000-8000-000000000002';
+  const P1 = '0b8a4a1e-3c1d-4d49-9a4e-1f1b7c2d3e41';
+  const P2 = '5c6d7e8f-1a2b-4c3d-8e9f-a0b1c2d3e4f5';
+  const race = {
+    race_id: R1, bonus_characteristic: 'agility', bonus_budget: 0,
+    peoples: [{ people_id: P1, skill_bonuses: [{ skill: 'strength', value: 1 }] }],
+  };
+  const put = async (value) => {
+    const res = mockRes();
+    await ConfigController.update(mockReq({ params: { key: 'character_races' }, body: { value } }), res);
+    return res;
+  };
+  const withPeople = (peoples) => [{ ...race, peoples }];
+
+  it('200 for a valid list', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [race] });
+    const res = await put([race]);
+    expect(ConfigModel.upsert).toHaveBeenCalledWith('character_races', [race]);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('200 for an empty list (no races opened yet)', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
+    expect((await put([])).status).not.toHaveBeenCalled();
+  });
+
+  it('200 for a race without mechanics or peoples, and the same people under two races', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
+    const res = await put([
+      { race_id: R1, bonus_characteristic: null, bonus_budget: 4 },
+      { race_id: R2, peoples: [{ people_id: P1 }, { people_id: P2, skill_bonuses: [] }] },
+    ]);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('400 for a non-array value', async () => {
+    expect((await put({})).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a race_id that is not a UUID', async () => {
+    expect((await put([{ ...race, race_id: 'human' }])).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when the same race is added twice', async () => {
+    expect((await put([race, race])).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for an unknown bonus characteristic', async () => {
+    expect((await put([{ ...race, bonus_characteristic: 'luck' }])).status).toHaveBeenCalledWith(400);
+  });
+
+  it.each([-1, 21, 1.5, '4'])('400 for bonus_budget %p', async (bonus_budget) => {
+    expect((await put([{ ...race, bonus_budget }])).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for a people_id that is not a UUID', async () => {
+    expect((await put(withPeople([{ people_id: 'nope' }]))).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when the same people is added twice to one race', async () => {
+    expect((await put(withPeople([{ people_id: P1 }, { people_id: P1 }]))).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 for an unknown skill', async () => {
+    const res = await put(withPeople([{ people_id: P1, skill_bonuses: [{ skill: 'luck', value: 1 }] }]));
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when a skill repeats within one people', async () => {
+    const dup = [{ skill: 'strength', value: 1 }, { skill: 'strength', value: 2 }];
+    expect((await put(withPeople([{ people_id: P1, skill_bonuses: dup }]))).status).toHaveBeenCalledWith(400);
+  });
+
+  it.each([0, 6, 1.5, '2'])('400 for people bonus value %p', async (value) => {
+    const res = await put(withPeople([{ people_id: P2, skill_bonuses: [{ skill: 'will', value }] }]));
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ConfigModel.upsert).not.toHaveBeenCalled();
+  });
+});

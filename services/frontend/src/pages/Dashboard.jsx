@@ -6,7 +6,8 @@ import api from '../api/client';
 import characterApi from '../api/characterSheet';
 import diceApi from '../api/dice';
 import { getRecentlyViewed } from '../utils/recentlyViewed';
-import { ARCHETYPES, RACES } from '../constants/characterSheet';
+import { ARCHETYPES } from '../constants/characterSheet';
+import { raceLabel } from '../utils/characterRace';
 import ArtifactCard from '../components/ArtifactCard';
 import SpellCard from '../components/SpellCard';
 import AbilityCard from '../components/AbilityCard';
@@ -142,7 +143,6 @@ function RecentViewCard({ entry }) {
 
 function CommunityCharacterCard({ character: c }) {
   const archetype = ARCHETYPES[c.archetype];
-  const race = RACES[c.race];
   return (
     <Link
       to={`/characters/${c.id}`}
@@ -156,7 +156,7 @@ function CommunityCharacterCard({ character: c }) {
       )}
       <div className="px-3.5 py-2.5">
         <h3 className="font-display text-lg text-accent">{c.name}</h3>
-        <p className="text-sm text-text-dim">{archetype?.label} · {race?.label}</p>
+        <p className="text-sm text-text-dim">{archetype?.label} · {raceLabel(c)}</p>
         {c.owner_username && <p className="mt-1 text-xs italic text-text-dim">@{c.owner_username}</p>}
       </div>
     </Link>

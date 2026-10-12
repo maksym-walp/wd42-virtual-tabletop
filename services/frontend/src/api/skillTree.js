@@ -39,6 +39,17 @@ const skillTreeApi = {
     await api.delete(`/api/skill-tree/edges/${id}`);
   },
 
+  // Per-tab view settings, keyed by archetype. Tabs without a stored row are
+  // simply absent — callers fall back to DEFAULT_TREE_SETTINGS.
+  async getSettings() {
+    const { data } = await api.get('/api/skill-tree/settings');
+    return Object.fromEntries(data.settings.map((s) => [s.archetype, s]));
+  },
+  async updateSettings(archetype, patch) {
+    const { data } = await api.put(`/api/skill-tree/settings/${archetype}`, patch);
+    return data.settings;
+  },
+
   async getProgress() {
     const { data } = await api.get('/api/skill-tree/progress');
     return data.progress;

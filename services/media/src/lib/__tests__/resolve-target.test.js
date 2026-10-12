@@ -54,6 +54,11 @@ describe('valid targets', () => {
   // requiresId: false — a season's bg_image_url is uploaded from the
   // Calendar Builder before the season row necessarily exists yet (a new,
   // unsaved row has only a client-side temp id, not a real UUID).
+  it('maps compendium-race to a flat directory and ignores entity_id entirely', () => {
+    expect(resolveTarget('compendium-race', undefined, DIR).relDir).toBe('compendium/races');
+    expect(resolveTarget('compendium-race', '../../etc', DIR).relDir).toBe('compendium/races');
+  });
+
   it('maps calendar-season to a flat directory and ignores entity_id entirely', () => {
     expect(resolveTarget('calendar-season', undefined, DIR).relDir).toBe('calendar/seasons');
     expect(resolveTarget('calendar-season', '../../etc', DIR).relDir).toBe('calendar/seasons');

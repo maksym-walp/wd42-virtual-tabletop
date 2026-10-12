@@ -2,6 +2,7 @@ const express = require('express');
 const NodeController = require('../controllers/node.controller');
 const EdgeController = require('../controllers/edge.controller');
 const TreeController = require('../controllers/tree.controller');
+const SettingsController = require('../controllers/settings.controller');
 const { requireAuth, requireGameMaster } = require('../middleware/auth.middleware');
 
 const router = express.Router();
@@ -18,6 +19,10 @@ router.get('/edges',        requireAuth,       wrap(EdgeController.list));
 router.post('/edges',       requireGameMaster, wrap(EdgeController.create));
 router.patch('/edges/:id',  requireGameMaster, wrap(EdgeController.update));
 router.delete('/edges/:id', requireGameMaster, wrap(EdgeController.remove));
+
+// Per-tab view settings (background image, layout) — read for all, write for game_master
+router.get('/settings',            requireAuth,       wrap(SettingsController.list));
+router.put('/settings/:archetype', requireGameMaster, wrap(SettingsController.update));
 
 // Export / Import (export readable by all auth users, import GM only)
 router.get('/export',        requireAuth,       wrap(TreeController.export));

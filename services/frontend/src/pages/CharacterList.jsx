@@ -4,7 +4,7 @@ import { ExternalLink, Trash2, Copy } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import { removeView } from '../utils/recentlyViewed';
-import { ARCHETYPES, RACES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
@@ -15,6 +15,8 @@ import PageHeader from '../components/ui/PageHeader';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
+import useCharacterConfig from '../hooks/useCharacterConfig';
+import { raceLabel } from '../utils/characterRace';
 
 export default function CharacterList() {
   const { user } = useAuth();
@@ -122,7 +124,8 @@ export default function CharacterList() {
 function DuplicateCharacterSheet({ character, open, onClose, onDuplicated }) {
   const [name, setName] = useState('');
   const [archetype, setArchetype] = useState('');
-  const [race, setRace] = useState('');
+  const [raceId, setRaceId] = useState('');
+  const { races } = useCharacterConfig();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -130,7 +133,7 @@ function DuplicateCharacterSheet({ character, open, onClose, onDuplicated }) {
     if (!character) return;
     setName(`${character.name} (копія)`);
     setArchetype(character.archetype);
-    setRace(character.race);
+    setRaceId(character.race_id ?? '');
     setError('');
   }, [character]);
 
@@ -142,7 +145,7 @@ function DuplicateCharacterSheet({ character, open, onClose, onDuplicated }) {
     setSaving(true);
     setError('');
     try {
-      const created = await characterApi.duplicate(character.id, { name, archetype, race });
+      const created = await characterApi.duplicate(character.id, { name, archetype, ...(raceId && { race_id: raceId }) });
       onDuplicated(created);
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалося задублювати персонажа');
@@ -168,8 +171,10 @@ function DuplicateCharacterSheet({ character, open, onClose, onDuplicated }) {
 
         <label className="flex flex-col gap-1.5 text-sm text-text-dim">
           Народ
-          <select className={inputClass} value={race} onChange={(e) => setRace(e.target.value)}>
-            {Object.entries(RACES).map(([key, r]) => <option key={key} value={key}>{r.label}</option>)}
+          <select className={inputClass} value={raceId} onChange={(e) => setRaceId(e.target.value)}>
+            {/* Раса ще не зіставлена з компендіумом (старий ключ) або вже не відкрита адміном — лишається як є. */}
+            {!races.some((r) => r.id === raceId) && <option value={raceId}>{raceLabel(character)}</option>}
+            {races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </label>
 
@@ -197,7 +202,6 @@ function CharacterCard({ character: c, isAdmin, onDelete, onDuplicate, onSetOwne
   const { theme } = useTheme();
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const archetype = ARCHETYPES[c.archetype];
-  const race = RACES[c.race];
   const archetypeColor = ARCHETYPE_COLORS[c.archetype];
   // Майстер кампанії бачить чужого персонажа й може відкрити його лист, але
   // дублювати/видаляти — лише власник або адмін.
@@ -209,7 +213,7 @@ function CharacterCard({ character: c, isAdmin, onDelete, onDuplicate, onSetOwne
         <div>
           <h2 className="font-display text-lg text-text">{c.name}</h2>
           <p className="text-sm text-text-dim">
-            {archetype?.label} · {race?.label}
+            {archetype?.label} · {raceLabel(c)}
           </p>
           {(isAdmin || !c.is_owner) && c.owner_username && (
             <p className="text-xs italic text-text-dim">@{c.owner_username}</p>

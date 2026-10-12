@@ -6,6 +6,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Field, { inputClass } from '../ui/Field';
 import SmartTextarea from '../ui/SmartTextarea';
+import { raceLabel } from '../../utils/characterRace';
 
 // ================================================================
 // Налаштування: для майстра/адміна — назва й опис, код запрошення,
@@ -253,7 +254,7 @@ function CampaignCharactersAdmin({ campaignId, characters, setCharacters }) {
                   {ch.character_name}
                   {ch.is_private && <Lock size={12} className="text-text-dim" aria-label="Приватний персонаж" />}
                 </p>
-                <p className="text-xs text-text-dim">{ch.archetype} · {ch.race} · {ch.owner_username}</p>
+                <p className="text-xs text-text-dim">{ch.archetype} · {raceLabel(ch)} · {ch.owner_username}</p>
               </div>
               <button
                 onClick={() => handleRemove(ch.character_id, ch.character_name)}

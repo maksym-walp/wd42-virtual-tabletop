@@ -8,7 +8,8 @@ import mapsApi from '../../api/maps';
 import { COLLECTION_DOMAINS } from '../../collectionsDomains';
 import { spellWithForm } from '../../constants/spellbook';
 import { abilityWithForm } from '../../constants/abilities';
-import { ARCHETYPES, RACES } from '../../constants/characterSheet';
+import { ARCHETYPES } from '../../constants/characterSheet';
+import { raceLabel } from '../../utils/characterRace';
 import { resolveLocationVersion } from '../../constants/maps';
 import { eventDateRangeLabel } from '../../utils/chronologyEvent';
 import { cached } from './memoCache';
@@ -117,7 +118,7 @@ export const ENTITY_KINDS = {
     fetch: (id) => characterApi.getSheet(id).then((sheet) => sheet.character),
     Preview: ({ data }) => (
       <SimplePreview
-        badges={['Персонаж', ARCHETYPES[data.archetype]?.label, RACES[data.race]?.label]}
+        badges={['Персонаж', ARCHETYPES[data.archetype]?.label, raceLabel(data) || undefined]}
         title={data.name}
         subtitle={data.owner_username ? `@${data.owner_username}` : null}
       />

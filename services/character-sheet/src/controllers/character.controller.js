@@ -8,6 +8,7 @@ const RitualTrackerModel = require('../models/ritual-tracker.model');
 const authorizeCharacterWrite = require('./authorize-character-write');
 const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 const { treeSpellAccess } = require('../models/spell-access.model');
+const SiteConfigModel = require('../models/site-config.model');
 
 const CharacterController = {
   async list(req, res) {
@@ -24,11 +25,22 @@ const CharacterController = {
   },
 
   async create(req, res) {
-    const { name, archetype, race, skills } = req.body;
-    if (!name || !archetype || !race) {
-      return res.status(400).json({ message: 'name, archetype та race є обовʼязковими' });
+    const { name, archetype, race_id: raceId, skills, people_id: peopleId } = req.body;
+    if (!name || !archetype || !raceId) {
+      return res.status(400).json({ message: 'name, archetype та race_id є обовʼязковими' });
     }
-    const character = await CharacterModel.create(req.user.sub, { name, archetype, race, skills });
+    if (!await SiteConfigModel.isCharacterRace(raceId)) {
+      return res.status(400).json({ message: 'Ця раса недоступна для персонажів' });
+    }
+    let peopleBonus = {};
+    if (peopleId) {
+      const people = await SiteConfigModel.findCharacterPeople(raceId, peopleId);
+      if (!people) return res.status(400).json({ message: 'Цей підвид недоступний для обраної раси' });
+      peopleBonus = people.bonus;
+    }
+    const character = await CharacterModel.create(req.user.sub, {
+      name, archetype, raceId, skills, peopleId: peopleId || null, peopleBonus,
+    });
     res.status(201).json({ character });
   },
 
@@ -107,6 +119,25 @@ const CharacterController = {
     res.json({ character: updated });
   },
 
+  // Вибір/зняття підвиду (народу) — body { people_id: uuid | null }. Підвид
+  // має бути відкритий адміном для раси цього персонажа; його бонуси до
+  // навичок застосовуються дельтою (див. CharacterModel.setPeople).
+  async setPeople(req, res) {
+    const char = await authorizeCharacterWrite(req, res);
+    if (!char) return;
+
+    const peopleId = req.body.people_id || null;
+    let bonus = {};
+    if (peopleId) {
+      const people = await SiteConfigModel.findCharacterPeople(char.race_id, peopleId);
+      if (!people) return res.status(400).json({ message: 'Цей підвид недоступний для раси персонажа' });
+      bonus = people.bonus;
+    }
+    const result = await CharacterModel.setPeople(req.params.id, peopleId, bonus);
+    if (!result) return res.status(404).json({ message: 'Персонажа не знайдено' });
+    res.json(result);
+  },
+
   async remove(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
 
@@ -130,8 +161,11 @@ const CharacterController = {
   async duplicate(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
 
-    const { name, archetype, race } = req.body;
-    const character = await CharacterModel.duplicate(req.params.id, { name, archetype, race });
+    const { name, archetype, race_id: raceId } = req.body;
+    if (raceId && !await SiteConfigModel.isCharacterRace(raceId)) {
+      return res.status(400).json({ message: 'Ця раса недоступна для персонажів' });
+    }
+    const character = await CharacterModel.duplicate(req.params.id, { name, archetype, raceId });
     if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
     res.status(201).json({ character });
   },

@@ -6,6 +6,7 @@ function toModelFields(body) {
     name: body.name?.trim(),
     description: body.description ?? null,
     isPublic: body.is_public ?? false,
+    imageUrl: body.image_url || null,
   };
 }
 

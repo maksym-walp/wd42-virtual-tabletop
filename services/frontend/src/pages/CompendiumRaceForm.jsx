@@ -5,12 +5,13 @@ import compendiumApi from '../api/compendium';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
+import ImageUploadField from '../components/ui/ImageUploadField';
 import Button from '../components/ui/Button';
 import KindSwitch from '../components/KindSwitch';
 
 const domain = COLLECTION_DOMAINS.compendium;
 
-const EMPTY = { name: '', description: '', origin: '', is_public: false };
+const EMPTY = { name: '', description: '', origin: '', is_public: false, image_url: null };
 
 // Same shape for race and people (people just adds a required race_id and
 // an origin field) — one form, not two near-identical copies. Mirrors
@@ -38,7 +39,7 @@ export default function CompendiumRaceForm({ isPeople = false }) {
     const load = isPeople ? compendiumApi.getPeople(id) : compendiumApi.getRace(id);
     load
       .then((r) => {
-        setForm({ name: r.name, description: r.description || '', origin: r.origin || '', is_public: r.is_public });
+        setForm({ name: r.name, description: r.description || '', origin: r.origin || '', is_public: r.is_public, image_url: r.image_url ?? null });
         if (isPeople) setRaceId(r.race_id);
       })
       .catch(() => navigate('/compendium'))
@@ -62,7 +63,7 @@ export default function CompendiumRaceForm({ isPeople = false }) {
           navigate(`/compendium/races/${raceId}`);
         }
       } else {
-        const payload = { name: form.name, description: form.description, is_public: form.is_public };
+        const payload = { name: form.name, description: form.description, is_public: form.is_public, image_url: form.image_url };
         if (isEdit) {
           await compendiumApi.updateRace(id, payload);
           navigate(`/compendium/races/${id}`);
@@ -119,6 +120,17 @@ export default function CompendiumRaceForm({ isPeople = false }) {
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             placeholder="Загальні риси, культура, середовище проживання..."
           />
+          {!isPeople && (
+            <div className="mt-4">
+              <ImageUploadField
+                value={form.image_url}
+                onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+                entityType="compendium-race"
+                label="Зображення"
+              />
+              <p className="mt-1.5 text-xs text-text-dim">Показується на картці раси при створенні персонажа.</p>
+            </div>
+          )}
           {isPeople && (
             <SmartTextarea
               label="Походження народу" hint="Звідки походить цей народ, його історія в межах раси."

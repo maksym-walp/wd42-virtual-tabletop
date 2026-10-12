@@ -190,7 +190,7 @@ describe('CampaignCharacterController.list', () => {
     CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
     CampaignCharacterModel.isMember.mockResolvedValue(true);
     CampaignCharacterModel.listWithOwners.mockResolvedValue([{
-      character_id: 'ch-1', character_name: 'Shadow', archetype: 'rogue', race: 'elf',
+      character_id: 'ch-1', character_name: 'Shadow', archetype: 'rogue', race: 'elf', race_name: 'Ельфи',
       owner_id: 'other-user', owner_username: 'alice', owner_email: 'alice@example.com',
       is_public: false, image_url: '/img.png', added_at: '2024-01-01',
     }]);
@@ -202,7 +202,7 @@ describe('CampaignCharacterController.list', () => {
     expect(res.json).toHaveBeenCalledWith({
       characters: [{
         character_id: 'ch-1', character_name: 'Shadow', image_url: '/img.png',
-        archetype: 'rogue', race: 'elf', owner_username: 'alice',
+        archetype: 'rogue', race: 'elf', race_name: 'Ельфи', owner_username: 'alice',
         is_mine: false, is_private: true,
       }],
     });

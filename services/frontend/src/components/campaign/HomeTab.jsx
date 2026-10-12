@@ -8,7 +8,8 @@ import EmptyState from '../ui/EmptyState';
 import Sheet from '../ui/Sheet';
 import SmartTextarea from '../ui/SmartTextarea';
 import SmartTextReader from '../SmartTextReader';
-import { ARCHETYPES, RACES } from '../../constants/characterSheet';
+import { ARCHETYPES } from '../../constants/characterSheet';
+import { raceLabel } from '../../utils/characterRace';
 
 // ================================================================
 // Головна: назва й опис, попередні сесії, картки персонажів.
@@ -223,7 +224,7 @@ function CharactersBlock({ characters, navigate }) {
                   <h3 className="font-display text-base text-text">{ch.character_name}</h3>
                   {ch.is_private && <Lock size={14} className="mt-1 shrink-0 text-text-dim" aria-label="Приватний персонаж" />}
                 </div>
-                <p className="text-sm text-text-dim">{ARCHETYPES[ch.archetype]?.label ?? ch.archetype} · {RACES[ch.race]?.label ?? ch.race}</p>
+                <p className="text-sm text-text-dim">{ARCHETYPES[ch.archetype]?.label ?? ch.archetype} · {raceLabel(ch)}</p>
                 <p className="mt-2 text-xs text-text-dim">
                   Гравець: {ch.owner_username} {ch.is_mine && <span className="text-accent">(ви)</span>}
                 </p>

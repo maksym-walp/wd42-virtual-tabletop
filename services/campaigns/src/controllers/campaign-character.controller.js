@@ -62,6 +62,7 @@ const CampaignCharacterController = {
           image_url: ch.image_url,
           archetype: ch.archetype,
           race: ch.race,
+          race_name: ch.race_name,
           owner_username: ch.owner_username,
           is_mine: false,
           is_private: true,

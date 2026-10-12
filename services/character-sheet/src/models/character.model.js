@@ -15,6 +15,40 @@ const ALL_SKILLS = [
   'will','deception','artistry','persuasion',
 ];
 
+// Підвид (народ) змінює навички дельтою: віднімається знімок бонусів, що вже
+// застосований до персонажа (people_bonus), додається бонус нового підвиду.
+// І value, і base_value зсуваються разом — досвід рахується від base_value,
+// тож бонус підвиду не повинен виглядати як витрачений досвід.
+async function applyPeople(client, characterId, peopleId, bonus) {
+  const { rows: [current] } = await client.query(
+    `SELECT people_bonus FROM character_sheet.characters WHERE id = $1 FOR UPDATE`,
+    [characterId]
+  );
+  if (!current) return null;
+
+  const old = current.people_bonus || {};
+  for (const key of new Set([...Object.keys(old), ...Object.keys(bonus)])) {
+    const delta = (bonus[key] || 0) - (old[key] || 0);
+    if (!delta) continue;
+    await client.query(
+      `UPDATE character_sheet.skills
+       SET value      = GREATEST(1, LEAST(12, value + $3)),
+           base_value = GREATEST(1, LEAST(12, base_value + $3))
+       WHERE character_id = $1 AND skill_key = $2`,
+      [characterId, key, delta]
+    );
+  }
+
+  const { rows: [character] } = await client.query(
+    `UPDATE character_sheet.characters
+     SET people_id = $2, people_bonus = $3::jsonb, updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [characterId, peopleId, JSON.stringify(bonus)]
+  );
+  return character;
+}
+
 const CharacterModel = {
   // isAdmin lists every user's characters (with owner_username attached so
   // an admin can tell them apart), not just the caller's own.
@@ -25,6 +59,7 @@ const CharacterModel = {
   async findAllByUser(userId, isAdmin = false, { includeGmCampaigns = false } = {}) {
     const { rows } = await pool.query(
       `SELECT c.*, ou.username AS owner_username, (c.user_id = $1) AS is_owner,
+        (SELECT rc.name FROM compendium.races rc WHERE rc.id = c.race_id) AS race_name,
         (SELECT COUNT(*) FROM character_sheet.skills WHERE character_id = c.id) AS skill_count,
         COALESCE(
           (SELECT array_agg(cp.name ORDER BY cp.name)
@@ -46,9 +81,15 @@ const CharacterModel = {
     return rows;
   },
 
+  // people_name/people_description — підвид (народ) з компендіуму: лист
+  // показує його й гостям, яким конфіг підвидів (GET /config) недоступний.
   async findById(id) {
     const { rows } = await pool.query(
-      `SELECT * FROM character_sheet.characters WHERE id = $1`,
+      `SELECT c.*, cp.name AS people_name, cp.description AS people_description,
+              (SELECT rc.name FROM compendium.races rc WHERE rc.id = c.race_id) AS race_name
+       FROM character_sheet.characters c
+       LEFT JOIN compendium.peoples cp ON cp.id = c.people_id
+       WHERE c.id = $1`,
       [id]
     );
     return rows[0] || null;
@@ -58,7 +99,7 @@ const CharacterModel = {
   // Dashboard's "Творіння спільноти" rail.
   async findAllPublic(userId, { limit = 15 } = {}) {
     const { rows } = await pool.query(
-      `SELECT c.*, ou.username AS owner_username
+      `SELECT c.*, ou.username AS owner_username, (SELECT rc.name FROM compendium.races rc WHERE rc.id = c.race_id) AS race_name
        FROM character_sheet.characters c
        LEFT JOIN auth.users ou ON ou.id = c.user_id
        WHERE c.is_public = true AND c.user_id <> $1 AND ou.role IS DISTINCT FROM 'admin'
@@ -71,7 +112,11 @@ const CharacterModel = {
 
   async findPublicById(id) {
     const { rows } = await pool.query(
-      `SELECT * FROM character_sheet.characters WHERE id = $1 AND is_public = true`,
+      `SELECT c.*, cp.name AS people_name, cp.description AS people_description,
+              (SELECT rc.name FROM compendium.races rc WHERE rc.id = c.race_id) AS race_name
+       FROM character_sheet.characters c
+       LEFT JOIN compendium.peoples cp ON cp.id = c.people_id AND cp.is_public = true
+       WHERE c.id = $1 AND c.is_public = true`,
       [id]
     );
     return rows[0] || null;
@@ -87,29 +132,34 @@ const CharacterModel = {
     return rows[0]?.username ?? null;
   },
 
-  async create(userId, { name, archetype, race, skills }) {
+  // raceId/peopleId/peopleBonus (раса й підвид) уже перевірені контролером проти
+  // конфігу адміна (race — compendium.races; старе поле race нових персонажів
+  // порожнє).
+  // адміна. Без явних skills навички стартують з 1 + бонус підвиду; крок 2
+  // візарда все одно перезаписує їх власними значеннями.
+  async create(userId, { name, archetype, raceId, skills, peopleId = null, peopleBonus = {} }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       const { rows } = await client.query(
-        `INSERT INTO character_sheet.characters (user_id, name, archetype, race)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO character_sheet.characters (user_id, name, archetype, race_id, people_id, people_bonus)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
          RETURNING *`,
-        [userId, name, archetype, race]
+        [userId, name, archetype, raceId, peopleId, JSON.stringify(peopleBonus)]
       );
       const character = rows[0];
 
-      // Insert all 20 skills with provided values (or default 1)
+      // Insert all 20 skills with provided values (or default 1 + people bonus)
       const skillValues = ALL_SKILLS.map(key => ({
         key,
-        value: skills?.[key] ?? 1,
+        value: skills?.[key] ?? 1 + (peopleBonus[key] || 0),
       }));
 
       for (const s of skillValues) {
         await client.query(
-          `INSERT INTO character_sheet.skills (character_id, skill_key, value)
-           VALUES ($1, $2, $3)`,
+          `INSERT INTO character_sheet.skills (character_id, skill_key, value, base_value)
+           VALUES ($1, $2, $3, $3)`,
           [character.id, s.key, Math.max(1, Math.min(12, s.value))]
         );
       }
@@ -216,6 +266,29 @@ const CharacterModel = {
     return rows[0] || null;
   },
 
+  // Задає/знімає підвид (peopleId = null знімає). Контролер уже перевірив,
+  // що народ відкритий адміном для раси персонажа, і передав його бонус.
+  // Повертає { character, skills } — навички змінились разом із підвидом.
+  async setPeople(id, peopleId, bonus = {}) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const character = await applyPeople(client, id, peopleId, peopleId ? bonus : {});
+      if (!character) { await client.query('ROLLBACK'); return null; }
+      const { rows: skills } = await client.query(
+        `SELECT * FROM character_sheet.skills WHERE character_id = $1 ORDER BY skill_key`,
+        [id]
+      );
+      await client.query('COMMIT');
+      return { character, skills };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
   // Admin-only — reassigns the character to another registered user.
   async setOwner(id, ownerUsername) {
     const { rows } = await pool.query(
@@ -235,7 +308,7 @@ const CharacterModel = {
   // trackers), so they only carry over when the archetype is unchanged — a real
   // archetype change intentionally leaves the duplicate's tree untouched rather
   // than auto-unlocking roots the way create() does.
-  async duplicate(sourceId, { name, archetype, race }) {
+  async duplicate(sourceId, { name, archetype, raceId }) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -247,26 +320,31 @@ const CharacterModel = {
       if (!source) { await client.query('ROLLBACK'); return null; }
 
       const newArchetype = archetype ?? source.archetype;
-      const newRace = race ?? source.race;
+      // Нова раса — завжди раса компендіуму; без неї копія лишає расу джерела
+      // (разом зі старим ключем race у ще не зіставлених персонажів).
+      const newRaceId = raceId ?? source.race_id;
+      const raceChanged = newRaceId !== source.race_id;
       const sameArchetype = newArchetype === source.archetype;
 
       const { rows: [copy] } = await client.query(
         `INSERT INTO character_sheet.characters
-           (user_id, name, archetype, race, is_public, backstory, notes,
+           (user_id, name, archetype, race, race_id, is_public, backstory, notes,
             current_hp, current_magic, heroic_actions_used, death_scale,
             health_dice_values, conditions, experience_points, money,
             spell_bonus, temp_hp, defense_bonus, inspiration_used,
             narrative_inspiration_die, luck_current, luck_max,
-            rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop)
-         SELECT user_id, $2, $3, $4, is_public, backstory, notes,
+            rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop,
+            people_id, people_bonus)
+         SELECT user_id, $2, $3, CASE WHEN $5::boolean THEN NULL ELSE race END, $4::uuid, is_public, backstory, notes,
                 current_hp, current_magic, heroic_actions_used, death_scale,
                 health_dice_values, conditions, experience_points, money,
                 spell_bonus, temp_hp, defense_bonus, inspiration_used,
                 narrative_inspiration_die, luck_current, luck_max,
-                rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop
+                rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop,
+                people_id, people_bonus
          FROM character_sheet.characters WHERE id = $1
          RETURNING *`,
-        [sourceId, name ?? source.name, newArchetype, newRace]
+        [sourceId, name ?? source.name, newArchetype, newRaceId, raceChanged]
       );
 
       await client.query(
@@ -275,6 +353,11 @@ const CharacterModel = {
          FROM character_sheet.skills WHERE character_id = $1`,
         [sourceId, copy.id]
       );
+      // Підвид відкривається адміном для конкретної раси: з іншою расою він
+      // не діє, тож знімаємо його разом з бонусом, що вже в скопійованих навичках.
+      if (raceChanged && source.people_id) {
+        await applyPeople(client, copy.id, null, {});
+      }
       await client.query(
         `INSERT INTO character_sheet.equipment (character_id, equipment_id, mastery_count, mastered, is_equipped)
          SELECT $2, equipment_id, mastery_count, mastered, is_equipped

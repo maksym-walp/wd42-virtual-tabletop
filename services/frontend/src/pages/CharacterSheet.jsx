@@ -17,7 +17,7 @@ import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, 
 import { CATALOG_TYPES } from '../constants/artifacts';
 import { abilityTiers, abilityVariantForms, abilityForCharacter } from '../constants/abilities';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS,
+  ARCHETYPES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
   valueToLevel, modifierDie, skillsToCharLevel, SKILL_PROGRESS_MARKS,
 } from '../constants/characterSheet';
@@ -32,6 +32,7 @@ import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextReader from '../components/SmartTextReader';
 import { htmlToPreviewText } from '../utils/richText';
+import { raceLabel } from '../utils/characterRace';
 import RollButton from '../components/RollButton';
 import ScopeFilter, { matchesScope } from '../components/ScopeFilter';
 import CanonBadge from '../components/CanonBadge';
@@ -74,7 +75,7 @@ export default function CharacterSheet({ publicView = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { conditions: conditionsConfig, currencies } = useCharacterConfig();
+  const { conditions: conditionsConfig, currencies, races } = useCharacterConfig();
   // На xl+ праворуч стоїть колонка з нотатками й вбудованими кубиками.
   const wide = useMediaQuery('(min-width: 1280px)');
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
@@ -180,6 +181,28 @@ export default function CharacterSheet({ publicView = false }) {
     setData(prev => ({ ...prev, character: { ...prev.character, ...patch } }));
     pendingPatch.current = { ...pendingPatch.current, ...patch };
     saveVitals();
+  };
+
+  // Вибір/зняття підвиду: бонуси до навичок змінюються на бекенді дельтою,
+  // тож підставляємо навички з відповіді.
+  const changePeople = async (peopleId) => {
+    setSaving(true);
+    try {
+      const { character, skills: freshSkills } = await characterApi.setPeople(id, peopleId || null);
+      const chosen = races.find((r) => r.id === data.character.race_id)?.peoples.find((p) => p.id === peopleId);
+      setData(prev => ({
+        ...prev,
+        character: {
+          ...prev.character, ...character,
+          people_name: chosen?.name ?? null, people_description: chosen?.description ?? null,
+        },
+        skills: freshSkills,
+      }));
+    } catch (err) {
+      window.alert(err.response?.data?.message || 'Не вдалось змінити підвид');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const startEditName = () => {
@@ -296,7 +319,6 @@ export default function CharacterSheet({ publicView = false }) {
 
   const { character: c, skills, spells, equipment, abilities, rituals, is_owner, is_gm } = data;
   const archetype = ARCHETYPES[c.archetype];
-  const race      = RACES[c.race];
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
 
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
@@ -445,7 +467,28 @@ export default function CharacterSheet({ publicView = false }) {
           <p className="mt-1 text-sm text-text-dim">
             <span style={{ color: ARCHETYPE_COLORS[c.archetype]?.color }} className="font-semibold">
               {archetype.label}
-            </span> · {race.label}
+            </span> · {raceLabel(c)}
+            {(() => {
+              const racePeoples = races.find((r) => r.id === c.race_id)?.peoples ?? [];
+              if (!publicView && (is_owner || is_gm) && (racePeoples.length > 0 || c.people_id)) {
+                return (
+                  <>
+                    {' · '}
+                    <select
+                      aria-label="Підвид"
+                      title={c.people_description || 'Підвид'}
+                      className="rounded-md border border-border bg-bg px-1.5 py-0.5 text-sm text-text-dim focus:border-accent focus:outline-none"
+                      value={racePeoples.some((p) => p.id === c.people_id) ? c.people_id : ''}
+                      onChange={(e) => changePeople(e.target.value)}
+                    >
+                      <option value="">Без підвиду</option>
+                      {racePeoples.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </>
+                );
+              }
+              return c.people_name ? <> · <span title={c.people_description || undefined}>{c.people_name}</span></> : null;
+            })()}
           </p>
           </div>
         <div className="flex flex-col gap-2 text-xs text-text-dim sm:items-end">

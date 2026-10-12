@@ -31,6 +31,9 @@ export const ARCHETYPE_COLORS_DARK = {
   rogue:       { color: '#6fbf7a', bg: 'rgba(111,191,122,0.12)' },
 };
 
+// Старі фіксовані раси персонажа. Нові персонажі беруть расу з компендіуму
+// (admin.site_configs → character_races); ці назви лишились лише як запасні для
+// персонажів, яких не вдалося зіставити з расою компендіуму (див. raceLabel).
 export const RACES = {
   human: {
     label: 'Люди', ability: 'Спритність від народження',
@@ -61,19 +64,6 @@ export const RACES = {
     description: 'Принципово інший шлях, що не підпадає під жодну з відомих особливостей.',
   },
 };
-
-// key = RACES key, value = CHARACTERISTICS[].key whose 4 skills default to 2 (not 1)
-// on new-character creation. sangvi/other are intentionally absent — sangvi gets
-// SANGVI_BONUS_BUDGET extra points instead, other gets no bonus at all.
-export const RACE_BONUS_CHARACTERISTIC = {
-  human: 'agility',
-  elf: 'intellect',
-  dwarf: 'physique',
-  gnome: 'wisdom',
-  nephilim: 'charisma',
-};
-
-export const SANGVI_BONUS_BUDGET = 4;
 
 // Characteristic groups: each contains 4 skills
 export const CHARACTERISTICS = [

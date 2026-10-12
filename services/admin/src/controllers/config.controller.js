@@ -6,7 +6,7 @@ const ConfigModel = require('../models/config.model');
 // через cross-schema SQL (equipment's getWeaponOptions, spellbook's
 // getKindOptions, character-sheet's GET /config), тож цей HTTP API
 // обслуговує лише саму адмін-панель.
-const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies', 'magic_forms'];
+const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies', 'magic_forms', 'character_races'];
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 
@@ -108,7 +108,81 @@ function validateMagicForms(value) {
   return null;
 }
 
-const VALIDATORS = { conditions: validateConditions, currencies: validateCurrencies, magic_forms: validateMagicForms };
+// Раси персонажа: які публічні раси компендіуму (race_id) гравець може обрати,
+// їхня механіка (+1 до 4 навичок однієї характеристики та/або додаткові очки
+// пулу) і підвиди — народи компендіуму (people_id) з бонусами до навичок
+// (skill → value). На відміну від решти конфігів, порожній список коректний
+// (рас ще не відкрито). Ключі характеристик і навичок фіксовані (CHECK у
+// character_sheet.skills). Існування й публічність записів компендіуму тут не
+// перевіряємо — character-sheet відсіює недоступні при читанні.
+const CHARACTERISTIC_KEYS = ['agility', 'physique', 'intellect', 'wisdom', 'charisma'];
+const SKILL_KEYS = [
+  'evasion', 'acrobatics', 'stealth', 'sleight_of_hand',
+  'strength', 'immunity', 'magic_sense', 'endurance',
+  'history', 'nature', 'erudition', 'mysticism',
+  'intuition', 'spellcasting', 'cleverness', 'perception',
+  'will', 'deception', 'artistry', 'persuasion',
+];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_PEOPLE_BONUS = 5;
+const MAX_RACE_BUDGET = 20;
+
+function validatePeopleEntry(entry, seenPeoples) {
+  if (!entry || typeof entry.people_id !== 'string' || !UUID_PATTERN.test(entry.people_id)) {
+    return 'кожен підвид має мати people_id (UUID народу з компендіуму)';
+  }
+  if (seenPeoples.has(entry.people_id)) return `підвид ${entry.people_id} уже додано до цієї раси`;
+  seenPeoples.add(entry.people_id);
+
+  const bonuses = entry.skill_bonuses ?? [];
+  if (!Array.isArray(bonuses)) return 'skill_bonuses має бути масивом';
+  const seenSkills = new Set();
+  for (const bonus of bonuses) {
+    if (!bonus || !SKILL_KEYS.includes(bonus.skill)) return `невідома навичка: ${bonus?.skill}`;
+    if (seenSkills.has(bonus.skill)) return `навичка ${bonus.skill} повторюється у підвиду ${entry.people_id}`;
+    seenSkills.add(bonus.skill);
+    if (!Number.isInteger(bonus.value) || bonus.value < 1 || bonus.value > MAX_PEOPLE_BONUS) {
+      return `бонус до ${bonus.skill} має бути цілим від 1 до ${MAX_PEOPLE_BONUS}`;
+    }
+  }
+  return null;
+}
+
+function validateCharacterRaces(value) {
+  if (!Array.isArray(value)) return 'value має бути масивом';
+  const seenRaces = new Set();
+  for (const entry of value) {
+    if (!entry || typeof entry.race_id !== 'string' || !UUID_PATTERN.test(entry.race_id)) {
+      return 'кожна раса має мати race_id (UUID раси з компендіуму)';
+    }
+    if (seenRaces.has(entry.race_id)) return `раса ${entry.race_id} додана двічі`;
+    seenRaces.add(entry.race_id);
+
+    if (entry.bonus_characteristic != null && !CHARACTERISTIC_KEYS.includes(entry.bonus_characteristic)) {
+      return `невідома характеристика: ${entry.bonus_characteristic}`;
+    }
+    const budget = entry.bonus_budget ?? 0;
+    if (!Number.isInteger(budget) || budget < 0 || budget > MAX_RACE_BUDGET) {
+      return `додаткові очки раси мають бути цілим від 0 до ${MAX_RACE_BUDGET}`;
+    }
+
+    const peoples = entry.peoples ?? [];
+    if (!Array.isArray(peoples)) return 'peoples має бути масивом';
+    const seenPeoples = new Set();
+    for (const people of peoples) {
+      const error = validatePeopleEntry(people, seenPeoples);
+      if (error) return error;
+    }
+  }
+  return null;
+}
+
+const VALIDATORS = {
+  conditions: validateConditions,
+  currencies: validateCurrencies,
+  magic_forms: validateMagicForms,
+  character_races: validateCharacterRaces,
+};
 
 const ConfigController = {
   async list(req, res) {

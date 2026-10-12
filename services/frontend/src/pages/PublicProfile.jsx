@@ -10,7 +10,8 @@ import SpellCard from '../components/SpellCard';
 import AbilityCard from '../components/AbilityCard';
 import EquipmentCard from '../components/EquipmentCard';
 import { htmlToPreviewText } from '../utils/richText';
-import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK, RACES } from '../constants/characterSheet';
+import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
+import { raceLabel } from '../utils/characterRace';
 import { useTheme } from '../context/ThemeContext';
 
 const COLLECTION_LABELS = {
@@ -127,7 +128,6 @@ function PublicCharacterCard({ character: c }) {
   const { theme } = useTheme();
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   const archetype = ARCHETYPES[c.archetype];
-  const race = RACES[c.race];
   const archetypeColor = ARCHETYPE_COLORS[c.archetype];
   return (
     <Card className="flex flex-col gap-3">
@@ -135,7 +135,7 @@ function PublicCharacterCard({ character: c }) {
         <div>
           <h2 className="font-display text-lg text-text">{c.name}</h2>
           <p className="mt-0.5 text-sm text-text-dim">
-            {archetype?.label} · {race?.label}
+            {archetype?.label} · {raceLabel(c)}
           </p>
         </div>
         {archetypeColor && (

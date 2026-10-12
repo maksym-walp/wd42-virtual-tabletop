@@ -14,6 +14,8 @@ const TARGETS = {
   'item':             { requiresId: false, dir: () => 'items' },
   'collection':       { requiresId: false, dir: () => 'collections' },
   'skill-node-icon':  { requiresId: false, dir: () => 'skill-tree/icons' },
+  'skill-tree-background': { requiresId: false, dir: () => 'skill-tree/backgrounds' },
+  'compendium-race':  { requiresId: false, dir: () => 'compendium/races' },
   'calendar-season':  { requiresId: false, dir: () => 'calendar/seasons' },
 };
 

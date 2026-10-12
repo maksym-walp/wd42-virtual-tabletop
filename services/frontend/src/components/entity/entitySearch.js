@@ -8,7 +8,8 @@ import mapsApi from '../../api/maps';
 import { COLLECTION_DOMAINS } from '../../collectionsDomains';
 import { natureLabels } from '../../constants/spellbook';
 import { EQUIPMENT_TYPES } from '../../constants/equipment';
-import { ARCHETYPES, RACES } from '../../constants/characterSheet';
+import { ARCHETYPES } from '../../constants/characterSheet';
+import { raceLabel } from '../../utils/characterRace';
 import { calendarEvents } from './entityRegistry';
 import { cached } from './memoCache';
 
@@ -93,7 +94,7 @@ export const ENTITY_SERVICES = [
         kind: 'character',
         id: c.id,
         name: c.name,
-        meta: [ARCHETYPES[c.archetype]?.label, RACES[c.race]?.label].filter(Boolean).join(' · '),
+        meta: [ARCHETYPES[c.archetype]?.label, raceLabel(c)].filter(Boolean).join(' · '),
       }));
     },
   },

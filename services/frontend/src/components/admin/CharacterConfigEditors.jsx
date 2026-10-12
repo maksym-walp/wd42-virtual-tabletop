@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GripVertical, X, Plus } from 'lucide-react';
 import adminApi from '../../api/admin';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 import { invalidateCharacterConfig } from '../../hooks/useCharacterConfig';
 import { invalidateMagicForms } from '../../hooks/useMagicForms';
+import compendiumApi from '../../api/compendium';
+import { CHARACTERISTICS } from '../../constants/characterSheet';
 
 // Редактори конфігів листа персонажа (стани, валюти). Їхні записи мають
 // більше полів, ніж {key, label} звичайного ConfigCard, тож окремі картки.
@@ -305,6 +307,178 @@ export function CurrenciesConfigCard({ config, onChange, onSaved }) {
           </button>
         </div>
       ))}
+    </ConfigShell>
+  );
+}
+
+// ── Раси та підвиди персонажа ────────────────────────────────────────────────
+
+const MAX_PEOPLE_BONUS = 5;
+const MAX_RACE_BUDGET = 20;
+
+function validateRaces(value) {
+  const seenRaces = new Set();
+  for (const race of value) {
+    if (!race.race_id) return 'Оберіть расу у кожному блоці';
+    if (seenRaces.has(race.race_id)) return 'Та сама раса додана двічі';
+    seenRaces.add(race.race_id);
+    if (!Number.isInteger(race.bonus_budget) || race.bonus_budget < 0 || race.bonus_budget > MAX_RACE_BUDGET) {
+      return `Додаткові очки раси — ціле від 0 до ${MAX_RACE_BUDGET}`;
+    }
+    const seenPeoples = new Set();
+    for (const people of race.peoples) {
+      if (!people.people_id) return 'Оберіть народ у кожному підвиді';
+      if (seenPeoples.has(people.people_id)) return 'Той самий народ додано двічі до однієї раси';
+      seenPeoples.add(people.people_id);
+      const skills = new Set();
+      for (const bonus of people.skill_bonuses) {
+        if (!bonus.skill) return 'Оберіть навичку у кожному бонусі';
+        if (skills.has(bonus.skill)) return 'Навичка повторюється в одного підвиду';
+        skills.add(bonus.skill);
+        if (!Number.isInteger(bonus.value) || bonus.value < 1 || bonus.value > MAX_PEOPLE_BONUS) {
+          return `Бонус до навички — ціле від 1 до ${MAX_PEOPLE_BONUS}`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function RacesConfigCard({ config, onChange, onSaved }) {
+  const value = config.value;
+  const { saving, error, save } = useSave('character_races', value, validateRaces, onSaved);
+  // Публічні раси й народи компендіуму: гравцям віддаються лише вони, тож
+  // тільки їх і пропонуємо.
+  const [catalog, setCatalog] = useState(null);
+
+  useEffect(() => {
+    Promise.all([compendiumApi.listRaces(), compendiumApi.listPeoples()])
+      .then(([races, peoples]) => setCatalog({
+        races: races.filter((r) => r.is_public),
+        peoples: peoples.filter((p) => p.is_public),
+      }))
+      .catch(() => setCatalog({ races: [], peoples: [] }));
+  }, []);
+
+  const raceName = (id) => catalog?.races.find((r) => r.id === id)?.name;
+  const update = (rowId, patch) => onChange(value.map((r) => (r._rowId === rowId ? { ...r, ...patch } : r)));
+  const updatePeople = (race, index, patch) => update(race._rowId, {
+    peoples: race.peoples.map((p, i) => (i === index ? { ...p, ...patch } : p)),
+  });
+  const updateBonus = (race, pIndex, bIndex, patch) => updatePeople(race, pIndex, {
+    skill_bonuses: race.peoples[pIndex].skill_bonuses.map((b, i) => (i === bIndex ? { ...b, ...patch } : b)),
+  });
+  const removeAt = (list, index) => list.filter((_, i) => i !== index);
+
+  return (
+    <ConfigShell
+      title="Раси та підвиди персонажа"
+      hint="Раси, які гравець може обрати при створенні персонажа, — публічні раси компендіуму (назва, опис і зображення беруться звідти). Для кожної налаштуйте механіку (як і раніше: +1 до 4 навичок однієї характеристики та/або додаткові очки пулу) і підвиди — народи цієї раси з компендіуму з бонусами до навичок. Бонуси безкоштовні: додаються до значення навички й не віднімаються з пулу очок."
+      saving={saving}
+      error={error}
+      onSave={save}
+      addLabel="Додати расу"
+      onAdd={() => onChange([...value, {
+        race_id: '', bonus_characteristic: null, bonus_budget: 0, peoples: [], _rowId: newRowId(),
+      }])}
+    >
+      {!value.length && <p className="text-sm text-text-dim">Жодної раси не відкрито — гравці не зможуть створити персонажа.</p>}
+      {value.map((race) => {
+        const racePeoples = catalog?.peoples.filter((p) => p.race_id === race.race_id) ?? [];
+        const taken = new Set(value.filter((r) => r._rowId !== race._rowId).map((r) => r.race_id));
+        return (
+          <div key={race._rowId} className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
+            <div className="flex items-center gap-2">
+              <select className={inputClass} value={race.race_id} aria-label="Раса"
+                onChange={(e) => update(race._rowId, { race_id: e.target.value, peoples: [] })}>
+                <option value="">Оберіть расу…</option>
+                {race.race_id && !raceName(race.race_id) && (
+                  <option value={race.race_id}>{catalog ? 'Раса недоступна (не публічна або видалена)' : 'Завантаження…'}</option>
+                )}
+                {catalog?.races.filter((r) => !taken.has(r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              <button type="button" aria-label="Видалити расу" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger"
+                onClick={() => onChange(value.filter((r) => r._rowId !== race._rowId))}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-sm text-text-dim">
+              <label className="inline-flex items-center gap-2">
+                +1 до навичок
+                <select className={`${inputClass} w-auto`} value={race.bonus_characteristic ?? ''} aria-label="Характеристика з бонусом"
+                  onChange={(e) => update(race._rowId, { bonus_characteristic: e.target.value || null })}>
+                  <option value="">— немає —</option>
+                  {CHARACTERISTICS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-2">
+                Додаткові очки пулу
+                <input type="number" min="0" max={MAX_RACE_BUDGET} className={`${inputClass} w-20`} value={race.bonus_budget ?? 0}
+                  onChange={(e) => update(race._rowId, { bonus_budget: e.target.value === '' ? null : Number(e.target.value) })} />
+              </label>
+            </div>
+
+            {race.race_id && (
+              <div className="flex flex-col gap-2">
+                <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">Підвиди (народи)</span>
+                {race.peoples.map((people, pIndex) => (
+                  <div key={pIndex} className="flex gap-2 rounded-lg bg-bg p-2.5">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <select className={inputClass} value={people.people_id} aria-label="Народ"
+                        onChange={(e) => updatePeople(race, pIndex, { people_id: e.target.value })}>
+                        <option value="">Оберіть народ…</option>
+                        {people.people_id && !racePeoples.some((p) => p.id === people.people_id) && (
+                          <option value={people.people_id}>{catalog ? 'Народ недоступний (не публічний або видалений)' : 'Завантаження…'}</option>
+                        )}
+                        {racePeoples.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      {people.skill_bonuses.map((bonus, bIndex) => (
+                        <div key={bIndex} className="flex items-center gap-2">
+                          <select className={inputClass} value={bonus.skill} aria-label="Навичка"
+                            onChange={(e) => updateBonus(race, pIndex, bIndex, { skill: e.target.value })}>
+                            <option value="">Навичка…</option>
+                            {CHARACTERISTICS.map((c) => (
+                              <optgroup key={c.key} label={c.label}>
+                                {c.skills.map((sk) => <option key={sk.key} value={sk.key}>{sk.label}</option>)}
+                              </optgroup>
+                            ))}
+                          </select>
+                          <span className="text-text-dim">+</span>
+                          <input type="number" min="1" max={MAX_PEOPLE_BONUS} className={`${inputClass} w-20`} value={bonus.value}
+                            aria-label="Бонус"
+                            onChange={(e) => updateBonus(race, pIndex, bIndex, { value: e.target.value === '' ? null : Number(e.target.value) })} />
+                          <button type="button" aria-label="Прибрати бонус" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger"
+                            onClick={() => updatePeople(race, pIndex, { skill_bonuses: removeAt(people.skill_bonuses, bIndex) })}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      <div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => updatePeople(race, pIndex, {
+                          skill_bonuses: [...people.skill_bonuses, { skill: '', value: 1 }],
+                        })}><Plus size={14} /> Бонус до навички</Button>
+                      </div>
+                    </div>
+                    <button type="button" aria-label="Видалити підвид" className="shrink-0 self-start rounded-lg p-2 text-text-dim hover:text-danger"
+                      onClick={() => update(race._rowId, { peoples: removeAt(race.peoples, pIndex) })}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+                <div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => update(race._rowId, {
+                    peoples: [...race.peoples, { people_id: '', skill_bonuses: [] }],
+                  })}><Plus size={14} /> Додати підвид</Button>
+                  {catalog && !racePeoples.length && (
+                    <span className="ml-2 text-xs text-text-dim">У цієї раси немає публічних народів у компендіумі.</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </ConfigShell>
   );
 }

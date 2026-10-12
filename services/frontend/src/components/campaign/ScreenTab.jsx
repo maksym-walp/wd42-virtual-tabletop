@@ -13,8 +13,9 @@ import {
   computeMaxHp, computeMaxMagic, computePassiveDefense,
 } from '../../utils/characterCombatStats';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS, skillsToCharLevel,
+  ARCHETYPES, CHARACTERISTICS, skillsToCharLevel,
 } from '../../constants/characterSheet';
+import { raceLabel } from '../../utils/characterRace';
 
 // Зміни з листа персонажа йдуть повз campaigns-сервіс (окрім ХП, яке він
 // синхронізує сам), тож статблоки ще й зрідка перечитуються.
@@ -167,7 +168,7 @@ function Statblock({ entry, sheet, failed }) {
           {entry.character_name}
         </Link>
         <p className="text-xs text-text-dim">
-          {ARCHETYPES[entry.archetype]?.label ?? entry.archetype} · {RACES[entry.race]?.label ?? entry.race} · {entry.owner_username}
+          {ARCHETYPES[entry.archetype]?.label ?? entry.archetype} · {raceLabel(entry)} · {entry.owner_username}
         </p>
       </div>
       {entry.is_private && <Lock size={14} className="mt-1 shrink-0 text-text-dim" aria-label="Приватний персонаж" />}

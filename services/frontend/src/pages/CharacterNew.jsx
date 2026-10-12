@@ -9,8 +9,7 @@ import { createCollectionsApi } from '../api/collections';
 import DevelopmentTree from '../components/DevelopmentTree';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
-  ARCHETYPES, RACES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  RACE_BONUS_CHARACTERISTIC, SANGVI_BONUS_BUDGET,
+  ARCHETYPES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
   PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +19,7 @@ import Button from '../components/ui/Button';
 import IntInput from '../components/ui/IntInput';
 import RollButton from '../components/RollButton';
 import useCharacterConfig from '../hooks/useCharacterConfig';
+import { htmlToPreviewText } from '../utils/richText';
 
 const BASE_BUDGET = 42;
 const ALL_SKILL_KEYS = CHARACTERISTICS.flatMap((c) => c.skills.map((s) => s.key));
@@ -27,18 +27,35 @@ const INITIAL_MONEY = Object.fromEntries(
   CURRENCIES.flatMap((c) => [[c.high.key, 0], [c.low.key, 0]])
 );
 
-// Race grants +1 (base 2 instead of 1) to the 4 skills of one characteristic —
-// except sangvi, who gets extra budget instead of a fixed characteristic.
+// Раса (з конфігу адміна) може давати +1 (старт 2 замість 1) до 4 навичок однієї
+// характеристики (bonus_characteristic) і/або додаткові очки пулу (bonus_budget).
 function boostedSkillKeysFor(race) {
-  const char = CHARACTERISTICS.find((c) => c.key === RACE_BONUS_CHARACTERISTIC[race]);
+  const char = CHARACTERISTICS.find((c) => c.key === race?.bonus_characteristic);
   return new Set(char?.skills.map((s) => s.key) ?? []);
 }
-function initialSkillsFor(race) {
+// Підвид додає свій бонус до навичок зверху на расовий — теж безкоштовно.
+function peopleBonusFor(people) {
+  const bonus = {};
+  for (const { skill, value } of people?.skill_bonuses ?? []) bonus[skill] = (bonus[skill] || 0) + value;
+  return bonus;
+}
+// Стартове (і мінімальне) значення кожної навички: 1 + расовий буст + бонус підвиду.
+function skillFloorsFor(race, people) {
   const boosted = boostedSkillKeysFor(race);
-  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, boosted.has(k) ? 2 : 1]));
+  const bonus = peopleBonusFor(people);
+  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.min(12, 1 + (boosted.has(k) ? 1 : 0) + (bonus[k] || 0))]));
 }
 function budgetFor(race) {
-  return race === 'sangvi' ? BASE_BUDGET + SANGVI_BONUS_BUDGET : BASE_BUDGET;
+  return BASE_BUDGET + (race?.bonus_budget ?? 0);
+}
+
+// Що раса дає механічно — підпис на її картці.
+function raceBonusLabel(race) {
+  const parts = [];
+  const char = CHARACTERISTICS.find((c) => c.key === race.bonus_characteristic);
+  if (char) parts.push(`+1 до навичок: ${char.label}`);
+  if (race.bonus_budget) parts.push(`+${race.bonus_budget} очок до пулу`);
+  return parts.join(' · ');
 }
 
 const STEPS = [
@@ -49,7 +66,7 @@ const STEPS = [
   { n: 5, label: 'Дерево' },
 ];
 
-// Filenames matching an archetype/race key (e.g. assets/archetypes/fighter.png) are picked up
+// Filenames matching an archetype key (e.g. assets/archetypes/fighter.png) are picked up
 // automatically — no code change needed once real illustrations are dropped into those folders.
 function imagesByKey(globResult) {
   const map = {};
@@ -62,9 +79,6 @@ function imagesByKey(globResult) {
 const archetypeImages = imagesByKey(
   import.meta.glob('../assets/archetypes/*.{png,jpg,jpeg,svg}', { eager: true, import: 'default' })
 );
-const raceImages = imagesByKey(
-  import.meta.glob('../assets/races/*.{png,jpg,jpeg,svg}', { eager: true, import: 'default' })
-);
 
 export default function CharacterNew() {
   const navigate = useNavigate();
@@ -76,16 +90,27 @@ export default function CharacterNew() {
   // Step 1 — basics
   const [name, setName] = useState('');
   const [archetype, setArchetype] = useState('');
-  const [race, setRace] = useState('');
+  const [raceId, setRaceId] = useState('');
+  const [peopleId, setPeopleId] = useState('');
+  const { races } = useCharacterConfig();
+  const race = races.find((r) => r.id === raceId) ?? null;
+  const people = race?.peoples.find((p) => p.id === peopleId) ?? null;
 
-  // Step 2 — skills. The pool defaults to 42 (46 for sangvi) but the player may
+  // Step 2 — skills. The pool defaults to 42 (+ race bonus) but the player may
   // set any number — homebrew tables adjust it.
   const [skills, setSkills] = useState({});
   const [skillBudget, setSkillBudget] = useState(BASE_BUDGET);
-  // The racial +1 to 4 skills is a bonus on top of the pool, not paid out of it —
-  // so those 4 "free" points are added back before computing what's left.
-  const skillBonusCount = boostedSkillKeysFor(race).size;
-  const skillRemaining = skillBudget - Object.values(skills).reduce((s, v) => s + (v - 1), 0) + skillBonusCount;
+  // The racial +1 to 4 skills and the people's bonus are on top of the pool, not
+  // paid out of it — only points above each skill's floor are spent.
+  const skillFloors = skillFloorsFor(race, people);
+  const skillRemaining = skillBudget - Object.entries(skills).reduce((s, [k, v]) => s + (v - (skillFloors[k] ?? 1)), 0);
+
+  // Підвид належить расі — з іншою расою він недоступний.
+  const chooseRace = (id) => {
+    if (id === raceId) return;
+    setRaceId(id);
+    setPeopleId('');
+  };
 
   // Step 5 — development tree. Starting experience defaults to 10, editable.
   const [experiencePoints, setExperiencePoints] = useState(10);
@@ -118,9 +143,9 @@ export default function CharacterNew() {
     setSaving(true);
     setError('');
     try {
-      const char = await characterApi.create({ name: name.trim(), archetype, race });
+      const char = await characterApi.create({ name: name.trim(), archetype, race_id: race.id, ...(people && { people_id: people.id }) });
       setCharacterId(char.id);
-      setSkills(initialSkillsFor(race));
+      setSkills(skillFloors);
       setSkillBudget(budgetFor(race));
       setStep(2);
     } catch (err) {
@@ -222,13 +247,15 @@ export default function CharacterNew() {
           <Step1Basics
             name={name} setName={setName}
             archetype={archetype} setArchetype={setArchetype}
-            race={race} setRace={setRace}
+            races={races} raceId={raceId} setRace={chooseRace}
+            peopleId={peopleId} setPeopleId={setPeopleId}
           />
         )}
         {step === 2 && (
           <Step2Skills
             skills={skills} setSkills={setSkills} remaining={skillRemaining}
             budget={skillBudget} setBudget={setSkillBudget} boostedKeys={boostedSkillKeysFor(race)}
+            floors={skillFloors} people={people}
           />
         )}
         {step === 3 && (
@@ -321,7 +348,7 @@ function WizardSteps({ step }) {
   );
 }
 
-function Step1Basics({ name, setName, archetype, setArchetype, race, setRace }) {
+function Step1Basics({ name, setName, archetype, setArchetype, races, raceId, setRace, peopleId, setPeopleId }) {
   const { theme } = useTheme();
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   return (
@@ -357,25 +384,50 @@ function Step1Basics({ name, setName, archetype, setArchetype, race, setRace }) 
       </Field>
 
       <Field label="Народ">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Object.entries(RACES).map(([key, r]) => (
-            <ChoiceCard
-              key={key}
-              selected={race === key}
-              onClick={() => setRace(key)}
-              title={r.label}
-              description={r.description}
-              subtitle={r.ability}
-              image={raceImages[key]}
-            />
-          ))}
-        </div>
+        {races.length === 0 ? (
+          <p className="text-sm text-text-dim">Адміністратор ще не відкрив жодної раси для персонажів.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {races.map((r) => (
+              <ChoiceCard
+                key={r.id}
+                selected={raceId === r.id}
+                onClick={() => setRace(r.id)}
+                title={r.name}
+                description={htmlToPreviewText(r.description || '')}
+                subtitle={raceBonusLabel(r)}
+                image={r.image_url}
+              >
+                {raceId === r.id && r.peoples.length > 0 && (
+                  <PeopleSelect peoples={r.peoples} value={peopleId} onChange={setPeopleId} />
+                )}
+              </ChoiceCard>
+            ))}
+          </div>
+        )}
       </Field>
     </Card>
   );
 }
 
-function ChoiceCard({ selected, onClick, title, subtitle, description, image, color }) {
+// Необовʼязковий підвид (народ) — випадне меню всередині вибраної картки раси.
+function PeopleSelect({ peoples, value, onChange }) {
+  const chosen = peoples.find((p) => p.id === value);
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 border-t border-border/40 pt-2" onClick={(e) => e.stopPropagation()}>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">Підвид (необовʼязково)</span>
+      <select className={`${inputClass} min-h-9 py-1.5 text-sm`} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Без підвиду</option>
+        {peoples.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      {chosen?.description && (
+        <p className="text-xs leading-snug text-text-muted">{htmlToPreviewText(chosen.description)}</p>
+      )}
+    </div>
+  );
+}
+
+function ChoiceCard({ selected, onClick, title, subtitle, description, image, color, children }) {
   const style = selected && color
     ? { borderColor: color, backgroundColor: `${color}1a` }
     : undefined;
@@ -400,6 +452,7 @@ function ChoiceCard({ selected, onClick, title, subtitle, description, image, co
       <strong style={titleStyle} className={titleClass}>{title}</strong>
       {description && <p className="text-xs leading-snug text-text-muted">{description}</p>}
       {subtitle && <p className="text-[0.7rem] text-text-dim">{subtitle}</p>}
+      {children}
     </div>
   );
 }
@@ -418,8 +471,8 @@ function ChoicePlaceholder({ letter, color }) {
   );
 }
 
-function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedKeys }) {
-  const floorFor = (key) => (boostedKeys.has(key) ? 2 : 1);
+function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedKeys, floors, people }) {
+  const floorFor = (key) => floors[key] ?? 1;
 
   const setSkill = (key, delta) => {
     setSkills((prev) => {
@@ -431,6 +484,8 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedK
   };
 
   const boostedLabel = CHARACTERISTICS.find((c) => c.skills.some((s) => boostedKeys.has(s.key)))?.label;
+  const skillLabels = Object.fromEntries(CHARACTERISTICS.flatMap((c) => c.skills.map((s) => [s.key, s.label])));
+  const peopleBonuses = (people?.skill_bonuses ?? []).map((b) => `+${b.value} ${skillLabels[b.skill]}`);
 
   return (
     <Card>
@@ -446,6 +501,11 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedK
           : 'Усі навички починаються з 1. '}
         Розподіліть очки між навичками (від {boostedLabel ? '2 для бустнутих' : '1'} до 12).
       </p>
+      {peopleBonuses.length > 0 && (
+        <p className="mb-2 text-sm text-text-dim">
+          Підвид «{people.name}» безкоштовно дає: {peopleBonuses.join(', ')}.
+        </p>
+      )}
       <p className="mb-5 text-xs text-text-dim">
         Пул очок (типово 42):
         <IntInput
