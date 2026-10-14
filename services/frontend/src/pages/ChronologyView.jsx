@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, CalendarSearch, Settings, Trash2, Plus, MapPin, ListTree } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CalendarSearch, Settings, Trash2, Plus, MapPin, ListTree, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
-import { totalDaysSinceEpoch, weekdayIndexOf, yearLabel, getActiveSeason, eventOccursOnDay } from '../utils/chronologyMath';
+import { totalDaysSinceEpoch, getActiveSeason } from '../utils/chronologyMath';
+import { makeTimeline, termsOf, dateFromTotalDays } from '../utils/chronologyEras';
+import { eventsOnDay, equivalentDates, equivalentDatesText } from '../utils/chronologySync';
 import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
 import EventForm from '../components/chronology/EventForm';
@@ -38,23 +40,28 @@ export default function ChronologyView() {
   const [seasons, setSeasons] = useState([]);
   const [moons, setMoons] = useState([]);
   const [events, setEvents] = useState([]);
+  const [calendars, setCalendars] = useState([]);
   const [locations, setLocations] = useState([]);
   const [characterOptions, setCharacterOptions] = useState([]);
   const [campaign, setCampaign] = useState(null);
   const isCampaignGm = Boolean(campaign?.is_gm);
   const [loading, setLoading] = useState(true);
 
-  const [viewYear, setViewYear] = useState(1);
-  const [viewMonthIndex, setViewMonthIndex] = useState(0);
-  const [selectedDay, setSelectedDay] = useState(null);
+  // Сітка навігує днем базового відліку (viewT — будь-який день показаного
+  // місяця): сторінка місяця, її підпис і межі виводяться з локального відліку
+  // ер (chronologyEras.js), тож місяці й роки нової ери починаються з 1.
+  const [viewT, setViewT] = useState(0);
+  const [selectedT, setSelectedT] = useState(null);
   const [jumpOpen, setJumpOpen] = useState(false);
-  const [jumpYear, setJumpYear] = useState('');
-  const [jumpMonthIndex, setJumpMonthIndex] = useState(0);
+  const [jump, setJump] = useState({ eraIndex: -1, cycle: '1', year: '', monthIndex: 0 });
+  const [jumpError, setJumpError] = useState('');
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setCampaign(null);
+    setViewT(0);
+    setSelectedT(null);
     // The campaign fetch is deliberately NOT in this Promise.all: it used to
     // be, which meant any failure to load it (403 — e.g. viewing with an
     // account that isn't actually this campaign's GM or a member; a stale
@@ -74,13 +81,14 @@ export default function ChronologyView() {
       chronologyApi.listWeekdays(id),
       chronologyApi.listSeasons(id),
       chronologyApi.listMoons(id),
-      chronologyApi.listEvents(id, campaignId),
+      chronologyApi.listEvents(id, campaignId, { synced: true }),
+      chronologyApi.list(),
       mapsApi.listLocations(),
       canManage
         ? Promise.all([npcsApi.list(), bestiaryApi.list()])
         : Promise.resolve([[], []]),
     ])
-      .then(([cal, monthsList, weekdaysList, seasonsList, moonsList, eventsList, locationsList, [npcs, creatures]]) => {
+      .then(([cal, monthsList, weekdaysList, seasonsList, moonsList, eventsList, calendarsList, locationsList, [npcs, creatures]]) => {
         if (!alive) return;
         setCalendar(cal);
         setMonths(monthsList);
@@ -88,6 +96,7 @@ export default function ChronologyView() {
         setSeasons(seasonsList);
         setMoons(moonsList);
         setEvents(eventsList);
+        setCalendars(calendarsList);
         setLocations(locationsList);
         setCharacterOptions([
           ...npcs.map((n) => ({ key: n.id, label: `${n.name} (НІП)` })),
@@ -111,8 +120,7 @@ export default function ChronologyView() {
         // beats all three.
         const defaultMi = cal.default_month_id ? monthsList.findIndex((m) => m.id === cal.default_month_id) : -1;
         if (defaultMi !== -1 && !hasDeepLink) {
-          setViewYear(cal.default_year ?? 1);
-          setViewMonthIndex(defaultMi);
+          setViewT(totalDaysSinceEpoch(monthsList, Number(cal.default_year ?? 1), defaultMi, 1));
         }
 
         if (campaignId) {
@@ -123,8 +131,7 @@ export default function ChronologyView() {
               if (!hasDeepLink && campaignData?.current_month_id && campaignData?.current_year != null) {
                 const mi = monthsList.findIndex((m) => m.id === campaignData.current_month_id);
                 if (mi !== -1) {
-                  setViewYear(campaignData.current_year);
-                  setViewMonthIndex(mi);
+                  setViewT(totalDaysSinceEpoch(monthsList, Number(campaignData.current_year), mi, 1));
                 }
               }
             })
@@ -132,11 +139,9 @@ export default function ChronologyView() {
         }
 
         if (hasDeepLink) {
-          setViewYear(Number(qYear));
-          setViewMonthIndex(deepLinkMi);
-          const totalDays = totalDaysSinceEpoch(monthsList, Number(qYear), deepLinkMi, Number(qDay));
-          const weekdayIndex = weekdayIndexOf(totalDays, cal.first_day_offset || 0, weekdaysList.length);
-          setSelectedDay({ day: Number(qDay), totalDays, weekdayIndex });
+          const T = totalDaysSinceEpoch(monthsList, Number(qYear), deepLinkMi, Number(qDay));
+          setViewT(T);
+          setSelectedT(T);
         }
       })
       .catch(() => { if (alive) navigate('/chronology'); })
@@ -144,37 +149,32 @@ export default function ChronologyView() {
     return () => { alive = false; };
   }, [id, campaignId, canManage]);
 
-  const refetchEvents = () => chronologyApi.listEvents(id, campaignId).then(setEvents);
-
-  const goToMonth = (delta) => {
-    let newIndex = viewMonthIndex + delta;
-    let newYear = viewYear;
-    if (newIndex < 0) { newIndex = months.length - 1; newYear -= 1; }
-    else if (newIndex >= months.length) { newIndex = 0; newYear += 1; }
-    setViewMonthIndex(newIndex);
-    setViewYear(newYear);
+  const handleExport = async () => {
+    try {
+      const data = await chronologyApi.exportStructure(id);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(calendar.name || 'calendar').replace(/[\\/:*?"<>|]+/g, '_')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Не вдалося експортувати календар');
+    }
   };
+
+  const refetchEvents = () => chronologyApi.listEvents(id, campaignId, { synced: true }).then(setEvents);
+
+  // Дата кампанії «сьогодні» у базовому відліку (null — не задана).
+  const campaignT = (() => {
+    const mi = campaign?.current_month_id ? months.findIndex((m) => m.id === campaign.current_month_id) : -1;
+    return mi !== -1 && campaign.current_year != null && campaign.current_day != null
+      ? totalDaysSinceEpoch(months, Number(campaign.current_year), mi, Number(campaign.current_day))
+      : null;
+  })();
 
   const jumpToToday = () => {
-    if (!campaign?.current_month_id || campaign.current_year == null) return;
-    const mi = months.findIndex((m) => m.id === campaign.current_month_id);
-    if (mi === -1) return;
-    setViewYear(campaign.current_year);
-    setViewMonthIndex(mi);
-  };
-
-  const openJumpForm = () => {
-    setJumpYear(String(viewYear));
-    setJumpMonthIndex(viewMonthIndex);
-    setJumpOpen(true);
-  };
-
-  const applyJump = () => {
-    const y = Number(jumpYear);
-    if (!Number.isInteger(y)) return;
-    setViewYear(y);
-    setViewMonthIndex(jumpMonthIndex);
-    setJumpOpen(false);
+    if (campaignT != null) setViewT(campaignT);
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -195,32 +195,70 @@ export default function ChronologyView() {
   }
 
   const totalWeekdays = weekdays.length;
-  const firstDayOffset = calendar.first_day_offset || 0;
-  const activeMonth = months[viewMonthIndex];
+  const terms = termsOf(calendar);
+  // Локальний відлік календаря (ери) — повні months/weekdayCount свіжіші за
+  // preview з getOne.
+  const syncTarget = { ...calendar, months, weekdayCount: totalWeekdays };
+  const timeline = makeTimeline(syncTarget);
+  const page = timeline.monthPage(viewT);
+  const activeMonth = months[page.loc.monthIndex];
+  const todayLoc = campaignT != null ? timeline.locate(campaignT) : null;
+
+  const goToMonth = (delta) => setViewT(delta < 0 ? page.start - 1 : page.end + 1);
+
+  const openJumpForm = () => {
+    setJump({
+      eraIndex: page.loc.eraIndex, cycle: String(page.loc.cycle ?? 1),
+      year: String(page.loc.year), monthIndex: page.loc.monthIndex,
+    });
+    setJumpError('');
+    setJumpOpen(true);
+  };
+
+  const applyJump = () => {
+    const spec = {
+      eraIndex: jump.eraIndex, cycle: Number(jump.cycle) || 1,
+      year: Number(jump.year), monthIndex: Number(jump.monthIndex), day: 1,
+    };
+    if (!Number.isInteger(spec.year) || !timeline.isValidLocal(spec)) {
+      setJumpError('Такого місяця немає в цій ері (за межами її тривалості або циклу).');
+      return;
+    }
+    setViewT(timeline.toAbs(spec));
+    setJumpOpen(false);
+  };
 
   // A written label, not just the highlighted grid cell — the cell only
   // shows up at all once you're already browsing the right month/year,
   // which isn't a way to *find out* the current date in the first place.
-  const currentDateMonth = campaign?.current_month_id ? months.find((m) => m.id === campaign.current_month_id) : null;
   // Plain year here, not yearLabel's era suffix — this line is meant to be
   // a compact glance-and-go status, and "20 Каель, 102 За ільнбурзьким
   // календарем" runs long; the full era-suffixed form still shows in the
   // month header above, where there's room for it.
-  const currentDateLabel = currentDateMonth && campaign?.current_year != null && campaign?.current_day != null
-    ? `${campaign.current_day} ${currentDateMonth.name}, ${campaign.current_year}`
+  const currentDateLabel = todayLoc
+    ? `${todayLoc.day} ${todayLoc.monthName}, ${todayLoc.year}${todayLoc.era ? ` ${todayLoc.era.name}` : ''}`
     : null;
 
-  const daysInMonth = Number(activeMonth.length);
-  const firstWeekday = weekdayIndexOf(
-    totalDaysSinceEpoch(months, viewYear, viewMonthIndex, 1), firstDayOffset, totalWeekdays
-  );
+  const firstWeekday = timeline.weekdayAt(page.start);
 
+  // Сітка рахує події через спільну вісь синхронізації: події інших календарів
+  // потрапляють у клітинку, якщо їхня дата (з повторюваністю за структурою
+  // власного календаря) збігається з цим днем. calendar з getOne — той самий
+  // рядок, що в списку, але months/weekdayCount тут свіжіші.
+  const syncCtx = { calendarsById: new Map(calendars.map((c) => [c.id, c])), target: syncTarget, targetTimeline: timeline };
+  const baseOf = (T) => {
+    const d = dateFromTotalDays(months, T);
+    return { year: d.year, monthId: d.monthId, day: d.day };
+  };
+
+  // Клітинки — дні базового відліку від початку сторінки місяця до її кінця
+  // (місяць може обриватися початком наступної ери).
   const cells = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  for (let T = page.start; T <= page.end; T++) cells.push(T);
   if (totalWeekdays > 0) while (cells.length % totalWeekdays !== 0) cells.push(null);
 
-  const activeSeason = getActiveSeason(seasons, months, viewMonthIndex, 1);
+  const activeSeason = getActiveSeason(seasons, months, page.loc.monthIndex, 1);
   const scrimmed = Boolean(activeSeason?.bg_image_url);
 
   const containerStyle = scrimmed
@@ -240,6 +278,9 @@ export default function ChronologyView() {
           >
             <ListTree size={15} /> Список подій
           </Link>
+          <button type="button" onClick={handleExport} className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text">
+            <Download size={15} /> Експорт JSON
+          </button>
           {canManage && (
             <Link to={`/chronology/${id}/build`} className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text">
               <Settings size={15} /> Редагувати структуру
@@ -264,7 +305,7 @@ export default function ChronologyView() {
               <div className="text-center">
                 <div className="font-display text-lg">{activeMonth.name}</div>
                 <div className={`text-xs ${scrimmed ? 'text-white/70' : 'text-text-dim'}`}>
-                  {yearLabel(viewYear, calendar.current_era_name, calendar.previous_era_name)}
+                  {timeline.yearText(page.loc)}
                 </div>
               </div>
               <button type="button" onClick={() => goToMonth(1)} aria-label="Наступний місяць"
@@ -308,27 +349,48 @@ export default function ChronologyView() {
 
           {jumpOpen && (
             <div className={`mb-4 flex flex-wrap items-end gap-2 rounded-lg border p-3 ${scrimmed ? 'border-white/20 bg-black/20' : 'border-border bg-bg'}`}>
-              <Field label="Рік">
+              {timeline.hasEras && (
+                <Field label="Ера">
+                  <select
+                    className={inputClass}
+                    value={jump.eraIndex}
+                    onChange={(e) => setJump((j) => ({ ...j, eraIndex: Number(e.target.value) }))}
+                  >
+                    <option value={-1}>{calendar.current_era_name || 'Основна ера'}</option>
+                    {timeline.eras.map((er, i) => <option key={er.id || i} value={i}>{er.name}</option>)}
+                  </select>
+                </Field>
+              )}
+              {jump.eraIndex >= 0 && timeline.eras[jump.eraIndex]?.cycle && (
+                <Field label="Цикл">
+                  <input
+                    type="number" min={1} className={`${inputClass} w-24`} value={jump.cycle}
+                    onChange={(e) => setJump((j) => ({ ...j, cycle: e.target.value }))}
+                  />
+                </Field>
+              )}
+              <Field label={terms.year}>
                 <input
                   type="number"
                   autoFocus
                   className={`${inputClass} w-28`}
-                  value={jumpYear}
-                  onChange={(e) => setJumpYear(e.target.value)}
+                  value={jump.year}
+                  onChange={(e) => setJump((j) => ({ ...j, year: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') applyJump(); if (e.key === 'Escape') setJumpOpen(false); }}
                 />
               </Field>
               <Field label="Місяць">
                 <select
                   className={inputClass}
-                  value={jumpMonthIndex}
-                  onChange={(e) => setJumpMonthIndex(Number(e.target.value))}
+                  value={jump.monthIndex}
+                  onChange={(e) => setJump((j) => ({ ...j, monthIndex: Number(e.target.value) }))}
                 >
                   {months.map((m, i) => <option key={m.id} value={i}>{m.name}</option>)}
                 </select>
               </Field>
               <Button size="sm" onClick={applyJump}>Перейти</Button>
               <Button variant="ghost" size="sm" onClick={() => setJumpOpen(false)}>Скасувати</Button>
+              {jumpError && <p className="basis-full text-xs text-danger">{jumpError}</p>}
             </div>
           )}
 
@@ -351,21 +413,20 @@ export default function ChronologyView() {
                   <span className="md:hidden">{wd.short_name || wd.name}</span>
                 </div>
               ))}
-              {cells.map((day, i) => {
-                if (day === null) return <div key={`blank-${i}`} />;
-                const totalDays = totalDaysSinceEpoch(months, viewYear, viewMonthIndex, day);
-                const weekdayIndex = weekdayIndexOf(totalDays, firstDayOffset, totalWeekdays);
-                const dayEvents = events.filter((e) =>
-                  eventOccursOnDay(e, { year: viewYear, monthId: activeMonth.id, day, weekdayIndex }, months, firstDayOffset, totalWeekdays)
-                );
-                const isToday = campaign?.current_month_id === activeMonth.id
-                  && campaign?.current_year === viewYear && campaign?.current_day === day;
+              {cells.map((T, i) => {
+                if (T === null) return <div key={`blank-${i}`} />;
+                const day = T - page.start + 1;
+                const totalDays = T;
+                const dayEvents = eventsOnDay(events, syncCtx, T);
+                const equivalents = equivalentDatesText(calendars, syncTarget, baseOf(T));
+                const isToday = T === campaignT;
 
                 return (
                   <button
-                    key={day}
+                    key={T}
                     type="button"
-                    onClick={() => setSelectedDay({ day, totalDays, weekdayIndex })}
+                    onClick={() => setSelectedT(T)}
+                    title={equivalents || undefined}
                     className={[
                       'flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors',
                       scrimmed
@@ -403,26 +464,32 @@ export default function ChronologyView() {
               })}
             </div>
           )}
+          {page.truncated && (
+            <p className={`mt-3 text-xs ${scrimmed ? 'text-white/70' : 'text-text-dim'}`}>
+              Тут закінчується {page.loc.era ? `«${page.loc.era.name}»` : 'основна ера'}: з наступного дня починається {(() => {
+                const next = timeline.locate(page.end + 1);
+                return next?.era ? `«${next.era.name}»${next.cycle ? ` (цикл ${next.cycle})` : ''}` : 'нова ера';
+              })()}.
+            </p>
+          )}
         </div>
       </div>
 
-      {selectedDay && (
+      {selectedT != null && (
         <DayEventsSheet
           calendarId={id}
           campaignId={campaignId}
           canManage={canManage}
           isCampaignGm={isCampaignGm}
           calendar={calendar}
-          months={months}
           locations={locations}
           characterOptions={characterOptions}
-          activeMonth={activeMonth}
-          viewYear={viewYear}
-          selectedDay={selectedDay}
-          events={events.filter((e) =>
-            eventOccursOnDay(e, { year: viewYear, monthId: activeMonth.id, day: selectedDay.day, weekdayIndex: selectedDay.weekdayIndex }, months, firstDayOffset, totalWeekdays)
-          )}
-          onClose={() => setSelectedDay(null)}
+          title={timeline.format(selectedT)}
+          baseDate={baseOf(selectedT)}
+          calendars={calendars}
+          events={eventsOnDay(events, syncCtx, selectedT)}
+          equivalents={equivalentDates(calendars, syncTarget, baseOf(selectedT))}
+          onClose={() => setSelectedT(null)}
           onEventsChanged={refetchEvents}
           onCampaignDateSet={(updated) => setCampaign(updated)}
         />
@@ -432,8 +499,8 @@ export default function ChronologyView() {
 }
 
 function DayEventsSheet({
-  calendarId, campaignId, canManage, isCampaignGm, calendar, months, locations, characterOptions,
-  activeMonth, viewYear, selectedDay, events, onClose, onEventsChanged, onCampaignDateSet,
+  calendarId, campaignId, canManage, isCampaignGm, calendar, calendars, locations, characterOptions,
+  title, baseDate, events, equivalents, onClose, onEventsChanged, onCampaignDateSet,
 }) {
   const [addingOpen, setAddingOpen] = useState(false);
   const [settingDate, setSettingDate] = useState(false);
@@ -441,12 +508,14 @@ function DayEventsSheet({
   const [error, setError] = useState('');
 
   const locationsById = new Map(locations.map((l) => [l.id, l]));
-  const title = `${selectedDay.day} ${activeMonth.name}, ${yearLabel(viewYear, calendar.current_era_name, calendar.previous_era_name)}`;
 
-  const handleDelete = async (eventId) => {
+  const calendarsById = new Map(calendars.map((c) => [c.id, c]));
+
+  const handleDelete = async (event) => {
     setError('');
     try {
-      await chronologyApi.removeEvent(calendarId, eventId);
+      // Подія може належати іншому (синхронізованому) календарю.
+      await chronologyApi.removeEvent(event.calendar_id || calendarId, event.id);
       onEventsChanged();
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалося видалити подію');
@@ -460,9 +529,9 @@ function DayEventsSheet({
     try {
       const updated = await campaignApi.updateCurrentDate(campaignId, {
         calendar_id: calendarId,
-        current_year: viewYear,
-        current_month_id: activeMonth.id,
-        current_day: selectedDay.day,
+        current_year: baseDate.year,
+        current_month_id: baseDate.monthId,
+        current_day: baseDate.day,
       });
       onCampaignDateSet(updated);
       setDateMessage('Поточну дату кампанії оновлено');
@@ -480,6 +549,17 @@ function DayEventsSheet({
           <p className="text-sm text-text-dim">У цей день немає подій.</p>
         )}
 
+        {equivalents.length > 0 && (
+          <div className="rounded-lg border border-border bg-bg px-3 py-2 text-xs text-text-dim">
+            <p className="mb-1 font-semibold uppercase tracking-wide">В інших календарях</p>
+            <ul className="flex flex-col gap-0.5">
+              {equivalents.map((q) => (
+                <li key={q.calendar.id}><span className="text-text">{q.label}</span> — {q.calendar.name}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {events.length > 0 && (
           <ul className="flex flex-col gap-2">
             {events.map((e) => (
@@ -494,6 +574,11 @@ function DayEventsSheet({
                     {e.campaign_id && (
                       <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">Кампанія</span>
                     )}
+                    {e.calendar_id !== calendarId && calendarsById.get(e.calendar_id) && (
+                      <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">
+                        {calendarsById.get(e.calendar_id).name}
+                      </span>
+                    )}
                   </div>
                   {e.description && <SmartTextReader text={e.description} className="mt-1 text-xs text-text-dim" />}
                   {eventPlaceLabel(e, locationsById) && (
@@ -503,7 +588,7 @@ function DayEventsSheet({
                   )}
                 </div>
                 {canManage && (
-                  <button type="button" onClick={() => handleDelete(e.id)} aria-label="Видалити подію"
+                  <button type="button" onClick={() => handleDelete(e)} aria-label="Видалити подію"
                     className="shrink-0 rounded p-1 text-danger hover:bg-surface-hover">
                     <Trash2 size={15} />
                   </button>
@@ -526,10 +611,10 @@ function DayEventsSheet({
           <EventForm
             calendarId={calendarId}
             campaignId={campaignId}
-            months={months}
+            calendars={calendars}
             locations={locations}
             characterOptions={characterOptions}
-            initialDate={{ year: viewYear, monthId: activeMonth.id, day: selectedDay.day }}
+            initialDate={baseDate}
             onCancel={() => setAddingOpen(false)}
             onSaved={() => { setAddingOpen(false); onEventsChanged(); }}
           />

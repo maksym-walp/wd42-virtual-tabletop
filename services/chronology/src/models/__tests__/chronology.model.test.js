@@ -32,39 +32,78 @@ describe('ChronologyModel.findAll ordering', () => {
 
 describe('ChronologyModel.setDefault', () => {
   const client = { query: jest.fn(), release: jest.fn() };
+  const run = (targetOffset) => {
+    client.query.mockReset().mockImplementation(async (sql) => {
+      if (/FOR UPDATE/.test(sql)) return { rows: [{ sync_offset_days: targetOffset }] };
+      if (/RETURNING/.test(sql)) return { rows: [{ id: 'c1', is_default: true }] };
+      return { rows: [] };
+    });
+  };
+  const sqls = () => client.query.mock.calls.map(([sql]) => sql);
   beforeEach(() => {
-    client.query.mockReset().mockResolvedValue({ rows: [{ id: 'c1', is_default: true }] });
     client.release.mockReset();
     pool.connect = jest.fn().mockResolvedValue(client);
   });
 
-  it('clears the previous default and sets the new one in one transaction', async () => {
+  it('demotes the old default keeping its axis position, then promotes the target', async () => {
+    run(7);
     const row = await ChronologyModel.setDefault('c1', true);
-    const sqls = client.query.mock.calls.map(([sql]) => sql);
-    expect(sqls[0]).toBe('BEGIN');
-    expect(sqls[1]).toMatch(/SET is_default = false WHERE is_default AND id <> \$1/);
-    expect(sqls[2]).toMatch(/SET is_default = \$2 WHERE id = \$1/);
-    expect(client.query.mock.calls[2][1]).toEqual(['c1', true]);
-    expect(sqls[3]).toBe('COMMIT');
+    const q = sqls();
+    expect(q[0]).toBe('BEGIN');
+    expect(q[1]).toMatch(/FOR UPDATE/);
+    expect(q[2]).toMatch(/SET is_default = false, sync_offset_days = COALESCE\(sync_offset_days, 0\)\s+WHERE is_default AND id <> \$1/);
+    expect(q[3]).toMatch(/SET is_default = true, sync_offset_days = COALESCE\(sync_offset_days, 0\)/);
+    expect(q).toHaveLength(5); // BEGIN, SELECT, demote, promote, COMMIT — a synced target keeps everyone synced
+    expect(q[4]).toBe('COMMIT');
     expect(client.release).toHaveBeenCalled();
     expect(row).toEqual({ id: 'c1', is_default: true });
   });
 
-  it('does not touch other calendars when unsetting', async () => {
+  it('drops every other calendar\'s sync when the new default was never synced', async () => {
+    run(null);
+    await ChronologyModel.setDefault('c1', true);
+    expect(sqls()).toContainEqual(expect.stringMatching(/SET sync_offset_days = NULL WHERE id <> \$1/));
+  });
+
+  it('returns null and does not touch anything for an unknown calendar', async () => {
+    client.query.mockReset().mockResolvedValue({ rows: [] });
+    expect(await ChronologyModel.setDefault('nope', true)).toBeNull();
+    expect(sqls().filter((q) => /^UPDATE/.test(q.trim()))).toHaveLength(0);
+  });
+
+  it('keeps the calendar\'s axis position when unsetting', async () => {
+    run(0);
     await ChronologyModel.setDefault('c1', false);
-    const sqls = client.query.mock.calls.map(([sql]) => sql);
-    expect(sqls).toHaveLength(3); // BEGIN, UPDATE, COMMIT
-    expect(client.query.mock.calls[1][1]).toEqual(['c1', false]);
+    const q = sqls();
+    expect(q).toHaveLength(3); // BEGIN, UPDATE, COMMIT
+    expect(q[1]).toMatch(/SET is_default = false, sync_offset_days = COALESCE/);
+    expect(client.query.mock.calls[1][1]).toEqual(['c1']);
   });
 
   it('rolls back and releases on failure', async () => {
-    client.query.mockImplementation(async (sql) => {
-      if (/SET is_default = \$2/.test(sql)) throw new Error('boom');
+    client.query.mockReset().mockImplementation(async (sql) => {
+      if (/FOR UPDATE/.test(sql)) throw new Error('boom');
       return { rows: [] };
     });
     await expect(ChronologyModel.setDefault('c1', true)).rejects.toThrow('boom');
     expect(client.query).toHaveBeenCalledWith('ROLLBACK');
     expect(client.release).toHaveBeenCalled();
+  });
+});
+
+describe('ChronologyModel.setSyncOffset / hasDefault', () => {
+  it('writes the offset (or null) by id', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', sync_offset_days: -40 }] });
+    const row = await ChronologyModel.setSyncOffset('c1', -40);
+    expect(pool.query.mock.calls[0][1]).toEqual(['c1', -40]);
+    expect(row.sync_offset_days).toBe(-40);
+  });
+
+  it('hasDefault reflects whether a default row exists', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    expect(await ChronologyModel.hasDefault()).toBe(true);
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    expect(await ChronologyModel.hasDefault()).toBe(false);
   });
 });
 
@@ -100,13 +139,20 @@ describe('ChronologyModel.update', () => {
     await ChronologyModel.update('cal-1', { name: 'Гарія' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/default_year=\$8, default_month_id=\$9/);
-    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, null, null]);
+    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, null, null, null, null, null, null]);
   });
 
   it('passes through an explicit default_year/default_month_id', async () => {
     await ChronologyModel.update('cal-1', { name: 'Гарія', default_year: 100, default_month_id: 'm1' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, 100, 'm1']);
+    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, 100, 'm1', null, null, null, null]);
+  });
+
+  it('stores custom terms, treating blanks as the default (null)', async () => {
+    await ChronologyModel.update('cal-1', { name: 'Гарія', term_day: 'Доба', term_week: '', term_year: 'Оберт' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/term_day=\$10, term_week=\$11, term_season=\$12, term_year=\$13/);
+    expect(params.slice(9)).toEqual(['Доба', null, null, 'Оберт']);
   });
 });
 

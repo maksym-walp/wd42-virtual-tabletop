@@ -36,11 +36,14 @@ export default function ChronologyList() {
 
   const toggleDefault = async (calendar) => {
     setError('');
+    // Синхронізація відлічується від осі колишнього основного календаря: якщо
+    // новий основний її не мав, решта втрачає синхронізацію (див. setDefault).
+    const losesSync = !calendar.is_default && calendar.sync_offset_days == null
+      && calendars.some((c) => c.id !== calendar.id && !c.is_default && c.sync_offset_days != null);
+    if (losesSync && !confirm(`«${calendar.name}» ще не синхронізовано, тож інші календарі втратять синхронізацію і їх треба буде синхронізувати з ним заново. Продовжити?`)) return;
     try {
-      const updated = await chronologyApi.setDefault(calendar.id, !calendar.is_default);
-      setCalendars((list) => list
-        .map((c) => (c.id === updated.id ? { ...c, is_default: updated.is_default } : { ...c, is_default: updated.is_default ? false : c.is_default }))
-        .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, 'uk')));
+      await chronologyApi.setDefault(calendar.id, !calendar.is_default);
+      setCalendars(await chronologyApi.list());
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалось змінити календар за замовчуванням');
     }

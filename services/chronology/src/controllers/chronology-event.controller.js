@@ -1,4 +1,5 @@
 const ChronologyEventModel = require('../models/chronology-event.model');
+const ChronologyModel = require('../models/chronology.model');
 const { loadChronologyOr404, loadChronologyForManageOr404 } = require('./load-chronology');
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -48,9 +49,16 @@ const ChronologyEventController = {
     if (!calendar) return;
 
     const isManager = ['admin', 'game_master'].includes(req.user.role);
+    // ?scope=synced — події всіх синхронізованих календарів (для синхронізованого
+    // календаря): сітка показує їх через спільну вісь. Несинхронізований
+    // календар бачить лише власні події, хоч би що попросили.
+    const isSynced = Boolean(calendar.is_default) || calendar.sync_offset_days != null;
     const events = await ChronologyEventModel.findAllByCalendar(calendar.id, {
       campaignId: req.query.campaign_id,
       includePrivate: isManager,
+      synced: req.query.scope === 'synced' && isSynced
+        ? { userId: req.user.sub, isAdmin: req.user.role === 'admin' }
+        : undefined,
     });
     res.json({ events });
   },
@@ -74,10 +82,18 @@ const ChronologyEventController = {
     const validationError = validateBody(req.body);
     if (validationError) return res.status(400).json({ message: validationError });
 
-    const monthError = await validateMonthRefs(req.body, calendar.id);
+    // body.calendar_id інший за :id — перенесення події в інший календар;
+    // дати (month_id) тоді мають належати календарю-призначенню.
+    let target = calendar;
+    if (req.body.calendar_id && req.body.calendar_id !== calendar.id) {
+      target = await ChronologyModel.findByIdRaw(req.body.calendar_id);
+      if (!target) return res.status(400).json({ message: 'calendar_id: календар не знайдено' });
+    }
+
+    const monthError = await validateMonthRefs(req.body, target.id);
     if (monthError) return res.status(400).json({ message: monthError });
 
-    const event = await ChronologyEventModel.update(req.params.eventId, calendar.id, req.body);
+    const event = await ChronologyEventModel.update(req.params.eventId, calendar.id, req.body, target.id);
     if (!event) return res.status(404).json({ message: 'Подію не знайдено' });
     res.json({ event });
   },

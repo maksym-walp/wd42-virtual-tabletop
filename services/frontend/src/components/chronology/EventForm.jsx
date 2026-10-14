@@ -2,7 +2,9 @@ import { useState } from 'react';
 import chronologyApi from '../../api/chronology';
 import { totalDaysSinceEpoch, DURATION_DISPLAY_LABELS } from '../../utils/chronologyMath';
 import { EVENT_COLOR_PRESETS } from '../../constants/chronologyColors';
+import { convertDate, isSynced } from '../../utils/chronologySync';
 import ColorField from '../ui/ColorField';
+import EraDateFields from './EraDateFields';
 import Button from '../ui/Button';
 import Field, { inputClass } from '../ui/Field';
 import MultiSelectDropdown from '../ui/MultiSelectDropdown';
@@ -15,13 +17,22 @@ const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічн�
 // ChronologyView.jsx's "click a day → add event" flow (via `initialDate`,
 // still editable rather than locked to the clicked cell) and by
 // ChronologyEvents.jsx's standalone "Додати подію"/edit-a-row flow (via
-// `event`). `months`/`locations`/`characterOptions` are fetched once by the
+// `event`). `calendars` (рядки chronologyApi.list() зі структурою в
+// preview_months)/`locations`/`characterOptions` are fetched once by the
 // caller and passed down so opening the form doesn't refetch them.
+//
+// Подія належить календарю (`calendarId` — за замовчуванням, у редагуванні
+// event.calendar_id): її дата й повторюваність рахуються за його структурою, а
+// на сітках решти синхронізованих календарів вона показується через спільну
+// вісь (chronologySync.js). Календар можна змінити в самій формі.
 export default function EventForm({
-  calendarId, campaignId, months, locations, characterOptions,
+  calendarId, calendars, campaignId, locations, characterOptions,
   event, initialDate, onCancel, onSaved,
 }) {
   const isEdit = Boolean(event);
+  const [ownerId, setOwnerId] = useState(event?.calendar_id || calendarId);
+  const owner = calendars.find((c) => c.id === ownerId);
+  const months = owner?.preview_months || [];
 
   const [name, setName] = useState(event?.name || '');
   const [description, setDescription] = useState(event?.description || '');
@@ -59,6 +70,21 @@ export default function EventForm({
     .filter(([key]) => rangeDisplayAllowed || key === 'start' || key === 'none');
   const effectiveDisplay = displayOptions.some(([key]) => key === durationDisplay) ? durationDisplay : 'start';
 
+  // Зміна календаря події: дату переносимо через синхронізацію, якщо обидва
+  // календарі на спільній осі; інакше місяці (id чужого календаря) очищаємо.
+  const changeOwner = (nextId) => {
+    const next = calendars.find((c) => c.id === nextId);
+    const move = (y, m, d, setY, setM, setD) => {
+      const converted = owner && next && y !== '' && m && d !== ''
+        ? convertDate(owner, next, { year: Number(y), monthId: m, day: Number(d) })
+        : null;
+      if (converted) { setY(String(converted.year)); setM(converted.monthId); setD(String(converted.day)); } else { setM(''); }
+    };
+    move(year, monthId, day, setYear, setMonthId, setDay);
+    if (isDuration) move(endYear, endMonthId, endDay, setEndYear, setEndMonthId, setEndDay);
+    setOwnerId(nextId);
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { setError('Вкажіть назву події'); return; }
     if (!HEX_COLOR_RE.test(color)) { setError('Колір має бути у форматі #rrggbb'); return; }
@@ -93,10 +119,13 @@ export default function EventForm({
         end_day: isDuration && endDay !== '' ? Number(endDay) : null,
         duration_display: isDuration ? effectiveDisplay : 'start',
         participant_ids: participantIds,
+        calendar_id: ownerId,
       };
+      // Редагування йде на маршрут поточного календаря події — бекенд сам
+      // переносить її, якщо в тілі інший calendar_id.
       const saved = isEdit
-        ? await chronologyApi.updateEvent(calendarId, event.id, payload)
-        : await chronologyApi.createEvent(calendarId, payload);
+        ? await chronologyApi.updateEvent(event.calendar_id || calendarId, event.id, payload)
+        : await chronologyApi.createEvent(ownerId, payload);
       onSaved(saved);
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалося зберегти подію');
@@ -110,22 +139,35 @@ export default function EventForm({
       <Field label="Назва">
         <input autoFocus className={inputClass} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} />
       </Field>
-      <SmartTextarea label="Опис" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="Рік">
-          <input type="number" className={inputClass} value={year} onChange={(e) => setYear(e.target.value)} />
-        </Field>
-        <Field label="Місяць">
-          <select className={inputClass} value={monthId} onChange={(e) => setMonthId(e.target.value)}>
-            <option value="">Не задано</option>
-            {months.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+      {calendars.length > 1 && (
+        <Field
+          label="Календар події"
+          hint="Дату й повторюваність рахують за структурою цього календаря; в інших синхронізованих календарях подія з'явиться сама."
+        >
+          <select className={inputClass} value={ownerId} onChange={(e) => changeOwner(e.target.value)}>
+            {calendars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}{c.is_default ? ' ★' : ''}{isSynced(c) ? '' : ' (не синхронізовано)'}
+              </option>
+            ))}
           </select>
         </Field>
-        <Field label="День">
-          <input type="number" min={1} className={inputClass} value={day} onChange={(e) => setDay(e.target.value)} />
-        </Field>
-      </div>
+      )}
+      {calendars.length > 1 && owner && !isSynced(owner) && (
+        <p className="text-xs text-text-dim">
+          Цей календар не синхронізовано з календарем за замовчуванням — подію бачитимуть лише в ньому.
+        </p>
+      )}
+      <SmartTextarea label="Опис" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+
+      {owner && (
+        <EraDateFields
+          key={`start-${ownerId}`}
+          calendar={owner}
+          value={{ year, monthId, day }}
+          onChange={(v) => { setYear(v.year); setMonthId(v.monthId); setDay(v.day); }}
+        />
+      )}
 
       <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
         <input type="checkbox" checked={isDuration} onChange={(e) => setIsDuration(e.target.checked)} className="h-5 w-5 accent-accent" />
@@ -133,23 +175,19 @@ export default function EventForm({
       </label>
 
       {isDuration && (
-        <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-3 sm:grid-cols-3">
-          <Field label="Рік завершення">
-            <input type="number" className={inputClass} value={endYear} onChange={(e) => setEndYear(e.target.value)} />
-          </Field>
-          <Field label="Місяць завершення">
-            <select className={inputClass} value={endMonthId} onChange={(e) => setEndMonthId(e.target.value)}>
-              <option value="">Не задано</option>
-              {months.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </Field>
-          <Field label="День завершення">
-            <input type="number" min={1} className={inputClass} value={endDay} onChange={(e) => setEndDay(e.target.value)} />
-          </Field>
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3">
+          {owner && (
+            <EraDateFields
+              key={`end-${ownerId}`}
+              calendar={owner}
+              labelSuffix=" завершення"
+              value={{ year: endYear, monthId: endMonthId, day: endDay }}
+              onChange={(v) => { setEndYear(v.year); setEndMonthId(v.monthId); setEndDay(v.day); }}
+            />
+          )}
           <Field
             label="Позначка в календарі"
             hint={rangeDisplayAllowed ? undefined : 'Для повторюваної події доступні лише початок або приховування.'}
-            className="sm:col-span-3"
           >
             <select className={inputClass} value={effectiveDisplay} onChange={(e) => setDurationDisplay(e.target.value)}>
               {displayOptions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}

@@ -8,8 +8,14 @@ import { totalDaysSinceEpoch, yearLabel } from './chronologyMath';
 // back gracefully as pieces go missing. null when there's no year at all —
 // same "as loosely or precisely as the GM knows it" philosophy as the event
 // fields themselves.
-export function eventDateLabel(months, year, monthId, day, currentEraName, previousEraName) {
+// timeline (необов'язково, chronologyEras.makeTimeline) — підписує повну дату у
+// локальному відліку календаря з ерами; неповну (без місяця/дня) — як і раніше.
+export function eventDateLabel(months, year, monthId, day, currentEraName, previousEraName, timeline) {
   if (year == null) return null;
+  if (timeline && monthId && day != null) {
+    const mi = months.findIndex((m) => m.id === monthId);
+    if (mi !== -1) return timeline.format(totalDaysSinceEpoch(months, Number(year), mi, Number(day)));
+  }
   const month = months.find((m) => m.id === monthId);
   const dayMonth = [day, month?.name].filter(Boolean).join(' ');
   const yr = yearLabel(year, currentEraName, previousEraName);
@@ -20,8 +26,8 @@ export function eventDateLabel(months, year, monthId, day, currentEraName, previ
 // date is set (a duration event may leave end_month_id/end_day unset while
 // still having an end_year — same independently-nullable shape as the start
 // fields, so the end label falls back to the start's month/day if needed).
-export function eventDateRangeLabel(event, months, currentEraName, previousEraName) {
-  const start = eventDateLabel(months, event.year, event.month_id, event.day, currentEraName, previousEraName);
+export function eventDateRangeLabel(event, months, currentEraName, previousEraName, timeline) {
+  const start = eventDateLabel(months, event.year, event.month_id, event.day, currentEraName, previousEraName, timeline);
   if (!start) return 'Дата не вказана';
   const hasEnd = event.end_year != null || event.end_month_id || event.end_day != null;
   if (!hasEnd) return start;
@@ -31,7 +37,8 @@ export function eventDateRangeLabel(event, months, currentEraName, previousEraNa
     event.end_month_id ?? event.month_id,
     event.end_day,
     currentEraName,
-    previousEraName
+    previousEraName,
+    timeline
   );
   return end ? `${start} – ${end}` : start;
 }

@@ -37,6 +37,18 @@ const chronologyApi = {
     return data.calendar;
   },
 
+  // Зсув синхронізації з календарем за замовчуванням (null — вимкнути).
+  async setSync(id, syncOffsetDays) {
+    const { data } = await api.put(`${BASE}/${id}/sync`, { sync_offset_days: syncOffsetDays });
+    return data.calendar;
+  },
+
+  // Структура календаря (без подій) у плоскому JSON для іншого рушія.
+  async exportStructure(id) {
+    const { data } = await api.get(`${BASE}/${id}/export`);
+    return data;
+  },
+
   // Місяці
   async listMonths(id) {
     const { data } = await api.get(`${BASE}/${id}/months`);
@@ -105,12 +117,32 @@ const chronologyApi = {
     await api.delete(`${BASE}/${id}/moons/${moonId}`);
   },
 
+  // Ери (понад основну: current_era_name/previous_era_name)
+  async listEras(id) {
+    const { data } = await api.get(`${BASE}/${id}/eras`);
+    return data.eras;
+  },
+  async createEra(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/eras`, payload);
+    return data.era;
+  },
+  async updateEra(id, eraId, payload) {
+    const { data } = await api.put(`${BASE}/${id}/eras/${eraId}`, payload);
+    return data.era;
+  },
+  async removeEra(id, eraId) {
+    await api.delete(`${BASE}/${id}/eras/${eraId}`);
+  },
+
   // Події. campaignId (опційно) додає події цієї кампанії поверх глобальних
   // лор-подій (campaign_id IS NULL) — без нього повертаються лише глобальні.
-  async listEvents(id, campaignId) {
-    const { data } = await api.get(`${BASE}/${id}/events`, {
-      params: campaignId ? { campaign_id: campaignId } : undefined,
-    });
+  // synced: true — разом із подіями інших синхронізованих календарів (для
+  // синхронізованого; їхня дата перераховується через chronologySync.js).
+  async listEvents(id, campaignId, { synced = false } = {}) {
+    const params = {};
+    if (campaignId) params.campaign_id = campaignId;
+    if (synced) params.scope = 'synced';
+    const { data } = await api.get(`${BASE}/${id}/events`, { params });
     return data.events;
   },
   async createEvent(id, payload) {

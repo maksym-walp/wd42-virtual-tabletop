@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom';
 import { CalendarDays, Globe, Lock, Star } from 'lucide-react';
 import MoonPhase from '../MoonPhase';
 import {
-  daysPerYear, totalDaysSinceEpoch, weekdayIndexOf, yearLabel, getActiveSeason,
+  daysPerYear, totalDaysSinceEpoch, weekdayIndexOf, getActiveSeason,
 } from '../../utils/chronologyMath';
+import { makeTimeline, termsOf, TERM_DEFAULTS } from '../../utils/chronologyEras';
 import { pluralizeUk } from '../../utils/pluralize';
 import { htmlToPreviewText } from '../../utils/richText';
 
@@ -71,7 +72,7 @@ export function CalendarMiniPreview({ calendar, year, monthId, day }) {
             ))}
           </div>
           <p className="truncate text-[0.65rem] text-text-dim">
-            {yearLabel(viewYear, calendar.current_era_name, calendar.previous_era_name)}
+            {(() => { const tl = makeTimeline(calendar); const loc = tl.locate(focusTotal); return loc ? tl.yearText(loc) : viewYear; })()}
             {season && <> · <span style={{ color: season.color }}>{season.name}</span></>}
           </p>
         </div>
@@ -107,13 +108,21 @@ export function CalendarMiniPreview({ calendar, year, monthId, day }) {
 // Картка календаря для каталогу /chronology і блоку календаря кампанії.
 // actions — кнопки поверх картки (налаштування, відвʼязати); вони лежать
 // поза <Link>, щоб не вкладати інтерактивні елементи в посилання.
+// «364 дн. на рік» — а якщо календар перейменував «День»/«Рік», то без відмінків:
+// «Оберт: 364 × доба».
+function yearLengthText(calendar, days) {
+  const t = termsOf(calendar);
+  if (t.day === TERM_DEFAULTS.day && t.year === TERM_DEFAULTS.year) return `${days} дн. на рік`;
+  return `${t.year}: ${days} × ${t.day.toLowerCase()}`;
+}
+
 export default function CalendarCard({ calendar: c, to, actions, date, label }) {
   const months = c.preview_months || [];
   const moonsCount = (c.preview_moons || []).length;
   const description = htmlToPreviewText(c.description, 160);
   const stats = [
     months.length > 0 && `${months.length} ${pluralizeUk(months.length, ['місяць', 'місяці', 'місяців'])}`,
-    months.length > 0 && `${daysPerYear(months)} дн. на рік`,
+    months.length > 0 && yearLengthText(c, daysPerYear(months)),
     moonsCount > 0 && `${moonsCount} ${pluralizeUk(moonsCount, ['супутник', 'супутники', 'супутників'])}`,
   ].filter(Boolean);
 

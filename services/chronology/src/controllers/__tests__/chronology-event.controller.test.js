@@ -251,3 +251,43 @@ describe('ChronologyEventController participants', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 });
+
+describe('ChronologyEventController list scope and calendar move', () => {
+  it('only requests synced events for a synced calendar', async () => {
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1', is_default: false, sync_offset_days: 4 });
+    ChronologyEventModel.findAllByCalendar.mockResolvedValue([]);
+    await ChronologyEventController.list(mockReq({ params: { id: 'c1' }, query: { scope: 'synced' } }), mockRes());
+    expect(ChronologyEventModel.findAllByCalendar.mock.calls[0][1].synced).toEqual({ userId: 'user-1', isAdmin: false });
+
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1', is_default: false, sync_offset_days: null });
+    await ChronologyEventController.list(mockReq({ params: { id: 'c1' }, query: { scope: 'synced' } }), mockRes());
+    expect(ChronologyEventModel.findAllByCalendar.mock.calls[1][1].synced).toBeUndefined();
+
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1', is_default: true, sync_offset_days: 0 });
+    await ChronologyEventController.list(mockReq({ params: { id: 'c1' } }), mockRes());
+    expect(ChronologyEventModel.findAllByCalendar.mock.calls[2][1].synced).toBeUndefined(); // scope not requested
+  });
+
+  it('moves an event to another calendar, validating months against the target', async () => {
+    ChronologyModel.findByIdRaw.mockImplementation(async (id) => ({ id }));
+    ChronologyEventModel.monthBelongsToCalendar.mockResolvedValue(true);
+    ChronologyEventModel.update.mockResolvedValue({ id: 'e1' });
+    const req = mockReq({
+      params: { id: 'c1', eventId: 'e1' },
+      body: { name: 'Свято', color: '#ff0000', calendar_id: 'c2', month_id: 'm9' },
+    });
+    await ChronologyEventController.update(req, mockRes());
+    expect(ChronologyEventModel.monthBelongsToCalendar).toHaveBeenCalledWith('m9', 'c2');
+    expect(ChronologyEventModel.update).toHaveBeenCalledWith('e1', 'c1', req.body, 'c2');
+  });
+
+  it('400s when the target calendar does not exist', async () => {
+    ChronologyModel.findByIdRaw.mockImplementation(async (id) => (id === 'c1' ? { id } : null));
+    const res = mockRes();
+    await ChronologyEventController.update(mockReq({
+      params: { id: 'c1', eventId: 'e1' }, body: { name: 'x', color: '#ff0000', calendar_id: 'ghost' },
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.update).not.toHaveBeenCalled();
+  });
+});

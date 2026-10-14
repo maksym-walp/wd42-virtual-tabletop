@@ -15,11 +15,15 @@
 | POST | `/` | admin/game_master | `{ name, description?, current_era_name?, previous_era_name?, first_day_offset?, is_private? }` | `201 { calendar }` / `400` (без `name`) |
 | PUT | `/:id` | admin/game_master | те саме, що й POST, плюс `default_year?`, `default_month_id?` | `200 { calendar }` / `404` |
 | DELETE | `/:id` | admin/game_master | — | `200 { message }` / `404` |
+| GET | `/:id/export` | так (видимість календаря) | — | `200` плоский JSON структури: `year_len`, `n_months`, `months`, `month_len`, `week_len`, `weekdays`, `n_moons`, `moons`, `lunar_cyc`, `lunar_shf`, `year`, `first_day`, `notes`, `seasons`, `eras`, `era_names`, `terms` (розширення); без подій. Однакові назви отримують суфікс « (2)» / `404` |
+| PUT | `/:id/sync` | admin/game_master | `{ sync_offset_days: integer \| null }` | `200 { calendar }` / `400` (не ціле, це календар за замовчуванням, або ще нема календаря за замовчуванням) / `404` |
 | PUT | `/:id/default` | лише admin | `{ is_default: boolean }` | `200 { calendar }` / `400` / `404` |
 
 `default_year`/`default_month_id` — рік і місяць, які ChronologyView відкриває за замовчуванням (коли немає прив'язаної кампанії з власною поточною датою — вона має пріоритет). Відсутні в `POST`, бо в щойно створеного календаря ще немає жодного місяця; `default_month_id`, якщо заданий, має належати цьому самому календарю — `400`, якщо це місяць іншого календаря.
 
 `is_default` — календар за замовчуванням (не більше одного, частковий унікальний індекс; міграція 97): його фронтенд підставляє наперед у всіх вибірах дати інших сервісів. Лише `PUT /:id/default` змінює прапорець — загальний `PUT /:id` його не чіпає; увімкнення знімає позначку з попереднього. `GET /` віддає календарі з default першим.
+
+**Синхронізація (міграція 98).** `sync_offset_days` — зсув між лічбою днів календаря (`totalDaysSinceEpoch`, день 1 року 1 = 0) і спільною «світовою» віссю: `світовий_день = день_у_календарі − зсув`. Синхронізуються лише з календарем за замовчуванням: інтерфейс (CalendarSyncSection) бере одну й ту саму мить у двох календарях і зводить її до зсуву. Календар за замовчуванням завжди на осі (зсув 0, якщо не задано). `PUT /:id/default` зберігає вісь: колишній основний лишає свій зсув, а якщо новий основний не був синхронізований — решта втрачає синхронізацію. Конвертацію дат і повторюваності робить фронтенд (`utils/chronologySync.js`).
 
 ### Місяці (`/:id/months`)
 
@@ -29,6 +33,19 @@
 | POST | `/:id/months` | admin/game_master | `{ name, length, order_num }` | `201 { month }` / `400` |
 | PUT | `/:id/months/:monthId` | admin/game_master | те саме, що й POST | `200 { month }` / `404` |
 | DELETE | `/:id/months/:monthId` | admin/game_master | — | `200 { message }` / `404` |
+
+### Ери (`/:id/eras`)
+
+| Метод | Шлях | Автентифікація | Тіло | Відповідь |
+|-------|------|----------------|------|-----------|
+| GET | `/:id/eras` | так (видимість календаря) | — | `200 { eras: [...] }` у хронологічному порядку початку |
+| POST | `/:id/eras` | admin/game_master | `{ name, start_year, start_month_id, start_day, cycle_years? }` | `201 { era }` / `400` |
+| PUT | `/:id/eras/:eraId` | admin/game_master | те саме | `200 { era }` / `400` / `404` |
+| DELETE | `/:id/eras/:eraId` | admin/game_master | — | `200 { message }` / `404` |
+
+Ери (міграція 99) — накладка над безперервним відліком (рік 1 день 1 = 0), у якому зберігаються **всі дати** (події, НІП, кампанії). Ера починається у `start_year`/`start_month_id`/`start_day` цього відліку; з цього дня рік, місяць, день місяця й день тижня рахуються наново з 1 (зсув першого дня `first_day_offset` діє лише до першої ери), а цикли супутників не переривається. Ера триває до початку наступної. `cycle_years` (ціле > 0) робить еру циклічною: вона повторюється циклами по стільки років, у кожному відлік знову з 1. До першої ери роки підписують `current_era_name`/`previous_era_name`. `start_month_id` має належати календарю, а `start_day` вміщатися в місяць — `400` інакше. Календар (`GET /`, `GET /:id`) віддає їх у `preview_eras` для побудови відліку на фронтенді (`utils/chronologyEras.js`). Повторювані події рахуються за базовим відліком (місяць/день), а їхній тижневий збіг — за локальним днем тижня.
+
+**Власні назви термінів** — `term_day`, `term_week`, `term_season`, `term_year` у `PUT /:id` (до 50 символів, порожнє = стандартні «День/Тиждень/Сезон/Рік»; називний відмінок, однина).
 
 ### Дні тижня (`/:id/weekdays`)
 
@@ -67,9 +84,9 @@
 
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/:id/events` | так | — (опційно `?campaign_id=...`) | `200 { events: [...] }` (кожен елемент несе `participant_ids: string[]`) |
+| GET | `/:id/events` | так | — (опційно `?campaign_id=...`, `?scope=synced`) | `200 { events: [...] }` (кожен елемент несе `participant_ids: string[]`). `scope=synced` для синхронізованого календаря додає події всіх видимих синхронізованих календарів (кожна несе свій `calendar_id`) |
 | POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, is_public?, year?, month_id?, day?, recurrence?, location_id?, region?, end_year?, end_month_id?, end_day?, duration_display?, participant_ids? }` | `201 { event }` / `400` |
-| PUT | `/:id/events/:eventId` | admin/game_master | те саме, що й POST | `200 { event }` / `404` |
+| PUT | `/:id/events/:eventId` | admin/game_master | те саме, що й POST; `calendar_id` ≠ `:id` переносить подію в інший календар (`month_id` мають бути його) | `200 { event }` / `400` / `404` |
 | DELETE | `/:id/events/:eventId` | admin/game_master | — | `200 { message }` / `404` |
 | POST | `/:id/events/:eventId/participants` | admin/game_master | `{ entry_id }` | `201 { event_id, entry_id }` / `400` без `entry_id` / `404` якщо подія не в цьому календарі |
 | DELETE | `/:id/events/:eventId/participants/:entryId` | admin/game_master | — | `200 { message }` / `404` |

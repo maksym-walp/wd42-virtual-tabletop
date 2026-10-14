@@ -19,19 +19,36 @@ const ChronologyEventModel = {
   // campaignId set -> global events PLUS that campaign's own events.
   // includePrivate -> managers (admin/game_master) see is_public=false
   // events too; regular users only ever see is_public=true ones.
-  async findAllByCalendar(calendarId, { campaignId, includePrivate } = {}) {
+  // synced: { userId, isAdmin } -> крім подій цього календаря, ще й події всіх
+  // синхронізованих календарів (is_default або sync_offset_days), які бачить
+  // користувач; викликається лише для синхронізованого календаря (див.
+  // контролер) — сітки решти календарів показують ці події через спільну вісь.
+  async findAllByCalendar(calendarId, { campaignId, includePrivate, synced } = {}) {
     const params = [calendarId];
-    let campaignFilter = 'campaign_id IS NULL';
+    let calendarFilter = 'e.calendar_id = $1';
+    if (synced) {
+      // Адмін бачить усі календарі — userId у запит не потрапляє: pg відхиляє
+      // запит, де параметрів більше, ніж плейсхолдерів.
+      let visibility = 'TRUE';
+      if (!synced.isAdmin) {
+        params.push(synced.userId);
+        visibility = `(c.is_private = false OR c.creator_id = $${params.length})`;
+      }
+      calendarFilter = `(e.calendar_id = $1 OR e.calendar_id IN (
+        SELECT c.id FROM chronology.calendars c
+        WHERE (c.is_default OR c.sync_offset_days IS NOT NULL) AND ${visibility}))`;
+    }
+    let campaignFilter = 'e.campaign_id IS NULL';
     if (campaignId) {
       params.push(campaignId);
-      campaignFilter = `(campaign_id IS NULL OR campaign_id = $${params.length})`;
+      campaignFilter = `(e.campaign_id IS NULL OR e.campaign_id = $${params.length})`;
     }
-    const visibilityFilter = includePrivate ? 'TRUE' : 'is_public = true';
+    const visibilityFilter = includePrivate ? 'TRUE' : 'e.is_public = true';
 
     const { rows } = await pool.query(
-      `SELECT * FROM chronology.calendar_events
-       WHERE calendar_id = $1 AND ${campaignFilter} AND ${visibilityFilter}
-       ORDER BY year ASC NULLS LAST, day ASC NULLS LAST, name ASC`,
+      `SELECT e.* FROM chronology.calendar_events e
+       WHERE ${calendarFilter} AND ${campaignFilter} AND ${visibilityFilter}
+       ORDER BY e.year ASC NULLS LAST, e.day ASC NULLS LAST, e.name ASC`,
       params
     );
     if (rows.length === 0) return rows;
@@ -85,7 +102,9 @@ const ChronologyEventModel = {
     return { ...event, participant_ids: participant_ids || [] };
   },
 
-  async update(id, calendarId, data) {
+  // newCalendarId — перенесення події в інший календар (за чиєю структурою
+  // рахується її дата й повторюваність); без нього лишається в calendarId.
+  async update(id, calendarId, data, newCalendarId = calendarId) {
     const {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
@@ -94,7 +113,7 @@ const ChronologyEventModel = {
 
     const { rows } = await pool.query(
       `UPDATE chronology.calendar_events
-       SET campaign_id=$3, name=$4, description=$5, color=$6, is_public=$7,
+       SET calendar_id=$18, campaign_id=$3, name=$4, description=$5, color=$6, is_public=$7,
            year=$8, month_id=$9, day=$10, recurrence=$11,
            location_id=$12, region=$13, end_year=$14, end_month_id=$15, end_day=$16,
            duration_display=$17, updated_at=NOW()
@@ -103,7 +122,7 @@ const ChronologyEventModel = {
       [id, calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
         location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
-        duration_display ?? 'start']
+        duration_display ?? 'start', newCalendarId]
     );
     if (!rows[0]) return null;
     await setParticipants(id, participant_ids);
@@ -120,8 +139,15 @@ const ChronologyEventModel = {
     const calendarVisibility = isAdmin ? 'TRUE' : '(c.is_private = false OR c.creator_id = $2)';
     const eventVisibility = isManager ? 'TRUE' : '(e.is_public = true AND e.campaign_id IS NULL)';
     const { rows } = await pool.query(
-      `SELECT e.*, c.name AS calendar_name, c.current_era_name, c.previous_era_name,
-              m.name AS month_name, em.name AS end_month_name
+      `SELECT e.*, c.name AS calendar_name, c.current_era_name, c.previous_era_name, c.first_day_offset,
+              m.name AS month_name, em.name AS end_month_name,
+              (SELECT COALESCE(json_agg(json_build_object('id', cm.id, 'name', cm.name, 'length', cm.length) ORDER BY cm.order_num), '[]'::json)
+                 FROM chronology.calendar_months cm WHERE cm.calendar_id = c.id) AS preview_months,
+              (SELECT COALESCE(json_agg(json_build_object('id', er.id, 'name', er.name, 'start_year', er.start_year,
+                        'start_month_id', er.start_month_id, 'start_day', er.start_day, 'cycle_years', er.cycle_years)
+                        ORDER BY er.start_year, er.start_day), '[]'::json)
+                 FROM chronology.calendar_eras er WHERE er.calendar_id = c.id) AS preview_eras,
+              (SELECT count(*) FROM chronology.calendar_weekdays w WHERE w.calendar_id = c.id)::int AS weekday_count
        FROM chronology.calendar_event_participants p
        JOIN chronology.calendar_events e ON e.id = p.event_id
        JOIN chronology.calendars c ON c.id = e.calendar_id

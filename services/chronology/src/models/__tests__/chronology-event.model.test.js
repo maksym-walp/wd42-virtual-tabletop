@@ -12,14 +12,14 @@ describe('ChronologyEventModel.findAllByCalendar', () => {
   it('with no campaignId, only returns global events, and hides private ones by default', async () => {
     await ChronologyEventModel.findAllByCalendar('cal-1');
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/WHERE calendar_id = \$1 AND campaign_id IS NULL AND is_public = true/);
+    expect(sql).toMatch(/WHERE e\.calendar_id = \$1 AND e\.campaign_id IS NULL AND e\.is_public = true/);
     expect(params).toEqual(['cal-1']);
   });
 
   it('with campaignId, returns global events plus that campaign\'s own', async () => {
     await ChronologyEventModel.findAllByCalendar('cal-1', { campaignId: 'camp-1' });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/\(campaign_id IS NULL OR campaign_id = \$2\)/);
+    expect(sql).toMatch(/\(e\.campaign_id IS NULL OR e\.campaign_id = \$2\)/);
     expect(params).toEqual(['cal-1', 'camp-1']);
   });
 
@@ -28,6 +28,25 @@ describe('ChronologyEventModel.findAllByCalendar', () => {
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/AND TRUE/);
     expect(sql).not.toMatch(/is_public = true/);
+  });
+
+  it('synced adds events of every visible synced calendar, numbering params in order', async () => {
+    await ChronologyEventModel.findAllByCalendar('cal-1', { campaignId: 'camp-1', synced: { userId: 'u1', isAdmin: false } });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/e\.calendar_id = \$1 OR e\.calendar_id IN \(/);
+    expect(sql).toMatch(/c\.is_default OR c\.sync_offset_days IS NOT NULL/);
+    expect(sql).toMatch(/c\.is_private = false OR c\.creator_id = \$2/);
+    expect(sql).toMatch(/e\.campaign_id = \$3/);
+    expect(params).toEqual(['cal-1', 'u1', 'camp-1']);
+  });
+
+  it('synced does not filter calendar visibility for an admin', async () => {
+    await ChronologyEventModel.findAllByCalendar('cal-1', { synced: { userId: 'a1', isAdmin: true } });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/\(c\.is_default OR c\.sync_offset_days IS NOT NULL\) AND TRUE/);
+    // Жодного зайвого параметра: pg падає, якщо їх більше, ніж $n у запиті.
+    expect(params).toEqual(['cal-1']);
+    expect(sql).not.toMatch(/\$2/);
   });
 
   it('returns [] without a second query when there are no events', async () => {
@@ -97,6 +116,19 @@ describe('ChronologyEventModel.create', () => {
     ]);
     expect(pool.query.mock.calls[2][0]).toMatch(/INSERT INTO chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[2][1]).toEqual(['e1', 'npc-1', 'npc-2']);
+  });
+});
+
+describe('ChronologyEventModel.update calendar move', () => {
+  it('keeps the event in its calendar by default, or moves it to newCalendarId', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 'e1' }] });
+    await ChronologyEventModel.update('e1', 'cal-1', { name: 'x', color: '#000000' });
+    expect(pool.query.mock.calls[0][1][17]).toBe('cal-1');
+    expect(pool.query.mock.calls[0][0]).toMatch(/SET calendar_id=\$18/);
+    await ChronologyEventModel.update('e1', 'cal-1', { name: 'x', color: '#000000' }, 'cal-2');
+    expect(pool.query.mock.calls[2][1][17]).toBe('cal-2');
+    expect(pool.query.mock.calls[2][1][0]).toBe('e1');
+    expect(pool.query.mock.calls[2][1][1]).toBe('cal-1');
   });
 });
 

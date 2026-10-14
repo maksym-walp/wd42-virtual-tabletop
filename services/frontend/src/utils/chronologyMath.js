@@ -87,7 +87,7 @@ export const DURATION_DISPLAY_LABELS = {
 // некоректний (кінець раніше початку). Рік/місяць/день завершення, яких не
 // задано, береться від початку — як у eventDateRangeLabel; день завершення
 // не виходить за довжину місяця.
-function eventDayRange(event, months) {
+export function eventDayRange(event, months) {
   if (event.year == null || !event.month_id || event.day == null) return null;
   const startMi = months.findIndex((m) => m.id === event.month_id);
   if (startMi === -1) return null;
@@ -105,7 +105,9 @@ function eventDayRange(event, months) {
 // 'start' режимом (див. DURATION_DISPLAY_LABELS) діють лише для одноразових:
 // повторювана подія з кінцем лишається мітками початку, а 'none' ховає
 // тривалу подію за будь-якого повторення.
-export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCount) {
+// weekdayAt (необов'язково) — день тижня для базового дня (локальний відлік ер,
+// див. chronologyEras.js); без нього — від першого дня року 1 з firstDayOffset.
+export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCount, weekdayAt) {
   const mode = event.duration_display || 'start';
   const hasEnd = eventHasEnd(event);
   if (mode === 'none' && hasEnd) return false;
@@ -120,7 +122,7 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
       const anchorMonthIndex = months.findIndex((m) => m.id === event.month_id);
       if (anchorMonthIndex === -1) return false;
       const anchorTotalDays = totalDaysSinceEpoch(months, Number(event.year), anchorMonthIndex, Number(event.day));
-      const anchorWeekday = weekdayIndexOf(anchorTotalDays, firstDayOffset, weekdayCount);
+      const anchorWeekday = weekdayAt ? weekdayAt(anchorTotalDays) : weekdayIndexOf(anchorTotalDays, firstDayOffset, weekdayCount);
       return anchorWeekday === cell.weekdayIndex;
     }
     case 'none':

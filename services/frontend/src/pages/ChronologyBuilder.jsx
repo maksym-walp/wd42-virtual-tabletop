@@ -9,6 +9,8 @@ import EmptyState from '../components/ui/EmptyState';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ColorField from '../components/ui/ColorField';
+import CalendarSyncSection from '../components/chronology/CalendarSyncSection';
+import { termsOf, TERM_DEFAULTS } from '../utils/chronologyEras';
 import { MOON_COLOR_PRESETS } from '../constants/chronologyColors';
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -16,6 +18,7 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const EMPTY_SETTINGS = {
   name: '', description: '', current_era_name: '', previous_era_name: '',
   first_day_offset: 0, is_private: false, default_year: '', default_month_id: '',
+  term_day: '', term_week: '', term_season: '', term_year: '',
 };
 
 // Дрібний домашній замінник Formik/react-hook-form (жодного з них немає в
@@ -55,6 +58,7 @@ export default function ChronologyBuilder() {
   const months = useEditableList((d) => ({ name: '', length: '30', ...d }));
   const weekdays = useEditableList((d) => ({ name: '', short_name: '', ...d }));
   const seasons = useEditableList((d) => ({ name: '', start_month_id: '', start_day: '1', color: '#4caf50', bg_image_url: '', ...d }));
+  const eras = useEditableList((d) => ({ name: '', start_year: '', start_month_id: '', start_day: '1', cyclic: false, cycle_years: '', ...d }));
   const moons = useEditableList((d) => ({ name: '', cycle_length: '29.5', shift: '0', color: '#c0c0c0', ...d }));
 
   const [loading, setLoading] = useState(true);
@@ -63,12 +67,13 @@ export default function ChronologyBuilder() {
   const [success, setSuccess] = useState(false);
 
   const loadAll = async () => {
-    const [calendar, monthsList, weekdaysList, seasonsList, moonsList] = await Promise.all([
+    const [calendar, monthsList, weekdaysList, seasonsList, moonsList, erasList] = await Promise.all([
       chronologyApi.getOne(id),
       chronologyApi.listMonths(id),
       chronologyApi.listWeekdays(id),
       chronologyApi.listSeasons(id),
       chronologyApi.listMoons(id),
+      chronologyApi.listEras(id),
     ]);
     setSettings({
       name: calendar.name || '',
@@ -79,6 +84,10 @@ export default function ChronologyBuilder() {
       is_private: calendar.is_private,
       default_year: calendar.default_year ?? '',
       default_month_id: calendar.default_month_id || '',
+      term_day: calendar.term_day || '',
+      term_week: calendar.term_week || '',
+      term_season: calendar.term_season || '',
+      term_year: calendar.term_year || '',
     });
     months.setItems(monthsList.map((m) => ({ id: m.id, name: m.name, length: String(m.length) })));
     weekdays.setItems(weekdaysList.map((w) => ({ id: w.id, name: w.name, short_name: w.short_name || '' })));
@@ -89,6 +98,11 @@ export default function ChronologyBuilder() {
     moons.setItems(moonsList.map((mo) => ({
       id: mo.id, name: mo.name, cycle_length: String(mo.cycle_length), shift: String(mo.shift), color: mo.color,
     })));
+    eras.setItems(erasList.map((er) => ({
+      id: er.id, name: er.name, start_year: String(er.start_year), start_month_id: er.start_month_id,
+      start_day: String(er.start_day), cyclic: er.cycle_years != null, cycle_years: er.cycle_years != null ? String(er.cycle_years) : '',
+    })));
+    eras.setDeletedIds([]);
     months.setDeletedIds([]);
     weekdays.setDeletedIds([]);
     seasons.setDeletedIds([]);
@@ -116,6 +130,15 @@ export default function ChronologyBuilder() {
       if (!s.start_month_id) return `Оберіть місяць початку для сезону "${s.name}"`;
       if (!(Number(s.start_day) > 0)) return `День початку сезону "${s.name}" має бути додатним числом`;
       if (!HEX_COLOR_RE.test(s.color)) return `Колір сезону "${s.name}" має бути у форматі #rrggbb`;
+    }
+    for (const er of eras.items) {
+      if (!er.name.trim()) return 'У кожної ери має бути назва';
+      if (!Number.isInteger(Number(er.start_year)) || er.start_year === '') return `Вкажіть рік початку для ери "${er.name}"`;
+      if (!er.start_month_id) return `Оберіть місяць початку для ери "${er.name}"`;
+      if (!(Number(er.start_day) > 0)) return `День початку ери "${er.name}" має бути додатним числом`;
+      if (er.cyclic && !(Number.isInteger(Number(er.cycle_years)) && Number(er.cycle_years) > 0)) {
+        return `Тривалість циклу ери "${er.name}" має бути додатним цілим числом років`;
+      }
     }
     for (const mo of moons.items) {
       if (!mo.name.trim()) return `У кожного супутника має бути назва`;
@@ -184,6 +207,19 @@ export default function ChronologyBuilder() {
       }
       for (const seasonId of seasons.deletedIds) await chronologyApi.removeSeason(id, seasonId);
 
+      for (const er of eras.items) {
+        const payload = {
+          name: er.name.trim(),
+          start_year: Number(er.start_year),
+          start_month_id: monthIdMap[er.start_month_id] || er.start_month_id,
+          start_day: Number(er.start_day),
+          cycle_years: er.cyclic ? Number(er.cycle_years) : null,
+        };
+        if (er.id.startsWith('new-')) await chronologyApi.createEra(id, payload);
+        else await chronologyApi.updateEra(id, er.id, payload);
+      }
+      for (const eraId of eras.deletedIds) await chronologyApi.removeEra(id, eraId);
+
       // Saved last, not first: default_month_id can point at a month created
       // in this very save, and only monthIdMap (built above) knows its real
       // id by now. A default pointing at a month removed in this same save
@@ -200,6 +236,10 @@ export default function ChronologyBuilder() {
         default_month_id: defaultMonthStillExists
           ? (monthIdMap[settings.default_month_id] || settings.default_month_id)
           : null,
+        term_day: settings.term_day.trim() || null,
+        term_week: settings.term_week.trim() || null,
+        term_season: settings.term_season.trim() || null,
+        term_year: settings.term_year.trim() || null,
       });
 
       await loadAll();
@@ -223,6 +263,9 @@ export default function ChronologyBuilder() {
       </div>
     );
   }
+
+  // Назви термінів у підписах конструктора відображають ще не збережені правки.
+  const terms = termsOf({ term_day: settings.term_day, term_week: settings.term_week, term_season: settings.term_season, term_year: settings.term_year });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
@@ -267,7 +310,24 @@ export default function ChronologyBuilder() {
               />
             </Field>
           </div>
-          <Field label="Зсув першого дня року 1" hint="На який день тижня випадає 1-й день 1-го року" className="mb-4">
+          <div className="mb-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Назви термінів</p>
+            <p className="mb-2 text-xs text-text-dim">Як цей календар називає ці поняття (називний відмінок, однина). Порожнє — стандартна назва.</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[['term_day', 'day'], ['term_week', 'week'], ['term_season', 'season'], ['term_year', 'year']].map(([field, key]) => (
+                <Field key={field} label={TERM_DEFAULTS[key]}>
+                  <input
+                    className={inputClass}
+                    value={settings[field]}
+                    onChange={(e) => setSettings((st) => ({ ...st, [field]: e.target.value }))}
+                    placeholder={TERM_DEFAULTS[key]}
+                    maxLength={50}
+                  />
+                </Field>
+              ))}
+            </div>
+          </div>
+          <Field label="Зсув першого дня року 1" hint="На який день тижня випадає 1-й день 1-го року (діє до першої ери; в нових ерах відлік тижня починається з першого дня)" className="mb-4">
             {weekdays.items.length > 0 ? (
               <select
                 className={inputClass}
@@ -288,7 +348,7 @@ export default function ChronologyBuilder() {
             )}
           </Field>
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Рік за замовчуванням" hint="Який рік відкривати на початку перегляду. Разом із місяцем — «поточна дата», від якої рахується вік NPC">
+            <Field label={`${terms.year} за замовчуванням`} hint="Який рік (у безперервному відліку від початку літочислення) відкривати на початку перегляду. Разом із місяцем — «поточна дата», від якої рахується вік NPC">
               <input
                 type="number"
                 className={inputClass}
@@ -320,6 +380,10 @@ export default function ChronologyBuilder() {
           </label>
         </FormSection>
 
+        <FormSection title="Синхронізація з основним календарем">
+          <CalendarSyncSection calendarId={id} months={months.items} />
+        </FormSection>
+
         <FormSection title="Місяці">
           <div className="flex flex-col gap-3">
             {months.items.length === 0 && <p className="text-sm text-text-dim">Ще немає жодного місяця.</p>}
@@ -335,7 +399,7 @@ export default function ChronologyBuilder() {
                 <Field label="Назва" className="flex-[2]">
                   <input className={inputClass} value={m.name} onChange={(e) => months.update(m.id, { name: e.target.value })} maxLength={200} />
                 </Field>
-                <Field label="Довжина (днів)" className="w-full sm:w-40">
+                <Field label={`Довжина, ${terms.day.toLowerCase()}`} className="w-full sm:w-40">
                   <input type="number" min={1} className={inputClass} value={m.length} onChange={(e) => months.update(m.id, { length: e.target.value })} />
                 </Field>
               </EditableRow>
@@ -344,7 +408,7 @@ export default function ChronologyBuilder() {
           </div>
         </FormSection>
 
-        <FormSection title="Дні тижня">
+        <FormSection title={settings.term_week.trim() || settings.term_day.trim() ? `${terms.week}: ${terms.day.toLowerCase()}` : 'Дні тижня'}>
           <div className="flex flex-col gap-3">
             {weekdays.items.length === 0 && <p className="text-sm text-text-dim">Ще немає жодного дня тижня.</p>}
             {weekdays.items.map((wd, i) => (
@@ -368,7 +432,7 @@ export default function ChronologyBuilder() {
           </div>
         </FormSection>
 
-        <FormSection title="Сезони">
+        <FormSection title={settings.term_season.trim() ? `${terms.season}: список` : 'Сезони'}>
           <div className="flex flex-col gap-3">
             {seasons.items.length === 0 && <p className="text-sm text-text-dim">Ще немає жодного сезону.</p>}
             {months.items.length === 0 && (
@@ -398,7 +462,7 @@ export default function ChronologyBuilder() {
                     ))}
                   </select>
                 </Field>
-                <Field label="День початку" className="w-full sm:w-28">
+                <Field label={`${terms.day} початку`} className="w-full sm:w-28">
                   <input type="number" min={1} className={inputClass} value={s.start_day} onChange={(e) => seasons.update(s.id, { start_day: e.target.value })} />
                 </Field>
                 <ColorField label="Колір" className="w-full sm:w-40" value={s.color} onChange={(color) => seasons.update(s.id, { color })} />
@@ -413,6 +477,57 @@ export default function ChronologyBuilder() {
               </EditableRow>
             ))}
             <AddRowButton label="Додати сезон" onClick={() => seasons.add()} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Ери">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-text-dim">
+              До першої ери роки підписано назвами ер зі «Загальних налаштувань». Нова ера починається в
+              заданий день, і з нього відлік років, місяців, днів місяця й днів тижня йде знову з 1
+              (єдине, що не переривається, — цикли супутників). Ера триває до початку наступної. Циклічна ера
+              повторюється циклами заданої тривалості в роках — у кожному відлік знову з 1.
+              Дату початку вказуйте в безперервному відліку: рік 1 — початок літочислення.
+            </p>
+            {eras.items.length === 0 && <p className="text-sm text-text-dim">Ще немає жодної ери.</p>}
+            {months.items.length === 0 && eras.items.length > 0 && (
+              <p className="text-sm text-text-dim">Спочатку додайте хоча б один місяць — ера прив'язується до місяця початку.</p>
+            )}
+            {eras.items.map((er) => (
+              <EditableRow key={er.id} onRemove={() => eras.remove(er.id)}>
+                <Field label="Назва" className="flex-[2]">
+                  <input className={inputClass} value={er.name} onChange={(e) => eras.update(er.id, { name: e.target.value })} maxLength={200} />
+                </Field>
+                <Field label="Тип" className="w-full sm:w-44">
+                  <select
+                    className={inputClass}
+                    value={er.cyclic ? 'cyclic' : 'single'}
+                    onChange={(e) => eras.update(er.id, { cyclic: e.target.value === 'cyclic' })}
+                  >
+                    <option value="single">До наступної ери</option>
+                    <option value="cyclic">Циклічна</option>
+                  </select>
+                </Field>
+                {er.cyclic && (
+                  <Field label="Цикл, років" className="w-full sm:w-28">
+                    <input type="number" min={1} className={inputClass} value={er.cycle_years} onChange={(e) => eras.update(er.id, { cycle_years: e.target.value })} />
+                  </Field>
+                )}
+                <Field label={`${terms.year} початку`} className="w-full sm:w-28">
+                  <input type="number" className={inputClass} value={er.start_year} onChange={(e) => eras.update(er.id, { start_year: e.target.value })} />
+                </Field>
+                <Field label="Місяць початку" className="w-full sm:w-44">
+                  <select className={inputClass} value={er.start_month_id} onChange={(e) => eras.update(er.id, { start_month_id: e.target.value })}>
+                    <option value="">Оберіть...</option>
+                    {months.items.map((m) => <option key={m.id} value={m.id}>{m.name || 'Без назви'}</option>)}
+                  </select>
+                </Field>
+                <Field label={`${terms.day} початку`} className="w-full sm:w-28">
+                  <input type="number" min={1} className={inputClass} value={er.start_day} onChange={(e) => eras.update(er.id, { start_day: e.target.value })} />
+                </Field>
+              </EditableRow>
+            ))}
+            <AddRowButton label="Додати еру" onClick={() => eras.add()} />
           </div>
         </FormSection>
 

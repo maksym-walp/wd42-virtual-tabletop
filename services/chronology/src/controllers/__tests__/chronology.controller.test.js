@@ -1,6 +1,16 @@
 jest.mock('../../models/chronology.model');
+jest.mock('../../models/chronology-month.model');
+jest.mock('../../models/chronology-weekday.model');
+jest.mock('../../models/chronology-season.model');
+jest.mock('../../models/chronology-moon.model');
+jest.mock('../../models/chronology-era.model');
 
 const ChronologyModel = require('../../models/chronology.model');
+const ChronologyMonthModel = require('../../models/chronology-month.model');
+const ChronologyWeekdayModel = require('../../models/chronology-weekday.model');
+const ChronologySeasonModel = require('../../models/chronology-season.model');
+const ChronologyMoonModel = require('../../models/chronology-moon.model');
+const ChronologyEraModel = require('../../models/chronology-era.model');
 const ChronologyController = require('../chronology.controller');
 
 function mockRes() {
@@ -47,6 +57,82 @@ describe('ChronologyController.setDefault', () => {
     await ChronologyController.setDefault(mockReq({ params: { id: 'c1' }, body: { is_default: true } }), res);
     expect(ChronologyModel.setDefault).toHaveBeenCalledWith('c1', true);
     expect(res.json).toHaveBeenCalledWith({ calendar: { id: 'c1', is_default: true } });
+  });
+});
+
+describe('ChronologyController.exportStructure', () => {
+  it('returns 404 for a missing or invisible calendar', async () => {
+    ChronologyModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+    await ChronologyController.exportStructure(mockReq({ params: { id: 'x' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('responds with the structure only, no events', async () => {
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1', default_year: null, first_day_offset: 0 });
+    ChronologyMonthModel.findAllByCalendar.mockResolvedValue([{ id: 'm1', name: 'A', length: 30 }]);
+    ChronologyWeekdayModel.findAllByCalendar.mockResolvedValue([{ name: 'Пн' }]);
+    ChronologySeasonModel.findAllByCalendar.mockResolvedValue([]);
+    ChronologyMoonModel.findAllByCalendar.mockResolvedValue([{ name: 'M', cycle_length: 28, shift: 3 }]);
+    ChronologyEraModel.findAllByCalendar.mockResolvedValue([]);
+    const res = mockRes();
+    await ChronologyController.exportStructure(mockReq({ params: { id: 'c1' } }), res);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({ year_len: 30, n_months: 1, months: ['A'], week_len: 1, moons: ['M'], lunar_shf: { M: 3 } });
+    expect(body).not.toHaveProperty('calendar_events');
+  });
+});
+
+describe('ChronologyController.update terms', () => {
+  it('rejects a term longer than 50 characters', async () => {
+    const res = mockRes();
+    await ChronologyController.update(mockReq({ params: { id: 'c1' }, body: { name: 'K', term_year: 'x'.repeat(51) } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyModel.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChronologyController.setSync', () => {
+  const call = (body, params = { id: 'c2' }) => {
+    const res = mockRes();
+    return ChronologyController.setSync(mockReq({ params, body }), res).then(() => res);
+  };
+
+  it('rejects a non-integer offset', async () => {
+    const res = await call({ sync_offset_days: 1.5 });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyModel.setSyncOffset).not.toHaveBeenCalled();
+  });
+
+  it('404s for an unknown calendar', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue(null);
+    const res = await call({ sync_offset_days: 3 });
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('refuses to sync the default calendar itself', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1', is_default: true });
+    const res = await call({ sync_offset_days: 3 }, { id: 'c1' });
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('refuses to sync while no default calendar exists, but allows clearing', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c2', is_default: false });
+    ChronologyModel.hasDefault.mockResolvedValue(false);
+    let res = await call({ sync_offset_days: 3 });
+    expect(res.status).toHaveBeenCalledWith(400);
+    ChronologyModel.setSyncOffset.mockResolvedValue({ id: 'c2', sync_offset_days: null });
+    res = await call({ sync_offset_days: null });
+    expect(ChronologyModel.setSyncOffset).toHaveBeenCalledWith('c2', null);
+  });
+
+  it('stores the offset', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c2', is_default: false });
+    ChronologyModel.hasDefault.mockResolvedValue(true);
+    ChronologyModel.setSyncOffset.mockResolvedValue({ id: 'c2', sync_offset_days: -12 });
+    const res = await call({ sync_offset_days: -12 });
+    expect(ChronologyModel.setSyncOffset).toHaveBeenCalledWith('c2', -12);
+    expect(res.json).toHaveBeenCalledWith({ calendar: { id: 'c2', sync_offset_days: -12 } });
   });
 });
 

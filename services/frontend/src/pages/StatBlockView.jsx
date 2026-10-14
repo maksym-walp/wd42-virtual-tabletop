@@ -3,6 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import compendiumApi from '../api/compendium';
 import chronologyApi from '../api/chronology';
+import Tooltip from '../components/ui/Tooltip';
+import { equivalentDatesText } from '../utils/chronologySync';
+import { makeTimeline } from '../utils/chronologyEras';
+import { totalDaysSinceEpoch } from '../utils/chronologyMath';
 import { ATTRIBUTE_LABELS, GENDER_OPTIONS } from '../constants/compendium';
 import { STAT_BLOCK_KINDS } from '../constants/statBlocks';
 import { recordView, removeView } from '../utils/recentlyViewed';
@@ -37,6 +41,7 @@ export default function StatBlockView({ kind: kindKey }) {
   const [people, setPeople] = useState(null);
   // Календарі дат народження/смерті та їхні місяці, за id календаря.
   const [calendars, setCalendars] = useState({});
+  const [allCalendars, setAllCalendars] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [spells, setSpells] = useState([]);
   const [abilities, setAbilities] = useState([]);
@@ -60,6 +65,10 @@ export default function StatBlockView({ kind: kindKey }) {
         if (e.subspecies_id) compendiumApi.getSubspecies(e.subspecies_id).then(setSubspecies).catch(() => {});
         if (e.race_id) compendiumApi.getRace(e.race_id).then(setRace).catch(() => {});
         if (e.people_id) compendiumApi.getPeople(e.people_id).then(setPeople).catch(() => {});
+        // Усі календарі — для підказки «яка це дата в інших календарях».
+        if (e.birth_calendar_id || e.death_calendar_id) {
+          chronologyApi.list().then((list) => { if (!cancelled) setAllCalendars(list); }).catch(() => {});
+        }
         new Set([e.birth_calendar_id, e.death_calendar_id].filter(Boolean)).forEach((calendarId) => {
           Promise.all([chronologyApi.getOne(calendarId), chronologyApi.listMonths(calendarId)])
             .then(([calendar, months]) => {
@@ -251,13 +260,13 @@ export default function StatBlockView({ kind: kindKey }) {
               {entry.gender && <p><span className="text-text-dim">Стать:</span> {GENDER_OPTIONS[entry.gender] || entry.gender}</p>}
               {entry.birth_calendar_id && (
                 <CalendarDateLine
-                  label="Дата народження" data={birth}
+                  label="Дата народження" data={birth} allCalendars={allCalendars}
                   date={{ year: entry.birth_year, monthId: entry.birth_month_id, day: entry.birth_day }}
                 />
               )}
               {entry.death_calendar_id && (
                 <CalendarDateLine
-                  label="Дата смерті" data={death}
+                  label="Дата смерті" data={death} allCalendars={allCalendars}
                   date={{ year: entry.death_year, monthId: entry.death_month_id, day: entry.death_day }}
                 />
               )}
@@ -333,12 +342,27 @@ export default function StatBlockView({ kind: kindKey }) {
 
 // "14 Квітня 120 (Календар Півночі)" — the month name comes from that
 // calendar's months, loaded alongside it.
-function CalendarDateLine({ label, data, date }) {
+function CalendarDateLine({ label, data, date, allCalendars }) {
   const month = data?.months.find((m) => m.id === date.monthId);
+  // Календар з ерами: повна дата — у його локальному відліку (рік ери, а не безперервний).
+  let eraText = '';
+  if (data && date.year !== '' && date.year != null && date.day && month) {
+    const tl = makeTimeline({ ...data.calendar, months: data.months });
+    if (tl.hasEras) eraText = tl.format(totalDaysSinceEpoch(data.months, Number(date.year), data.months.indexOf(month), Number(date.day)));
+  }
+  // Та сама дата в інших синхронізованих календарях — підказка при наведенні.
+  const source = allCalendars.find((c) => c.id === data?.calendar.id);
+  const hint = source && date.year !== '' && date.year != null && date.monthId && date.day
+    ? equivalentDatesText(allCalendars, source, { year: Number(date.year), monthId: date.monthId, day: Number(date.day) })
+    : '';
   return (
     <p>
       <span className="text-text-dim">{label}:</span>{' '}
-      {[date.day, month?.name, date.year].filter((v) => v != null && v !== '').join(' ')}
+      <Tooltip text={hint}>
+        <span className={hint ? 'cursor-help underline decoration-dotted underline-offset-2' : undefined}>
+          {eraText || [date.day, month?.name, date.year].filter((v) => v != null && v !== '').join(' ')}
+        </span>
+      </Tooltip>
       {data && <span className="text-text-dim"> ({data.calendar.name})</span>}
     </p>
   );

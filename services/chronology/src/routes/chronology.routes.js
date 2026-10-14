@@ -4,6 +4,7 @@ const ChronologyMonthController = require('../controllers/chronology-month.contr
 const ChronologyWeekdayController = require('../controllers/chronology-weekday.controller');
 const ChronologySeasonController = require('../controllers/chronology-season.controller');
 const ChronologyMoonController = require('../controllers/chronology-moon.controller');
+const ChronologyEraController = require('../controllers/chronology-era.controller');
 const ChronologyEventController = require('../controllers/chronology-event.controller');
 const { requireAuth, requireChronologyManager, requireChronologyAdmin } = require('../middleware/auth.middleware');
 
@@ -20,8 +21,10 @@ router.get('/events/by-participant/:entryId', requireAuth, wrap(ChronologyEventC
 router.get('/',        requireAuth, wrap(ChronologyController.list));
 router.post('/',       requireChronologyManager, wrap(ChronologyController.create));
 router.get('/:id',     requireAuth, wrap(ChronologyController.getOne));
+router.get('/:id/export', requireAuth, wrap(ChronologyController.exportStructure));
 router.put('/:id',     requireChronologyManager, wrap(ChronologyController.update));
 router.delete('/:id',  requireChronologyManager, wrap(ChronologyController.remove));
+router.put('/:id/sync', requireChronologyManager, wrap(ChronologyController.setSync));
 router.put('/:id/default', requireChronologyAdmin, wrap(ChronologyController.setDefault));
 
 router.get('/:id/months',           requireAuth, wrap(ChronologyMonthController.list));
@@ -43,6 +46,11 @@ router.get('/:id/moons',          requireAuth, wrap(ChronologyMoonController.lis
 router.post('/:id/moons',         requireChronologyManager, wrap(ChronologyMoonController.create));
 router.put('/:id/moons/:moonId',  requireChronologyManager, wrap(ChronologyMoonController.update));
 router.delete('/:id/moons/:moonId', requireChronologyManager, wrap(ChronologyMoonController.remove));
+
+router.get('/:id/eras',          requireAuth, wrap(ChronologyEraController.list));
+router.post('/:id/eras',         requireChronologyManager, wrap(ChronologyEraController.create));
+router.put('/:id/eras/:eraId',   requireChronologyManager, wrap(ChronologyEraController.update));
+router.delete('/:id/eras/:eraId', requireChronologyManager, wrap(ChronologyEraController.remove));
 
 // ?campaign_id=... on the GET adds that campaign's own events on top of the
 // global (campaign_id IS NULL) lore events — see ChronologyEventController.list.

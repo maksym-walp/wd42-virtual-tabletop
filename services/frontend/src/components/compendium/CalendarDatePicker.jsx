@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import chronologyApi from '../../api/chronology';
 import Field, { inputClass } from '../ui/Field';
-import { ageOnCalendarDate, yearLabel } from '../../utils/chronologyMath';
+import { ageOnCalendarDate, totalDaysSinceEpoch } from '../../utils/chronologyMath';
+import { makeTimeline } from '../../utils/chronologyEras';
+import EraDateFields from '../chronology/EraDateFields';
 import { defaultCalendarId } from '../../utils/chronologyEvent';
 
 // Picks a date against one of the user's own/public calendars — first the
@@ -45,7 +47,6 @@ export default function CalendarDatePicker({ value, onChange, onAgeComputed, unt
   }, [calendarId]);
 
   const withAge = Boolean(onAgeComputed);
-  const selectedMonth = months.find((m) => m.id === monthId);
   const calendar = calendars.find((c) => c.id === calendarId);
   const untilApplies = Boolean(until?.calendarId) && until.year !== '' && until.year != null;
   const untilSameCalendar = untilApplies && until.calendarId === calendarId;
@@ -55,12 +56,17 @@ export default function CalendarDatePicker({ value, onChange, onAgeComputed, unt
   // months порожні, доки не підвантажились, — тоді вік рахується лише за роками
   // й одразу уточнюється, щойно місяці прийдуть.
   const age = withAge && calendar && now ? ageOnCalendarDate(months, { year, monthId, day }, now) : null;
-  const nowMonth = months.find((m) => m.id === now?.monthId);
+  // Підпис «поточної дати» календаря (місяць і рік) у його локальному відліку (ери).
+  const defaultDateText = (() => {
+    if (!calendar || calendar.default_year == null) return '';
+    const tl = makeTimeline(calendar);
+    const mi = tl.months.findIndex((m) => m.id === calendar.default_month_id);
+    const loc = tl.locate(totalDaysSinceEpoch(tl.months, Number(calendar.default_year), Math.max(mi, 0), 1));
+    return loc ? [mi === -1 ? null : loc.monthName, tl.yearText(loc)].filter(Boolean).join(' ') : '';
+  })();
 
   useEffect(() => { if (withAge) onAgeComputed(age); }, [age]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (withAge) onAgeComputed(null); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const set = (field) => (e) => onChange({ ...value, [field]: e.target.value });
 
   return (
     <div className="flex flex-col gap-3">
@@ -74,24 +80,13 @@ export default function CalendarDatePicker({ value, onChange, onAgeComputed, unt
         </select>
       </Field>
 
-      {calendarId && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="Рік">
-            <input type="number" className={inputClass} value={year} onChange={set('year')} />
-          </Field>
-          <Field label="Місяць">
-            <select className={inputClass} value={monthId} onChange={set('monthId')}>
-              <option value="">Не задано</option>
-              {months.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </Field>
-          <Field label="День">
-            <input
-              type="number" min={1} max={selectedMonth?.length || undefined}
-              className={inputClass} value={day} onChange={set('day')}
-            />
-          </Field>
-        </div>
+      {calendar && (
+        <EraDateFields
+          key={calendarId}
+          calendar={calendar}
+          value={{ year, monthId, day }}
+          onChange={(v) => onChange({ ...value, year: v.year, monthId: v.monthId, day: v.day })}
+        />
       )}
 
       {withAge && calendar && year !== '' && (
@@ -115,7 +110,7 @@ export default function CalendarDatePicker({ value, onChange, onAgeComputed, unt
           <p className="text-xs text-danger">Дата народження пізніша за поточну дату календаря.</p>
         ) : (
           <p className="text-xs text-text-dim">
-            Вік на {[nowMonth?.name, yearLabel(Number(calendar.default_year), calendar.current_era_name, calendar.previous_era_name)].filter(Boolean).join(' ')}:{' '}
+            Вік на {defaultDateText}:{' '}
             <span className="font-semibold text-text">{age}</span>
           </p>
         )

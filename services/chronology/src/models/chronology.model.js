@@ -13,7 +13,11 @@ const PREVIEW_COLUMNS = `
      FROM chronology.calendar_seasons s WHERE s.calendar_id = c.id) AS preview_seasons,
   (SELECT COALESCE(json_agg(json_build_object('id', mo.id, 'name', mo.name, 'cycle_length', mo.cycle_length,
             'shift', mo.shift, 'color', mo.color)), '[]'::json)
-     FROM chronology.calendar_moons mo WHERE mo.calendar_id = c.id) AS preview_moons`;
+     FROM chronology.calendar_moons mo WHERE mo.calendar_id = c.id) AS preview_moons,
+  (SELECT COALESCE(json_agg(json_build_object('id', er.id, 'name', er.name, 'start_year', er.start_year,
+            'start_month_id', er.start_month_id, 'start_day', er.start_day, 'cycle_years', er.cycle_years)
+            ORDER BY er.start_year, er.start_day), '[]'::json)
+     FROM chronology.calendar_eras er WHERE er.calendar_id = c.id) AS preview_eras`;
 
 const ChronologyModel = {
   // Visible to the requester: public calendars, their own (any visibility),
@@ -72,16 +76,19 @@ const ChronologyModel = {
     const {
       name, description, current_era_name, previous_era_name,
       first_day_offset, is_private, default_year, default_month_id,
+      term_day, term_week, term_season, term_year,
     } = data;
 
     const { rows } = await pool.query(
       `UPDATE chronology.calendars
        SET name=$2, description=$3, current_era_name=$4, previous_era_name=$5,
-           first_day_offset=$6, is_private=$7, default_year=$8, default_month_id=$9, updated_at=NOW()
+           first_day_offset=$6, is_private=$7, default_year=$8, default_month_id=$9,
+           term_day=$10, term_week=$11, term_season=$12, term_year=$13, updated_at=NOW()
        WHERE id=$1
        RETURNING *`,
       [id, name, description ?? null, current_era_name ?? null, previous_era_name ?? null,
-        first_day_offset ?? 0, is_private ?? false, default_year ?? null, default_month_id ?? null]
+        first_day_offset ?? 0, is_private ?? false, default_year ?? null, default_month_id ?? null,
+        term_day || null, term_week || null, term_season || null, term_year || null]
     );
     return rows[0] || null;
   },
@@ -90,25 +97,71 @@ const ChronologyModel = {
   // uq_calendars_single_default): попередній знімається в тій самій транзакції,
   // що ставить новий. Прапорець не входить у update() — загальне збереження
   // налаштувань (доступне й майстрам) його не чіпає.
+  //
+  // Синхронізація (sync_offset_days, міграція 98) відлічується від спільної
+  // осі, прив'язаної до колишнього основного календаря. Тому: календар, що
+  // перестає бути основним, зберігає свою позицію на осі (NULL → 0); новий
+  // основний без зсуву осі не має — тоді всі інші втрачають синхронізацію
+  // (їх треба синхронізувати з ним заново), а він сам стає початком осі.
   async setDefault(id, isDefault) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      let row = null;
       if (isDefault) {
-        await client.query(`UPDATE chronology.calendars SET is_default = false WHERE is_default AND id <> $1`, [id]);
+        const { rows: [target] } = await client.query(
+          `SELECT sync_offset_days FROM chronology.calendars WHERE id = $1 FOR UPDATE`, [id]
+        );
+        if (target) {
+          await client.query(
+            `UPDATE chronology.calendars
+             SET is_default = false, sync_offset_days = COALESCE(sync_offset_days, 0)
+             WHERE is_default AND id <> $1`,
+            [id]
+          );
+          if (target.sync_offset_days == null) {
+            await client.query(`UPDATE chronology.calendars SET sync_offset_days = NULL WHERE id <> $1`, [id]);
+          }
+          const { rows } = await client.query(
+            `UPDATE chronology.calendars
+             SET is_default = true, sync_offset_days = COALESCE(sync_offset_days, 0)
+             WHERE id = $1 RETURNING *`,
+            [id]
+          );
+          row = rows[0];
+        }
+      } else {
+        const { rows } = await client.query(
+          `UPDATE chronology.calendars
+           SET is_default = false, sync_offset_days = COALESCE(sync_offset_days, 0)
+           WHERE id = $1 RETURNING *`,
+          [id]
+        );
+        row = rows[0];
       }
-      const { rows } = await client.query(
-        `UPDATE chronology.calendars SET is_default = $2 WHERE id = $1 RETURNING *`,
-        [id, isDefault]
-      );
       await client.query('COMMIT');
-      return rows[0] || null;
+      return row || null;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
     } finally {
       client.release();
     }
+  },
+
+  // Зсув синхронізації з календарем за замовчуванням (NULL — вимкнути).
+  // Основному календарю зсув не задається (контролер це відсікає).
+  async setSyncOffset(id, offset) {
+    const { rows } = await pool.query(
+      `UPDATE chronology.calendars SET sync_offset_days = $2 WHERE id = $1 RETURNING *`,
+      [id, offset]
+    );
+    return rows[0] || null;
+  },
+
+  async hasDefault() {
+    const { rows } = await pool.query(`SELECT 1 FROM chronology.calendars WHERE is_default LIMIT 1`);
+    return rows.length > 0;
   },
 
   async delete(id) {

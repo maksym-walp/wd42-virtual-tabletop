@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import chronologyApi from '../../api/chronology';
 import { useAuth } from '../../context/AuthContext';
 import { eventDateRangeLabel, defaultCalendarId } from '../../utils/chronologyEvent';
+import { makeTimeline } from '../../utils/chronologyEras';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 
@@ -89,6 +90,12 @@ export default function NpcEventsSection({ npcId, Section, who = 'НІПа', emp
 // full month list — enough for eventDateRangeLabel, which only looks months
 // up by id.
 function participantEventDate(event) {
+  // Повна структура календаря (preview_months/preview_eras) дозволяє підписати
+  // дату в локальному відліку ер; без неї — лише назви двох місяців події.
+  if (event.preview_months?.length) {
+    const timeline = makeTimeline(event);
+    return eventDateRangeLabel(event, timeline.months, event.current_era_name, event.previous_era_name, timeline);
+  }
   const months = [
     { id: event.month_id, name: event.month_name },
     { id: event.end_month_id, name: event.end_month_name },

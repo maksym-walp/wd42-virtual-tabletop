@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Settings, Plus, Trash2, Pencil, ExternalLink, ArrowUpDown } from 'lucide-react';
+import { Settings, Plus, Trash2, Pencil, ExternalLink, ArrowUpDown, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import mapsApi from '../api/maps';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
 import characterApi from '../api/characterSheet';
-import { eventDateRangeLabel, eventPlaceLabel, eventSortKey, defaultCalendarId } from '../utils/chronologyEvent';
+import { eventDateRangeLabel, eventPlaceLabel, defaultCalendarId } from '../utils/chronologyEvent';
+import {
+  eventInCalendar, eventWorldSortKey, equivalentDatesText, buildEventsExport, monthsOf,
+} from '../utils/chronologySync';
+import { makeTimeline } from '../utils/chronologyEras';
+import { htmlToPreviewText } from '../utils/richText';
+import Tooltip from '../components/ui/Tooltip';
 import ChronologyTabs from '../components/chronology/ChronologyTabs';
 import EventForm from '../components/chronology/EventForm';
 import SmartTextReader from '../components/SmartTextReader';
@@ -56,7 +62,7 @@ export default function ChronologyEvents() {
   const load = () => Promise.all([
     chronologyApi.getOne(id),
     chronologyApi.listMonths(id),
-    chronologyApi.listEvents(id, campaignId),
+    chronologyApi.listEvents(id, campaignId, { synced: true }),
     mapsApi.listLocations(),
     // Персонажі гравців теж можуть бути учасниками — їхні події видно на
     // вкладці «Наратив» листа персонажа. Список — власні та прикріплені до
@@ -112,8 +118,27 @@ export default function ChronologyEvents() {
 
   const handleDelete = async (event) => {
     if (!confirm(`Видалити подію «${event.name}»?`)) return;
-    await chronologyApi.removeEvent(id, event.id);
+    await chronologyApi.removeEvent(event.calendar_id || id, event.id);
     load();
+  };
+
+  const calendarsById = new Map((calendars || []).map((c) => [c.id, c]));
+
+  // Подія іншого (синхронізованого) календаря: показуємо її в датах вибраного,
+  // а якщо перерахувати не вдалося (неповна дата) — у власних.
+  const viewOf = (e) => {
+    const owner = calendarsById.get(e.calendar_id);
+    if (!owner || !calendar || owner.id === calendar.id) return { owner: calendar, shown: e, foreign: false };
+    const shown = eventInCalendar(e, owner, calendar);
+    return { owner, shown: shown || e, foreign: true, converted: Boolean(shown) };
+  };
+
+  // Куди веде «Відкрити»: локація, інакше день у сітці того календаря, в чиїх
+  // датах подію зараз показано.
+  const gridTarget = (e) => {
+    const { owner, shown, converted } = viewOf(e);
+    if (shown.year == null || !shown.month_id || shown.day == null) return null;
+    return { calendarId: converted === false ? owner.id : calendar.id, year: shown.year, month_id: shown.month_id, day: shown.day };
   };
 
   const openInNewTab = (event) => {
@@ -121,10 +146,33 @@ export default function ChronologyEvents() {
       window.open(`/locations/${event.location_id}`, '_blank', 'noopener');
       return;
     }
-    if (event.year != null && event.month_id && event.day != null) {
-      const params = new URLSearchParams({ year: event.year, month_id: event.month_id, day: event.day });
+    const target = gridTarget(event);
+    if (target) {
+      const params = new URLSearchParams({ year: target.year, month_id: target.month_id, day: target.day });
       if (campaignId) params.set('campaign_id', campaignId);
-      window.open(`/chronology/${id}?${params}`, '_blank', 'noopener');
+      window.open(`/chronology/${target.calendarId}?${params}`, '_blank', 'noopener');
+    }
+  };
+
+  // Експорт подій усіх календарів з прив'язкою до календаря за замовчуванням.
+  const handleExport = async () => {
+    try {
+      const perCalendar = await Promise.all(calendars.map((c) => chronologyApi.listEvents(c.id, campaignId)));
+      const data = buildEventsExport({
+        calendars,
+        events: perCalendar.flat(),
+        locationsById,
+        charactersById,
+        plainText: (html) => htmlToPreviewText(html),
+      });
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'chronology-events.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Не вдалося експортувати події');
     }
   };
 
@@ -144,9 +192,17 @@ export default function ChronologyEvents() {
     );
   }
 
+  // Сортування на світовій осі, а не за датою власного календаря: у списку
+  // змішані події різних синхронізованих календарів.
+  const calendarTimeline = makeTimeline({ ...calendar, months });
+
   const sorted = [...events].sort((a, b) => {
-    const diff = eventSortKey(a, months) - eventSortKey(b, months);
-    return sortDir === 'asc' ? diff : -diff;
+    const ka = eventWorldSortKey(a, calendarsById);
+    const kb = eventWorldSortKey(b, calendarsById);
+    if (ka === kb) return 0; // Infinity - Infinity = NaN
+    if (ka === Infinity) return 1;
+    if (kb === Infinity) return -1;
+    return sortDir === 'asc' ? ka - kb : kb - ka;
   });
 
   // Grouping is tag-style, not a partition: an event with two participants
@@ -214,11 +270,16 @@ export default function ChronologyEvents() {
           <option value={GROUP_LOCATION}>Групувати за локацією</option>
           <option value={GROUP_CHARACTER}>Групувати за персонажем</option>
         </select>
-        {canManage && (
-          <Button size="sm" className="ml-auto" onClick={() => setFormTarget('new')}>
-            <Plus size={14} /> Додати подію
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleExport}>
+            <Download size={14} /> Експорт JSON
           </Button>
-        )}
+          {canManage && (
+            <Button size="sm" onClick={() => setFormTarget('new')}>
+              <Plus size={14} /> Додати подію
+            </Button>
+          )}
+        </div>
       </div>
 
       {events.length === 0 ? (
@@ -231,7 +292,7 @@ export default function ChronologyEvents() {
             <div key={groupLabel}>
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-text-dim">{groupLabel}</h2>
               <EventList
-                events={groupEvents} months={months} calendar={calendar} locationsById={locationsById}
+                events={groupEvents} months={months} calendar={calendar} calendarTimeline={calendarTimeline} calendars={calendars} viewOf={viewOf} gridTarget={gridTarget} locationsById={locationsById}
                 charactersById={charactersById} canManage={canManage} highlightId={highlightId}
                 onOpen={openInNewTab} onEdit={setFormTarget} onDelete={handleDelete}
               />
@@ -240,7 +301,7 @@ export default function ChronologyEvents() {
         </div>
       ) : (
         <EventList
-          events={sorted} months={months} calendar={calendar} locationsById={locationsById}
+          events={sorted} months={months} calendar={calendar} calendarTimeline={calendarTimeline} calendars={calendars} viewOf={viewOf} gridTarget={gridTarget} locationsById={locationsById}
           charactersById={charactersById} canManage={canManage} highlightId={highlightId}
           onOpen={openInNewTab} onEdit={setFormTarget} onDelete={handleDelete}
         />
@@ -249,9 +310,9 @@ export default function ChronologyEvents() {
       {formTarget && (
         <Sheet open onClose={() => setFormTarget(null)} title={formTarget === 'new' ? 'Нова подія' : 'Редагувати подію'}>
           <EventForm
-            calendarId={id}
+            calendarId={formTarget === 'new' ? id : formTarget.calendar_id}
+            calendars={calendars}
             campaignId={campaignId}
-            months={months}
             locations={locations}
             characterOptions={characterOptions}
             event={formTarget === 'new' ? undefined : formTarget}
@@ -264,12 +325,21 @@ export default function ChronologyEvents() {
   );
 }
 
-function EventList({ events, months, calendar, locationsById, charactersById, canManage, highlightId, onOpen, onEdit, onDelete }) {
+function EventList({ events, months, calendar, calendarTimeline, calendars, viewOf, gridTarget, locationsById, charactersById, canManage, highlightId, onOpen, onEdit, onDelete }) {
   return (
     <ul className="flex flex-col gap-2">
       {events.map((e) => {
         const place = eventPlaceLabel(e, locationsById);
-        const canOpen = Boolean(e.location_id) || (e.year != null && e.month_id && e.day != null);
+        const canOpen = Boolean(e.location_id) || Boolean(gridTarget(e));
+        const { owner, shown, foreign, converted } = viewOf(e);
+        // Підпис дати — у вибраному календарі (якщо вдалося перерахувати), інакше
+        // у власному; підказка при наведенні показує ту саму мить в усіх календарях.
+        const dateMonths = foreign && converted === false ? monthsOf(owner) : months;
+        const dateCal = foreign && converted === false ? owner : calendar;
+        const dateTimeline = foreign && converted === false ? makeTimeline(owner) : calendarTimeline;
+        const equivalents = owner && e.year != null && e.month_id && e.day != null
+          ? equivalentDatesText(calendars, owner, { year: Number(e.year), monthId: e.month_id, day: Number(e.day) })
+          : '';
         return (
           <li
             key={e.id}
@@ -286,9 +356,16 @@ function EventList({ events, months, calendar, locationsById, charactersById, ca
                 {e.campaign_id && (
                   <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">Кампанія</span>
                 )}
+                {foreign && (
+                  <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">{owner.name}</span>
+                )}
               </div>
               <p className="mt-1 text-xs text-text-dim">
-                {eventDateRangeLabel(e, months, calendar.current_era_name, calendar.previous_era_name)}
+                <Tooltip text={equivalents}>
+                  <span className={equivalents ? 'cursor-help underline decoration-dotted underline-offset-2' : undefined}>
+                    {eventDateRangeLabel(shown, dateMonths, dateCal.current_era_name, dateCal.previous_era_name, dateTimeline)}
+                  </span>
+                </Tooltip>
                 {place && ` · ${place}`}
               </p>
               {e.description && <SmartTextReader text={e.description} className="mt-1 text-xs text-text-dim" />}
