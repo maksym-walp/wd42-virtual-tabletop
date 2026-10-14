@@ -3,14 +3,18 @@ const { loadChronologyOr404, loadChronologyForManageOr404 } = require('./load-ch
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const VALID_RECURRENCE = ['none', 'yearly', 'monthly', 'weekly'];
+const VALID_DURATION_DISPLAY = ['start', 'start_end', 'every_day', 'none'];
 
 function validateBody(body) {
-  const { name, color, recurrence = 'none', day, end_day, location_id, region } = body;
+  const { name, color, recurrence = 'none', day, end_day, location_id, region, duration_display = 'start' } = body;
   if (!name || !HEX_COLOR_RE.test(color || '')) {
     return 'name та color (#rrggbb) є обовʼязковими';
   }
   if (!VALID_RECURRENCE.includes(recurrence)) {
     return `recurrence має бути одним з: ${VALID_RECURRENCE.join(', ')}`;
+  }
+  if (!VALID_DURATION_DISPLAY.includes(duration_display)) {
+    return `duration_display має бути одним з: ${VALID_DURATION_DISPLAY.join(', ')}`;
   }
   if (day !== undefined && day !== null && !(day > 0)) {
     return 'day має бути додатним числом';

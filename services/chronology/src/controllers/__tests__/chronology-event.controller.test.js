@@ -111,6 +111,17 @@ describe('ChronologyEventController.create', () => {
     expect(ChronologyEventModel.create).not.toHaveBeenCalled();
   });
 
+  it('returns 400 on an unknown duration_display', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    const req = mockReq({ params: { id: 'c1' }, body: { name: 'Облога', color: '#ff0000', duration_display: 'sometimes' } });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when both location_id and region are set', async () => {
     ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
     const req = mockReq({

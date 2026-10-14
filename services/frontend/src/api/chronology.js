@@ -30,6 +30,13 @@ const chronologyApi = {
     await api.delete(`${BASE}/${id}`);
   },
 
+  // Лише адмін: зробити календар (не)основним — він обраний наперед у всіх
+  // вибірах дати. Повертає оновлений календар.
+  async setDefault(id, isDefault) {
+    const { data } = await api.put(`${BASE}/${id}/default`, { is_default: isDefault });
+    return data.calendar;
+  },
+
   // Місяці
   async listMonths(id) {
     const { data } = await api.get(`${BASE}/${id}/months`);

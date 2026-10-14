@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, Settings, Plus, Trash2, Pencil, ExternalLink, ArrowUpDown } from 'lucide-react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Settings, Plus, Trash2, Pencil, ExternalLink, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import mapsApi from '../api/maps';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
 import characterApi from '../api/characterSheet';
-import { eventDateRangeLabel, eventPlaceLabel, eventSortKey } from '../utils/chronologyEvent';
-import CatalogTabs from '../components/CatalogTabs';
+import { eventDateRangeLabel, eventPlaceLabel, eventSortKey, defaultCalendarId } from '../utils/chronologyEvent';
+import ChronologyTabs from '../components/chronology/ChronologyTabs';
 import EventForm from '../components/chronology/EventForm';
 import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
+import PageHeader from '../components/ui/PageHeader';
 import EmptyState from '../components/ui/EmptyState';
 import Sheet from '../components/ui/Sheet';
 import { inputClass } from '../components/ui/Field';
@@ -21,13 +22,14 @@ const GROUP_NONE = 'none';
 const GROUP_LOCATION = 'location';
 const GROUP_CHARACTER = 'character';
 
-// The "Події" sub-tab of a calendar (see ChronologyView.jsx for the "Сітка"
-// sub-tab it pairs with, via the same CatalogTabs bar) — a flat, sortable,
-// groupable list of every event visible to the viewer, since the grid only
-// ever surfaces one day's events at a time.
+// Вкладка «Події» сервісу «Хронологія» (поряд із каталогом календарів, див.
+// ChronologyTabs) — плоский відсортований список усіх подій одного календаря,
+// які бачить глядач (сітка показує події лише одного дня за раз). Календар
+// обирається селектом: ?calendar=<id>, інакше календар за замовчуванням, інакше
+// перший зі списку. Старі посилання /chronology/:id/events ведуть сюди через
+// редірект у App.jsx.
 export default function ChronologyEvents() {
-  const { id } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const campaignId = searchParams.get('campaign_id') || null;
   // ?event=<id> — посилання на конкретну подію (внутрішні посилання в текстах):
   // прокручуємо до неї й підсвічуємо.
@@ -35,6 +37,10 @@ export default function ChronologyEvents() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'game_master';
+
+  const [calendars, setCalendars] = useState(null); // null — ще вантажиться
+  const id = searchParams.get('calendar')
+    || (calendars ? (defaultCalendarId(calendars) || calendars[0]?.id || null) : null);
 
   const [calendar, setCalendar] = useState(null);
   const [months, setMonths] = useState([]);
@@ -73,13 +79,28 @@ export default function ChronologyEvents() {
   });
 
   useEffect(() => {
+    chronologyApi.list()
+      .then(setCalendars)
+      .catch(() => navigate('/chronology'));
+  }, []);
+
+  useEffect(() => {
+    if (calendars === null) return undefined;
+    if (!id) { setLoading(false); return undefined; }
     let alive = true;
     setLoading(true);
     load()
       .catch(() => { if (alive) navigate('/chronology'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [id, campaignId]);
+  }, [id, campaignId, calendars]);
+
+  const selectCalendar = (calendarId) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('calendar', calendarId);
+    next.delete('event');
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     if (loading || !highlightId) return;
@@ -107,7 +128,21 @@ export default function ChronologyEvents() {
     }
   };
 
-  if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
+  if (calendars === null || (id && loading)) {
+    return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
+  }
+
+  if (!id || !calendar) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+        <PageHeader title="🗓️ Хронологія" />
+        <ChronologyTabs />
+        <EmptyState icon="📜" title="Ще немає жодного календаря">
+          Події належать календарям — спершу створіть календар у вкладці «Календарі».
+        </EmptyState>
+      </div>
+    );
+  }
 
   const sorted = [...events].sort((a, b) => {
     const diff = eventSortKey(a, months) - eventSortKey(b, months);
@@ -144,9 +179,20 @@ export default function ChronologyEvents() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <Link to="/chronology" className="inline-flex items-center gap-1.5 text-sm text-text-dim">
-          <ArrowLeft size={15} /> Календарі
+      <PageHeader title="🗓️ Хронологія" />
+      <ChronologyTabs />
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <select
+          className={`${inputClass} w-auto min-w-0 max-w-full`}
+          value={id}
+          onChange={(e) => selectCalendar(e.target.value)}
+          aria-label="Календар"
+        >
+          {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}{c.is_default ? ' ★' : ''}</option>)}
+        </select>
+        <Link to={`/chronology/${id}${campaignId ? `?campaign_id=${campaignId}` : ''}`} className="text-sm text-text-dim hover:text-text">
+          Відкрити календар
         </Link>
         {canManage && (
           <Link to={`/chronology/${id}/build`} className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text">
@@ -154,15 +200,6 @@ export default function ChronologyEvents() {
           </Link>
         )}
       </div>
-
-      <h1 className="mb-4 font-display text-2xl text-accent">{calendar.name}</h1>
-
-      <CatalogTabs
-        tabs={[
-          { label: 'Сітка', to: `/chronology/${id}${campaignId ? `?campaign_id=${campaignId}` : ''}`, end: true },
-          { label: 'Події', to: `/chronology/${id}/events${campaignId ? `?campaign_id=${campaignId}` : ''}` },
-        ]}
-      />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
 
@@ -28,4 +28,15 @@ export function LegacyFactionRedirect() {
   const navigate = useNavigate();
   useEffect(() => { navigate(`/npcs/factions${rest ? `/${rest}` : ''}`, { replace: true }); }, [rest]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
+}
+
+// /chronology/:id/events -> /chronology/events?calendar=:id — «Події» тепер
+// окрема вкладка сервісу, а не підвкладка календаря; ?event= і ?campaign_id=
+// із внутрішніх посилань зберігаються.
+export function LegacyCalendarEventsRedirect() {
+  const { id } = useParams();
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set('calendar', id);
+  return <Navigate to={`/chronology/events?${params}`} replace />;
 }

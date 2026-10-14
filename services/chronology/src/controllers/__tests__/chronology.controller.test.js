@@ -26,6 +26,30 @@ describe('ChronologyController.list', () => {
   });
 });
 
+describe('ChronologyController.setDefault', () => {
+  it('rejects a non-boolean is_default', async () => {
+    const res = mockRes();
+    await ChronologyController.setDefault(mockReq({ params: { id: 'c1' }, body: { is_default: 'yes' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyModel.setDefault).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for an unknown calendar', async () => {
+    ChronologyModel.setDefault.mockResolvedValue(null);
+    const res = mockRes();
+    await ChronologyController.setDefault(mockReq({ params: { id: 'x' }, body: { is_default: true } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns the updated calendar', async () => {
+    ChronologyModel.setDefault.mockResolvedValue({ id: 'c1', is_default: true });
+    const res = mockRes();
+    await ChronologyController.setDefault(mockReq({ params: { id: 'c1' }, body: { is_default: true } }), res);
+    expect(ChronologyModel.setDefault).toHaveBeenCalledWith('c1', true);
+    expect(res.json).toHaveBeenCalledWith({ calendar: { id: 'c1', is_default: true } });
+  });
+});
+
 describe('ChronologyController.getOne', () => {
   it('returns 404 when not found or not visible', async () => {
     ChronologyModel.findById.mockResolvedValue(null);

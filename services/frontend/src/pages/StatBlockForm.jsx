@@ -29,6 +29,7 @@ const EMPTY = {
 };
 
 const intOrNull = (v) => (v === '' || v == null ? null : Number(v));
+const hasDatePart = (form, prefix) => ['year', 'month_id', 'day'].some((k) => form[`${prefix}_${k}`] !== '' && form[`${prefix}_${k}`] != null);
 
 // Shared by НІПи (/npcs/new, /npcs/:id/edit) and Бестіарій (/bestiary/new,
 // /bestiary/:id/edit). NPC-only sections (motivation/backstory, biography with
@@ -154,11 +155,13 @@ export default function StatBlockForm({ kind: kindKey }) {
         // Обчислений із дати народження вік має пріоритет над ручним.
         age: autoAge ?? intOrNull(form.age),
         gender: form.gender || null,
-        birth_calendar_id: form.birth_calendar_id || null,
+        // Календар без жодної частини дати нічого не означає (його може
+        // підставити сам вибір календаря за замовчуванням) — не зберігаємо.
+        birth_calendar_id: hasDatePart(form, 'birth') ? (form.birth_calendar_id || null) : null,
         birth_year: intOrNull(form.birth_year),
         birth_month_id: form.birth_month_id || null,
         birth_day: intOrNull(form.birth_day),
-        death_calendar_id: form.death_calendar_id || null,
+        death_calendar_id: hasDatePart(form, 'death') ? (form.death_calendar_id || null) : null,
         death_year: intOrNull(form.death_year),
         death_month_id: form.death_month_id || null,
         death_day: intOrNull(form.death_day),

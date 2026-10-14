@@ -15,8 +15,11 @@
 | POST | `/` | admin/game_master | `{ name, description?, current_era_name?, previous_era_name?, first_day_offset?, is_private? }` | `201 { calendar }` / `400` (без `name`) |
 | PUT | `/:id` | admin/game_master | те саме, що й POST, плюс `default_year?`, `default_month_id?` | `200 { calendar }` / `404` |
 | DELETE | `/:id` | admin/game_master | — | `200 { message }` / `404` |
+| PUT | `/:id/default` | лише admin | `{ is_default: boolean }` | `200 { calendar }` / `400` / `404` |
 
 `default_year`/`default_month_id` — рік і місяць, які ChronologyView відкриває за замовчуванням (коли немає прив'язаної кампанії з власною поточною датою — вона має пріоритет). Відсутні в `POST`, бо в щойно створеного календаря ще немає жодного місяця; `default_month_id`, якщо заданий, має належати цьому самому календарю — `400`, якщо це місяць іншого календаря.
+
+`is_default` — календар за замовчуванням (не більше одного, частковий унікальний індекс; міграція 97): його фронтенд підставляє наперед у всіх вибірах дати інших сервісів. Лише `PUT /:id/default` змінює прапорець — загальний `PUT /:id` його не чіпає; увімкнення знімає позначку з попереднього. `GET /` віддає календарі з default першим.
 
 ### Місяці (`/:id/months`)
 
@@ -65,7 +68,7 @@
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
 | GET | `/:id/events` | так | — (опційно `?campaign_id=...`) | `200 { events: [...] }` (кожен елемент несе `participant_ids: string[]`) |
-| POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, is_public?, year?, month_id?, day?, recurrence?, location_id?, region?, end_year?, end_month_id?, end_day?, participant_ids? }` | `201 { event }` / `400` |
+| POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, is_public?, year?, month_id?, day?, recurrence?, location_id?, region?, end_year?, end_month_id?, end_day?, duration_display?, participant_ids? }` | `201 { event }` / `400` |
 | PUT | `/:id/events/:eventId` | admin/game_master | те саме, що й POST | `200 { event }` / `404` |
 | DELETE | `/:id/events/:eventId` | admin/game_master | — | `200 { message }` / `404` |
 | POST | `/:id/events/:eventId/participants` | admin/game_master | `{ entry_id }` | `201 { event_id, entry_id }` / `400` без `entry_id` / `404` якщо подія не в цьому календарі |
@@ -77,7 +80,7 @@
 - `GET` без `?campaign_id`: лише глобальні події (`campaign_id IS NULL`). З `?campaign_id=X`: глобальні події **плюс** події кампанії `X`.
 - `is_public` (за замовчуванням `true`) ховає подію від звичайних користувачів у `GET` — `admin`/`game_master` бачать усі події незалежно від `is_public`.
 - `color` — hex-формат `#rrggbb`; `recurrence` — одне з `none`/`yearly`/`monthly`/`weekly` (за замовчуванням `none`); `day`/`end_day`, якщо задані, мають бути додатними.
-- `month_id`/`end_month_id`, якщо задані, мають належати тому самому календарю (`:id` з URL) — `400`, якщо це місяць іншого календаря. `year`/`month_id`/`day` незалежно nullable — подію можна прив'язати до часу настільки точно, наскільки відомо ГМу; заповнення `end_year`/`end_month_id`/`end_day` перетворює точкову подію на тривалу.
+- `month_id`/`end_month_id`, якщо задані, мають належати тому самому календарю (`:id` з URL) — `400`, якщо це місяць іншого календаря. `year`/`month_id`/`day` незалежно nullable — подію можна прив'язати до часу настільки точно, наскільки відомо ГМу; заповнення `end_year`/`end_month_id`/`end_day` перетворює точкову подію на тривалу. `duration_display` — як тривала подія малюється на сітці: `start` (за замовчуванням), `start_end`, `every_day`, `none` (на сітці не показувати); інакше `400`.
 - `location_id` (крос-сервісний UUID → `maps.locations.id`, без FK) і `region` (вільний текст, до 200 символів) взаємовиключні — `400`, якщо задані обидва.
 - `participant_ids` — масив крос-сервісних UUID (`npcs.npcs.id` / `bestiary.creatures.id`, НІПи чи істоти); повна заміна набору учасників події при кожному `POST`/`PUT` (порожній масив чи відсутність поля прибирає всіх).
 - `/participants` — точкове додавання/видалення одного учасника (сторінка НІПа в сервісі npcs), без повної заміни набору через `PUT`. `by-participant`: `admin`/`game_master` бачать усі події (приватні й кампанійні), решта — лише публічні глобальні (`campaign_id IS NULL`), і лише з календарів, які їм видимі (`is_private = false` або власний; адмін — усі).

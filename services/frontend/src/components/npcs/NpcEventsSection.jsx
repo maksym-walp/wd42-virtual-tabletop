@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import chronologyApi from '../../api/chronology';
 import { useAuth } from '../../context/AuthContext';
-import { eventDateRangeLabel } from '../../utils/chronologyEvent';
+import { eventDateRangeLabel, defaultCalendarId } from '../../utils/chronologyEvent';
 import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 
@@ -46,7 +46,7 @@ export default function NpcEventsSection({ npcId, Section, who = 'НІПа', emp
           <li key={event.id} className="flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: event.color }} />
             <div className="min-w-0 flex-1">
-              <Link to={`/chronology/${event.calendar_id}/events`} className="text-sm font-semibold text-text hover:text-accent">
+              <Link to={`/chronology/events?calendar=${event.calendar_id}`} className="text-sm font-semibold text-text hover:text-accent">
                 {event.name}
               </Link>
               <p className="text-xs text-text-dim">{participantEventDate(event)} · {event.calendar_name}</p>
@@ -103,7 +103,11 @@ function AddEventForm({ takenIds, onSubmit, onCancel }) {
   const [months, setMonths] = useState([]);
   const [eventId, setEventId] = useState('');
 
-  useEffect(() => { chronologyApi.list().then(setCalendars).catch(() => {}); }, []);
+  useEffect(() => {
+    chronologyApi.list()
+      .then((list) => { setCalendars(list); setCalendarId((cur) => cur || defaultCalendarId(list)); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setEventId('');

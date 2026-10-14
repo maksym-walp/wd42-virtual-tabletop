@@ -5,7 +5,7 @@ const ChronologyWeekdayController = require('../controllers/chronology-weekday.c
 const ChronologySeasonController = require('../controllers/chronology-season.controller');
 const ChronologyMoonController = require('../controllers/chronology-moon.controller');
 const ChronologyEventController = require('../controllers/chronology-event.controller');
-const { requireAuth, requireChronologyManager } = require('../middleware/auth.middleware');
+const { requireAuth, requireChronologyManager, requireChronologyAdmin } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -22,6 +22,7 @@ router.post('/',       requireChronologyManager, wrap(ChronologyController.creat
 router.get('/:id',     requireAuth, wrap(ChronologyController.getOne));
 router.put('/:id',     requireChronologyManager, wrap(ChronologyController.update));
 router.delete('/:id',  requireChronologyManager, wrap(ChronologyController.remove));
+router.put('/:id/default', requireChronologyAdmin, wrap(ChronologyController.setDefault));
 
 router.get('/:id/months',           requireAuth, wrap(ChronologyMonthController.list));
 router.post('/:id/months',          requireChronologyManager, wrap(ChronologyMonthController.create));

@@ -66,10 +66,50 @@ export function getActiveSeason(seasons, months, monthIndex, day = 1) {
   return chosen.season;
 }
 
+// Чи має подія дату завершення (тривала). Ті самі незалежно-nullable поля, що
+// й початок, тож достатньо будь-якого з трьох.
+export function eventHasEnd(event) {
+  return event.end_year != null || Boolean(event.end_month_id) || event.end_day != null;
+}
+
+// Як тривала подія малюється на сітці (events.duration_display):
+// 'start' — лише день початку, 'start_end' — день початку й день завершення,
+// 'every_day' — кожен день тривалості, 'none' — не малювати взагалі.
+export const DURATION_DISPLAY_LABELS = {
+  start: 'Лише дата початку',
+  start_end: 'Дата початку і завершення',
+  every_day: 'Кожен день тривалості',
+  none: 'Не показувати в календарі',
+};
+
+// [startTotalDays, endTotalDays] одноразової події або null, якщо діапазон не
+// визначити (нема повної дати початку, місяць не з цього календаря) чи він
+// некоректний (кінець раніше початку). Рік/місяць/день завершення, яких не
+// задано, береться від початку — як у eventDateRangeLabel; день завершення
+// не виходить за довжину місяця.
+function eventDayRange(event, months) {
+  if (event.year == null || !event.month_id || event.day == null) return null;
+  const startMi = months.findIndex((m) => m.id === event.month_id);
+  if (startMi === -1) return null;
+  const endMi = months.findIndex((m) => m.id === (event.end_month_id || event.month_id));
+  if (endMi === -1) return null;
+  const endDay = Math.min(Number(event.end_day ?? event.day), Number(months[endMi].length));
+  const start = totalDaysSinceEpoch(months, Number(event.year), startMi, Number(event.day));
+  const end = totalDaysSinceEpoch(months, Number(event.end_year ?? event.year), endMi, endDay);
+  return end >= start ? [start, end] : null;
+}
+
 // Does `event` land on this exact grid cell? "yearly"/"monthly"/"weekly"
 // ignore the parts of the anchor date that repeat (task: "if yearly, it
-// shows on that day/month regardless of the year").
+// shows on that day/month regardless of the year"). Тривалі події поза
+// 'start' режимом (див. DURATION_DISPLAY_LABELS) діють лише для одноразових:
+// повторювана подія з кінцем лишається мітками початку, а 'none' ховає
+// тривалу подію за будь-якого повторення.
 export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCount) {
+  const mode = event.duration_display || 'start';
+  const hasEnd = eventHasEnd(event);
+  if (mode === 'none' && hasEnd) return false;
+
   switch (event.recurrence) {
     case 'yearly':
       return event.month_id === cell.monthId && Number(event.day) === cell.day;
@@ -84,8 +124,17 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
       return anchorWeekday === cell.weekdayIndex;
     }
     case 'none':
-    default:
-      return Number(event.year) === cell.year && event.month_id === cell.monthId && Number(event.day) === cell.day;
+    default: {
+      const startsHere = Number(event.year) === cell.year && event.month_id === cell.monthId && Number(event.day) === cell.day;
+      if (!hasEnd || mode === 'start') return startsHere;
+      const range = eventDayRange(event, months);
+      if (!range) return startsHere;
+      const cellMi = months.findIndex((m) => m.id === cell.monthId);
+      if (cellMi === -1) return startsHere;
+      const cellTotal = totalDaysSinceEpoch(months, cell.year, cellMi, cell.day);
+      if (mode === 'start_end') return cellTotal === range[0] || cellTotal === range[1];
+      return cellTotal >= range[0] && cellTotal <= range[1]; // every_day
+    }
   }
 }
 

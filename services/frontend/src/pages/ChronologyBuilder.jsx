@@ -8,6 +8,8 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import ImageUploadField from '../components/ui/ImageUploadField';
 import SmartTextarea from '../components/ui/SmartTextarea';
+import ColorField from '../components/ui/ColorField';
+import { MOON_COLOR_PRESETS } from '../constants/chronologyColors';
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
@@ -399,9 +401,7 @@ export default function ChronologyBuilder() {
                 <Field label="День початку" className="w-full sm:w-28">
                   <input type="number" min={1} className={inputClass} value={s.start_day} onChange={(e) => seasons.update(s.id, { start_day: e.target.value })} />
                 </Field>
-                <Field label="Колір" className="w-full sm:w-40">
-                  <ColorField value={s.color} onChange={(color) => seasons.update(s.id, { color })} />
-                </Field>
+                <ColorField label="Колір" className="w-full sm:w-40" value={s.color} onChange={(color) => seasons.update(s.id, { color })} />
                 <div className="w-full sm:w-64">
                   <ImageUploadField
                     label="Фон сезону"
@@ -433,9 +433,10 @@ export default function ChronologyBuilder() {
                 <Field label="Зсув" hint="День початку циклу" className="w-full sm:w-28">
                   <input type="number" className={inputClass} value={mo.shift} onChange={(e) => moons.update(mo.id, { shift: e.target.value })} />
                 </Field>
-                <Field label="Колір" className="w-full sm:w-40">
-                  <ColorField value={mo.color} onChange={(color) => moons.update(mo.id, { color })} />
-                </Field>
+                <ColorField
+                  label="Колір" className="w-full sm:w-64" value={mo.color} presets={MOON_COLOR_PRESETS}
+                  onChange={(color) => moons.update(mo.id, { color })}
+                />
               </EditableRow>
             ))}
             <AddRowButton label="Додати супутник" onClick={() => moons.add()} />
@@ -505,32 +506,5 @@ function AddRowButton({ onClick, label }) {
     >
       <Plus size={14} /> {label}
     </button>
-  );
-}
-
-// Нативний color-picker + текстове поле для ручного вводу hex — жодного
-// color-picker компонента/бібліотеки в репо ще немає (перевірено по
-// package.json), а нативний <input type="color"> покриває вимогу без нової
-// залежності.
-function ColorField({ value, onChange }) {
-  const safeValue = HEX_COLOR_RE.test(value || '') ? value : '#888888';
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={safeValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1"
-        aria-label="Колір"
-      />
-      <input
-        type="text"
-        className={inputClass}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="#rrggbb"
-        maxLength={7}
-      />
-    </div>
   );
 }

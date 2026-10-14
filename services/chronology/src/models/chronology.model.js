@@ -25,7 +25,7 @@ const ChronologyModel = {
       `SELECT c.*, (c.creator_id = $1) AS is_owner, ${PREVIEW_COLUMNS}
        FROM chronology.calendars c
        WHERE ${visibility}
-       ORDER BY c.name ASC`,
+       ORDER BY c.is_default DESC, c.name ASC`,
       [userId]
     );
     return rows;
@@ -84,6 +84,31 @@ const ChronologyModel = {
         first_day_offset ?? 0, is_private ?? false, default_year ?? null, default_month_id ?? null]
     );
     return rows[0] || null;
+  },
+
+  // Не більше одного календаря за замовчуванням (частковий унікальний індекс
+  // uq_calendars_single_default): попередній знімається в тій самій транзакції,
+  // що ставить новий. Прапорець не входить у update() — загальне збереження
+  // налаштувань (доступне й майстрам) його не чіпає.
+  async setDefault(id, isDefault) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (isDefault) {
+        await client.query(`UPDATE chronology.calendars SET is_default = false WHERE is_default AND id <> $1`, [id]);
+      }
+      const { rows } = await client.query(
+        `UPDATE chronology.calendars SET is_default = $2 WHERE id = $1 RETURNING *`,
+        [id, isDefault]
+      );
+      await client.query('COMMIT');
+      return rows[0] || null;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 
   async delete(id) {

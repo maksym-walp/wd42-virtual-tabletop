@@ -55,3 +55,10 @@ export function eventSortKey(event, months) {
   if (monthIndex === -1) return Infinity;
   return totalDaysSinceEpoch(months, Number(event.year), monthIndex, Number(event.day) || 1);
 }
+
+// Календар за замовчуванням (позначений адміном) серед переданих — id або ''.
+// Список видимості вже відфільтрував приватні календарі, тож для того, кому
+// такий календар недоступний, повернеться '' і вибір лишається порожнім.
+export function defaultCalendarId(calendars) {
+  return calendars.find((c) => c.is_default)?.id || '';
+}

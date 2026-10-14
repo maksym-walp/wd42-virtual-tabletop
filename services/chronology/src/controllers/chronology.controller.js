@@ -30,6 +30,16 @@ const ChronologyController = {
     res.json({ calendar });
   },
 
+  // Лише адмін (requireChronologyAdmin). Тіло { is_default: boolean }.
+  async setDefault(req, res) {
+    if (typeof req.body.is_default !== 'boolean') {
+      return res.status(400).json({ message: 'is_default має бути boolean' });
+    }
+    const calendar = await ChronologyModel.setDefault(req.params.id, req.body.is_default);
+    if (!calendar) return res.status(404).json({ message: 'Календар не знайдено' });
+    res.json({ calendar });
+  },
+
   async remove(req, res) {
     const deleted = await ChronologyModel.delete(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Календар не знайдено' });

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CalendarDays, Globe, Lock } from 'lucide-react';
+import { CalendarDays, Globe, Lock, Star } from 'lucide-react';
 import MoonPhase from '../MoonPhase';
 import {
   daysPerYear, totalDaysSinceEpoch, weekdayIndexOf, yearLabel, getActiveSeason,
@@ -128,6 +128,11 @@ export default function CalendarCard({ calendar: c, to, actions, date, label }) 
           {label && <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-gold">{label}</p>}
           <h3 className="flex items-center gap-1.5 font-display text-lg leading-tight text-accent">
             <span className="min-w-0 truncate">{c.name}</span>
+            {c.is_default && (
+              <span className="shrink-0 text-gold" title="Календар за замовчуванням">
+                <Star size={13} className="fill-gold" />
+              </span>
+            )}
             <span className="shrink-0 text-text-dim" title={c.is_private ? 'Приватний' : 'Публічний'}>
               {c.is_private ? <Lock size={13} /> : <Globe size={13} />}
             </span>

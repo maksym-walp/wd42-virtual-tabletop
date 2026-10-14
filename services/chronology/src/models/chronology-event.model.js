@@ -66,18 +66,19 @@ const ChronologyEventModel = {
     const {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
-      location_id, region, end_year, end_month_id, end_day, participant_ids,
+      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO chronology.calendar_events
          (calendar_id, campaign_id, name, description, color, is_public, year, month_id, day, recurrence,
-          location_id, region, end_year, end_month_id, end_day)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          location_id, region, end_year, end_month_id, end_day, duration_display)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
-        location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null]
+        location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
+        duration_display ?? 'start']
     );
     const event = rows[0];
     await setParticipants(event.id, participant_ids);
@@ -88,19 +89,21 @@ const ChronologyEventModel = {
     const {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
-      location_id, region, end_year, end_month_id, end_day, participant_ids,
+      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids,
     } = data;
 
     const { rows } = await pool.query(
       `UPDATE chronology.calendar_events
        SET campaign_id=$3, name=$4, description=$5, color=$6, is_public=$7,
            year=$8, month_id=$9, day=$10, recurrence=$11,
-           location_id=$12, region=$13, end_year=$14, end_month_id=$15, end_day=$16, updated_at=NOW()
+           location_id=$12, region=$13, end_year=$14, end_month_id=$15, end_day=$16,
+           duration_display=$17, updated_at=NOW()
        WHERE id=$1 AND calendar_id=$2
        RETURNING *`,
       [id, calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
-        location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null]
+        location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
+        duration_display ?? 'start']
     );
     if (!rows[0]) return null;
     await setParticipants(id, participant_ids);

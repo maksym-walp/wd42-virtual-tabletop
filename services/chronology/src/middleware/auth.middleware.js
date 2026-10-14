@@ -25,4 +25,14 @@ function requireChronologyManager(req, res, next) {
   });
 }
 
-module.exports = { requireAuth, requireChronologyManager };
+// Календар за замовчуванням — глобальне налаштування сайту, тому лише адмін.
+function requireChronologyAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden: admin only' });
+    }
+    next();
+  });
+}
+
+module.exports = { requireAuth, requireChronologyManager, requireChronologyAdmin };

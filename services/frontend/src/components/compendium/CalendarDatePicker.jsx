@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import chronologyApi from '../../api/chronology';
 import Field, { inputClass } from '../ui/Field';
 import { ageOnCalendarDate, yearLabel } from '../../utils/chronologyMath';
+import { defaultCalendarId } from '../../utils/chronologyEvent';
 
 // Picks a date against one of the user's own/public calendars — first the
 // calendar itself (chronologyApi.list(), same own+public visibility
@@ -18,8 +19,25 @@ export default function CalendarDatePicker({ value, onChange, onAgeComputed, unt
   const { calendarId = '', year = '', monthId = '', day = '' } = value || {};
   const [calendars, setCalendars] = useState([]);
   const [months, setMonths] = useState([]);
+  const latest = useRef({ value, onChange });
+  latest.current = { value, onChange };
 
-  useEffect(() => { chronologyApi.list().then(setCalendars).catch(() => {}); }, []);
+  // Календар за замовчуванням підставляється лише в зовсім порожню дату (ще не
+  // обрано ні календар, ні рік/місяць/день) — вже збережений вибір не чіпаємо.
+  useEffect(() => {
+    chronologyApi.list()
+      .then((list) => {
+        setCalendars(list);
+        // Актуальне значення з ref, а не з замикання: форма редагування могла
+        // підвантажити збережену дату, поки йшов запит календарів.
+        const cur = latest.current.value || {};
+        const def = defaultCalendarId(list);
+        if (def && !cur.calendarId && !cur.year && !cur.monthId && !cur.day) {
+          latest.current.onChange({ calendarId: def, year: '', monthId: '', day: '' });
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!calendarId) { setMonths([]); return; }

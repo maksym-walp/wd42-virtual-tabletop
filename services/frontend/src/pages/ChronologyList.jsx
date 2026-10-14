@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings } from 'lucide-react';
+import { Settings, Star } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import Button from '../components/ui/Button';
 import CardOverlayButton from '../components/ui/CardOverlayButton';
 import CalendarCard from '../components/chronology/CalendarCard';
+import ChronologyTabs from '../components/chronology/ChronologyTabs';
 import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
 import Field, { inputClass } from '../components/ui/Field';
@@ -17,6 +18,8 @@ export default function ChronologyList() {
   // власницьке: будь-який admin/game_master керує будь-яким календарем,
   // так само як на бекенді (requireChronologyManager).
   const canManage = user?.role === 'admin' || user?.role === 'game_master';
+  // Календар за замовчуванням — глобальне налаштування, лише адмін (як і на бекенді).
+  const isAdmin = user?.role === 'admin';
 
   const [calendars, setCalendars] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,18 @@ export default function ChronologyList() {
       .finally(() => setLoading(false));
   }, []);
 
+  const toggleDefault = async (calendar) => {
+    setError('');
+    try {
+      const updated = await chronologyApi.setDefault(calendar.id, !calendar.is_default);
+      setCalendars((list) => list
+        .map((c) => (c.id === updated.id ? { ...c, is_default: updated.is_default } : { ...c, is_default: updated.is_default ? false : c.is_default }))
+        .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name, 'uk')));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалось змінити календар за замовчуванням');
+    }
+  };
+
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
   return (
@@ -39,6 +54,8 @@ export default function ChronologyList() {
         title="🗓️ Хронологія"
         action={canManage && <Button onClick={() => setCreateOpen(true)}>+ Новий календар</Button>}
       />
+
+      <ChronologyTabs />
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
@@ -53,10 +70,22 @@ export default function ChronologyList() {
               key={c.id}
               calendar={c}
               to={`/chronology/${c.id}`}
-              actions={canManage && (
-                <CardOverlayButton label="Побудувати структуру" onClick={() => navigate(`/chronology/${c.id}/build`)}>
-                  <Settings size={15} />
-                </CardOverlayButton>
+              actions={(
+                <>
+                  {isAdmin && (
+                    <CardOverlayButton
+                      label={c.is_default ? 'Зняти позначку «за замовчуванням»' : 'Зробити календарем за замовчуванням'}
+                      onClick={() => toggleDefault(c)}
+                    >
+                      <Star size={15} className={c.is_default ? 'fill-gold text-gold' : ''} />
+                    </CardOverlayButton>
+                  )}
+                  {canManage && (
+                    <CardOverlayButton label="Побудувати структуру" onClick={() => navigate(`/chronology/${c.id}/build`)}>
+                      <Settings size={15} />
+                    </CardOverlayButton>
+                  )}
+                </>
               )}
             />
           ))}

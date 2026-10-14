@@ -23,6 +23,51 @@ describe('ChronologyModel.findAll', () => {
   });
 });
 
+describe('ChronologyModel.findAll ordering', () => {
+  it('puts the default calendar first', async () => {
+    await ChronologyModel.findAll('u1', false);
+    expect(pool.query.mock.calls[0][0]).toMatch(/ORDER BY c\.is_default DESC, c\.name ASC/);
+  });
+});
+
+describe('ChronologyModel.setDefault', () => {
+  const client = { query: jest.fn(), release: jest.fn() };
+  beforeEach(() => {
+    client.query.mockReset().mockResolvedValue({ rows: [{ id: 'c1', is_default: true }] });
+    client.release.mockReset();
+    pool.connect = jest.fn().mockResolvedValue(client);
+  });
+
+  it('clears the previous default and sets the new one in one transaction', async () => {
+    const row = await ChronologyModel.setDefault('c1', true);
+    const sqls = client.query.mock.calls.map(([sql]) => sql);
+    expect(sqls[0]).toBe('BEGIN');
+    expect(sqls[1]).toMatch(/SET is_default = false WHERE is_default AND id <> \$1/);
+    expect(sqls[2]).toMatch(/SET is_default = \$2 WHERE id = \$1/);
+    expect(client.query.mock.calls[2][1]).toEqual(['c1', true]);
+    expect(sqls[3]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalled();
+    expect(row).toEqual({ id: 'c1', is_default: true });
+  });
+
+  it('does not touch other calendars when unsetting', async () => {
+    await ChronologyModel.setDefault('c1', false);
+    const sqls = client.query.mock.calls.map(([sql]) => sql);
+    expect(sqls).toHaveLength(3); // BEGIN, UPDATE, COMMIT
+    expect(client.query.mock.calls[1][1]).toEqual(['c1', false]);
+  });
+
+  it('rolls back and releases on failure', async () => {
+    client.query.mockImplementation(async (sql) => {
+      if (/SET is_default = \$2/.test(sql)) throw new Error('boom');
+      return { rows: [] };
+    });
+    await expect(ChronologyModel.setDefault('c1', true)).rejects.toThrow('boom');
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
+  });
+});
+
 describe('ChronologyModel.findById', () => {
   it('scopes visibility the same way as findAll', async () => {
     await ChronologyModel.findById('cal-1', 'u1', false);

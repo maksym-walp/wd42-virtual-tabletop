@@ -50,7 +50,7 @@ import LocationDetail from './pages/LocationDetail';
 import StatBlockList from './pages/StatBlockList';
 import StatBlockForm from './pages/StatBlockForm';
 import StatBlockView from './pages/StatBlockView';
-import { LegacyEntryRedirect, LegacyFactionRedirect } from './pages/LegacyCompendiumRedirect';
+import { LegacyEntryRedirect, LegacyFactionRedirect, LegacyCalendarEventsRedirect } from './pages/LegacyCompendiumRedirect';
 import CompendiumTaxonomyList from './pages/CompendiumTaxonomyList';
 import CompendiumSpeciesDetail from './pages/CompendiumSpeciesDetail';
 import CompendiumSpeciesForm from './pages/CompendiumSpeciesForm';
@@ -134,7 +134,9 @@ export default function App() {
                   <Route path="/chronology" element={<PrivateRoute><ChronologyList /></PrivateRoute>} />
                   <Route path="/chronology/:id/build" element={<PrivateRoute><ChronologyBuilder /></PrivateRoute>} />
                   <Route path="/chronology/:id" element={<PrivateRoute><ChronologyView /></PrivateRoute>} />
-                  <Route path="/chronology/:id/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
+                  <Route path="/chronology/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
+                  {/* Раніше «Події» були підвкладкою календаря; старі посилання (внутрішні лінки в текстах) ведуть на нову вкладку. */}
+                  <Route path="/chronology/:id/events" element={<PrivateRoute><LegacyCalendarEventsRedirect /></PrivateRoute>} />
                   <Route path="/locations/:id" element={<PrivateRoute><LocationDetail /></PrivateRoute>} />
 
                   {/* Компендіум — вікі-довідник: види/підвиди, раси/народи. */}

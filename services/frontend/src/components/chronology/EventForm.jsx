@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import chronologyApi from '../../api/chronology';
-import { totalDaysSinceEpoch } from '../../utils/chronologyMath';
+import { totalDaysSinceEpoch, DURATION_DISPLAY_LABELS } from '../../utils/chronologyMath';
+import { EVENT_COLOR_PRESETS } from '../../constants/chronologyColors';
+import ColorField from '../ui/ColorField';
 import Button from '../ui/Button';
 import Field, { inputClass } from '../ui/Field';
 import MultiSelectDropdown from '../ui/MultiSelectDropdown';
@@ -37,6 +39,9 @@ export default function EventForm({
   const [endYear, setEndYear] = useState(String(event?.end_year ?? ''));
   const [endMonthId, setEndMonthId] = useState(event?.end_month_id || '');
   const [endDay, setEndDay] = useState(String(event?.end_day ?? ''));
+  // Нова тривала подія за замовчуванням позначається на початку й кінці;
+  // збережена події зберігає свій вибір.
+  const [durationDisplay, setDurationDisplay] = useState(event ? (event.duration_display || 'start') : 'start_end');
 
   const [placeMode, setPlaceMode] = useState(event?.location_id ? 'location' : event?.region ? 'region' : 'none');
   const [locationId, setLocationId] = useState(event?.location_id || '');
@@ -46,6 +51,13 @@ export default function EventForm({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Діапазон позначок (початок+кінець / кожен день) має сенс лише для
+  // одноразової події; повторювана лишає тільки «початок» або «не показувати».
+  const rangeDisplayAllowed = recurrence === 'none';
+  const displayOptions = Object.entries(DURATION_DISPLAY_LABELS)
+    .filter(([key]) => rangeDisplayAllowed || key === 'start' || key === 'none');
+  const effectiveDisplay = displayOptions.some(([key]) => key === durationDisplay) ? durationDisplay : 'start';
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Вкажіть назву події'); return; }
@@ -79,6 +91,7 @@ export default function EventForm({
         end_year: isDuration && endYear !== '' ? Number(endYear) : null,
         end_month_id: isDuration ? (endMonthId || null) : null,
         end_day: isDuration && endDay !== '' ? Number(endDay) : null,
+        duration_display: isDuration ? effectiveDisplay : 'start',
         participant_ids: participantIds,
       };
       const saved = isEdit
@@ -133,6 +146,15 @@ export default function EventForm({
           <Field label="День завершення">
             <input type="number" min={1} className={inputClass} value={endDay} onChange={(e) => setEndDay(e.target.value)} />
           </Field>
+          <Field
+            label="Позначка в календарі"
+            hint={rangeDisplayAllowed ? undefined : 'Для повторюваної події доступні лише початок або приховування.'}
+            className="sm:col-span-3"
+          >
+            <select className={inputClass} value={effectiveDisplay} onChange={(e) => setDurationDisplay(e.target.value)}>
+              {displayOptions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </Field>
         </div>
       )}
 
@@ -177,20 +199,12 @@ export default function EventForm({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Колір">
-          <div className="flex items-center gap-2">
-            <input type="color" value={HEX_COLOR_RE.test(color) ? color : '#888888'} onChange={(e) => setColor(e.target.value)}
-              className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1" />
-            <input type="text" className={inputClass} value={color} onChange={(e) => setColor(e.target.value)} maxLength={7} />
-          </div>
-        </Field>
-        <Field label="Повторення">
-          <select className={inputClass} value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-            {Object.entries(RECURRENCE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
-        </Field>
-      </div>
+      <ColorField label="Колір" value={color} onChange={setColor} presets={EVENT_COLOR_PRESETS} />
+      <Field label="Повторення">
+        <select className={inputClass} value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+          {Object.entries(RECURRENCE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </Field>
       <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
         <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="h-5 w-5 accent-accent" />
         Публічна — видима всім гравцям

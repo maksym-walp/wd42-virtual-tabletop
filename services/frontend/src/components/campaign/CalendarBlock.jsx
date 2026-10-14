@@ -9,6 +9,7 @@ import { inputClass } from '../ui/Field';
 import EmptyState from '../ui/EmptyState';
 import CardOverlayButton from '../ui/CardOverlayButton';
 import CalendarCard from '../chronology/CalendarCard';
+import { defaultCalendarId } from '../../utils/chronologyEvent';
 
 // Links a campaign to one calendar (the chronology service's own custom
 // calendars — see chronologyApi). This is the only entry point into
@@ -45,6 +46,7 @@ export default function CalendarBlock({ campaign, isGm, onChange }) {
       .then((list) => {
         if (!alive) return;
         setCalendars(isGm ? list : []);
+        if (isGm) setPick((cur) => cur || defaultCalendarId(list));
         setLinked(list.find((c) => c.id === campaign.calendar_id) || null);
       })
       .catch(() => {

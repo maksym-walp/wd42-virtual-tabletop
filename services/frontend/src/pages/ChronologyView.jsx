@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, CalendarSearch, Settings, Trash2, Plus, MapPin } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CalendarSearch, Settings, Trash2, Plus, MapPin, ListTree } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import campaignApi from '../api/campaigns';
@@ -10,7 +10,6 @@ import bestiaryApi from '../api/bestiary';
 import { totalDaysSinceEpoch, weekdayIndexOf, yearLabel, getActiveSeason, eventOccursOnDay } from '../utils/chronologyMath';
 import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
-import CatalogTabs from '../components/CatalogTabs';
 import EventForm from '../components/chronology/EventForm';
 import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
@@ -234,24 +233,25 @@ export default function ChronologyView() {
         <Link to="/chronology" className="inline-flex items-center gap-1.5 text-sm text-text-dim">
           <ArrowLeft size={15} /> Календарі
         </Link>
-        {canManage && (
-          <Link to={`/chronology/${id}/build`} className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text">
-            <Settings size={15} /> Редагувати структуру
+        <div className="flex items-center gap-4">
+          <Link
+            to={`/chronology/events?calendar=${id}${campaignId ? `&campaign_id=${campaignId}` : ''}`}
+            className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text"
+          >
+            <ListTree size={15} /> Список подій
           </Link>
-        )}
+          {canManage && (
+            <Link to={`/chronology/${id}/build`} className="inline-flex items-center gap-1.5 text-sm text-text-dim hover:text-text">
+              <Settings size={15} /> Редагувати структуру
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="mb-4 flex items-start gap-2">
         <h1 className="font-display text-2xl text-accent">{calendar.name}</h1>
         <ShareButton className="mt-0.5" />
       </div>
-
-      <CatalogTabs
-        tabs={[
-          { label: 'Сітка', to: `/chronology/${id}${campaignId ? `?campaign_id=${campaignId}` : ''}`, end: true },
-          { label: 'Події', to: `/chronology/${id}/events${campaignId ? `?campaign_id=${campaignId}` : ''}` },
-        ]}
-      />
 
       <div className="overflow-hidden rounded-2xl border border-border" style={containerStyle}>
         <div className={scrimmed ? 'bg-black/55 p-4 backdrop-blur-[1px]' : 'bg-surface p-4'}>

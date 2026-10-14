@@ -74,7 +74,7 @@ describe('ChronologyEventModel.create', () => {
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Битва за Гарію', null, '#ff0000', true, null, null, null, 'none',
-      null, null, null, null, null,
+      null, null, null, null, null, 'start',
     ]);
     expect(pool.query.mock.calls[1][0]).toMatch(/DELETE FROM chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[1][1]).toEqual(['e1']);
@@ -86,14 +86,14 @@ describe('ChronologyEventModel.create', () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'e1' }] });
     await ChronologyEventModel.create('cal-1', {
       name: 'Облога Гарії', color: '#4caf50', year: 100, month_id: 'm1', day: 1,
-      location_id: 'loc-1', end_year: 100, end_month_id: 'm2', end_day: 5,
+      location_id: 'loc-1', end_year: 100, end_month_id: 'm2', end_day: 5, duration_display: 'every_day',
       participant_ids: ['npc-1', 'npc-2'],
     });
 
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Облога Гарії', null, '#4caf50', true, 100, 'm1', 1, 'none',
-      'loc-1', null, 100, 'm2', 5,
+      'loc-1', null, 100, 'm2', 5, 'every_day',
     ]);
     expect(pool.query.mock.calls[2][0]).toMatch(/INSERT INTO chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[2][1]).toEqual(['e1', 'npc-1', 'npc-2']);
