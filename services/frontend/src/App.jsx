@@ -20,6 +20,7 @@ import SpellForm from './pages/SpellForm';
 import EquipmentCatalog from './pages/EquipmentCatalog';
 import EquipmentView from './pages/EquipmentView';
 import EquipmentForm from './pages/EquipmentForm';
+import ArtifactPrint from './pages/ArtifactPrint';
 import ArtifactsCatalog from './pages/ArtifactsCatalog';
 import ArtifactView from './pages/ArtifactView';
 import ArtifactForm from './pages/ArtifactForm';
@@ -61,6 +62,138 @@ import FactionDetail from './pages/FactionDetail';
 import FactionForm from './pages/FactionForm';
 import AdminPanel from './pages/AdminPanel';
 
+function AppShell() {
+  return (
+    <div className="flex h-dvh flex-col">
+      <Navbar />
+      <div id="app-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+          <Route path="/profile/:username" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
+          <Route path="/spellbook" element={<PrivateRoute><Spellbook /></PrivateRoute>} />
+          <Route path="/spellbook/new" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
+          <Route path="/spellbook/collections" element={<PrivateRoute><CollectionsList domainKey="spellbook" /></PrivateRoute>} />
+          <Route path="/spellbook/collections/new" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
+          <Route path="/spellbook/collections/public/:id" element={<CollectionView domainKey="spellbook" publicView />} />
+          <Route path="/spellbook/collections/:id" element={<PrivateRoute><CollectionView domainKey="spellbook" /></PrivateRoute>} />
+          <Route path="/spellbook/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
+          <Route path="/spellbook/traditions" element={<PrivateRoute><TraditionsList /></PrivateRoute>} />
+          <Route path="/spellbook/traditions/new" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
+          <Route path="/spellbook/traditions/:id" element={<PrivateRoute><TraditionView /></PrivateRoute>} />
+          <Route path="/spellbook/traditions/:id/edit" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
+          <Route path="/spellbook/:id" element={<PrivateRoute><SpellView /></PrivateRoute>} />
+          <Route path="/spellbook/:id/edit" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
+          <Route path="/equipment" element={<Navigate to="/equipment/weapon" replace />} />
+          <Route path="/equipment/weapon" element={<PrivateRoute><EquipmentCatalog type="weapon" /></PrivateRoute>} />
+          <Route path="/equipment/armor" element={<PrivateRoute><EquipmentCatalog type="armor" /></PrivateRoute>} />
+          <Route path="/equipment/items" element={<PrivateRoute><EquipmentCatalog type="item" /></PrivateRoute>} />
+          <Route path="/equipment/new" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
+          <Route path="/equipment/collections" element={<PrivateRoute><CollectionsList domainKey="equipment" /></PrivateRoute>} />
+          <Route path="/equipment/collections/new" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
+          <Route path="/equipment/collections/public/:id" element={<CollectionView domainKey="equipment" publicView />} />
+          <Route path="/equipment/collections/:id" element={<PrivateRoute><CollectionView domainKey="equipment" /></PrivateRoute>} />
+          <Route path="/equipment/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
+          <Route path="/equipment/:id" element={<PrivateRoute><EquipmentView /></PrivateRoute>} />
+          <Route path="/equipment/:id/edit" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
+
+          {/* Артефакти — четвертий вид спорядження (вкладка в CatalogTabs), а не
+              окремий сервіс/домен — див. 51-merge-artifacts-into-equipment.sql.
+              Власні View/Form лишаються окремо від EquipmentView/EquipmentForm,
+              бо в артефакта інші поля (creator/rarity замість зброї/обладунку). */}
+          <Route path="/equipment/artifacts" element={<PrivateRoute><ArtifactsCatalog /></PrivateRoute>} />
+          <Route path="/equipment/artifacts/new" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
+          <Route path="/equipment/artifacts/:id" element={<PrivateRoute><ArtifactView /></PrivateRoute>} />
+          <Route path="/equipment/artifacts/:id/edit" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
+          <Route path="/abilities" element={<PrivateRoute><AbilityCatalog /></PrivateRoute>} />
+          <Route path="/abilities/new" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
+          <Route path="/abilities/collections" element={<PrivateRoute><CollectionsList domainKey="abilities" /></PrivateRoute>} />
+          <Route path="/abilities/collections/new" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
+          <Route path="/abilities/collections/public/:id" element={<CollectionView domainKey="abilities" publicView />} />
+          <Route path="/abilities/collections/:id" element={<PrivateRoute><CollectionView domainKey="abilities" /></PrivateRoute>} />
+          <Route path="/abilities/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
+          <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
+          <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
+          <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />
+          <Route path="/characters" element={<PrivateRoute><CharacterList /></PrivateRoute>} />
+          <Route path="/characters/new" element={<PrivateRoute><CharacterNew /></PrivateRoute>} />
+          <Route path="/characters/:id" element={<PrivateRoute><CharacterSheet /></PrivateRoute>} />
+          <Route path="/characters/public/:id" element={<CharacterSheet publicView />} />
+          <Route path="/campaigns" element={<PrivateRoute><CampaignList /></PrivateRoute>} />
+          <Route path="/campaigns/new" element={<PrivateRoute><CampaignNew /></PrivateRoute>} />
+          <Route path="/campaigns/:id" element={<PrivateRoute><CampaignDetail /></PrivateRoute>} />
+          <Route path="/maps" element={<PrivateRoute><MapList /></PrivateRoute>} />
+          <Route path="/maps/locations" element={<PrivateRoute><LocationLibrary /></PrivateRoute>} />
+          <Route path="/maps/:id" element={<PrivateRoute><MapView /></PrivateRoute>} />
+          <Route path="/chronology" element={<PrivateRoute><ChronologyList /></PrivateRoute>} />
+          <Route path="/chronology/:id/build" element={<PrivateRoute><ChronologyBuilder /></PrivateRoute>} />
+          <Route path="/chronology/:id" element={<PrivateRoute><ChronologyView /></PrivateRoute>} />
+          <Route path="/chronology/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
+          {/* Раніше «Події» були підвкладкою календаря; старі посилання (внутрішні лінки в текстах) ведуть на нову вкладку. */}
+          <Route path="/chronology/:id/events" element={<PrivateRoute><LegacyCalendarEventsRedirect /></PrivateRoute>} />
+          <Route path="/locations/:id" element={<PrivateRoute><LocationDetail /></PrivateRoute>} />
+
+          {/* Компендіум — вікі-довідник: види/підвиди, раси/народи. */}
+          <Route path="/compendium" element={<PrivateRoute><CompendiumTaxonomyList /></PrivateRoute>} />
+          <Route path="/compendium/species/new" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
+          <Route path="/compendium/species/:id" element={<PrivateRoute><CompendiumSpeciesDetail /></PrivateRoute>} />
+          <Route path="/compendium/species/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
+          <Route path="/compendium/subspecies/new" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
+          <Route path="/compendium/subspecies/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
+          <Route path="/compendium/races/new" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
+          <Route path="/compendium/races/:id" element={<PrivateRoute><CompendiumRaceDetail /></PrivateRoute>} />
+          <Route path="/compendium/races/:id/edit" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
+          <Route path="/compendium/peoples/new" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
+          <Route path="/compendium/peoples/:id/edit" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
+          {/* Старі адреси, до розділення компендіуму на три сервіси. */}
+          <Route path="/compendium/taxonomy" element={<Navigate to="/compendium" replace />} />
+          <Route path="/compendium/bestiary" element={<Navigate to="/bestiary" replace />} />
+          <Route path="/compendium/factions/*" element={<LegacyFactionRedirect />} />
+          <Route path="/compendium/collections/*" element={<Navigate to="/npcs/collections" replace />} />
+          <Route path="/compendium/entries/new" element={<Navigate to="/npcs/new" replace />} />
+          <Route path="/compendium/entries/:id" element={<PrivateRoute><LegacyEntryRedirect /></PrivateRoute>} />
+          <Route path="/compendium/entries/:id/edit" element={<PrivateRoute><LegacyEntryRedirect edit /></PrivateRoute>} />
+
+          {/* Бестіарій. key — щоб форма/перегляд не переносили стан між НІПом та істотою. */}
+          <Route path="/bestiary" element={<PrivateRoute><StatBlockList key="creature" kind="creature" /></PrivateRoute>} />
+          <Route path="/bestiary/new" element={<PrivateRoute><StatBlockForm key="creature-new" kind="creature" /></PrivateRoute>} />
+          <Route path="/bestiary/collections" element={<PrivateRoute><CollectionsList domainKey="bestiary" /></PrivateRoute>} />
+          <Route path="/bestiary/collections/new" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
+          <Route path="/bestiary/collections/public/:id" element={<CollectionView domainKey="bestiary" publicView />} />
+          <Route path="/bestiary/collections/:id" element={<PrivateRoute><CollectionView domainKey="bestiary" /></PrivateRoute>} />
+          <Route path="/bestiary/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
+          <Route path="/bestiary/:id" element={<PrivateRoute><StatBlockView key="creature" kind="creature" /></PrivateRoute>} />
+          <Route path="/bestiary/:id/edit" element={<PrivateRoute><StatBlockForm key="creature-edit" kind="creature" /></PrivateRoute>} />
+
+          {/* НІПи та фракції. */}
+          <Route path="/npcs" element={<PrivateRoute><StatBlockList key="npc" kind="npc" /></PrivateRoute>} />
+          <Route path="/npcs/new" element={<PrivateRoute><StatBlockForm key="npc-new" kind="npc" /></PrivateRoute>} />
+          <Route path="/npcs/factions" element={<PrivateRoute><FactionList /></PrivateRoute>} />
+          <Route path="/npcs/factions/new" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
+          <Route path="/npcs/factions/:id" element={<PrivateRoute><FactionDetail /></PrivateRoute>} />
+          <Route path="/npcs/factions/:id/edit" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
+          <Route path="/npcs/collections" element={<PrivateRoute><CollectionsList domainKey="npcs" /></PrivateRoute>} />
+          <Route path="/npcs/collections/new" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
+          <Route path="/npcs/collections/public/:id" element={<CollectionView domainKey="npcs" publicView />} />
+          <Route path="/npcs/collections/:id" element={<PrivateRoute><CollectionView domainKey="npcs" /></PrivateRoute>} />
+          <Route path="/npcs/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
+          <Route path="/npcs/:id" element={<PrivateRoute><StatBlockView key="npc" kind="npc" /></PrivateRoute>} />
+          <Route path="/npcs/:id/edit" element={<PrivateRoute><StatBlockForm key="npc-edit" kind="npc" /></PrivateRoute>} />
+
+          <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+      <BottomNav />
+      <DiceWidget />
+      <ScrollToTopButton />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -68,133 +201,12 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <DiceProvider>
-            <div className="flex h-dvh flex-col">
-              <Navbar />
-              <div id="app-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-                  <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-                  <Route path="/profile/:username" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
-                  <Route path="/spellbook" element={<PrivateRoute><Spellbook /></PrivateRoute>} />
-                  <Route path="/spellbook/new" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
-                  <Route path="/spellbook/collections" element={<PrivateRoute><CollectionsList domainKey="spellbook" /></PrivateRoute>} />
-                  <Route path="/spellbook/collections/new" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
-                  <Route path="/spellbook/collections/public/:id" element={<CollectionView domainKey="spellbook" publicView />} />
-                  <Route path="/spellbook/collections/:id" element={<PrivateRoute><CollectionView domainKey="spellbook" /></PrivateRoute>} />
-                  <Route path="/spellbook/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="spellbook" /></PrivateRoute>} />
-                  <Route path="/spellbook/traditions" element={<PrivateRoute><TraditionsList /></PrivateRoute>} />
-                  <Route path="/spellbook/traditions/new" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
-                  <Route path="/spellbook/traditions/:id" element={<PrivateRoute><TraditionView /></PrivateRoute>} />
-                  <Route path="/spellbook/traditions/:id/edit" element={<PrivateRoute><TraditionForm /></PrivateRoute>} />
-                  <Route path="/spellbook/:id" element={<PrivateRoute><SpellView /></PrivateRoute>} />
-                  <Route path="/spellbook/:id/edit" element={<PrivateRoute><SpellForm /></PrivateRoute>} />
-                  <Route path="/equipment" element={<Navigate to="/equipment/weapon" replace />} />
-                  <Route path="/equipment/weapon" element={<PrivateRoute><EquipmentCatalog type="weapon" /></PrivateRoute>} />
-                  <Route path="/equipment/armor" element={<PrivateRoute><EquipmentCatalog type="armor" /></PrivateRoute>} />
-                  <Route path="/equipment/items" element={<PrivateRoute><EquipmentCatalog type="item" /></PrivateRoute>} />
-                  <Route path="/equipment/new" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
-                  <Route path="/equipment/collections" element={<PrivateRoute><CollectionsList domainKey="equipment" /></PrivateRoute>} />
-                  <Route path="/equipment/collections/new" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
-                  <Route path="/equipment/collections/public/:id" element={<CollectionView domainKey="equipment" publicView />} />
-                  <Route path="/equipment/collections/:id" element={<PrivateRoute><CollectionView domainKey="equipment" /></PrivateRoute>} />
-                  <Route path="/equipment/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="equipment" /></PrivateRoute>} />
-                  <Route path="/equipment/:id" element={<PrivateRoute><EquipmentView /></PrivateRoute>} />
-                  <Route path="/equipment/:id/edit" element={<PrivateRoute><EquipmentForm /></PrivateRoute>} />
-
-                  {/* Артефакти — четвертий вид спорядження (вкладка в CatalogTabs), а не
-                      окремий сервіс/домен — див. 51-merge-artifacts-into-equipment.sql.
-                      Власні View/Form лишаються окремо від EquipmentView/EquipmentForm,
-                      бо в артефакта інші поля (creator/rarity замість зброї/обладунку). */}
-                  <Route path="/equipment/artifacts" element={<PrivateRoute><ArtifactsCatalog /></PrivateRoute>} />
-                  <Route path="/equipment/artifacts/new" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
-                  <Route path="/equipment/artifacts/:id" element={<PrivateRoute><ArtifactView /></PrivateRoute>} />
-                  <Route path="/equipment/artifacts/:id/edit" element={<PrivateRoute><ArtifactForm /></PrivateRoute>} />
-                  <Route path="/abilities" element={<PrivateRoute><AbilityCatalog /></PrivateRoute>} />
-                  <Route path="/abilities/new" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
-                  <Route path="/abilities/collections" element={<PrivateRoute><CollectionsList domainKey="abilities" /></PrivateRoute>} />
-                  <Route path="/abilities/collections/new" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
-                  <Route path="/abilities/collections/public/:id" element={<CollectionView domainKey="abilities" publicView />} />
-                  <Route path="/abilities/collections/:id" element={<PrivateRoute><CollectionView domainKey="abilities" /></PrivateRoute>} />
-                  <Route path="/abilities/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="abilities" /></PrivateRoute>} />
-                  <Route path="/abilities/:id" element={<PrivateRoute><AbilityView /></PrivateRoute>} />
-                  <Route path="/abilities/:id/edit" element={<PrivateRoute><AbilityForm /></PrivateRoute>} />
-                  <Route path="/skill-tree" element={<PrivateRoute><SkillTree /></PrivateRoute>} />
-                  <Route path="/characters" element={<PrivateRoute><CharacterList /></PrivateRoute>} />
-                  <Route path="/characters/new" element={<PrivateRoute><CharacterNew /></PrivateRoute>} />
-                  <Route path="/characters/:id" element={<PrivateRoute><CharacterSheet /></PrivateRoute>} />
-                  <Route path="/characters/public/:id" element={<CharacterSheet publicView />} />
-                  <Route path="/campaigns" element={<PrivateRoute><CampaignList /></PrivateRoute>} />
-                  <Route path="/campaigns/new" element={<PrivateRoute><CampaignNew /></PrivateRoute>} />
-                  <Route path="/campaigns/:id" element={<PrivateRoute><CampaignDetail /></PrivateRoute>} />
-                  <Route path="/maps" element={<PrivateRoute><MapList /></PrivateRoute>} />
-                  <Route path="/maps/locations" element={<PrivateRoute><LocationLibrary /></PrivateRoute>} />
-                  <Route path="/maps/:id" element={<PrivateRoute><MapView /></PrivateRoute>} />
-                  <Route path="/chronology" element={<PrivateRoute><ChronologyList /></PrivateRoute>} />
-                  <Route path="/chronology/:id/build" element={<PrivateRoute><ChronologyBuilder /></PrivateRoute>} />
-                  <Route path="/chronology/:id" element={<PrivateRoute><ChronologyView /></PrivateRoute>} />
-                  <Route path="/chronology/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
-                  {/* Раніше «Події» були підвкладкою календаря; старі посилання (внутрішні лінки в текстах) ведуть на нову вкладку. */}
-                  <Route path="/chronology/:id/events" element={<PrivateRoute><LegacyCalendarEventsRedirect /></PrivateRoute>} />
-                  <Route path="/locations/:id" element={<PrivateRoute><LocationDetail /></PrivateRoute>} />
-
-                  {/* Компендіум — вікі-довідник: види/підвиди, раси/народи. */}
-                  <Route path="/compendium" element={<PrivateRoute><CompendiumTaxonomyList /></PrivateRoute>} />
-                  <Route path="/compendium/species/new" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
-                  <Route path="/compendium/species/:id" element={<PrivateRoute><CompendiumSpeciesDetail /></PrivateRoute>} />
-                  <Route path="/compendium/species/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm /></PrivateRoute>} />
-                  <Route path="/compendium/subspecies/new" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
-                  <Route path="/compendium/subspecies/:id/edit" element={<PrivateRoute><CompendiumSpeciesForm isSubspecies /></PrivateRoute>} />
-                  <Route path="/compendium/races/new" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
-                  <Route path="/compendium/races/:id" element={<PrivateRoute><CompendiumRaceDetail /></PrivateRoute>} />
-                  <Route path="/compendium/races/:id/edit" element={<PrivateRoute><CompendiumRaceForm /></PrivateRoute>} />
-                  <Route path="/compendium/peoples/new" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
-                  <Route path="/compendium/peoples/:id/edit" element={<PrivateRoute><CompendiumRaceForm isPeople /></PrivateRoute>} />
-                  {/* Старі адреси, до розділення компендіуму на три сервіси. */}
-                  <Route path="/compendium/taxonomy" element={<Navigate to="/compendium" replace />} />
-                  <Route path="/compendium/bestiary" element={<Navigate to="/bestiary" replace />} />
-                  <Route path="/compendium/factions/*" element={<LegacyFactionRedirect />} />
-                  <Route path="/compendium/collections/*" element={<Navigate to="/npcs/collections" replace />} />
-                  <Route path="/compendium/entries/new" element={<Navigate to="/npcs/new" replace />} />
-                  <Route path="/compendium/entries/:id" element={<PrivateRoute><LegacyEntryRedirect /></PrivateRoute>} />
-                  <Route path="/compendium/entries/:id/edit" element={<PrivateRoute><LegacyEntryRedirect edit /></PrivateRoute>} />
-
-                  {/* Бестіарій. key — щоб форма/перегляд не переносили стан між НІПом та істотою. */}
-                  <Route path="/bestiary" element={<PrivateRoute><StatBlockList key="creature" kind="creature" /></PrivateRoute>} />
-                  <Route path="/bestiary/new" element={<PrivateRoute><StatBlockForm key="creature-new" kind="creature" /></PrivateRoute>} />
-                  <Route path="/bestiary/collections" element={<PrivateRoute><CollectionsList domainKey="bestiary" /></PrivateRoute>} />
-                  <Route path="/bestiary/collections/new" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
-                  <Route path="/bestiary/collections/public/:id" element={<CollectionView domainKey="bestiary" publicView />} />
-                  <Route path="/bestiary/collections/:id" element={<PrivateRoute><CollectionView domainKey="bestiary" /></PrivateRoute>} />
-                  <Route path="/bestiary/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="bestiary" /></PrivateRoute>} />
-                  <Route path="/bestiary/:id" element={<PrivateRoute><StatBlockView key="creature" kind="creature" /></PrivateRoute>} />
-                  <Route path="/bestiary/:id/edit" element={<PrivateRoute><StatBlockForm key="creature-edit" kind="creature" /></PrivateRoute>} />
-
-                  {/* НІПи та фракції. */}
-                  <Route path="/npcs" element={<PrivateRoute><StatBlockList key="npc" kind="npc" /></PrivateRoute>} />
-                  <Route path="/npcs/new" element={<PrivateRoute><StatBlockForm key="npc-new" kind="npc" /></PrivateRoute>} />
-                  <Route path="/npcs/factions" element={<PrivateRoute><FactionList /></PrivateRoute>} />
-                  <Route path="/npcs/factions/new" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
-                  <Route path="/npcs/factions/:id" element={<PrivateRoute><FactionDetail /></PrivateRoute>} />
-                  <Route path="/npcs/factions/:id/edit" element={<PrivateRoute><FactionForm /></PrivateRoute>} />
-                  <Route path="/npcs/collections" element={<PrivateRoute><CollectionsList domainKey="npcs" /></PrivateRoute>} />
-                  <Route path="/npcs/collections/new" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
-                  <Route path="/npcs/collections/public/:id" element={<CollectionView domainKey="npcs" publicView />} />
-                  <Route path="/npcs/collections/:id" element={<PrivateRoute><CollectionView domainKey="npcs" /></PrivateRoute>} />
-                  <Route path="/npcs/collections/:id/edit" element={<PrivateRoute><CollectionForm domainKey="npcs" /></PrivateRoute>} />
-                  <Route path="/npcs/:id" element={<PrivateRoute><StatBlockView key="npc" kind="npc" /></PrivateRoute>} />
-                  <Route path="/npcs/:id/edit" element={<PrivateRoute><StatBlockForm key="npc-edit" kind="npc" /></PrivateRoute>} />
-
-                  <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </div>
-              <BottomNav />
-              <DiceWidget />
-              <ScrollToTopButton />
-            </div>
+            <Routes>
+              {/* Друкарська сторінка карток — поза оболонкою: Navbar/BottomNav і
+                  внутрішній скрол (#app-scroll) ламають пагінацію @page. */}
+              <Route path="/equipment/artifacts/print" element={<PrivateRoute><ArtifactPrint /></PrivateRoute>} />
+              <Route path="*" element={<AppShell />} />
+            </Routes>
           </DiceProvider>
         </AuthProvider>
       </BrowserRouter>

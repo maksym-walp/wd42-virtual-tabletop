@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
+import { downloadJsonFile } from '../utils/downloadJson';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
@@ -40,6 +41,15 @@ export default function ArtifactView() {
       navigate('/equipment/artifacts');
     } catch {
       setDeleting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const { data } = await api.get(`/api/equipment/export?id=${id}`);
+      downloadJsonFile(data, `artifact_${id}.json`);
+    } catch {
+      alert('Не вдалося експортувати артефакт');
     }
   };
 
@@ -93,6 +103,20 @@ export default function ArtifactView() {
             {artifact.is_canonical ? 'канонічне' : 'спільнота'}
           </span>
           {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
+          <div className="ml-auto flex items-center gap-4">
+            <Link
+              to={`/equipment/artifacts/print?ids=${id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
+            >
+              <Printer size={14} /> Картка PDF
+            </Link>
+            <button
+              type="button" onClick={handleExport}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
+            >
+              <Download size={14} /> Експорт
+            </button>
+          </div>
         </div>
 
         <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
