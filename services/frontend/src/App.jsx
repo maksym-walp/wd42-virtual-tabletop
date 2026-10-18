@@ -25,6 +25,10 @@ import ToolsHome from './pages/ToolsHome';
 import ConstellationsList from './pages/ConstellationsList';
 import ConstellationView from './pages/ConstellationView';
 import ConstellationEditor from './pages/ConstellationEditor';
+import DecksList from './pages/DecksList';
+import DeckView from './pages/DeckView';
+import DeckEditor from './pages/DeckEditor';
+import DeckPlay from './pages/DeckPlay';
 import ArtifactsCatalog from './pages/ArtifactsCatalog';
 import ArtifactView from './pages/ArtifactView';
 import ArtifactForm from './pages/ArtifactForm';
@@ -193,6 +197,11 @@ function AppShell() {
           <Route path="/tools/constellations/new" element={<PrivateRoute><ConstellationEditor /></PrivateRoute>} />
           <Route path="/tools/constellations/:id" element={<PrivateRoute><ConstellationView /></PrivateRoute>} />
           <Route path="/tools/constellations/:id/edit" element={<PrivateRoute><ConstellationEditor /></PrivateRoute>} />
+          <Route path="/tools/decks" element={<PrivateRoute><DecksList /></PrivateRoute>} />
+          <Route path="/tools/decks/new" element={<PrivateRoute><DeckEditor /></PrivateRoute>} />
+          <Route path="/tools/decks/:id" element={<PrivateRoute><DeckView /></PrivateRoute>} />
+          <Route path="/tools/decks/:id/edit" element={<PrivateRoute><DeckEditor /></PrivateRoute>} />
+          <Route path="/tools/decks/:id/play" element={<PrivateRoute><DeckPlay /></PrivateRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
