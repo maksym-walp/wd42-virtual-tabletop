@@ -21,6 +21,10 @@ import EquipmentCatalog from './pages/EquipmentCatalog';
 import EquipmentView from './pages/EquipmentView';
 import EquipmentForm from './pages/EquipmentForm';
 import ArtifactPrint from './pages/ArtifactPrint';
+import ToolsHome from './pages/ToolsHome';
+import ConstellationsList from './pages/ConstellationsList';
+import ConstellationView from './pages/ConstellationView';
+import ConstellationEditor from './pages/ConstellationEditor';
 import ArtifactsCatalog from './pages/ArtifactsCatalog';
 import ArtifactView from './pages/ArtifactView';
 import ArtifactForm from './pages/ArtifactForm';
@@ -183,6 +187,12 @@ function AppShell() {
           <Route path="/npcs/:id/edit" element={<PrivateRoute><StatBlockForm key="npc-edit" kind="npc" /></PrivateRoute>} />
 
           <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+
+          <Route path="/tools" element={<PrivateRoute><ToolsHome /></PrivateRoute>} />
+          <Route path="/tools/constellations" element={<PrivateRoute><ConstellationsList /></PrivateRoute>} />
+          <Route path="/tools/constellations/new" element={<PrivateRoute><ConstellationEditor /></PrivateRoute>} />
+          <Route path="/tools/constellations/:id" element={<PrivateRoute><ConstellationView /></PrivateRoute>} />
+          <Route path="/tools/constellations/:id/edit" element={<PrivateRoute><ConstellationEditor /></PrivateRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
