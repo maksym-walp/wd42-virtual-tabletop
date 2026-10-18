@@ -389,6 +389,20 @@ describe('UnionModel.bulkImport', () => {
     expect(imported).toBe(2);
   });
 
+  it('keeps a valid artifact rarity and resets an unknown one to NULL instead of failing the CHECK', async () => {
+    pool.query.mockResolvedValue({ rowCount: 2 });
+    await UnionModel.bulkImport('importer', [
+      { type: 'artifact', name: 'Клинок долі', creator: 'Хтось', rarity: 'legendary' },
+      { type: 'artifact', name: 'Амулет', creator: null, rarity: 'epic' },
+    ]);
+
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO equipment\.artifacts/);
+    // creator, rarity — останні дві колонки кожного рядка (по 11 значень)
+    expect(params.slice(9, 11)).toEqual(['Хтось', 'legendary']);
+    expect(params.slice(20, 22)).toEqual([null, null]);
+  });
+
   it('forces user_id to the importer, regardless of any user_id in the record', async () => {
     pool.query.mockResolvedValue({ rowCount: 1 });
     await UnionModel.bulkImport('importer', [{ type: 'item', name: 'Мотузка', user_id: 'someone-else' }]);

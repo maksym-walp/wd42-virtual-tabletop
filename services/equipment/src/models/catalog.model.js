@@ -369,6 +369,16 @@ function groupByKind(records) {
   return grouped;
 }
 
+const RARITY_VALUES = ['common', 'uncommon', 'rare', 'legendary'];
+
+// Значення з файлу імпорту не довірені: CHECK на колонці rarity завалив би
+// увесь багаторядковий INSERT через один кривий запис, тож невідому рідкість
+// скидаємо в NULL (запис імпортується, рідкість можна виправити вручну).
+function normalizeImported(column, row) {
+  if (column === 'rarity') return RARITY_VALUES.includes(row.rarity) ? row.rarity : null;
+  return normalize(column, row);
+}
+
 // Один багаторядковий INSERT у таблицю виду: [sql, values].
 function buildKindInsert(userId, kind, rows, isCanonical) {
   const { table, columns } = KINDS[kind];
@@ -383,7 +393,7 @@ function buildKindInsert(userId, kind, rows, isCanonical) {
       ...COMMON_COLUMNS.map((column) => (
         column === 'image_url' || column === 'thumbnail_url' || column === 'image_crop' ? null : normalize(column, row)
       )),
-      ...columns.map((column) => normalize(column, row))
+      ...columns.map((column) => normalizeImported(column, row))
     );
     return `(${writeColumns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
   });

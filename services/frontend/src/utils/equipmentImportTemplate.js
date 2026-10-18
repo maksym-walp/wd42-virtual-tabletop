@@ -58,3 +58,38 @@ export function buildEquipmentImportTemplate(weaponTypes, weaponGrips) {
 ]
 `;
 }
+
+// Шаблон лише для артефактів — той самий ендпоінт і формат, що й вище, але
+// приклад і підказки стосуються тільки одного виду. "type": "artifact"
+// обов'язкове, бо /import сортує записи за ним і пропускає невідомі.
+export function buildArtifactImportTemplate() {
+  const rarityList = Object.entries(RARITIES).map(([k, v]) => `${k} (${v.label})`).join(', ');
+
+  return `// Шаблон імпорту артефактів для POST /api/equipment/import.
+// Масив об'єктів — кожен є окремим артефактом.
+// Поле "id" ігнорується (нові записи отримують власні id), "image_url" і
+// "thumbnail_url" завжди стають null — зображення додається після імпорту.
+// Власником усіх імпортованих записів стає користувач, що робить імпорт.
+//
+// Поля:
+//   type         — обов'язкове, завжди "artifact"
+//   name         — обов'язкове, рядок
+//   description  — рядок (HTML з редактора або простий текст) або null
+//   creator      — хто створив артефакт, рядок або null
+//   rarity       — один з: ${rarityList}; інше значення стане порожнім
+//   price        — число або null
+//   is_public    — true / false
+//
+[
+  {
+    "type": "artifact",
+    "name": "Приклад: Клинок долі",
+    "description": "Опис артефакту",
+    "creator": "Невідомий коваль",
+    "rarity": "rare",
+    "price": 500,
+    "is_public": true
+  }
+]
+`;
+}
