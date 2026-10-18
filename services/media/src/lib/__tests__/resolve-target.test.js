@@ -63,6 +63,11 @@ describe('valid targets', () => {
     expect(resolveTarget('calendar-season', undefined, DIR).relDir).toBe('calendar/seasons');
     expect(resolveTarget('calendar-season', '../../etc', DIR).relDir).toBe('calendar/seasons');
   });
+
+  it('maps deck-card to a flat tools/decks directory and ignores entity_id entirely', () => {
+    expect(resolveTarget('deck-card', undefined, DIR).relDir).toBe('tools/decks');
+    expect(resolveTarget('deck-card', '../../etc', DIR).relDir).toBe('tools/decks');
+  });
 });
 
 describe('entity_type whitelist', () => {

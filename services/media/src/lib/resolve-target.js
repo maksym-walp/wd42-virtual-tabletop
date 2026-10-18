@@ -17,6 +17,7 @@ const TARGETS = {
   'skill-tree-background': { requiresId: false, dir: () => 'skill-tree/backgrounds' },
   'compendium-race':  { requiresId: false, dir: () => 'compendium/races' },
   'calendar-season':  { requiresId: false, dir: () => 'calendar/seasons' },
+  'deck-card':        { requiresId: false, dir: () => 'tools/decks' },
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

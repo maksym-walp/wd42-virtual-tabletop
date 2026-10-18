@@ -30,6 +30,7 @@
     ├── bestiary/                   # порт 3016 — бестіарій (істоти)
     ├── npcs/                       # порт 3017 — НІПи та фракції
     ├── chronology/                 # порт 3015 — власні фентезійні календарі та події
+    ├── tools/                      # порт 3018 — допоміжні інструменти: сузір'я, колоди карт
     └── frontend/                 # порт 5173 (dev) — React/Vite SPA
 ```
 
@@ -53,6 +54,7 @@
 - [bestiary](services/bestiary/README.md) — бестіарій (істоти)
 - [npcs](services/npcs/README.md) — НІПи, фракції, звʼязки
 - [chronology](services/chronology/README.md) — власні фентезійні календарі та події
+- [tools](services/tools/README.md) — допоміжні інструменти: сузір'я, колоди карт
 
 Nginx проксує запити з порту 80:
 - `/api/auth/` → auth
@@ -68,6 +70,7 @@ Nginx проксує запити з порту 80:
 - `/api/compendium/` → compendium
 - `/api/bestiary/` → bestiary
 - `/api/npcs/` → npcs
+- `/api/tools/` → tools (сузір'я, колоди карт)
 - `/api/media/` → media (завантаження файлів; `client_max_body_size 12m` лише тут)
 - `/uploads/` → статика з volume `media_data`, повз бекенд
 - `/` → frontend

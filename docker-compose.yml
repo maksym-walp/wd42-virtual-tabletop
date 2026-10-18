@@ -299,6 +299,23 @@ services:
     networks:
       - walp-network
 
+  tools:
+    build:
+      context: ./services/tools
+      target: development
+    container_name: walp-tools
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3018
+    volumes:
+      - ./services/tools/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - walp-network
+
   # Єдиний сервіс без depends_on postgres — він stateless, уся метаінформація
   # про файли живе в БД інших сервісів (campaign_gallery, characters.image_url).
   media:
@@ -357,6 +374,7 @@ services:
       - npcs
       - admin
       - chronology
+      - tools
       - media
       - frontend
     networks:

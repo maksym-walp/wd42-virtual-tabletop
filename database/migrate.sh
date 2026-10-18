@@ -33,7 +33,7 @@ psql -c "CREATE TABLE IF NOT EXISTS public.schema_migrations (
 applied_count=0
 skipped_count=0
 
-for file in $(find "$MIGRATIONS_DIR" -maxdepth 1 -name '*.sql' | sort); do
+for file in $(find "$MIGRATIONS_DIR" -maxdepth 1 -name '*.sql' | sort -V); do
   name="$(basename "$file")"
   already_applied="$(psql -tA -c "SELECT 1 FROM public.schema_migrations WHERE filename = '$name';")"
   if [ "$already_applied" = "1" ]; then

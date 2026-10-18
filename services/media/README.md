@@ -25,6 +25,7 @@ Delete-ендпоінта немає — це свідоме рішення, д�
 | `campaign-gallery`     | так (UUID)             | `campaigns/<entity_id>/gallery/`         |
 | `character`            | так (UUID)             | `characters/<entity_id>/`                |
 | `item`                 | ні                     | `items/`                                 |
+| `deck-card`            | ні                     | `tools/decks/`                           |
 
 Коли `entity_id` потрібен, він звіряється з регексом UUID (v1–v5) — саме це, а не санітайзинг рядка, унеможливлює path traversal (`..`, `/`, `\`, NUL). Додатково є assert, що обчислений абсолютний шлях лишається всередині `UPLOAD_DIR` — страховка на випадок, якщо колись додадуть новий `entity_type` з менш суворим форматом ID.
 
