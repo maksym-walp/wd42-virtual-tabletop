@@ -16,3 +16,7 @@ export const ARTIFACT_TYPE = { label: 'Артефакт' };
 // усі чотири під один набір заголовків там, де вони перелічуються разом
 // (лист персонажа тощо).
 export const CATALOG_TYPES = { ...EQUIPMENT_TYPES, artifact: ARTIFACT_TYPE };
+
+// Друкований розмір картки артефакта (мм) — спільний для аркуша PDF і JPEG-експорту.
+export const CARD_W_MM = 80;
+export const CARD_H_MM = 120;

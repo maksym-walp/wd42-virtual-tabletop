@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Download, Printer } from 'lucide-react';
+import { ArrowLeft, Download, Image as ImageIcon } from 'lucide-react';
 import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import { downloadJsonFile } from '../utils/downloadJson';
+import { downloadArtifactCardJpeg } from '../utils/artifactCardImage';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
@@ -21,6 +22,7 @@ export default function ArtifactView() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [settingCanonical, setSettingCanonical] = useState(false);
+  const [exportingJpeg, setExportingJpeg] = useState(false);
 
   useEffect(() => {
     api.get(`/api/equipment/artifacts/${id}`)
@@ -50,6 +52,20 @@ export default function ArtifactView() {
       downloadJsonFile(data, `artifact_${id}.json`);
     } catch {
       alert('Не вдалося експортувати артефакт');
+    }
+  };
+
+  // Картка 80×120 мм як зображення (300 dpi). Для друку кількох карток на
+  // аркуші PDF — «Вибрати для друку» у каталозі.
+  const handleExportJpeg = async () => {
+    setExportingJpeg(true);
+    try {
+      const { imageSkipped } = await downloadArtifactCardJpeg(artifact);
+      if (imageSkipped) alert('Зображення артефакта не вдалося вбудувати (воно з іншого сервера), тож картку збережено без нього.');
+    } catch {
+      alert('Не вдалося створити зображення картки');
+    } finally {
+      setExportingJpeg(false);
     }
   };
 
@@ -104,12 +120,13 @@ export default function ArtifactView() {
           </span>
           {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
           <div className="ml-auto flex items-center gap-4">
-            <Link
-              to={`/equipment/artifacts/print?ids=${id}`}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
+            <button
+              type="button" onClick={handleExportJpeg} disabled={exportingJpeg}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent disabled:opacity-60"
+              title="Картка 80×120 мм у форматі JPEG"
             >
-              <Printer size={14} /> Картка PDF
-            </Link>
+              <ImageIcon size={14} /> {exportingJpeg ? 'Створення...' : 'Картка JPEG'}
+            </button>
             <button
               type="button" onClick={handleExport}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"

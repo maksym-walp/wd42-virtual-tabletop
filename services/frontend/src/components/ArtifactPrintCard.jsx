@@ -1,11 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
-import { RARITIES, ARTIFACT_TYPE } from '../constants/artifacts';
+import { RARITIES, ARTIFACT_TYPE, CARD_W_MM, CARD_H_MM } from '../constants/artifacts';
 import CroppedImage from './ui/CroppedImage';
 import SmartTextReader from './SmartTextReader';
-
-// Розмір друкованої картки — фізичний, у міліметрах.
-export const CARD_W_MM = 80;
-export const CARD_H_MM = 120;
 
 // Друк завжди на білому папері, тож картка не залежить від теми застосунку:
 // перевизначаємо змінні "Пергаменту" локально, і Tailwind-класи (text-text,

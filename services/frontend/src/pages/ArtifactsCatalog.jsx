@@ -137,7 +137,7 @@ export default function ArtifactsCatalog() {
     prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
   ));
   const stopSelecting = () => { setSelectMode(false); setSelected([]); };
-  const printHref = (mode) => `/equipment/artifacts/print?ids=${selected.join(',')}&mode=${mode}`;
+  const printHref = () => `/equipment/artifacts/print?ids=${selected.join(',')}`;
 
   const showCards = view === 'cards';
   const activeFilterCount = rarity ? 1 : 0;
@@ -168,12 +168,9 @@ export default function ArtifactsCatalog() {
           <div className="flex flex-col gap-2">
             <p className="text-sm text-text-dim">Обрано: {selected.length}</p>
             {selected.length > 0 ? (
-              <>
-                <Button size="sm" to={printHref('sheet')}><Printer size={14} /> Аркуш A4 × 4</Button>
-                <Button size="sm" variant="ghost" to={printHref('card')}>Картки 80×120 мм</Button>
-              </>
+              <Button size="sm" to={printHref()}><Printer size={14} /> PDF-аркуш A4 (по 4 картки)</Button>
             ) : (
-              <p className="text-xs text-text-dim">Клікни по артефактах, які треба надрукувати.</p>
+              <p className="text-xs text-text-dim">Клікни по артефактах, які треба надрукувати. Одну картку як JPEG можна зберегти на її сторінці.</p>
             )}
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" className="flex-1" onClick={() => setSelected(artifacts.map((a) => a.id))}>

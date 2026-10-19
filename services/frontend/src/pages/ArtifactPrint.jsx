@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Printer } from 'lucide-react';
 import api from '../api/client';
 import Button from '../components/ui/Button';
-import ArtifactPrintCard, { CARD_W_MM, CARD_H_MM } from '../components/ArtifactPrintCard';
+import ArtifactPrintCard from '../components/ArtifactPrintCard';
+import { CARD_W_MM, CARD_H_MM } from '../constants/artifacts';
+import { pluralizeUk } from '../utils/pluralize';
 
 const MAX_CARDS = 40;
 
@@ -21,11 +23,6 @@ const BLOCK_TOP_MM = (A4_H_MM - BLOCK_H_MM) / 2;
 const MARK_OFFSET_MM = 2;
 const MARK_LEN_MM = 2.5;
 const MARK_THICKNESS_MM = 0.25;
-
-const MODES = {
-  card:  { label: 'Картка 80×120 мм', page: `${CARD_W_MM}mm ${CARD_H_MM}mm`, w: CARD_W_MM, h: CARD_H_MM },
-  sheet: { label: 'Аркуш A4 × 4', page: 'A4', w: A4_W_MM, h: A4_H_MM },
-};
 
 // 1 мм = 96/25.4 css-px
 const MM_TO_PX = 96 / 25.4;
@@ -85,13 +82,12 @@ function SheetOfFour({ artifacts }) {
 
 export default function ArtifactPrint() {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const [artifacts, setArtifacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(0);
   const [viewportW, setViewportW] = useState(() => window.innerWidth);
 
-  const mode = params.get('mode') === 'sheet' ? 'sheet' : 'card';
   const idsParam = params.get('ids') || '';
   const ids = useMemo(
     () => [...new Set(idsParam.split(',').map((s) => s.trim()).filter(Boolean))].slice(0, MAX_CARDS),
@@ -118,22 +114,15 @@ export default function ArtifactPrint() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const setMode = (next) => {
-    const nextParams = new URLSearchParams(params);
-    nextParams.set('mode', next);
-    setParams(nextParams, { replace: true });
-  };
-
-  const { page, w } = MODES[mode];
   // Лише для екрана: звужуємо попередній перегляд до ширини вікна. У друці
   // zoom скидається правилом нижче.
-  const zoom = Math.min(1, (viewportW - 32) / (w * MM_TO_PX));
-  const sheets = mode === 'sheet' ? chunk(artifacts, CARDS_PER_SHEET) : artifacts.map((a) => [a]);
+  const zoom = Math.min(1, (viewportW - 32) / (A4_W_MM * MM_TO_PX));
+  const sheets = chunk(artifacts, CARDS_PER_SHEET);
 
   return (
     <div className="min-h-dvh bg-[#d9d4c5] pb-12 print:bg-white print:pb-0">
       <style>{`
-        @page { size: ${page}; margin: 0; }
+        @page { size: A4; margin: 0; }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         @media print {
           html, body { background: #fff !important; margin: 0 !important; min-height: 0 !important; }
@@ -153,26 +142,16 @@ export default function ArtifactPrint() {
             <ArrowLeft size={15} /> Назад
           </button>
 
-          <div className="flex gap-1.5">
-            {Object.entries(MODES).map(([key, { label }]) => (
-              <button
-                key={key} type="button" onClick={() => setMode(key)}
-                className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  mode === key ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-text-dim'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <span className="text-sm font-semibold text-text">
+            Аркуш A4: {artifacts.length} {pluralizeUk(artifacts.length, ['картка', 'картки', 'карток'])} 80×120 мм, аркушів: {sheets.length}
+          </span>
 
           <Button size="sm" className="ml-auto" onClick={() => window.print()} disabled={loading || artifacts.length === 0}>
             <Printer size={14} /> Друк / Зберегти як PDF
           </Button>
 
           <p className="w-full text-xs text-text-dim">
-            У вікні друку обери «Зберегти як PDF», поля — «Немає», масштаб — 100%.
-            {mode === 'sheet' && ' Після друку виріж картки по мітках у кутах.'}
+            У вікні друку обери «Зберегти як PDF», поля — «Немає», масштаб — 100%. Після друку виріж картки по мітках у кутах.
           </p>
         </div>
       </div>
@@ -188,12 +167,8 @@ export default function ArtifactPrint() {
           )}
           <div className="print-zoom flex flex-col items-center gap-6 pt-6 print:gap-0 print:pt-0" style={{ zoom }}>
             {sheets.map((group) => (
-              <div
-                key={group.map((a) => a.id).join('-')}
-                className="print-page bg-white shadow-lg"
-                style={mode === 'sheet' ? undefined : { width: `${CARD_W_MM}mm`, height: `${CARD_H_MM - PAGE_TRIM_MM}mm`, overflow: 'hidden' }}
-              >
-                {mode === 'sheet' ? <SheetOfFour artifacts={group} /> : <ArtifactPrintCard artifact={group[0]} />}
+              <div key={group.map((a) => a.id).join('-')} className="print-page bg-white shadow-lg">
+                <SheetOfFour artifacts={group} />
               </div>
             ))}
           </div>
