@@ -85,6 +85,36 @@ describe('CreatureController.getOne', () => {
   });
 });
 
+describe('CreatureController.export', () => {
+  it('404 when missing', async () => {
+    CreatureModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+    await CreatureController.export(mockReq({ params: { id: 'x' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('403 on someone else\'s private creature', async () => {
+    CreatureModel.findById.mockResolvedValue(wolf);
+    const res = mockRes();
+    await CreatureController.export(mockReq({ params: { id: 'c1' }, user: PLAYER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('returns a one-element array without server-only fields, ready for POST /import', async () => {
+    CreatureModel.findById.mockResolvedValue({
+      ...wolf, image_url: '/uploads/x.png', image_crop: null, owner_username: 'gm', is_owner: true, created_at: 'now',
+    });
+    const res = mockRes();
+    await CreatureController.export(mockReq({ params: { id: 'c1' } }), res);
+    const [list] = res.json.mock.calls[0];
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ name: 'Wolf', dexterity: 3 });
+    for (const field of ['image_url', 'image_crop', 'owner_username', 'is_owner', 'created_at', 'created_by']) {
+      expect(list[0]).not.toHaveProperty(field);
+    }
+  });
+});
+
 describe('CreatureController.update / remove', () => {
   beforeEach(() => CreatureModel.findById.mockResolvedValue(wolf));
 

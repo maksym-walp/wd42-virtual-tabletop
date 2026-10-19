@@ -90,6 +90,43 @@ describe('NpcController.getOne', () => {
   });
 });
 
+describe('NpcController.export', () => {
+  it('404 when missing', async () => {
+    NpcModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+    await NpcController.export(mockReq({ params: { id: 'x' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('403 on someone else\'s private NPC', async () => {
+    NpcModel.findById.mockResolvedValue({ ...tom, is_public: false });
+    const res = mockRes();
+    await NpcController.export(mockReq({ params: { id: 'n1' }, user: PLAYER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('exports a one-element array without server-only fields', async () => {
+    NpcModel.findById.mockResolvedValue({ ...tom, image_url: '/uploads/x.png', owner_username: 'gm', is_owner: true });
+    const res = mockRes();
+    await NpcController.export(mockReq({ params: { id: 'n1' } }), res);
+    const [list] = res.json.mock.calls[0];
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ name: 'Old Tom' });
+    for (const field of ['image_url', 'owner_username', 'is_owner', 'created_by']) expect(list[0]).not.toHaveProperty(field);
+  });
+
+  it('keeps private notes in the export of the creator but strips them for a plain reader', async () => {
+    NpcModel.findById.mockResolvedValue(tom);
+    const own = mockRes();
+    await NpcController.export(mockReq({ params: { id: 'n1' } }), own);
+    expect(own.json.mock.calls[0][0][0].private_notes).toBe('secret');
+
+    const other = mockRes();
+    await NpcController.export(mockReq({ params: { id: 'n1' }, user: PLAYER }), other);
+    expect(other.json.mock.calls[0][0][0]).not.toHaveProperty('private_notes');
+  });
+});
+
 describe('NpcController.update / remove', () => {
   beforeEach(() => NpcModel.findById.mockResolvedValue(tom));
 

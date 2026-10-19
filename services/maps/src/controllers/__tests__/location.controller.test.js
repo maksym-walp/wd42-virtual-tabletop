@@ -8,8 +8,8 @@ const LocationController = require('../location.controller');
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
 }
-function mockReq({ body = {}, params = {}, user = { sub: 'gm-1', role: 'game_master' } } = {}) {
-  return { body, params, user };
+function mockReq({ body = {}, params = {}, query = {}, user = { sub: 'gm-1', role: 'game_master' } } = {}) {
+  return { body, params, query, user };
 }
 
 const OWNER = { sub: 'gm-1', role: 'game_master' };
@@ -168,6 +168,45 @@ describe('LocationController.export / import', () => {
     expect(out[0].versions[0]).not.toHaveProperty('id');
     expect(out[0].versions[0].gm_note).toBe('g');
     expect(out[0].name).toBe('X');
+  });
+
+  describe('export ?id=', () => {
+    const stored = {
+      id: 'loc1', created_by: 'gm-1', created_at: 't', updated_at: 't', name: 'X',
+      versions: [{ id: 'v1', description: 'd', gm_note: 'g' }],
+    };
+
+    it('exports one location as a one-element array, without ids', async () => {
+      LocationModel.findByIdWithVersions.mockResolvedValue(stored);
+      const res = mockRes();
+      await LocationController.export(mockReq({ query: { id: 'loc1' }, user: OWNER }), res);
+      const out = res.json.mock.calls[0][0];
+      expect(LocationModel.listByOwner).not.toHaveBeenCalled();
+      expect(out).toHaveLength(1);
+      expect(out[0]).not.toHaveProperty('id');
+      expect(out[0].versions[0]).not.toHaveProperty('id');
+      expect(out[0].versions[0].gm_note).toBe('g');
+    });
+
+    it('404 when missing, 403 for someone who cannot write it', async () => {
+      LocationModel.findByIdWithVersions.mockResolvedValue(null);
+      const missing = mockRes();
+      await LocationController.export(mockReq({ query: { id: 'nope' }, user: OWNER }), missing);
+      expect(missing.status).toHaveBeenCalledWith(404);
+
+      LocationModel.findByIdWithVersions.mockResolvedValue(stored);
+      const denied = mockRes();
+      await LocationController.export(mockReq({ query: { id: 'loc1' }, user: PLAYER }), denied);
+      expect(denied.status).toHaveBeenCalledWith(403);
+      expect(denied.json).toHaveBeenCalledWith({ message: 'Доступ заборонено' });
+    });
+
+    it('lets an admin export anyone\'s location', async () => {
+      LocationModel.findByIdWithVersions.mockResolvedValue(stored);
+      const res = mockRes();
+      await LocationController.export(mockReq({ query: { id: 'loc1' }, user: { sub: 'a-1', role: 'admin' } }), res);
+      expect(res.json.mock.calls[0][0]).toHaveLength(1);
+    });
   });
 
   it('import 403 for a non-GM', async () => {

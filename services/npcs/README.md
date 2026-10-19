@@ -10,6 +10,7 @@
 |---|---|---|---|---|
 | GET | `/npcs` | Bearer JWT | — | `200 { npcs: [...] }` — власні + публічні (адміну — усі) |
 | GET | `/npcs/:id` | Bearer JWT | — | `200 { npc }` / `404` / `403` |
+| GET | `/npcs/:id/export` | Bearer JWT (читання запису) | — | `200 [ запис ]` — масив з одного елемента у форматі `POST /npcs/import`; приватні нотатки лише тим, хто їх бачить / `404` / `403` |
 | POST | `/npcs` | admin/game_master | `{ name, dexterity, body, intelligence, wisdom, charisma (1..6), species_id?, subspecies_id?, race_id?, people_id?, description?, motivation?, backstory?, image_url?, image_crop?, health_die_override?, age?, gender?, birth_calendar_id?, birth_year?, birth_month_id?, birth_day?, death_calendar_id?, death_year?, death_month_id?, death_day?, private_notes?, is_public? }` | `201 { npc }` / `400` / `403` |
 | PATCH | `/npcs/:id` | власник-GM або admin | те саме | `200 { npc }` / `404` / `403` / `400` |
 | PATCH | `/npcs/:id/health` | власник-GM або admin | `{ rolled_health }` — додатне ціле або `null` | `200 { npc }` / `400` |

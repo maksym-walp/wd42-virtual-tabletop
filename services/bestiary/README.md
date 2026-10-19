@@ -10,6 +10,7 @@
 |---|---|---|---|---|
 | GET | `/creatures` | Bearer JWT | — | `200 { creatures: [...] }` — власні + публічні (адміну — усі) |
 | GET | `/creatures/:id` | Bearer JWT | — | `200 { creature }` / `404` / `403` |
+| GET | `/creatures/:id/export` | Bearer JWT (читання запису) | — | `200 [ запис ]` — масив з одного елемента у форматі `POST /creatures/import` (без зображення й службових полів) / `404` / `403` |
 | POST | `/creatures` | admin/game_master | `{ name, dexterity, body, intelligence, wisdom, charisma (1..6), species_id?, subspecies_id?, race_id?, people_id?, description?, history?, image_url?, image_crop?, health_die_override?, is_public? }` | `201 { creature }` / `400` / `403` |
 | PATCH | `/creatures/:id` | власник-GM або admin | те саме | `200 { creature }` / `404` / `403` / `400` |
 | PATCH | `/creatures/:id/owner` | admin | `{ owner_username }` | `200 { creature }` / `404` |

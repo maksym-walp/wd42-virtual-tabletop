@@ -14,6 +14,7 @@ router.get('/', wrap(CreatureController.list));
 router.post('/', wrap(CreatureController.create));
 // import мусить стояти до GET /:id-маршрутів, як і в інших каталогах.
 router.post('/import', wrap(CreatureController.import));
+router.get('/:id/export', wrap(CreatureController.export));
 router.get('/:id', wrap(CreatureController.getOne));
 router.patch('/:id', wrap(CreatureController.update));
 router.patch('/:id/owner', wrap(CreatureController.setOwner));

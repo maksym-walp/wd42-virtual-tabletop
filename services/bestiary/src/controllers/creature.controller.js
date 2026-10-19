@@ -1,6 +1,7 @@
 const CreatureModel = require('../models/creature.model');
 const { canCreate, canWrite, isAdmin } = require('./access');
 const { decorateStatBlock } = require('../dto/stat-block.dto');
+const { sanitizeForExport } = require('../dto/export.dto');
 const { HEALTH_DICE } = require('../constants/health-dice');
 
 const ATTRIBUTE_KEYS = ['dexterity', 'body', 'intelligence', 'wisdom', 'charisma'];
@@ -95,6 +96,15 @@ const CreatureController = {
 
     const ids = await CreatureModel.importMany(req.user.sub, fieldsList);
     res.status(201).json({ imported: ids.length });
+  },
+
+  // Один запис у форматі POST /import (масив з одного елемента) — той самий,
+  // що й записи в експорті колекції.
+  async export(req, res) {
+    const creature = await CreatureModel.findById(req.params.id, req.user.sub);
+    if (!creature) return res.status(404).json({ message: 'Істоту не знайдено' });
+    if (!isReadable(creature, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+    res.json([sanitizeForExport(decorateStatBlock(creature))]);
   },
 
   async getOne(req, res) {

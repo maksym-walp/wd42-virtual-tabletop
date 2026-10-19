@@ -2,6 +2,7 @@ const NpcModel = require('../models/npc.model');
 const { canCreate, canWrite, isAdmin } = require('./access');
 const { isReadable } = require('./visibility');
 const { decorateStatBlock } = require('../dto/stat-block.dto');
+const { sanitizeForExport } = require('../dto/export.dto');
 const { HEALTH_DICE } = require('../constants/health-dice');
 
 const ATTRIBUTE_KEYS = ['dexterity', 'body', 'intelligence', 'wisdom', 'charisma'];
@@ -140,6 +141,15 @@ const NpcController = {
 
     const ids = await NpcModel.importMany(req.user.sub, fieldsList);
     res.status(201).json({ imported: ids.length });
+  },
+
+  // Один запис у форматі POST /import (масив з одного елемента) — той самий,
+  // що й записи в експорті колекції; приватні нотатки — лише тим, хто їх бачить.
+  async export(req, res) {
+    const npc = await NpcModel.findById(req.params.id, req.user.sub);
+    if (!npc) return res.status(404).json({ message: 'НІПа не знайдено' });
+    if (!isReadable(npc, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+    res.json([sanitizeForExport(present(npc, req.user))]);
   },
 
   async getOne(req, res) {

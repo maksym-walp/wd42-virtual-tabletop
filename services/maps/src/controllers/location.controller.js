@@ -121,7 +121,16 @@ const LocationController = {
   },
 
   // Whole library as a JSON array, ready to feed back into POST /import.
+  // ?id= exports exactly one location (still an array with one element). The
+  // file carries gm_note, so — like the library export, which is own-only —
+  // only the owner or an admin may export a location.
   async export(req, res) {
+    if (req.query.id) {
+      const location = await LocationModel.findByIdWithVersions(req.query.id);
+      if (!location) return res.status(404).json({ message: 'Локацію не знайдено' });
+      if (!canWriteLocation(location, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+      return res.json([sanitizeForExport(location)]);
+    }
     const locations = await LocationModel.listByOwner(req.user.sub);
     res.json(locations.map(sanitizeForExport));
   },
