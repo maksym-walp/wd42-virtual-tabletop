@@ -13,6 +13,7 @@ import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 import useSpellKinds from '../hooks/useSpellKinds';
 import CroppedImage from '../components/ui/CroppedImage';
 
@@ -120,7 +121,10 @@ export default function SpellView() {
 
           <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
             <h1 className="font-display text-3xl text-accent">{spell.name}</h1>
-            <ShareButton className="mt-1" />
+            <div className="mt-1 flex shrink-0 items-center">
+              <ExportRecordButton url={`/api/spellbook/export?id=${id}`} filename={`spell_${id}.json`} />
+              <ShareButton />
+            </div>
           </div>
           <AuthorBadge
             username={spell.owner_username}

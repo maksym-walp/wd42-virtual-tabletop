@@ -9,6 +9,7 @@ import MarkerIcon from '../components/map/MarkerIcon';
 import SmartTextReader from '../components/SmartTextReader';
 import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 
 // Standalone, read-only location page — locations previously had no URL of
 // their own (only reachable via a map's ?location= query param, see
@@ -43,6 +44,8 @@ export default function LocationDetail() {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
+  // Експорт містить gm_note, тож його віддають лише власнику та адміну (як і бекенд).
+  const canExport = Boolean(location) && (isAdmin || location.created_by === user?.id);
   const version = resolveLocationVersion(location?.versions, null);
   const displayName = version?.name || location?.name || 'Локація';
   const displayIcon = version?.marker_icon ?? location?.marker_icon;
@@ -64,6 +67,7 @@ export default function LocationDetail() {
           <div className="flex flex-col gap-4 p-5">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-display text-xl text-text">{displayName}</h1>
+              {canExport && <ExportRecordButton url={`/api/maps/locations/export?id=${id}`} filename={`location_${id}.json`} />}
               <ShareButton />
               <Badge className="inline-flex items-center gap-1.5 border border-border text-text-muted">
                 <MarkerIcon icon={displayIcon} size={14} />

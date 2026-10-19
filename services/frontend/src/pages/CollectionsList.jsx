@@ -7,6 +7,7 @@ import ScopeFilter from '../components/ScopeFilter';
 import CatalogTabs from '../components/CatalogTabs';
 import EquipmentCollectionsByType from '../components/EquipmentCollectionsByType';
 import CollectionImportActions from '../components/CollectionImportActions';
+import CollectionExportButton from '../components/CollectionExportButton';
 import { htmlToPreviewText } from '../utils/richText';
 import useHoverPreview from '../hooks/useHoverPreview';
 import CatalogLayout, {
@@ -82,9 +83,10 @@ export default function CollectionsList({ domainKey }) {
               key={c.id}
               to={`${domain.basePath}/collections/${c.id}`}
               {...bindPreview(c)}
-              className="block overflow-hidden rounded-lg border border-border bg-surface"
+              className="relative block overflow-hidden rounded-lg border border-border bg-surface"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
+              <CollectionExportButton collectionsApi={domain.collectionsApi} domainKey={domainKey} collection={c} />
               {c.image_url && (
                 <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
                   <CroppedImage src={c.image_url} crop={c.image_crop} alt={c.name} loading="lazy" />

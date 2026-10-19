@@ -14,6 +14,7 @@ import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 import CroppedImage from '../components/ui/CroppedImage';
 
 export default function AbilityView() {
@@ -115,7 +116,10 @@ export default function AbilityView() {
 
         <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
           <h1 className="font-display text-3xl text-accent">{ability.name}</h1>
-          <ShareButton className="mt-1" />
+          <div className="mt-1 flex shrink-0 items-center">
+              <ExportRecordButton url={`/api/abilities/export?id=${id}`} filename={`ability_${id}.json`} />
+              <ShareButton />
+            </div>
         </div>
         <AuthorBadge
           username={ability.owner_username}

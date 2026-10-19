@@ -17,6 +17,7 @@ import RollButton from '../components/RollButton';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 import CroppedImage from '../components/ui/CroppedImage';
 import NpcFactionsSection from '../components/npcs/NpcFactionsSection';
 import NpcRelationshipsSection from '../components/npcs/NpcRelationshipsSection';
@@ -166,7 +167,10 @@ export default function StatBlockView({ kind: kindKey }) {
 
         <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
           <h1 className="font-display text-3xl text-accent">{entry.name}</h1>
-          <ShareButton className="mt-1" />
+          <div className="mt-1 flex shrink-0 items-center">
+              <ExportRecordButton url={`${kind.apiBase}/${id}/export`} filename={`${kindKey}_${id}.json`} />
+              <ShareButton />
+            </div>
         </div>
 
         <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-5">

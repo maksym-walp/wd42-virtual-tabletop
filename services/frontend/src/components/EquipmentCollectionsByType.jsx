@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { htmlToPreviewText } from '../utils/richText';
 import CroppedImage from './ui/CroppedImage';
+import CollectionExportButton from './CollectionExportButton';
+import { COLLECTION_DOMAINS } from '../collectionsDomains';
 
 // Equipment's Колекції tab groups collections by which type-table their
 // items belong to (see EquipmentCatalog.jsx / /equipment/weapon|armor|items|
@@ -67,9 +69,10 @@ function CollectionsScrollRow({ label, collections, basePath, bindPreview }) {
               key={c.id}
               to={`${basePath}/collections/${c.id}`}
               {...bindPreview?.(c)}
-              className="block w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-surface"
+              className="relative block w-64 shrink-0 overflow-hidden rounded-lg border border-border bg-surface"
               style={{ borderLeft: '4px solid var(--color-accent)' }}
             >
+              <CollectionExportButton collectionsApi={COLLECTION_DOMAINS.equipment.collectionsApi} domainKey="equipment" collection={c} />
               {c.image_url && (
                 <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
                   <CroppedImage src={c.image_url} crop={c.image_crop} alt={c.name} loading="lazy" />

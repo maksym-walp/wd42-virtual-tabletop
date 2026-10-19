@@ -165,9 +165,13 @@ export default function CollectionView({ domainKey, publicView = false }) {
           <h1 className="font-display text-3xl text-accent">{collection.name}</h1>
           <div className="mt-1 flex shrink-0 items-center gap-1.5">
             {!publicView && (
-              <Button type="button" variant="ghost" size="icon" onClick={handleExport} aria-label="Експорт" title="Експорт колекції разом із записами у JSON">
-                <Download size={16} />
-              </Button>
+              <button
+                type="button" onClick={handleExport}
+                className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-xs font-semibold text-text-dim hover:bg-surface-hover hover:text-accent"
+                title="Назва, опис і всі записи колекції з усіма полями — у JSON"
+              >
+                <Download size={14} /> Експорт
+              </button>
             )}
             <ShareButton url={collection.is_public ? shareUrl : undefined} />
           </div>
