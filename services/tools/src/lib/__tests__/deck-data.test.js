@@ -58,14 +58,42 @@ describe('sanitizeDeckData', () => {
     expect(() => sanitizeDeckData(cards)).toThrow(/Карти/);
   });
 
-  it('requires names for suits, ranks and cards', () => {
+  it('requires names for suits and ranks', () => {
     const noSuitName = base();
     noSuitName.suits[0].name = '  ';
     expect(() => sanitizeDeckData(noSuitName)).toThrow(/обов'язкове/);
 
-    const noCardName = base();
-    noCardName.cards[0].name = '';
-    expect(() => sanitizeDeckData(noCardName)).toThrow(/обов'язкове/);
+    const noRankName = base();
+    noRankName.ranks[0].name = '';
+    expect(() => sanitizeDeckData(noRankName)).toThrow(/обов'язкове/);
+  });
+
+  it('lets a card with both suit and rank omit its name and description', () => {
+    const data = base();
+    data.cards[0].name = '';
+    delete data.cards[0].description;
+    const [card] = sanitizeDeckData(data).cards;
+    expect(card.name).toBe('');
+    expect(card.description).toBe('');
+  });
+
+  it.each([
+    ['no suit', { suit_id: null, rank_id: 'r1' }],
+    ['no rank', { suit_id: 's1', rank_id: null }],
+    ['neither', { suit_id: null, rank_id: null }],
+  ])('still requires a name when the card has %s', (_label, link) => {
+    const data = base();
+    data.cards[0] = { id: 'c1', name: '  ', ...link };
+    expect(() => sanitizeDeckData(data)).toThrow(/обов'язкове/);
+  });
+
+  it('keeps a trimmed card description and rejects an over-long one', () => {
+    const data = base();
+    data.cards[0].description = '  Символ початку  ';
+    expect(sanitizeDeckData(data).cards[0].description).toBe('Символ початку');
+
+    data.cards[0].description = 'x'.repeat(2001);
+    expect(() => sanitizeDeckData(data)).toThrow(/опис/);
   });
 
   it('rejects more than the maximum number of cards', () => {

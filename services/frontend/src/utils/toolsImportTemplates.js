@@ -51,14 +51,17 @@ export function buildDeckImportTemplate() {
 //   name            — обов'язкове, рядок до 200 символів
 //   description     — рядок до 5000 символів або null
 //   back_image_url  — зворот колоди: "/uploads/..." або "https://..." чи null
-//   data.suits      — масті (до 12): id (унікальний рядок), name, image_url (чи null)
+//   data.suits      — масті (до 12): id (унікальний рядок), name, image_url (чи null).
+//                     image_url масті стає сорочкою всіх карт цієї масті
 //   data.ranks      — номінали (до 60): id (унікальний рядок), name
 //   data.cards      — карти (до 200):
 //       id          — унікальний рядок
 //       suit_id     — id масті або null (карта без масті, наприклад старший аркан)
 //       rank_id     — id номіналу або null
-//       name        — обов'язкове, до 150 символів
-//       image_url   — "/uploads/..." або "https://..." чи null
+//       name        — до 150 символів. Обов'язкове, якщо немає suit_id або rank_id;
+//                     коли є і масть, і номінал — можна "" (назва буде «номінал · масть»)
+//       description — опис карти, до 2000 символів (необов'язковий)
+//       image_url   — лице карти: "/uploads/..." або "https://..." чи null
 //
 {
   "type": "deck",
@@ -75,11 +78,11 @@ export function buildDeckImportTemplate() {
       { "id": "two", "name": "Двійка" }
     ],
     "cards": [
-      { "id": "c1", "suit_id": "cups", "rank_id": "ace", "name": "Туз Кубків", "image_url": null },
-      { "id": "c2", "suit_id": "cups", "rank_id": "two", "name": "Двійка Кубків", "image_url": null },
-      { "id": "c3", "suit_id": "swords", "rank_id": "ace", "name": "Туз Мечів", "image_url": null },
-      { "id": "c4", "suit_id": "swords", "rank_id": "two", "name": "Двійка Мечів", "image_url": null },
-      { "id": "c5", "suit_id": null, "rank_id": null, "name": "Шут", "image_url": null }
+      { "id": "c1", "suit_id": "cups", "rank_id": "ace", "name": "Туз Кубків", "description": "Початок почуттів", "image_url": null },
+      { "id": "c2", "suit_id": "cups", "rank_id": "two", "name": "", "description": "", "image_url": null },
+      { "id": "c3", "suit_id": "swords", "rank_id": "ace", "name": "", "description": "", "image_url": null },
+      { "id": "c4", "suit_id": "swords", "rank_id": "two", "name": "", "description": "", "image_url": null },
+      { "id": "c5", "suit_id": null, "rank_id": null, "name": "Шут", "description": "Нова дорога", "image_url": null }
     ]
   }
 }

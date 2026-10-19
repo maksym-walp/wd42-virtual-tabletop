@@ -1,5 +1,5 @@
 const {
-  ValidationError, requireText, cleanId, cleanImageUrl, requireArray, requireObject,
+  ValidationError, cleanText, requireText, cleanId, cleanImageUrl, requireArray, requireObject,
 } = require('./validation');
 
 const MAX_SUITS = 12;
@@ -18,10 +18,12 @@ function uniqueIds(items, field) {
 // Документ колоди:
 //   suits: [{ id, name, image_url }]            — масті (необов'язкові)
 //   ranks: [{ id, name }]                       — номінали
-//   cards: [{ id, suit_id|null, rank_id|null, name, image_url }]
+//   cards: [{ id, suit_id|null, rank_id|null, name, description, image_url }]
 // Карти без масті (наприклад, старші аркани таро) — suit_id: null. Карти
 // зберігаються явно (а не як масть × номінал), щоб кожній можна було дати
-// власні назву й зображення.
+// власні назву, опис і зображення.
+// Назва й опис необов'язкові, коли в карти є і масть, і номінал (назву тоді
+// складає клієнт: «Туз · Кубки»); якщо масті чи номіналу немає — назва обов'язкова.
 function sanitizeDeckData(raw) {
   const data = requireObject(raw ?? {}, 'data');
 
@@ -50,11 +52,16 @@ function sanitizeDeckData(raw) {
     const rankId = card.rank_id ?? null;
     if (suitId !== null && !suitIds.has(suitId)) throw new ValidationError(`${field}: невідома масть`);
     if (rankId !== null && !rankIds.has(rankId)) throw new ValidationError(`${field}: невідомий номінал`);
+    const nameField = `${field}, назва`;
+    const name = suitId !== null && rankId !== null
+      ? cleanText(card.name, 150, nameField)
+      : requireText(card.name, 150, nameField);
     return {
       id: cleanId(card.id, field),
       suit_id: suitId,
       rank_id: rankId,
-      name: requireText(card.name, 150, `${field}, назва`),
+      name,
+      description: cleanText(card.description, 2000, `${field}, опис`),
       image_url: cleanImageUrl(card.image_url, `${field}, зображення`),
     };
   });

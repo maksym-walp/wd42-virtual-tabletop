@@ -4,6 +4,11 @@
 // не змінюється), а випадковість іде через randomInt (crypto, не Math.random:
 // перетасовка колоди має бути чесною, а не «майже випадковою»).
 //
+// Стопка з `spread: true` — розклад: усі її карти лежать на столі в ряд (а не
+// видна лише верхня). `origin` — id стопки, з якої викладали (куди за
+// замовчуванням збирати назад). Розклад — звичайна стопка, тож усі операції
+// (переміщення карт, об'єднання) працюють і з ним.
+//
 // Лицьова сторона після ходу:
 //   * перетасовка й розкладка по стопках кладуть усе сорочкою догори;
 //   * карта, вставлена в середину/низ/випадкове місце, лягає сорочкою догори —
@@ -85,6 +90,14 @@ export function flipTop(state, pileId) {
   }));
 }
 
+// Перевернути карту з індексом `index` (у розкладі — будь-яку, не лише верхню).
+export function flipCard(state, pileId, index) {
+  return mapPile(state, pileId, (p) => (index < 0 || index >= p.cards.length ? p : {
+    ...p,
+    cards: p.cards.map((c, i) => (i === index ? { ...c, faceUp: !c.faceUp } : c)),
+  }));
+}
+
 // Індекс вставки в стопку довжиною `length` (вже без переміщуваної карти).
 export function insertIndex(position, length) {
   switch (position) {
@@ -112,11 +125,14 @@ export function moveCard(state, fromId, index, toId, position) {
 
   return {
     ...state,
-    piles: state.piles.map((p) => {
-      if (p.id === toId) return { ...p, cards: next };
-      if (p.id === fromId) return { ...p, cards: without };
-      return p;
-    }),
+    piles: state.piles
+      .map((p) => {
+        if (p.id === toId) return { ...p, cards: next };
+        if (p.id === fromId) return { ...p, cards: without };
+        return p;
+      })
+      // Розклад, з якого забрали останню карту, зникає сам.
+      .filter((p) => !(p.id === fromId && fromId !== toId && p.spread && p.cards.length === 0)),
   };
 }
 
@@ -168,6 +184,74 @@ export function cutPile(state, pileId, count) {
   const top = pile.cards.slice(0, n);
   const updated = mapPile(state, pileId, (p) => ({ ...p, cards: p.cards.slice(n) }));
   return insertPilesAfter(updated, pileId, [{ id: newPileId(), name: `${pile.name} (знято)`, cards: top }]);
+}
+
+// Розсортувати стопку на стоси за мастями: по стосу на кожну масть, що є в
+// стопці (у порядку мастей колоди), плюс «Без масті» для решти. Порядок і
+// лицьова сторона карт у стосах лишаються як були. Початкова стопка
+// замінюється стосами. Якщо в стопці лише одна група — нічого не робимо.
+export function sortPileBySuit(state, pileId, deckData) {
+  const pile = findPile(state, pileId);
+  if (!pile) return state;
+
+  const suitNames = new Map(deckData.suits.map((s) => [s.id, s.name]));
+  const suitOf = new Map(deckData.cards.map((c) => [c.id, suitNames.has(c.suit_id) ? c.suit_id : null]));
+
+  const groups = new Map();
+  for (const card of pile.cards) {
+    const key = suitOf.get(card.cardId) ?? null;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(card);
+  }
+  if (groups.size < 2) return state;
+
+  const order = [...deckData.suits.map((s) => s.id), null];
+  const stacks = order.filter((key) => groups.has(key)).map((key) => ({
+    id: newPileId(), name: key === null ? 'Без масті' : suitNames.get(key), cards: groups.get(key),
+  }));
+
+  const idx = state.piles.findIndex((p) => p.id === pileId);
+  const piles = [...state.piles];
+  piles.splice(idx, 1, ...stacks);
+  return { ...state, piles };
+}
+
+// Викласти на стіл `count` верхніх карт стопки: вони йдуть у новий розклад
+// (перша знята — ліворуч), лицем догори. Стопка лишається з рештою карт.
+export function layOut(state, pileId, count) {
+  const pile = findPile(state, pileId);
+  const n = Math.floor(count);
+  if (!pile || !(n >= 1) || n > pile.cards.length) return state;
+
+  const spreads = state.piles.filter((p) => p.spread).length;
+  const spread = {
+    id: newPileId(),
+    name: spreads === 0 ? 'Розклад' : `Розклад ${spreads + 1}`,
+    spread: true,
+    origin: pileId,
+    cards: pile.cards.slice(0, n).map((c) => ({ ...c, faceUp: true })),
+  };
+  const updated = mapPile(state, pileId, (p) => ({ ...p, cards: p.cards.slice(n) }));
+  return insertPilesAfter(updated, pileId, [spread]);
+}
+
+// Зібрати всі карти стопки `fromId` (розкладу) блоком у стопку `toId` й
+// прибрати порожню. Як і в moveCard: зверху карти зберігають лицьову сторону,
+// решта місць — сорочкою догори; блок іде в тому самому порядку.
+export function gatherPile(state, fromId, toId, position) {
+  const from = findPile(state, fromId);
+  const to = findPile(state, toId);
+  if (!from || !to || fromId === toId) return state;
+
+  const at = insertIndex(position, to.cards.length);
+  const block = position === 'top' ? from.cards : faceDown(from.cards);
+  const next = [...to.cards.slice(0, at), ...block, ...to.cards.slice(at)];
+  return {
+    ...state,
+    piles: state.piles
+      .map((p) => (p.id === toId ? { ...p, cards: next } : p))
+      .filter((p) => p.id !== fromId),
+  };
 }
 
 // Скласти стопку `fromId` зверху на `toId` і прибрати порожню.

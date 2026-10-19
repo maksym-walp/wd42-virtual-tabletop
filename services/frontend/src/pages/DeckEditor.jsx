@@ -7,7 +7,7 @@ import Field, { inputClass } from '../components/ui/Field';
 import ImageSlot from '../components/tools/ImageSlot';
 import {
   MAX_SUITS, MAX_RANKS, MAX_CARDS, emptyDeck, fromServer, toPayload, parseNames,
-  newSuit, newRank, newCard, generateMissingCards,
+  newSuit, newRank, newCard, generateMissingCards, isNameRequired, cardTitle,
 } from '../utils/deck';
 
 function Section({ title, hint, action, children }) {
@@ -68,6 +68,7 @@ export default function DeckEditor() {
   }, [id, navigate]);
 
   const suitsById = useMemo(() => new Map((doc?.suits ?? []).map((s) => [s.id, s])), [doc]);
+  const ranksById = useMemo(() => new Map((doc?.ranks ?? []).map((r) => [r.id, r])), [doc]);
 
   if (!doc) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
@@ -108,7 +109,10 @@ export default function DeckEditor() {
   const handleSave = async () => {
     if (!doc.name.trim()) { setError('Вкажіть назву колоди'); return; }
     if (doc.cards.length === 0) { setError('Додайте хоча б одну карту'); return; }
-    if (doc.cards.some((c) => !c.name.trim())) { setError('У кожної карти має бути назва'); return; }
+    if (doc.cards.some((c) => isNameRequired(c) && !c.name.trim())) {
+      setError('Карті без масті чи номіналу потрібна назва');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -153,11 +157,11 @@ export default function DeckEditor() {
           </div>
         </Section>
 
-        <Section title="Масті" hint={`До ${MAX_SUITS}. Необов'язкові: карти без масті (як старші аркани) теж можливі. Зображення масті показується на картах без власного.`}>
+        <Section title="Масті" hint={`До ${MAX_SUITS}. Необов'язкові: карти без масті (як старші аркани) теж можливі. Зображення масті стає сорочкою всіх карт цієї масті — замість сорочки колоди, тож навіть у перемішаній колоді видно масть верхньої карти.`}>
           <ul className="flex flex-col gap-2">
             {doc.suits.map((suit) => (
               <li key={suit.id} className="flex items-center gap-3">
-                <ImageSlot label={`Масть ${suit.name}`} value={suit.image_url} onChange={(url) => patchItem('suits', suit.id, { image_url: url })} className="w-12 aspect-[2/3]" />
+                <ImageSlot label={`Сорочка масті ${suit.name}`} value={suit.image_url} onChange={(url) => patchItem('suits', suit.id, { image_url: url })} className="w-12 aspect-[2/3]" />
                 <input className={inputClass} value={suit.name} maxLength={100} onChange={(e) => patchItem('suits', suit.id, { name: e.target.value })} aria-label="Назва масті" />
                 <Button type="button" variant="ghost" size="icon" onClick={() => removeSuit(suit.id)} aria-label="Видалити масть"><Trash2 size={15} /></Button>
               </li>
@@ -183,7 +187,7 @@ export default function DeckEditor() {
 
         <Section
           title={`Карти (${doc.cards.length})`}
-          hint={`До ${MAX_CARDS}. Кожній карті можна дати власні назву й зображення.`}
+          hint={`До ${MAX_CARDS}. Кожній карті можна дати власні назву, опис і зображення (лице карти). Якщо в карти є і масть, і номінал, назва й опис необов'язкові: назва складається з номіналу й масті.`}
           action={(
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={handleGenerate} disabled={doc.suits.length === 0 || doc.ranks.length === 0}>
@@ -210,13 +214,20 @@ export default function DeckEditor() {
               {visibleCards.map((card) => (
                 <li key={card.id} className="flex gap-3 rounded-lg border border-border bg-bg p-2.5">
                   <ImageSlot
-                    label={`Карта ${card.name}`}
+                    label={`Лице карти ${cardTitle(card, suitsById, ranksById)}`}
                     value={card.image_url}
                     onChange={(url) => patchItem('cards', card.id, { image_url: url })}
-                    className={`w-16 aspect-[2/3] ${!card.image_url && suitsById.get(card.suit_id)?.image_url ? 'opacity-70' : ''}`}
+                    className="w-16 aspect-[2/3]"
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <input className={inputClass} value={card.name} maxLength={150} onChange={(e) => patchItem('cards', card.id, { name: e.target.value })} aria-label="Назва карти" />
+                    <input
+                      className={inputClass}
+                      value={card.name}
+                      maxLength={150}
+                      placeholder={isNameRequired(card) ? 'Назва (обов\'язкова)' : cardTitle(card, suitsById, ranksById)}
+                      onChange={(e) => patchItem('cards', card.id, { name: e.target.value })}
+                      aria-label="Назва карти"
+                    />
                     <div className="flex gap-1.5">
                       <select className={inputClass} value={card.suit_id ?? ''} onChange={(e) => patchItem('cards', card.id, { suit_id: e.target.value || null })} aria-label="Масть">
                         <option value="">Без масті</option>
@@ -227,6 +238,15 @@ export default function DeckEditor() {
                         {doc.ranks.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
                     </div>
+                    <textarea
+                      className={`${inputClass} !min-h-0`}
+                      rows={2}
+                      maxLength={2000}
+                      value={card.description ?? ''}
+                      placeholder="Опис (необов'язково)"
+                      onChange={(e) => patchItem('cards', card.id, { description: e.target.value })}
+                      aria-label="Опис карти"
+                    />
                   </div>
                   <Button type="button" variant="ghost" size="icon" onClick={() => setDoc((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== card.id) }))} aria-label="Видалити карту"><Trash2 size={15} /></Button>
                 </li>

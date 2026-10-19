@@ -38,18 +38,33 @@ export function parseNames(text) {
 export const newSuit = (name) => ({ id: newId(), name, image_url: null });
 export const newRank = (name) => ({ id: newId(), name });
 export const newCard = (extra = {}) => ({
-  id: newId(), suit_id: null, rank_id: null, name: 'Нова карта', image_url: null, ...extra,
+  id: newId(), suit_id: null, rank_id: null, name: '', description: '', image_url: null, ...extra,
 });
 
+// Назва й опис необов'язкові, коли в карти є і масть, і номінал; інакше назва
+// обов'язкова (так само перевіряє сервер).
+export const isNameRequired = (card) => !(card.suit_id && card.rank_id);
+
+// Назва для показу: власна, а без неї — «Туз · Кубки» зі складових карти.
+export function cardTitle(card, suitsById, ranksById) {
+  const own = card?.name?.trim();
+  if (own) return own;
+  const rank = ranksById.get(card?.rank_id)?.name;
+  const suit = suitsById.get(card?.suit_id)?.name;
+  return [rank, suit].filter(Boolean).join(' · ') || 'Карта';
+}
+
 // Додає всі відсутні комбінації «масть × номінал» (наявні не чіпає — їхні
-// назви й зображення вже могли бути відредаговані). Ряд за мастю, у порядку номіналів.
+// назви, описи й зображення вже могли бути відредаговані). Ряд за мастю, у
+// порядку номіналів. Назву не заповнюємо: вона складається з номіналу й масті,
+// тож перейменування масті чи номіналу оновлює й карти.
 export function generateMissingCards(doc) {
   const existing = new Set(doc.cards.filter((c) => c.suit_id && c.rank_id).map((c) => `${c.suit_id}|${c.rank_id}`));
   const added = [];
   for (const suit of doc.suits) {
     for (const rank of doc.ranks) {
       if (!existing.has(`${suit.id}|${rank.id}`)) {
-        added.push(newCard({ suit_id: suit.id, rank_id: rank.id, name: `${rank.name} · ${suit.name}` }));
+        added.push(newCard({ suit_id: suit.id, rank_id: rank.id }));
       }
     }
   }
@@ -57,7 +72,13 @@ export function generateMissingCards(doc) {
   return { cards: [...doc.cards, ...added.slice(0, room)], added: Math.min(added.length, room), truncated: added.length > room };
 }
 
-// Зображення лицьової сторони: власне карти, інакше — масті.
-export function faceImage(card, suitsById) {
-  return card.image_url || suitsById.get(card.suit_id)?.image_url || null;
+// Лицьова сторона — лише власне зображення карти.
+export function faceImage(card) {
+  return card?.image_url || null;
+}
+
+// Сорочка: зображення масті карти, а якщо його нема (чи карта без масті) —
+// сорочка колоди. Тож навіть у перемішаній колоді верхня карта показує масть.
+export function backImage(card, suitsById, deckBackUrl) {
+  return suitsById.get(card?.suit_id)?.image_url || deckBackUrl || null;
 }

@@ -4,10 +4,10 @@ import { ArrowLeft, Download, Play } from 'lucide-react';
 import { decksApi } from '../api/tools';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
-import Lightbox from '../components/ui/Lightbox';
+import Sheet from '../components/ui/Sheet';
 import ShareButton from '../components/ShareButton';
 import DeckCard from '../components/tools/DeckCard';
-import { faceImage } from '../utils/deck';
+import { cardTitle } from '../utils/deck';
 import { exportOne } from '../utils/toolsImportTemplates';
 
 export default function DeckView() {
@@ -17,7 +17,7 @@ export default function DeckView() {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [preview, setPreview] = useState(null);
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     decksApi.getOne(id)
@@ -28,6 +28,7 @@ export default function DeckView() {
 
   const { suits, ranks, cards } = item?.data ?? { suits: [], ranks: [], cards: [] };
   const suitsById = useMemo(() => new Map(suits.map((s) => [s.id, s])), [suits]);
+  const ranksById = useMemo(() => new Map(ranks.map((r) => [r.id, r])), [ranks]);
 
   const handleDelete = async () => {
     if (!confirm('Видалити цю колоду?')) return;
@@ -81,20 +82,28 @@ export default function DeckView() {
       </div>
 
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-7">
-        {cards.map((card) => {
-          const image = faceImage(card, suitsById);
-          return (
-            <DeckCard
-              key={card.id}
-              card={card}
-              suitsById={suitsById}
-              onClick={image ? () => setPreview(image) : undefined}
-            />
-          );
-        })}
+        {cards.map((card) => (
+          <DeckCard
+            key={card.id}
+            card={card}
+            suitsById={suitsById}
+            ranksById={ranksById}
+            onClick={() => setSelected(card)}
+          />
+        ))}
       </div>
 
-      {preview && <Lightbox images={[preview]} index={0} onClose={() => setPreview(null)} />}
+      <Sheet open={Boolean(selected)} onClose={() => setSelected(null)} title={selected ? cardTitle(selected, suitsById, ranksById) : ''}>
+        {selected && (
+          <div className="flex flex-col items-center gap-3">
+            <DeckCard card={selected} suitsById={suitsById} ranksById={ranksById} className="w-48" />
+            <p className="text-sm text-text-dim">
+              {[suitsById.get(selected.suit_id)?.name, ranksById.get(selected.rank_id)?.name].filter(Boolean).join(' · ') || 'Без масті й номіналу'}
+            </p>
+            {selected.description && <p className="w-full whitespace-pre-line text-sm text-text-muted">{selected.description}</p>}
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }
