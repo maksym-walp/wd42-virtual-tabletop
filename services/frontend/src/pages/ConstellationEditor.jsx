@@ -156,6 +156,12 @@ export default function ConstellationEditor() {
             <Field label="Опис">
               <textarea className={inputClass} rows={3} maxLength={5000} value={doc.description} onChange={(e) => patchDoc({ description: e.target.value })} />
             </Field>
+            <Field
+              label="🔒 Нотатки майстра"
+              hint="Приватні: бачить лише автор (та адмін), навіть якщо сузір'я публічне."
+            >
+              <textarea className={inputClass} rows={4} maxLength={10000} value={doc.gm_notes} onChange={(e) => patchDoc({ gm_notes: e.target.value })} />
+            </Field>
             <label className="flex items-center gap-2 text-sm text-text">
               <input type="checkbox" checked={doc.is_public} onChange={(e) => patchDoc({ is_public: e.target.checked })} />
               Публічне (бачать усі)

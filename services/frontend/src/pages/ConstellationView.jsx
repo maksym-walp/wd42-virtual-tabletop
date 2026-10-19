@@ -98,6 +98,14 @@ export default function ConstellationView() {
             )}
           </div>
 
+          {item.gm_notes && (
+            <div className="rounded-lg border border-gold/50 bg-surface p-4">
+              <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gold">🔒 Нотатки майстра</h2>
+              <p className="whitespace-pre-line text-sm text-text-muted">{item.gm_notes}</p>
+              <p className="mt-2 text-xs text-text-dim">Бачите лише ви{item.is_public ? ' — навіть коли сузір\'я публічне' : ''}.</p>
+            </div>
+          )}
+
           {byBrightness.length > 0 && (
             <ul className="max-h-64 overflow-y-auto rounded-lg border border-border bg-surface">
               {byBrightness.map((s) => (

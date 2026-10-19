@@ -45,6 +45,11 @@ describe('findAll', () => {
     expect(sql).not.toMatch(/SELECT t\.\*/);
   });
 
+  it('never selects the private gm_notes column in the list', async () => {
+    await ConstellationModel.findAll('u1');
+    expect(pool.query.mock.calls[0][0]).not.toMatch(/gm_notes/);
+  });
+
   it('lists decks with their back image and card counts', async () => {
     await DeckModel.findAll('u1');
     const sql = pool.query.mock.calls[0][0];
@@ -60,9 +65,17 @@ describe('create / update', () => {
       name: 'Дракон', description: null, is_public: false, data: { stars: [], lines: [] },
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO tools\.constellations \(created_by, name, description, is_public, data\)/);
-    expect(sql).toMatch(/\$5::jsonb/);
-    expect(params).toEqual(['u1', 'Дракон', null, false, '{"stars":[],"lines":[]}']);
+    expect(sql).toMatch(/INSERT INTO tools\.constellations \(created_by, name, description, is_public, gm_notes, data\)/);
+    expect(sql).toMatch(/\$6::jsonb/);
+    expect(params).toEqual(['u1', 'Дракон', null, false, null, '{"stars":[],"lines":[]}']);
+  });
+
+  it('writes gm_notes with a constellation', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 'new' }] });
+    await ConstellationModel.create('u1', {
+      name: 'Дракон', description: null, is_public: false, gm_notes: 'Це сузір\'я — карта до гробниці', data: { stars: [], lines: [] },
+    });
+    expect(pool.query.mock.calls[0][1][4]).toBe('Це сузір\'я — карта до гробниці');
   });
 
   it('includes back_image_url for decks', async () => {

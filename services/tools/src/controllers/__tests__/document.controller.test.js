@@ -166,3 +166,68 @@ describe('export / import', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 });
+
+describe('private gm_notes on constellations', () => {
+  const stored = (extra = {}) => ({
+    id: 'c1', created_by: 'owner', is_public: true, name: 'Дракон', description: null,
+    gm_notes: 'секрет майстра', data: { stars: [], lines: [] }, ...extra,
+  });
+
+  it('saves trimmed notes on create and null when empty', async () => {
+    ConstellationModel.create.mockResolvedValue({ id: 'c1' });
+    await ConstellationController.create(mockReq({ body: { ...validConstellation, gm_notes: '  Нотатка  ' } }), mockRes());
+    expect(ConstellationModel.create.mock.calls[0][1].gm_notes).toBe('Нотатка');
+
+    await ConstellationController.create(mockReq({ body: { ...validConstellation, gm_notes: '   ' } }), mockRes());
+    expect(ConstellationModel.create.mock.calls[1][1].gm_notes).toBeNull();
+  });
+
+  it('400s on over-long notes', async () => {
+    const res = mockRes();
+    await ConstellationController.create(mockReq({ body: { ...validConstellation, gm_notes: 'x'.repeat(10001) } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('hides notes of a public constellation from other users', async () => {
+    ConstellationModel.findById.mockResolvedValue(stored());
+    const res = mockRes();
+    await ConstellationController.get(mockReq({ params: { id: 'c1' } }), res);
+    const { item } = res.json.mock.calls[0][0];
+    expect(item).not.toHaveProperty('gm_notes');
+    expect(item.name).toBe('Дракон');
+  });
+
+  it('shows notes to the author and to an admin', async () => {
+    ConstellationModel.findById.mockResolvedValue(stored({ created_by: 'u1' }));
+    const own = mockRes();
+    await ConstellationController.get(mockReq({ params: { id: 'c1' } }), own);
+    expect(own.json.mock.calls[0][0].item.gm_notes).toBe('секрет майстра');
+
+    ConstellationModel.findById.mockResolvedValue(stored());
+    const admin = mockRes();
+    await ConstellationController.get(mockReq({ params: { id: 'c1' }, user: { sub: 'a', role: 'admin' } }), admin);
+    expect(admin.json.mock.calls[0][0].item.gm_notes).toBe('секрет майстра');
+  });
+
+  it('keeps notes out of someone else’s export but includes them for the author', async () => {
+    ConstellationModel.findById.mockResolvedValue(stored());
+    const other = mockRes();
+    await ConstellationController.export(mockReq({ params: { id: 'c1' } }), other);
+    expect(other.json.mock.calls[0][0]).not.toHaveProperty('gm_notes');
+
+    ConstellationModel.findById.mockResolvedValue(stored({ created_by: 'u1' }));
+    const own = mockRes();
+    await ConstellationController.export(mockReq({ params: { id: 'c1' } }), own);
+    expect(own.json.mock.calls[0][0].gm_notes).toBe('секрет майстра');
+  });
+
+  it('does not wipe existing notes when an update omits the field', async () => {
+    ConstellationModel.findById.mockResolvedValue(stored({ created_by: 'u1' }));
+    ConstellationModel.update.mockResolvedValue({ id: 'c1' });
+    await ConstellationController.update(mockReq({ params: { id: 'c1' }, body: validConstellation }), mockRes());
+    expect(ConstellationModel.update.mock.calls[0][1].gm_notes).toBe('секрет майстра');
+
+    await ConstellationController.update(mockReq({ params: { id: 'c1' }, body: { ...validConstellation, gm_notes: '' } }), mockRes());
+    expect(ConstellationModel.update.mock.calls[1][1].gm_notes).toBeNull();
+  });
+});

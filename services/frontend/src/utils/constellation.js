@@ -15,7 +15,7 @@ export function newId() {
 }
 
 export function emptyConstellation() {
-  return { name: '', description: '', is_public: false, stars: [], lines: [] };
+  return { name: '', description: '', gm_notes: '', is_public: false, stars: [], lines: [] };
 }
 
 export function newStar(x, y, index) {
@@ -35,6 +35,7 @@ export function fromServer(item) {
   return {
     name: item.name,
     description: item.description || '',
+    gm_notes: item.gm_notes || '',
     is_public: item.is_public,
     stars: item.data?.stars ?? [],
     lines: item.data?.lines ?? [],
@@ -45,6 +46,7 @@ export function toPayload(doc) {
   return {
     name: doc.name.trim(),
     description: doc.description.trim(),
+    gm_notes: doc.gm_notes.trim(),
     is_public: doc.is_public,
     data: { stars: doc.stars, lines: doc.lines },
   };

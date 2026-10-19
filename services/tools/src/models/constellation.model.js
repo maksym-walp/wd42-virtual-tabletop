@@ -11,4 +11,8 @@ const PREVIEW = `
     'lines', t.data->'lines'
   ) AS preview`;
 
-module.exports = createDocumentModel({ table: 'tools.constellations', listSelect: PREVIEW });
+module.exports = createDocumentModel({
+  table: 'tools.constellations',
+  privateColumns: ['gm_notes'],
+  listSelect: PREVIEW,
+});

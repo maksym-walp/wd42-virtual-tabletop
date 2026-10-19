@@ -5,10 +5,13 @@ const pool = require('../config/db');
 // Фабрика приймає лише те, чим інструменти відрізняються:
 //   table         — повна назва таблиці (tools.constellations)
 //   extraColumns  — додаткові звичайні колонки (decks.back_image_url)
+//   privateColumns — колонки, які пишуться як звичайні, але НЕ потрапляють у
+//                   список (constellations.gm_notes); чи віддавати їх при
+//                   читанні, вирішує контролер
 //   listSelect    — SQL-вирази для списку: стислий підсумок замість важкого
 //                   `data` (кількість зірок, картки тощо)
-function createDocumentModel({ table, extraColumns = [], listSelect = '' }) {
-  const writeColumns = ['name', 'description', 'is_public', ...extraColumns, 'data'];
+function createDocumentModel({ table, extraColumns = [], privateColumns = [], listSelect = '' }) {
+  const writeColumns = ['name', 'description', 'is_public', ...extraColumns, ...privateColumns, 'data'];
   const listExtra = [...extraColumns.map((c) => `t.${c}`), listSelect].filter(Boolean).join(', ');
 
   const valuesOf = (fields) => writeColumns.map((column) => (

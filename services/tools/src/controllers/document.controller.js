@@ -10,7 +10,11 @@ const MAX_IMPORT_ITEMS = 50;
 //   prepare     — (body) => очищені поля запису ({ data, ...extra });
 //                 кидає ValidationError
 //   exportExtra — (item) => додаткові поля файлу експорту
-function createDocumentController({ model, type, label, prepare, exportExtra = () => ({}) }) {
+//   privateFields — поля запису, які бачить лише той, хто має право писати
+//                   (автор чи адмін): для решти їх прибирають із читання й експорту
+function createDocumentController({
+  model, type, label, prepare, exportExtra = () => ({}), privateFields = [],
+}) {
   // Спільні поля + специфічні для інструмента. name/description тут, решту дає prepare.
   function buildFields(body) {
     const source = requireObject(body ?? {}, 'Тіло запиту');
@@ -30,6 +34,14 @@ function createDocumentController({ model, type, label, prepare, exportExtra = (
       res.status(400).json({ message: err.message });
       return null;
     }
+  }
+
+  // Копія запису без приватних полів, якщо користувач не може його редагувати.
+  function viewableBy(item, user) {
+    if (canWrite(item, user)) return item;
+    const copy = { ...item };
+    privateFields.forEach((field) => { delete copy[field]; });
+    return copy;
   }
 
   // Документ, який користувач має право читати, або 404 (існування чужого
@@ -52,7 +64,7 @@ function createDocumentController({ model, type, label, prepare, exportExtra = (
 
     async get(req, res) {
       const item = await loadReadableOr404(req, res);
-      if (item) res.json({ item });
+      if (item) res.json({ item: viewableBy(item, req.user) });
     },
 
     async create(req, res) {
@@ -69,6 +81,10 @@ function createDocumentController({ model, type, label, prepare, exportExtra = (
 
       const fields = fieldsOr400(req.body, res);
       if (!fields) return;
+      // Клієнт, який не знає про приватне поле, не має його стирати.
+      privateFields.forEach((field) => {
+        if (req.body[field] === undefined) fields[field] = existing[field];
+      });
       const isPublic = typeof req.body.is_public === 'boolean' ? req.body.is_public : existing.is_public;
       const item = await model.update(existing.id, { ...fields, is_public: isPublic });
       res.json({ item });
@@ -85,8 +101,9 @@ function createDocumentController({ model, type, label, prepare, exportExtra = (
     // Файл без id/власника/публічності — лише те, що має сенс у чужій
     // інсталяції. `type` дозволяє імпорту відрізнити сузір'я від колоди.
     async export(req, res) {
-      const item = await loadReadableOr404(req, res);
-      if (!item) return;
+      const found = await loadReadableOr404(req, res);
+      if (!found) return;
+      const item = viewableBy(found, req.user);
       res.json({
         type,
         name: item.name,

@@ -12,6 +12,7 @@ export function buildConstellationImportTemplate() {
 // Поля сузір'я:
 //   name         — обов'язкове, рядок до 200 символів
 //   description  — рядок до 5000 символів або null
+//   gm_notes     — приватні нотатки майстра (до 10000 символів) або null
 //   data.stars   — масив зірок (до 200):
 //       id          — унікальний рядок у межах сузір'я (на нього посилаються лінії)
 //       x, y        — координати на полотні, числа (приблизно від -500 до 500)
@@ -24,6 +25,7 @@ export function buildConstellationImportTemplate() {
   "type": "constellation",
   "name": "Приклад: Дракон",
   "description": "Сузір'я, що вказує шлях на північ",
+  "gm_notes": "Око дракона — ключ до гробниці; гравці про це не знають",
   "data": {
     "stars": [
       { "id": "s1", "x": -80, "y": 20, "size": 3, "name": "Расабан", "description": "Око дракона" },
