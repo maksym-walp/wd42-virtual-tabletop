@@ -6,7 +6,7 @@ import useSvgPanZoom from '../hooks/useSvgPanZoom';
 import {
   computeLayoutFor, DEFAULT_TREE_SETTINGS, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
-import Sheet from './ui/Sheet';
+import SidePanel, { useSidePanelShift } from './ui/SidePanel';
 import SkillTreeBackdrop from './SkillTreeBackdrop';
 import SmartTextReader from './SmartTextReader';
 import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from './NodeGrants';
@@ -38,6 +38,7 @@ export default function DevelopmentTree({
   const [hoverLabel, setHoverLabel] = useState(null);
   const panZoom = useSvgPanZoom({ initial: { x: 80, y: 80, k: 0.85 }, maxK: 3 });
   const { transform, setTransform } = panZoom;
+  useSidePanelShift(!!selectedNode, setTransform);
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState('');
   const svgRef = useRef(null);
@@ -194,8 +195,10 @@ export default function DevelopmentTree({
         )}
       </div>
 
-      {/* Canvas */}
-      <div className="relative h-[520px] overflow-hidden rounded-lg border border-border bg-surface">
+      {/* Полотно + бічна панель вузла: панель відкривається колонкою, а дерево
+          стискається й зсувається, а не ховається під вікном. */}
+      <div className="flex h-[520px] overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="relative min-w-0 flex-1 overflow-hidden">
         <button
           type="button"
           onClick={handleFitView}
@@ -307,19 +310,21 @@ export default function DevelopmentTree({
           </div>
         )}
 
-        {selectedNode && (
-          <TreeNodePanel
-            node={selectedNode}
-            nodes={nodes}
-            edges={edges}
-            unlocked={unlockedIds.has(selectedNode.id)}
-            canUnlock={checkCanUnlock(selectedNode)}
-            is_owner={is_owner}
-            onUnlock={(via) => handleUnlock(selectedNode.id, via)}
-            onClose={() => setSelectedNode(null)}
-            catalog={catalog}
-          />
-        )}
+      </div>
+
+      {selectedNode && (
+        <TreeNodePanel
+          node={selectedNode}
+          nodes={nodes}
+          edges={edges}
+          unlocked={unlockedIds.has(selectedNode.id)}
+          canUnlock={checkCanUnlock(selectedNode)}
+          is_owner={is_owner}
+          onUnlock={(via) => handleUnlock(selectedNode.id, via)}
+          onClose={() => setSelectedNode(null)}
+          catalog={catalog}
+        />
+      )}
       </div>
     </div>
   );
@@ -377,7 +382,7 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
   const costLabel = `${node.cost} ${node.cost === 1 ? 'пункт' : 'пунктів'} досвіду`;
 
   return (
-    <Sheet
+    <SidePanel
       open
       onClose={onClose}
       title={node.icon ? (
@@ -490,6 +495,6 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
           )}
         </div>
       )}
-    </Sheet>
+    </SidePanel>
   );
 }

@@ -55,6 +55,8 @@ import ChronologyList from './pages/ChronologyList';
 import ChronologyBuilder from './pages/ChronologyBuilder';
 import ChronologyView from './pages/ChronologyView';
 import ChronologyEvents from './pages/ChronologyEvents';
+import ChronologyEventView from './pages/ChronologyEventView';
+import ChronologyEventForm from './pages/ChronologyEventForm';
 import LocationDetail from './pages/LocationDetail';
 import StatBlockList from './pages/StatBlockList';
 import StatBlockForm from './pages/StatBlockForm';
@@ -139,6 +141,11 @@ function AppShell() {
           <Route path="/chronology/:id/build" element={<PrivateRoute><ChronologyBuilder /></PrivateRoute>} />
           <Route path="/chronology/:id" element={<PrivateRoute><ChronologyView /></PrivateRoute>} />
           <Route path="/chronology/events" element={<PrivateRoute><ChronologyEvents /></PrivateRoute>} />
+          <Route path="/chronology/events/new" element={<PrivateRoute><ChronologyEventForm /></PrivateRoute>} />
+          {/* Подія — окрема сторінка (раніше вікно поверх списку). Календар у
+              шляху — щоб внутрішні посилання на подію лишалися однаковими. */}
+          <Route path="/chronology/:id/events/:eventId" element={<PrivateRoute><ChronologyEventView /></PrivateRoute>} />
+          <Route path="/chronology/:id/events/:eventId/edit" element={<PrivateRoute><ChronologyEventForm /></PrivateRoute>} />
           {/* Раніше «Події» були підвкладкою календаря; старі посилання (внутрішні лінки в текстах) ведуть на нову вкладку. */}
           <Route path="/chronology/:id/events" element={<PrivateRoute><LegacyCalendarEventsRedirect /></PrivateRoute>} />
           <Route path="/locations/:id" element={<PrivateRoute><LocationDetail /></PrivateRoute>} />

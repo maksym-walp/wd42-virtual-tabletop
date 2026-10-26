@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import useWeaponOptions from '../hooks/useWeaponOptions';
 import { recordView, removeView } from '../utils/recentlyViewed';
-import { downloadJsonFile } from '../utils/downloadJson';
 import Button from '../components/ui/Button';
 import SmartTextReader from '../components/SmartTextReader';
 import AuthorBadge from '../components/AuthorBadge';
 import CanonicalSwitch from '../components/CanonicalSwitch';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 import CroppedImage from '../components/ui/CroppedImage';
 
 export default function EquipmentView() {
@@ -56,15 +56,6 @@ export default function EquipmentView() {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const { data } = await api.get(`/api/equipment/export?id=${id}`);
-      downloadJsonFile(data, `equipment_${id}.json`);
-    } catch {
-      alert('Не вдалося експортувати предмет');
-    }
-  };
-
   const handleSetCanonical = async (isCanonical) => {
     setSettingCanonical(true);
     try {
@@ -90,20 +81,22 @@ export default function EquipmentView() {
   const type = EQUIPMENT_TYPES[item.type] || EQUIPMENT_TYPES.item;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <Link to={`/equipment/${EQUIPMENT_TYPE_PATHS[item.type]}`} className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> {type.label}
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        {item.image_url && (
-          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <CroppedImage src={item.image_url} crop={item.image_crop} alt={item.name} />
-          </div>
-        )}
+      {/* Макет як у заклинань: ліворуч — зображення, назва, автор; праворуч —
+          характеристики й опис. На мобільному — одна колонка. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
+          {item.image_url && (
+            <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+              <CroppedImage src={item.image_url} crop={item.image_crop} alt={item.name} />
+            </div>
+          )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
             <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
               {type.label}
             </span>
@@ -112,78 +105,77 @@ export default function EquipmentView() {
             </span>
             {item.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
           </div>
-          <button
-            type="button" onClick={handleExport}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
-          >
-            <Download size={14} /> Експорт
-          </button>
-        </div>
 
-        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
-          <h1 className="font-display text-3xl text-accent">{item.name}</h1>
-          <ShareButton className="mt-1" />
-        </div>
-        <AuthorBadge
-          username={item.owner_username}
-          size="sm"
-          className="px-5 pb-2"
-          onChangeOwner={isAdmin ? handleSetOwner : undefined}
-        />
-
-        <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
-          {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} />}
-          {item.modifier && <SheetStat label="Модифікатор" value={weaponModifierLabel(item.modifier)} />}
-          {item.weapon_type && <SheetStat label="Тип зброї" value={weaponTypesMap[item.weapon_type]?.label ?? item.weapon_type} />}
-          {item.weapon_grip?.length > 0 && (
-            <SheetStat
-              label="Особливості"
-              value={item.weapon_grip.map((g) => weaponGripsMap[g]?.label ?? g).join(', ')}
-            />
-          )}
-          {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} />}
-          {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
-          {item.price != null && <SheetStat label="Орієнтовна вартість" value={item.price} />}
-        </div>
-
-        {item.description && (
-          <Section title="Опис">
-            <SmartTextReader text={item.description} className="text-[0.95rem] leading-relaxed text-text" />
-          </Section>
-        )}
-
-        {item.used_in_spells?.length > 0 && (
-          <Section title="Використовується у">
-            <div className="flex flex-col gap-1.5">
-              {item.used_in_spells.map((s) => (
-                <Link key={s.id} to={`/spellbook/${s.id}`} className="text-sm text-accent hover:underline">
-                  {s.name}
-                </Link>
-              ))}
+          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+            <h1 className="font-display text-3xl text-accent">{item.name}</h1>
+            <div className="mt-1 flex shrink-0 items-center">
+              <ExportRecordButton url={`/api/equipment/export?id=${id}`} filename={`equipment_${id}.json`} />
+              <ShareButton />
             </div>
-          </Section>
-        )}
+          </div>
+          <AuthorBadge
+            username={item.owner_username}
+            size="sm"
+            className="px-5 pb-4"
+            onChangeOwner={isAdmin ? handleSetOwner : undefined}
+          />
+        </div>
 
-        {(item.is_owner || isAdmin || canManageCanonical) && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
-            {(item.is_owner || isAdmin) && (
-              <>
-                <Button variant="ghost" to={`/equipment/${id}/edit`}>Редагувати</Button>
-                <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Видалення...' : 'Видалити'}
-                </Button>
-              </>
-            )}
-            {canManageCanonical && (
-              <CanonicalSwitch
-                className="ml-auto"
-                checked={!!item.is_canonical}
-                disabled={settingCanonical}
-                onChange={handleSetCanonical}
+        <div className="self-start overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-3">
+            {item.damage_die && <SheetStat label="Кубик шкоди" value={item.damage_die} />}
+            {item.modifier && <SheetStat label="Модифікатор" value={weaponModifierLabel(item.modifier)} />}
+            {item.weapon_type && <SheetStat label="Тип зброї" value={weaponTypesMap[item.weapon_type]?.label ?? item.weapon_type} />}
+            {item.weapon_grip?.length > 0 && (
+              <SheetStat
+                label="Особливості"
+                value={item.weapon_grip.map((g) => weaponGripsMap[g]?.label ?? g).join(', ')}
               />
             )}
+            {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} />}
+            {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
+            {item.price != null && <SheetStat label="Орієнтовна вартість" value={item.price} />}
           </div>
-        )}
+
+          {item.description && (
+            <Section title="Опис">
+              <SmartTextReader text={item.description} className="text-[0.95rem] leading-relaxed text-text" />
+            </Section>
+          )}
+
+          {item.used_in_spells?.length > 0 && (
+            <Section title="Використовується у">
+              <div className="flex flex-col gap-1.5">
+                {item.used_in_spells.map((s) => (
+                  <Link key={s.id} to={`/spellbook/${s.id}`} className="text-sm text-accent hover:underline">
+                    {s.name}
+                  </Link>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {(item.is_owner || isAdmin || canManageCanonical) && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+              {(item.is_owner || isAdmin) && (
+                <>
+                  <Button variant="ghost" to={`/equipment/${id}/edit`}>Редагувати</Button>
+                  <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                    {deleting ? 'Видалення...' : 'Видалити'}
+                  </Button>
+                </>
+              )}
+              {canManageCanonical && (
+                <CanonicalSwitch
+                  className="ml-auto"
+                  checked={!!item.is_canonical}
+                  disabled={settingCanonical}
+                  onChange={handleSetCanonical}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

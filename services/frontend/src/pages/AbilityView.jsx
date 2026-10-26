@@ -81,139 +81,160 @@ export default function AbilityView() {
   const shown = forms.find((f) => f.key === activeForm) ?? forms.find((f) => f.key === 'main');
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <Link to="/abilities" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Вміння
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ borderTop: '3px solid var(--color-gold)' }}>
-        {ability.image_url && (
-          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <CroppedImage src={ability.image_url} crop={ability.image_crop} alt={ability.name} />
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-          {(ability.archetypes ?? []).map((a) => (
-            <span
-              key={a}
-              className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
-              style={{ borderColor: ARCHETYPE_COLORS[a]?.color, color: ARCHETYPE_COLORS[a]?.color }}
-            >
-              {ARCHETYPES[a]?.label ?? a}
-            </span>
-          ))}
-          {ability.is_maneuver && (
-            <span className="rounded border border-gold/60 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-gold">
-              Маневр · {formatDuration(shown.duration_value, shown.duration_unit)}
-            </span>
+      {/* Той самий макет, що в заклинань: ліворуч — лор (назва, автор, форми,
+          наративний опис), праворуч — механіка. На мобільному — одна колонка. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
+          {ability.image_url && (
+            <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+              <CroppedImage src={ability.image_url} crop={ability.image_crop} alt={ability.name} />
+            </div>
           )}
-          <span className={`text-xs italic ${ability.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
-            {ability.is_canonical ? 'канонічне' : 'спільнота'}
-          </span>
-          {ability.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
-        </div>
 
-        <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
-          <h1 className="font-display text-3xl text-accent">{ability.name}</h1>
-          <div className="mt-1 flex shrink-0 items-center">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-hover px-4 py-2.5">
+            {(ability.archetypes ?? []).map((a) => (
+              <span
+                key={a}
+                className="rounded border px-2 py-0.5 text-xs font-bold uppercase tracking-wide"
+                style={{ borderColor: ARCHETYPE_COLORS[a]?.color, color: ARCHETYPE_COLORS[a]?.color }}
+              >
+                {ARCHETYPES[a]?.label ?? a}
+              </span>
+            ))}
+            {ability.is_maneuver && (
+              <span className="rounded border border-gold/60 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-gold">
+                Маневр · {formatDuration(shown.duration_value, shown.duration_unit)}
+              </span>
+            )}
+            <span className={`text-xs italic ${ability.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+              {ability.is_canonical ? 'канонічне' : 'спільнота'}
+            </span>
+            {ability.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
+          </div>
+
+          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+            <h1 className="font-display text-3xl text-accent">{ability.name}</h1>
+            <div className="mt-1 flex shrink-0 items-center">
               <ExportRecordButton url={`/api/abilities/export?id=${id}`} filename={`ability_${id}.json`} />
               <ShareButton />
             </div>
-        </div>
-        <AuthorBadge
-          username={ability.owner_username}
-          size="sm"
-          className="px-5 pb-2"
-          onChangeOwner={isAdmin ? handleSetOwner : undefined}
-        />
+          </div>
+          <AuthorBadge
+            username={ability.owner_username}
+            size="sm"
+            className="px-5 pb-2"
+            onChangeOwner={isAdmin ? handleSetOwner : undefined}
+          />
 
-        {forms.length > 1 && (
-          <Section title="Форми">
-            <div className="flex flex-wrap gap-1.5">
-              {forms.map((f) => (
-                <button
-                  key={f.key} type="button"
-                  onClick={() => setActiveForm(f.key)}
-                  className={`rounded border px-3 py-1 text-xs font-semibold transition-colors ${
-                    shown.key === f.key ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {!ability.is_maneuver && shown.duration_unit && shown.duration_unit !== 'instant' && (
-          <Section title="Тривалість">
-            <p className="text-[0.95rem] text-text">{formatDuration(shown.duration_value, shown.duration_unit)}</p>
-          </Section>
-        )}
-
-        {shown.components?.length > 0 && (
-          <Section title="Компоненти">
-            <ComponentsList components={shown.components} />
-          </Section>
-        )}
-
-        {shown.mechanical_desc && (
-          <Section title="Механічний опис">
-            <SmartTextReader text={shown.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
-          </Section>
-        )}
-
-        {shown.narrative_desc && (
-          <Section title="Наративний опис">
-            <SmartTextReader text={shown.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
-          </Section>
-        )}
-
-        {shown.lore_creator && (
-          <Section title="Творець">
-            <p className="text-[0.95rem] text-text">
+          {shown.lore_creator && (
+            <p className="px-5 pb-3 text-sm text-text-dim">
+              Творець:{' '}
               {shown.lore_creator_npc_id
                 ? <Link to={`/npcs/${shown.lore_creator_npc_id}`} className="text-accent hover:underline">{shown.lore_creator}</Link>
-                : shown.lore_creator}
+                : <span className="text-text">{shown.lore_creator}</span>}
             </p>
-          </Section>
-        )}
+          )}
 
-        {ability.prerequisite_nodes?.length > 0 && (
-          <Section title="Вимоги дерева розвитку">
-            <div className="flex flex-col gap-1.5">
-              {ability.prerequisite_nodes.map((n) => (
-                <span key={n.id} className="flex items-center gap-1.5 text-sm text-text">
-                  <ReqBadge type={ability.prerequisite_logic === 'and' ? 'required' : 'optional'} />
-                  {n.title}
-                </span>
-              ))}
+          {forms.length > 1 && (
+            <Section title="Форми">
+              <div className="flex flex-wrap gap-1.5">
+                {forms.map((f) => (
+                  <button
+                    key={f.key} type="button"
+                    onClick={() => setActiveForm(f.key)}
+                    className={`rounded border px-3 py-1 text-xs font-semibold transition-colors ${
+                      shown.key === f.key ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {shown.narrative_desc && (
+            <Section title="Наративний опис">
+              <SmartTextReader text={shown.narrative_desc} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+            </Section>
+          )}
+        </div>
+
+        <div className="self-start overflow-hidden rounded-lg border border-border bg-surface">
+          {forms.length > 1 && (
+            <div className="border-b border-border bg-surface-hover px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+              {shown.label}
             </div>
-          </Section>
-        )}
+          )}
 
-        {(ability.is_owner || isAdmin || canManageCanonical) && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
-            {(ability.is_owner || isAdmin) && (
-              <>
-                <Button variant="ghost" to={`/abilities/${id}/edit`}>Редагувати</Button>
-                <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Видалення...' : 'Видалити'}
-                </Button>
-              </>
-            )}
-            {canManageCanonical && (
-              <CanonicalSwitch
-                className="ml-auto"
-                checked={!!ability.is_canonical}
-                disabled={settingCanonical}
-                onChange={handleSetCanonical}
-              />
-            )}
+          <div className="grid grid-cols-2 gap-px border-b border-border bg-border">
+            <SheetStat label="Тип" value={ability.is_maneuver ? 'Маневр' : 'Вміння'} />
+            <SheetStat label="Тривалість" value={formatDuration(shown.duration_value, shown.duration_unit)} />
           </div>
-        )}
+
+          {shown.components?.length > 0 && (
+            <Section title="Компоненти">
+              <ComponentsList components={shown.components} />
+            </Section>
+          )}
+
+          {shown.mechanical_desc && (
+            <Section title="Механічний опис">
+              <SmartTextReader text={shown.mechanical_desc} className="text-[0.95rem] leading-relaxed text-text" />
+            </Section>
+          )}
+
+          {ability.prerequisite_nodes?.length > 0 && (
+            <Section title="Вимоги дерева розвитку">
+              <div className="flex flex-col gap-1.5">
+                {ability.prerequisite_nodes.map((n) => (
+                  <span key={n.id} className="flex items-center gap-1.5 text-sm text-text">
+                    <ReqBadge type={ability.prerequisite_logic === 'and' ? 'required' : 'optional'} />
+                    {n.title}
+                  </span>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {(ability.is_owner || isAdmin || canManageCanonical) && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+              {(ability.is_owner || isAdmin) && (
+                <>
+                  <Button variant="ghost" to={`/abilities/${id}/edit`}>Редагувати</Button>
+                  <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                    {deleting ? 'Видалення...' : 'Видалити'}
+                  </Button>
+                </>
+              )}
+              {canManageCanonical && (
+                <CanonicalSwitch
+                  className="ml-auto"
+                  checked={!!ability.is_canonical}
+                  disabled={settingCanonical}
+                  onChange={handleSetCanonical}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function SheetStat({ label, value }) {
+  return (
+    <div className="flex flex-col gap-0.5 bg-surface px-3 py-2">
+      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">
+        {label}
+      </span>
+      <span className="text-sm font-semibold text-text">{value || '—'}</span>
     </div>
   );
 }

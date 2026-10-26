@@ -6,10 +6,16 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const VALID_RECURRENCE = ['none', 'yearly', 'monthly', 'weekly'];
 const VALID_DURATION_DISPLAY = ['start', 'start_end', 'every_day', 'none'];
 
-function validateBody(body) {
-  const { name, color, recurrence = 'none', day, end_day, location_id, region, duration_display = 'start' } = body;
+async function validateBody(body) {
+  const { name, color, recurrence = 'none', day, end_day, location_id, region, duration_display = 'start', event_type } = body;
   if (!name || !HEX_COLOR_RE.test(color || '')) {
     return 'name та color (#rrggbb) є обовʼязковими';
+  }
+  // Тип — ключ із event_types (адмін-панель); невідомий ключ відхиляємо, щоб
+  // подія не посилалася на тип, якого немає. Порожній — подія без типу.
+  if (event_type != null && event_type !== '') {
+    const types = await ChronologyEventModel.getEventTypes();
+    if (!types.some((t) => t.key === event_type)) return 'event_type: невідомий тип події';
   }
   if (!VALID_RECURRENCE.includes(recurrence)) {
     return `recurrence має бути одним з: ${VALID_RECURRENCE.join(', ')}`;
@@ -66,7 +72,7 @@ const ChronologyEventController = {
   async create(req, res) {
     const calendar = await loadChronologyForManageOr404(req, res);
     if (!calendar) return;
-    const validationError = validateBody(req.body);
+    const validationError = await validateBody(req.body);
     if (validationError) return res.status(400).json({ message: validationError });
 
     const monthError = await validateMonthRefs(req.body, calendar.id);
@@ -79,7 +85,7 @@ const ChronologyEventController = {
   async update(req, res) {
     const calendar = await loadChronologyForManageOr404(req, res);
     if (!calendar) return;
-    const validationError = validateBody(req.body);
+    const validationError = await validateBody(req.body);
     if (validationError) return res.status(400).json({ message: validationError });
 
     // body.calendar_id інший за :id — перенесення події в інший календар;
@@ -95,6 +101,27 @@ const ChronologyEventController = {
 
     const event = await ChronologyEventModel.update(req.params.eventId, calendar.id, req.body, target.id);
     if (!event) return res.status(404).json({ message: 'Подію не знайдено' });
+    res.json({ event });
+  },
+
+  // Типи подій (назва + колір) — задаються в адмін-панелі, читають усі
+  // автентифіковані.
+  async listTypes(req, res) {
+    res.json({ event_types: await ChronologyEventModel.getEventTypes() });
+  },
+
+  // Одна подія календаря — для сторінки події. Календар мусить бути видимий
+  // глядачу; приватні події й події кампаній — лише менеджерам (кампанійні
+  // ще й тим, хто відкриває їх з контексту цієї кампанії, ?campaign_id).
+  async getOne(req, res) {
+    const calendar = await loadChronologyOr404(req, res);
+    if (!calendar) return;
+    const event = await ChronologyEventModel.findDetailed(req.params.eventId, calendar.id);
+    const isManager = ['admin', 'game_master'].includes(req.user.role);
+    const visible = event && (isManager || (
+      event.is_public && (!event.campaign_id || event.campaign_id === req.query.campaign_id)
+    ));
+    if (!visible) return res.status(404).json({ message: 'Подію не знайдено' });
     res.json({ event });
   },
 

@@ -19,6 +19,7 @@ import {
   computeLayoutFor, DEFAULT_TREE_SETTINGS, reorderCluster, straightEdgePath, computeFitTransform, ancestorClosure,
 } from '../utils/skillTreeLayout';
 import Sheet from '../components/ui/Sheet';
+import SidePanel, { useSidePanelShift } from '../components/ui/SidePanel';
 import { inputClass } from '../components/ui/Field';
 import Button from '../components/ui/Button';
 import ReqBadge from '../components/ui/ReqBadge';
@@ -105,6 +106,7 @@ export default function SkillTree() {
   const highlightSet = highlightSourceId ? ancestorClosure(highlightSourceId, edges) : null;
 
   const [nodeForm, setNodeForm] = useState(null);
+  useSidePanelShift(!!selectedNode && !nodeForm, setTransform);
   const [formError, setFormError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState(null); // { type: 'success' | 'error', text }
@@ -599,8 +601,10 @@ export default function SkillTree() {
         </div>
       )}
 
-      {/* Canvas */}
-      <div className="relative flex-1 overflow-hidden bg-surface">
+      {/* Canvas + бічна панель вузла: панель відкривається колонкою, а дерево
+          стискається й зсувається, а не ховається під вікном. */}
+      <div className="flex min-h-0 flex-1">
+      <div className="relative min-w-0 flex-1 overflow-hidden bg-surface">
         <SkillTreeBackdrop url={activeSettings.background_url} />
         <svg
           ref={svgRef}
@@ -735,21 +739,6 @@ export default function SkillTree() {
           </div>
         )}
 
-        {/* Detail panel (view mode / non-GM) */}
-        {selectedNode && !nodeForm && (
-          <NodePanel
-            node={selectedNode}
-            nodes={nodes}
-            edges={edges}
-            level={levels[selectedNode.id]}
-            isGM={isGM}
-            grantCatalogs={grantCatalogs}
-            onEdit={openEditNodeForm}
-            onDelete={handleDeleteNode}
-            onClose={() => setSelectedNode(null)}
-          />
-        )}
-
         {/* Layout + background of the active tab */}
         {isGM && (
           <SkillTreeViewSheet
@@ -814,6 +803,21 @@ export default function SkillTree() {
             onClose={() => setEdgeModalId(null)}
           />
         )}
+      </div>
+
+      {/* Detail panel (view mode / non-GM) */}
+      <NodePanel
+        open={!!selectedNode && !nodeForm}
+        node={selectedNode}
+        nodes={nodes}
+        edges={edges}
+        level={selectedNode ? levels[selectedNode.id] : undefined}
+        isGM={isGM}
+        grantCatalogs={grantCatalogs}
+        onEdit={openEditNodeForm}
+        onDelete={handleDeleteNode}
+        onClose={() => setSelectedNode(null)}
+      />
       </div>
 
       {nodeForm && (
@@ -979,7 +983,8 @@ function TtBadge({ children }) {
   return <span className="inline-block rounded bg-bg px-2 py-0.5 text-xs text-text-dim">{children}</span>;
 }
 // ── Node detail panel (view mode / non-GM click) ────────────────────
-function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onDelete, onClose }) {
+function NodePanel({ open, node, nodes, edges, level, isGM, grantCatalogs, onEdit, onDelete, onClose }) {
+  if (!open || !node) return null;
   const prereqEdges = edges.filter((e) => e.target_id === node.id);
   const prereqs = prereqEdges
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
@@ -993,7 +998,7 @@ function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onD
   const grantsUnlock = grantList.filter((g) => g.mode === 'unlock');
 
   return (
-    <Sheet open onClose={onClose} title={node.title}>
+    <SidePanel open onClose={onClose} title={node.title}>
       <div className="mb-3 flex items-start gap-3">
         {node.icon && (
           isIconUrl(node.icon)
@@ -1074,7 +1079,7 @@ function NodePanel({ node, nodes, edges, level, isGM, grantCatalogs, onEdit, onD
           <Button variant="danger" onClick={() => onDelete(node.id)}><Trash2 size={15} /> Видалити</Button>
         </div>
       )}
-    </Sheet>
+    </SidePanel>
   );
 }
 

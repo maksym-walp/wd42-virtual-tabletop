@@ -14,7 +14,27 @@ async function setParticipants(eventId, participantIds) {
   );
 }
 
+// Типи подій задає адмін (admin.site_configs, ключ event_types — міграція
+// 103): [{ key, label, color }]. Колір події береться з її типу під час
+// читання, тож зміна кольору типу перефарбовує всі його події; власний колір
+// події (own_color) — запасний, для подій без типу/з видаленим типом.
+async function getEventTypes() {
+  const { rows } = await pool.query(`SELECT value FROM admin.site_configs WHERE key = 'event_types'`);
+  return rows[0]?.value || [];
+}
+
+function withTypeColors(events, types) {
+  const colorByKey = new Map(types.map((t) => [t.key, t.color]));
+  return events.map((e) => ({
+    ...e,
+    own_color: e.color,
+    color: (e.event_type && colorByKey.get(e.event_type)) || e.color,
+  }));
+}
+
 const ChronologyEventModel = {
+  getEventTypes,
+
   // campaignId omitted/null -> only global lore events (campaign_id IS NULL).
   // campaignId set -> global events PLUS that campaign's own events.
   // includePrivate -> managers (admin/game_master) see is_public=false
@@ -66,7 +86,8 @@ const ChronologyEventModel = {
       if (!byEvent.has(event_id)) byEvent.set(event_id, []);
       byEvent.get(event_id).push(entry_id);
     }
-    return rows.map((r) => ({ ...r, participant_ids: byEvent.get(r.id) || [] }));
+    const types = await getEventTypes();
+    return withTypeColors(rows.map((r) => ({ ...r, participant_ids: byEvent.get(r.id) || [] })), types);
   },
 
   // month_id/end_month_id must belong to the same calendar — same guard as
@@ -83,23 +104,24 @@ const ChronologyEventModel = {
     const {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
-      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids,
+      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids, event_type,
     } = data;
 
     const { rows } = await pool.query(
       `INSERT INTO chronology.calendar_events
          (calendar_id, campaign_id, name, description, color, is_public, year, month_id, day, recurrence,
-          location_id, region, end_year, end_month_id, end_day, duration_display)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          location_id, region, end_year, end_month_id, end_day, duration_display, event_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING *`,
       [calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
         location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
-        duration_display ?? 'start']
+        duration_display ?? 'start', event_type || null]
     );
     const event = rows[0];
     await setParticipants(event.id, participant_ids);
-    return { ...event, participant_ids: participant_ids || [] };
+    const [withColor] = withTypeColors([{ ...event, participant_ids: participant_ids || [] }], await getEventTypes());
+    return withColor;
   },
 
   // newCalendarId — перенесення події в інший календар (за чиєю структурою
@@ -108,7 +130,7 @@ const ChronologyEventModel = {
     const {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
-      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids,
+      location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids, event_type,
     } = data;
 
     const { rows } = await pool.query(
@@ -116,17 +138,18 @@ const ChronologyEventModel = {
        SET calendar_id=$18, campaign_id=$3, name=$4, description=$5, color=$6, is_public=$7,
            year=$8, month_id=$9, day=$10, recurrence=$11,
            location_id=$12, region=$13, end_year=$14, end_month_id=$15, end_day=$16,
-           duration_display=$17, updated_at=NOW()
+           duration_display=$17, event_type=$19, updated_at=NOW()
        WHERE id=$1 AND calendar_id=$2
        RETURNING *`,
       [id, calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
         location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
-        duration_display ?? 'start', newCalendarId]
+        duration_display ?? 'start', newCalendarId, event_type || null]
     );
     if (!rows[0]) return null;
     await setParticipants(id, participant_ids);
-    return { ...rows[0], participant_ids: participant_ids || [] };
+    const [withColor] = withTypeColors([{ ...rows[0], participant_ids: participant_ids || [] }], await getEventTypes());
+    return withColor;
   },
 
   // Every event (across all calendars the viewer can see) that lists this
@@ -157,7 +180,7 @@ const ChronologyEventModel = {
        ORDER BY c.name ASC, e.year ASC NULLS LAST, m.order_num ASC NULLS LAST, e.day ASC NULLS LAST, e.name ASC`,
       [entryId, userId]
     );
-    return rows;
+    return withTypeColors(rows, await getEventTypes());
   },
 
   async findById(id, calendarId) {
@@ -166,6 +189,25 @@ const ChronologyEventModel = {
       [id, calendarId]
     );
     return rows[0] || null;
+  },
+
+  // Одна подія календаря з учасниками й кольором типу — для сторінки події.
+  // Видимість календаря й події перевіряє контролер.
+  async findDetailed(id, calendarId) {
+    const { rows } = await pool.query(
+      `SELECT * FROM chronology.calendar_events WHERE id = $1 AND calendar_id = $2`,
+      [id, calendarId]
+    );
+    if (!rows[0]) return null;
+    const { rows: participantRows } = await pool.query(
+      `SELECT entry_id FROM chronology.calendar_event_participants WHERE event_id = $1`,
+      [id]
+    );
+    const [event] = withTypeColors(
+      [{ ...rows[0], participant_ids: participantRows.map((r) => r.entry_id) }],
+      await getEventTypes()
+    );
+    return event;
   },
 
   // Point add/remove of a single participant — used from an NPC's page,

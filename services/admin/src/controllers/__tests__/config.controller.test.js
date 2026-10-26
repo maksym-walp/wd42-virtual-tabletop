@@ -275,3 +275,42 @@ describe('ConfigController.update — character_races', () => {
     expect(ConfigModel.upsert).not.toHaveBeenCalled();
   });
 });
+
+describe('ConfigController.update — event_types', () => {
+  const put = (value) => ({ params: { key: 'event_types' }, body: { value } });
+
+  beforeEach(() => {
+    ConfigModel.upsert.mockImplementation(async (key, value) => ({ key, value }));
+  });
+
+  it('200 for valid types with colors', async () => {
+    const res = mockRes();
+    await ConfigController.update(mockReq(put([{ key: 'battle', label: 'Битва', color: '#d9534f' }])), res);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(ConfigModel.upsert).toHaveBeenCalled();
+  });
+
+  it('200 for an empty list (events fall back to their own color)', async () => {
+    const res = mockRes();
+    await ConfigController.update(mockReq(put([])), res);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(ConfigModel.upsert).toHaveBeenCalledWith('event_types', []);
+  });
+
+  it('400 for a missing or malformed color', async () => {
+    for (const color of [undefined, 'red', '#fff']) {
+      const res = mockRes();
+      await ConfigController.update(mockReq(put([{ key: 'battle', label: 'Битва', color }])), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+    }
+    expect(ConfigModel.upsert).not.toHaveBeenCalled();
+  });
+
+  it('400 for duplicate keys', async () => {
+    const res = mockRes();
+    await ConfigController.update(mockReq(put([
+      { key: 'a', label: 'A', color: '#000000' }, { key: 'a', label: 'B', color: '#111111' },
+    ])), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});

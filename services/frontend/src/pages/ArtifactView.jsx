@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Download, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import api from '../api/client';
 import { ARTIFACT_TYPE, RARITIES } from '../constants/artifacts';
 import { recordView, removeView } from '../utils/recentlyViewed';
-import { downloadJsonFile } from '../utils/downloadJson';
 import { downloadArtifactCardJpeg } from '../utils/artifactCardImage';
 import Button from '../components/ui/Button';
 import AuthorBadge from '../components/AuthorBadge';
@@ -12,6 +11,7 @@ import CanonicalSwitch from '../components/CanonicalSwitch';
 import SmartTextReader from '../components/SmartTextReader';
 import { useAuth } from '../context/AuthContext';
 import ShareButton from '../components/ShareButton';
+import ExportRecordButton from '../components/ExportRecordButton';
 import CroppedImage from '../components/ui/CroppedImage';
 
 export default function ArtifactView() {
@@ -43,15 +43,6 @@ export default function ArtifactView() {
       navigate('/equipment/artifacts');
     } catch {
       setDeleting(false);
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      const { data } = await api.get(`/api/equipment/export?id=${id}`);
-      downloadJsonFile(data, `artifact_${id}.json`);
-    } catch {
-      alert('Не вдалося експортувати артефакт');
     }
   };
 
@@ -94,92 +85,93 @@ export default function ArtifactView() {
   const rarity = RARITIES[artifact.rarity];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <Link to="/equipment/artifacts" className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Артефакти
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        {artifact.image_url && (
-          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <CroppedImage src={artifact.image_url} crop={artifact.image_crop} alt={artifact.name} />
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
-          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
-            {ARTIFACT_TYPE.label}
-          </span>
-          {rarity && (
-            <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
-              {rarity.label}
-            </span>
+      {/* Макет як у заклинань: ліворуч — зображення, назва, творець, автор;
+          праворуч — вартість, опис, дії. На мобільному — одна колонка. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
+          {artifact.image_url && (
+            <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+              <CroppedImage src={artifact.image_url} crop={artifact.image_crop} alt={artifact.name} />
+            </div>
           )}
-          <span className={`text-xs italic ${artifact.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
-            {artifact.is_canonical ? 'канонічне' : 'спільнота'}
-          </span>
-          {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
-          <div className="ml-auto flex items-center gap-4">
-            <button
-              type="button" onClick={handleExportJpeg} disabled={exportingJpeg}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent disabled:opacity-60"
-              title="Картка 80×120 мм у форматі JPEG"
-            >
-              <ImageIcon size={14} /> {exportingJpeg ? 'Створення...' : 'Картка JPEG'}
-            </button>
-            <button
-              type="button" onClick={handleExport}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-dim hover:text-accent"
-            >
-              <Download size={14} /> Експорт
-            </button>
+
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+            <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+              {ARTIFACT_TYPE.label}
+            </span>
+            {rarity && (
+              <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+                {rarity.label}
+              </span>
+            )}
+            <span className={`text-xs italic ${artifact.is_canonical ? 'text-gold' : 'text-text-dim'}`}>
+              {artifact.is_canonical ? 'канонічне' : 'спільнота'}
+            </span>
+            {artifact.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
           </div>
+
+          <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
+            <h1 className="font-display text-3xl text-accent">{artifact.name}</h1>
+            <div className="mt-1 flex shrink-0 items-center">
+              <button
+                type="button" onClick={handleExportJpeg} disabled={exportingJpeg}
+                className="inline-flex shrink-0 items-center rounded-md p-1.5 text-text-dim transition-colors hover:bg-surface-hover hover:text-accent disabled:opacity-60"
+                title={exportingJpeg ? 'Створення...' : 'Картка 80×120 мм у форматі JPEG'}
+                aria-label="Картка JPEG"
+              >
+                <ImageIcon size={16} />
+              </button>
+              <ExportRecordButton url={`/api/equipment/export?id=${id}`} filename={`artifact_${id}.json`} />
+              <ShareButton />
+            </div>
+          </div>
+          {artifact.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {artifact.creator}</p>}
+          <AuthorBadge
+            username={artifact.owner_username}
+            size="sm"
+            className="px-5 pb-4"
+            onChangeOwner={isAdmin ? handleSetOwner : undefined}
+          />
         </div>
 
-        <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-4">
-          <h1 className="font-display text-3xl text-accent">{artifact.name}</h1>
-          <ShareButton className="mt-1" />
-        </div>
-        {artifact.creator && <p className="px-5 pb-2 text-sm italic text-text-dim">Творець: {artifact.creator}</p>}
-        <AuthorBadge
-          username={artifact.owner_username}
-          size="sm"
-          className="px-5 pb-2"
-          onChangeOwner={isAdmin ? handleSetOwner : undefined}
-        />
-
-        {artifact.price != null && (
-          <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3">
+        <div className="self-start overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-3">
+            {rarity && <SheetStat label="Рідкісність" value={rarity.label} />}
             <SheetStat label="Орієнтовна вартість" value={artifact.price} />
           </div>
-        )}
 
-        {artifact.description && (
-          <Section title="Опис">
-            <SmartTextReader text={artifact.description} className="text-[0.95rem] leading-relaxed text-text" />
-          </Section>
-        )}
+          {artifact.description && (
+            <Section title="Опис">
+              <SmartTextReader text={artifact.description} className="text-[0.95rem] leading-relaxed text-text" />
+            </Section>
+          )}
 
-        {(artifact.is_owner || isAdmin || canManageCanonical) && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
-            {(artifact.is_owner || isAdmin) && (
-              <>
-                <Button variant="ghost" to={`/equipment/artifacts/${id}/edit`}>Редагувати</Button>
-                <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? 'Видалення...' : 'Видалити'}
-                </Button>
-              </>
-            )}
-            {canManageCanonical && (
-              <CanonicalSwitch
-                className="ml-auto"
-                checked={!!artifact.is_canonical}
-                disabled={settingCanonical}
-                onChange={handleSetCanonical}
-              />
-            )}
-          </div>
-        )}
+          {(artifact.is_owner || isAdmin || canManageCanonical) && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4">
+              {(artifact.is_owner || isAdmin) && (
+                <>
+                  <Button variant="ghost" to={`/equipment/artifacts/${id}/edit`}>Редагувати</Button>
+                  <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                    {deleting ? 'Видалення...' : 'Видалити'}
+                  </Button>
+                </>
+              )}
+              {canManageCanonical && (
+                <CanonicalSwitch
+                  className="ml-auto"
+                  checked={!!artifact.is_canonical}
+                  disabled={settingCanonical}
+                  onChange={handleSetCanonical}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -157,6 +157,20 @@ const chronologyApi = {
     await api.delete(`${BASE}/${id}/events/${eventId}`);
   },
 
+  // Типи подій (назва + колір) — задаються в адмін-панелі.
+  async listEventTypes() {
+    const { data } = await api.get(`${BASE}/event-types`);
+    return data.event_types;
+  },
+
+  // Одна подія календаря (сторінка події); campaignId — якщо відкрито з
+  // контексту кампанії, щоб побачити й її власні події.
+  async getEvent(id, eventId, campaignId) {
+    const params = campaignId ? { campaign_id: campaignId } : {};
+    const { data } = await api.get(`${BASE}/${id}/events/${eventId}`, { params });
+    return data.event;
+  },
+
   // Усі видимі події (у всіх календарях), де entryId — учасник (НІП/істота).
   // Кожна подія несе calendar_name/month_name/end_month_name для підпису дати.
   async listEventsByParticipant(entryId) {

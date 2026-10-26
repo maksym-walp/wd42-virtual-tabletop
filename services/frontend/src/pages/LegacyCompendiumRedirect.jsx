@@ -31,12 +31,19 @@ export function LegacyFactionRedirect() {
 }
 
 // /chronology/:id/events -> /chronology/events?calendar=:id — «Події» тепер
-// окрема вкладка сервісу, а не підвкладка календаря; ?event= і ?campaign_id=
-// із внутрішніх посилань зберігаються.
+// окрема вкладка сервісу, а не підвкладка календаря; ?campaign_id= із
+// внутрішніх посилань зберігається, а ?event= веде на сторінку події.
 export function LegacyCalendarEventsRedirect() {
   const { id } = useParams();
   const { search } = useLocation();
   const params = new URLSearchParams(search);
+  // ?event=<id> — посилання на конкретну подію: тепер вона має власну сторінку.
+  const eventId = params.get('event');
+  if (eventId) {
+    params.delete('event');
+    const qs = params.toString();
+    return <Navigate to={`/chronology/${id}/events/${eventId}${qs ? `?${qs}` : ''}`} replace />;
+  }
   params.set('calendar', id);
   return <Navigate to={`/chronology/events?${params}`} replace />;
 }

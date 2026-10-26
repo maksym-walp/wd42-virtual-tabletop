@@ -13,23 +13,27 @@ const CampaignSessionModel = {
     return rows;
   },
 
-  async add(campaignId, { title, content, session_date }) {
+  async add(campaignId, { title, content, session_date, visited_locations, related_events, npcs }) {
     const { rows } = await pool.query(
-      `INSERT INTO campaigns.campaign_sessions (campaign_id, title, content, session_date)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO campaigns.campaign_sessions
+         (campaign_id, title, content, session_date, visited_locations, related_events, npcs)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [campaignId, title, content ?? null, session_date ?? null]
+      [campaignId, title, content ?? null, session_date ?? null,
+        visited_locations ?? null, related_events ?? null, npcs ?? null]
     );
     return rows[0];
   },
 
-  async update(id, campaignId, { title, content, session_date }) {
+  async update(id, campaignId, { title, content, session_date, visited_locations, related_events, npcs }) {
     const { rows } = await pool.query(
       `UPDATE campaigns.campaign_sessions
-       SET title = $3, content = $4, session_date = $5, updated_at = NOW()
+       SET title = $3, content = $4, session_date = $5,
+           visited_locations = $6, related_events = $7, npcs = $8, updated_at = NOW()
        WHERE id = $1 AND campaign_id = $2
        RETURNING *`,
-      [id, campaignId, title, content ?? null, session_date ?? null]
+      [id, campaignId, title, content ?? null, session_date ?? null,
+        visited_locations ?? null, related_events ?? null, npcs ?? null]
     );
     return rows[0] || null;
   },

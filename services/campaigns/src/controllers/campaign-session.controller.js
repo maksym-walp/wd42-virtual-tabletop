@@ -19,10 +19,12 @@ const CampaignSessionController = {
     if (!campaign) return;
     if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
-    const { title, content, session_date } = req.body;
+    const { title, content, session_date, visited_locations, related_events, npcs } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ message: 'title є обовʼязковим' });
 
-    const session = await CampaignSessionModel.add(campaign.id, { title: title.trim(), content, session_date });
+    const session = await CampaignSessionModel.add(campaign.id, {
+      title: title.trim(), content, session_date, visited_locations, related_events, npcs,
+    });
     bus.publish(campaign.id, 'sessions');
     res.status(201).json({ session });
   },
@@ -32,11 +34,11 @@ const CampaignSessionController = {
     if (!campaign) return;
     if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 
-    const { title, content, session_date } = req.body;
+    const { title, content, session_date, visited_locations, related_events, npcs } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ message: 'title є обовʼязковим' });
 
     const session = await CampaignSessionModel.update(req.params.sessionId, campaign.id, {
-      title: title.trim(), content, session_date,
+      title: title.trim(), content, session_date, visited_locations, related_events, npcs,
     });
     if (!session) return res.status(404).json({ message: 'Сесію не знайдено' });
     bus.publish(campaign.id, 'sessions');

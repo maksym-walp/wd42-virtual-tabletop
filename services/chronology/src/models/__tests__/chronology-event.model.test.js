@@ -93,11 +93,11 @@ describe('ChronologyEventModel.create', () => {
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Битва за Гарію', null, '#ff0000', true, null, null, null, 'none',
-      null, null, null, null, null, 'start',
+      null, null, null, null, null, 'start', null,
     ]);
     expect(pool.query.mock.calls[1][0]).toMatch(/DELETE FROM chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[1][1]).toEqual(['e1']);
-    expect(pool.query).toHaveBeenCalledTimes(2); // delete only, no insert — no participants given
+    expect(pool.query).toHaveBeenCalledTimes(3); // delete + event types lookup, no insert — no participants given
     expect(event).toEqual({ id: 'e1', participant_ids: [] });
   });
 
@@ -112,10 +112,53 @@ describe('ChronologyEventModel.create', () => {
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Облога Гарії', null, '#4caf50', true, 100, 'm1', 1, 'none',
-      'loc-1', null, 100, 'm2', 5, 'every_day',
+      'loc-1', null, 100, 'm2', 5, 'every_day', null,
     ]);
     expect(pool.query.mock.calls[2][0]).toMatch(/INSERT INTO chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[2][1]).toEqual(['e1', 'npc-1', 'npc-2']);
+  });
+});
+
+describe('event types', () => {
+  const types = { rows: [{ value: [{ key: 'battle', label: 'Битва', color: '#d9534f' }] }] };
+
+  it('paints an event with its type color and keeps the own color as a fallback', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [
+        { id: 'e1', color: '#000000', event_type: 'battle' },
+        { id: 'e2', color: '#111111', event_type: null },
+        { id: 'e3', color: '#222222', event_type: 'removed' },
+      ] })
+      .mockResolvedValueOnce({ rows: [] }) // participants
+      .mockResolvedValueOnce(types);
+
+    const result = await ChronologyEventModel.findAllByCalendar('cal-1');
+
+    expect(result.map((e) => e.color)).toEqual(['#d9534f', '#111111', '#222222']);
+    expect(result[0].own_color).toBe('#000000');
+  });
+
+  it('stores event_type on create (empty string means no type)', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'e1', color: '#000000', event_type: 'battle' }] });
+    await ChronologyEventModel.create('cal-1', { name: 'x', color: '#000000', event_type: 'battle' });
+    expect(pool.query.mock.calls[0][1][16]).toBe('battle');
+
+    pool.query.mockClear();
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'e2' }] });
+    await ChronologyEventModel.create('cal-1', { name: 'x', color: '#000000', event_type: '' });
+    expect(pool.query.mock.calls[0][1][16]).toBeNull();
+  });
+
+  it('findDetailed returns null for an unknown id, else the event with participants and type color', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    await expect(ChronologyEventModel.findDetailed('nope', 'cal-1')).resolves.toBeNull();
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: 'e1', color: '#000000', event_type: 'battle' }] })
+      .mockResolvedValueOnce({ rows: [{ entry_id: 'npc-1' }] })
+      .mockResolvedValueOnce(types);
+    const event = await ChronologyEventModel.findDetailed('e1', 'cal-1');
+    expect(event).toMatchObject({ id: 'e1', color: '#d9534f', own_color: '#000000', participant_ids: ['npc-1'] });
   });
 });
 
@@ -126,9 +169,10 @@ describe('ChronologyEventModel.update calendar move', () => {
     expect(pool.query.mock.calls[0][1][17]).toBe('cal-1');
     expect(pool.query.mock.calls[0][0]).toMatch(/SET calendar_id=\$18/);
     await ChronologyEventModel.update('e1', 'cal-1', { name: 'x', color: '#000000' }, 'cal-2');
-    expect(pool.query.mock.calls[2][1][17]).toBe('cal-2');
-    expect(pool.query.mock.calls[2][1][0]).toBe('e1');
-    expect(pool.query.mock.calls[2][1][1]).toBe('cal-1');
+    // Кожен update — це UPDATE, DELETE учасників і читання типів подій.
+    expect(pool.query.mock.calls[3][1][17]).toBe('cal-2');
+    expect(pool.query.mock.calls[3][1][0]).toBe('e1');
+    expect(pool.query.mock.calls[3][1][1]).toBe('cal-1');
   });
 });
 

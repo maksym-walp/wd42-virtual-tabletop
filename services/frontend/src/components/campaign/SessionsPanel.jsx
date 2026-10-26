@@ -1,54 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Trash2, Lock, Plus } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 import campaignApi from '../../api/campaigns';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Field, { inputClass } from '../ui/Field';
-import EmptyState from '../ui/EmptyState';
 import Sheet from '../ui/Sheet';
 import SmartTextarea from '../ui/SmartTextarea';
 import SmartTextReader from '../SmartTextReader';
-import { ARCHETYPES } from '../../constants/characterSheet';
-import { raceLabel } from '../../utils/characterRace';
 
 // ================================================================
-// Головна: назва й опис, попередні сесії, картки персонажів.
-// sessionsVersion змінюється на real-time подію 'sessions' — тоді список
-// сесій перезапитується.
+// Попередні сесії: записи майстра про минулі сесії. Живуть під календарем
+// на Столі; version змінюється на real-time подію 'sessions' — тоді список
+// перезапитується. Локації, події й НІПи — ті самі rich-text поля, що й опис:
+// у них вставляються посилання-чипи на записи сайту.
 // ================================================================
 
-export default function HomeTab({ campaign, characters, isGm, navigate, sessionsVersion }) {
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="flex min-w-0 flex-col gap-6">
-        <CampaignAbout campaign={campaign} />
-        <Card>
-          <SessionsPanel campaignId={campaign.id} isGm={isGm} version={sessionsVersion} />
-        </Card>
-      </div>
-      <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-        <CharactersBlock characters={characters} navigate={navigate} />
-      </aside>
-    </div>
-  );
-}
+// session_date приходить як ISO-рядок (DATE → UTC-північ); показуємо лише день.
+const formatDate = (value) => {
+  const [y, m, d] = String(value).slice(0, 10).split('-');
+  return y && m && d ? `${d}.${m}.${y}` : String(value);
+};
 
-function CampaignAbout({ campaign }) {
-  return (
-    <Card>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Майстер</p>
-      <p className="mb-4 text-sm text-text">{campaign.gm_username}</p>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Опис кампанії</p>
-      {campaign.description ? (
-        <SmartTextReader text={campaign.description} className="text-sm text-text" />
-      ) : (
-        <p className="text-sm text-text-dim">Опису ще немає.</p>
-      )}
-    </Card>
-  );
-}
+const LINK_FIELDS = [
+  { key: 'visited_locations', label: 'Відвідані локації', hint: 'Посилання на локації — кнопка «Запис» або @' },
+  { key: 'related_events', label: 'Пов’язані події', hint: 'Події хронології — кнопка «Запис» або @' },
+  { key: 'npcs', label: 'НІПи', hint: 'Персонажі майстра — кнопка «Запис» або @' },
+];
 
-function SessionsPanel({ campaignId, isGm, version }) {
+export default function SessionsPanel({ campaignId, isGm, version }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -71,7 +50,7 @@ function SessionsPanel({ campaignId, isGm, version }) {
   };
 
   return (
-    <div>
+    <Card className="p-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="m-0 font-display text-base text-text">Попередні сесії</h3>
         {isGm && (
@@ -95,7 +74,7 @@ function SessionsPanel({ campaignId, isGm, version }) {
           {isGm ? 'Додайте запис про минулу сесію.' : 'Майстер ще не додав записів про сесії.'}
         </p>
       ) : (
-        <ul className="flex max-h-[32rem] flex-col gap-2 overflow-y-auto">
+        <ul className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto">
           {sessions.map((s) => (
             <li key={s.id}>
               <button
@@ -104,7 +83,7 @@ function SessionsPanel({ campaignId, isGm, version }) {
                 className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-accent/50"
               >
                 <p className="truncate text-sm text-text">{s.title}</p>
-                {s.session_date && <p className="text-xs text-text-dim">{s.session_date}</p>}
+                {s.session_date && <p className="text-xs text-text-dim">{formatDate(s.session_date)}</p>}
               </button>
             </li>
           ))}
@@ -119,7 +98,7 @@ function SessionsPanel({ campaignId, isGm, version }) {
         onSaved={() => { setSheetSession(null); refresh(); }}
         onDeleted={handleDeleted}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -128,6 +107,7 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [date, setDate] = useState('');
+  const [links, setLinks] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -136,6 +116,7 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
     setTitle(session.title ?? '');
     setContent(session.content ?? '');
     setDate(session.session_date ? String(session.session_date).slice(0, 10) : '');
+    setLinks(Object.fromEntries(LINK_FIELDS.map((f) => [f.key, session[f.key] ?? ''])));
     setError('');
   }, [session]);
 
@@ -146,7 +127,7 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
     setSaving(true);
     setError('');
     try {
-      const payload = { title: title.trim(), content, session_date: date || null };
+      const payload = { title: title.trim(), content, session_date: date || null, ...links };
       if (isNew) await campaignApi.addSession(campaignId, payload);
       else await campaignApi.updateSession(campaignId, session.id, payload);
       onSaved();
@@ -178,6 +159,10 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
             <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <SmartTextarea label="Опис / нотатки" rows={6} value={content} onChange={(e) => setContent(e.target.value)} />
+          {LINK_FIELDS.map((f) => (
+            <SmartTextarea key={f.key} label={f.label} hint={f.hint} rows={2} value={links[f.key] ?? ''}
+              onChange={(e) => setLinks((prev) => ({ ...prev, [f.key]: e.target.value }))} />
+          ))}
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex items-center justify-between gap-2">
             {!isNew && (
@@ -192,47 +177,20 @@ function SessionSheet({ session, isGm, campaignId, onClose, onSaved, onDeleted }
         </div>
       ) : (
         <div>
-          {session.session_date && <p className="mb-2 text-xs text-text-dim">{session.session_date}</p>}
+          {session.session_date && <p className="mb-2 text-xs text-text-dim">{formatDate(session.session_date)}</p>}
           {session.content ? (
             <SmartTextReader text={session.content} className="text-sm text-text" />
           ) : (
             <p className="text-sm text-text-dim">Без опису.</p>
           )}
+          {LINK_FIELDS.filter((f) => session[f.key]).map((f) => (
+            <div key={f.key} className="mt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">{f.label}</p>
+              <SmartTextReader text={session[f.key]} className="text-sm text-text" />
+            </div>
+          ))}
         </div>
       )}
     </Sheet>
-  );
-}
-
-function CharactersBlock({ characters, navigate }) {
-  return (
-    <div>
-      <h3 className="mb-2 font-display text-base text-text">Персонажі кампанії</h3>
-      {characters.length === 0 ? (
-        <EmptyState title="До кампанії ще не приєднано жодного персонажа" />
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-          {characters.map((ch) => {
-            const clickable = !ch.is_private;
-            return (
-              <Card
-                key={ch.character_id}
-                className={clickable ? 'cursor-pointer hover:border-accent/50' : 'opacity-80'}
-                onClick={clickable ? () => navigate(`/characters/${ch.character_id}`) : undefined}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-base text-text">{ch.character_name}</h3>
-                  {ch.is_private && <Lock size={14} className="mt-1 shrink-0 text-text-dim" aria-label="Приватний персонаж" />}
-                </div>
-                <p className="text-sm text-text-dim">{ARCHETYPES[ch.archetype]?.label ?? ch.archetype} · {raceLabel(ch)}</p>
-                <p className="mt-2 text-xs text-text-dim">
-                  Гравець: {ch.owner_username} {ch.is_mine && <span className="text-accent">(ви)</span>}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
   );
 }

@@ -47,7 +47,7 @@ export default function NpcEventsSection({ npcId, Section, who = 'НІПа', emp
           <li key={event.id} className="flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2">
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: event.color }} />
             <div className="min-w-0 flex-1">
-              <Link to={`/chronology/events?calendar=${event.calendar_id}`} className="text-sm font-semibold text-text hover:text-accent">
+              <Link to={`/chronology/${event.calendar_id}/events/${event.id}`} className="text-sm font-semibold text-text hover:text-accent">
                 {event.name}
               </Link>
               <p className="text-xs text-text-dim">{participantEventDate(event)} · {event.calendar_name}</p>

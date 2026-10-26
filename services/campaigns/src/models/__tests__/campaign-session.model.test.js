@@ -27,14 +27,24 @@ describe('CampaignSessionModel.add', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO campaigns\.campaign_sessions/);
     expect(sql).toMatch(/RETURNING \*/);
-    expect(params).toEqual(['c1', 'Session 1', 'They fought a dragon', '2024-01-01']);
+    expect(params).toEqual(['c1', 'Session 1', 'They fought a dragon', '2024-01-01', null, null, null]);
   });
 
   it('defaults content and session_date to null when omitted', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 's1' }] });
     await CampaignSessionModel.add('c1', { title: 'Session 1' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['c1', 'Session 1', null, null]);
+    expect(params).toEqual(['c1', 'Session 1', null, null, null, null, null]);
+  });
+});
+
+describe('CampaignSessionModel links fields', () => {
+  it('stores visited locations, related events and NPCs on add and update', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 's1' }] });
+    await CampaignSessionModel.add('c1', { title: 'T', visited_locations: 'L', related_events: 'E', npcs: 'N' });
+    expect(pool.query.mock.calls[0][1]).toEqual(['c1', 'T', null, null, 'L', 'E', 'N']);
+    await CampaignSessionModel.update('s1', 'c1', { title: 'T', visited_locations: 'L', related_events: 'E', npcs: 'N' });
+    expect(pool.query.mock.calls[1][1]).toEqual(['s1', 'c1', 'T', null, null, 'L', 'E', 'N']);
   });
 });
 
@@ -45,7 +55,7 @@ describe('CampaignSessionModel.update', () => {
     expect(session).toEqual({ id: 's1', title: 'Updated' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/WHERE id = \$1 AND campaign_id = \$2/);
-    expect(params).toEqual(['s1', 'c1', 'Updated', 'New recap', '2024-02-01']);
+    expect(params).toEqual(['s1', 'c1', 'Updated', 'New recap', '2024-02-01', null, null, null]);
   });
 
   it('returns null when nothing matched', async () => {

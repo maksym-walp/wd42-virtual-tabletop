@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import useEventTypes from '../../hooks/useEventTypes';
 import chronologyApi from '../../api/chronology';
 import { totalDaysSinceEpoch, DURATION_DISPLAY_LABELS } from '../../utils/chronologyMath';
 import { EVENT_COLOR_PRESETS } from '../../constants/chronologyColors';
@@ -13,11 +14,10 @@ import SmartTextarea from '../ui/SmartTextarea';
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 
-// Shared create/edit form for a chronology event — used both by
-// ChronologyView.jsx's "click a day → add event" flow (via `initialDate`,
-// still editable rather than locked to the clicked cell) and by
-// ChronologyEvents.jsx's standalone "Додати подію"/edit-a-row flow (via
-// `event`). `calendars` (рядки chronologyApi.list() зі структурою в
+// Create/edit form for a chronology event — the body of the event form page
+// (pages/ChronologyEventForm.jsx). `initialDate` prefills the date when the
+// page is opened from a calendar day (still editable rather than locked to
+// the clicked cell); `event` is the event being edited. `calendars` (рядки chronologyApi.list() зі структурою в
 // preview_months)/`locations`/`characterOptions` are fetched once by the
 // caller and passed down so opening the form doesn't refetch them.
 //
@@ -36,7 +36,13 @@ export default function EventForm({
 
   const [name, setName] = useState(event?.name || '');
   const [description, setDescription] = useState(event?.description || '');
-  const [color, setColor] = useState(event?.color || '#e0a020');
+  // Тип події задає адмін (панель адміністратора), і колір події — це колір її
+  // типу; власний колір лишається для подій без типу. own_color — збережений
+  // власний колір (color у відповіді вже підмінено кольором типу).
+  const { eventTypes } = useEventTypes();
+  const [eventType, setEventType] = useState(event?.event_type || '');
+  const activeType = eventTypes.find((t) => t.key === eventType);
+  const [color, setColor] = useState(event?.own_color || event?.color || '#e0a020');
   const [isPublic, setIsPublic] = useState(event?.is_public ?? true);
   const [recurrence, setRecurrence] = useState(event?.recurrence || 'none');
 
@@ -87,7 +93,7 @@ export default function EventForm({
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Вкажіть назву події'); return; }
-    if (!HEX_COLOR_RE.test(color)) { setError('Колір має бути у форматі #rrggbb'); return; }
+    if (!activeType && !HEX_COLOR_RE.test(color)) { setError('Колір має бути у форматі #rrggbb'); return; }
 
     if (isDuration && year && monthId && day && endYear && endMonthId && endDay) {
       const startIdx = months.findIndex((m) => m.id === monthId);
@@ -106,7 +112,8 @@ export default function EventForm({
         campaign_id: campaignId || null,
         name: name.trim(),
         description: description || null,
-        color,
+        color: activeType ? activeType.color : color,
+        event_type: activeType ? activeType.key : null,
         is_public: isPublic,
         year: year === '' ? null : Number(year),
         month_id: monthId || null,
@@ -237,7 +244,23 @@ export default function EventForm({
         />
       </Field>
 
-      <ColorField label="Колір" value={color} onChange={setColor} presets={EVENT_COLOR_PRESETS} />
+      {eventTypes.length > 0 && (
+        <Field
+          label="Тип події"
+          hint="Колір події визначається її типом — типи й кольори налаштовує адміністратор."
+        >
+          <div className="flex items-center gap-2">
+            {activeType && (
+              <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: activeType.color }} aria-hidden />
+            )}
+            <select className={inputClass} value={activeType ? eventType : ''} onChange={(e) => setEventType(e.target.value)}>
+              <option value="">Без типу (власний колір)</option>
+              {eventTypes.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </div>
+        </Field>
+      )}
+      {!activeType && <ColorField label="Колір" value={color} onChange={setColor} presets={EVENT_COLOR_PRESETS} />}
       <Field label="Повторення">
         <select className={inputClass} value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
           {Object.entries(RECURRENCE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}

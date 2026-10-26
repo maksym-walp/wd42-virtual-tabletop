@@ -5,6 +5,7 @@ import { inputClass } from '../ui/Field';
 import Button from '../ui/Button';
 import { invalidateCharacterConfig } from '../../hooks/useCharacterConfig';
 import { invalidateMagicForms } from '../../hooks/useMagicForms';
+import { invalidateEventTypes } from '../../hooks/useEventTypes';
 import compendiumApi from '../../api/compendium';
 import { CHARACTERISTICS } from '../../constants/characterSheet';
 
@@ -479,6 +480,69 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
           </div>
         );
       })}
+    </ConfigShell>
+  );
+}
+
+// ── Типи подій хронології ────────────────────────────────────────────────────
+
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+
+function validateEventTypes(value) {
+  if (!value.length) return null; // порожній список коректний — події користуються власним кольором
+  const keysError = checkKeys(value, 'тип');
+  if (keysError) return keysError;
+  const bad = value.find((t) => !HEX_COLOR_RE.test(t.color || ''));
+  return bad ? `«${bad.label}»: колір має бути у форматі #rrggbb` : null;
+}
+
+export function EventTypesConfigCard({ config, onChange, onSaved }) {
+  const value = config.value;
+  const drag = useRowDrag(value, onChange);
+  const { saving, error, save } = useSave('event_types', value, validateEventTypes, onSaved, invalidateEventTypes);
+  const update = (rowId, patch) => onChange(value.map((t) => (t._rowId === rowId ? { ...t, ...patch } : t)));
+
+  return (
+    <ConfigShell
+      title="Типи подій хронології"
+      hint="Кожна подія хронології має тип, а колір події береться з кольору її типу — змінивши колір тут, ви перефарбуєте всі події цього типу. key — службова назва типу, що зберігається в події: якщо змінити або видалити key, події цього типу втратять тип і користуватимуться власним кольором."
+      saving={saving}
+      error={error}
+      onSave={save}
+      addLabel="Додати тип"
+      onAdd={() => onChange([...value, { key: '', label: '', color: '#e0a020', _rowId: newRowId() }])}
+    >
+      {value.length === 0 && <p className="text-sm text-text-dim">Типів ще немає — події користуються власним кольором.</p>}
+      {value.map((t, index) => (
+        <div
+          key={t._rowId}
+          {...drag.rowProps(index)}
+          className={`flex items-center gap-2 rounded-lg border border-border p-2.5 ${drag.overIndex === index ? 'bg-surface-hover' : ''}`}
+        >
+          <span {...drag.handleProps(index)} className="shrink-0 cursor-grab text-text-dim active:cursor-grabbing" aria-label="Перетягнути">
+            <GripVertical size={16} />
+          </span>
+          <input
+            type="color"
+            value={HEX_COLOR_RE.test(t.color || '') ? t.color : '#888888'}
+            onChange={(e) => update(t._rowId, { color: e.target.value })}
+            className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1"
+            aria-label={`Колір типу ${t.label || ''}`}
+          />
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]">
+            <input className={inputClass} placeholder="Назва" value={t.label}
+              onChange={(e) => update(t._rowId, { label: e.target.value })} />
+            <input className={keyInputClass} placeholder="key" value={t.key}
+              onChange={(e) => update(t._rowId, { key: e.target.value })} />
+            <input className={keyInputClass} placeholder="#rrggbb" value={t.color} maxLength={7}
+              onChange={(e) => update(t._rowId, { color: e.target.value })} />
+          </div>
+          <button type="button" onClick={() => onChange(value.filter((x) => x._rowId !== t._rowId))}
+            aria-label="Видалити тип" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger">
+            <X size={16} />
+          </button>
+        </div>
+      ))}
     </ConfigShell>
   );
 }

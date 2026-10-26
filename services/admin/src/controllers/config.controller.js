@@ -2,11 +2,11 @@ const ConfigModel = require('../models/config.model');
 
 // Набір типів зброї (weapon_types), особливостей зброї (weapon_grips),
 // видів заклинань (spell_kinds), станів персонажа (conditions) і валют
-// (currencies) і форм магії (magic_forms). equipment/spellbook/character-sheet читають їх напряму
+// (currencies), форм магії (magic_forms) і типів подій хронології (event_types). equipment/spellbook/character-sheet читають їх напряму
 // через cross-schema SQL (equipment's getWeaponOptions, spellbook's
 // getKindOptions, character-sheet's GET /config), тож цей HTTP API
 // обслуговує лише саму адмін-панель.
-const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies', 'magic_forms', 'character_races'];
+const ALLOWED_KEYS = ['weapon_types', 'weapon_grips', 'spell_kinds', 'conditions', 'currencies', 'magic_forms', 'character_races', 'event_types'];
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 
@@ -177,7 +177,27 @@ function validateCharacterRaces(value) {
   return null;
 }
 
+// Типи подій хронології: key/label як у решти конфігів + колір (#rrggbb), яким
+// відображаються події цього типу. chronology читає їх напряму з
+// admin.site_configs (ChronologyEventModel.getEventTypes). Порожній список
+// коректний — події тоді користуються власним кольором.
+const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+function validateEventTypes(value) {
+  if (!Array.isArray(value)) return 'value має бути масивом';
+  if (value.length === 0) return null;
+  const base = validateValue(value);
+  if (base) return base;
+  for (const entry of value) {
+    if (typeof entry.color !== 'string' || !HEX_COLOR_PATTERN.test(entry.color)) {
+      return `колір типу "${entry.label}" має бути у форматі #rrggbb`;
+    }
+  }
+  return null;
+}
+
 const VALIDATORS = {
+  event_types: validateEventTypes,
   conditions: validateConditions,
   currencies: validateCurrencies,
   magic_forms: validateMagicForms,

@@ -159,22 +159,24 @@ export const ENTITY_KINDS = {
       />
     ),
   },
-  // Подія хронології не має власної сторінки чи GET-ендпоінта: id тут складений —
-  // `календар:подія[:кампанія]`, а посилання веде на вкладку «Події» календаря з
-  // ?event=… (сторінка підсвічує подію). Кампанія потрібна лише подіям кампанії.
+  // Подія хронології: id тут складений — `календар:подія[:кампанія]` (так він
+  // зберігається в посиланнях у текстах), а посилання веде на сторінку події
+  // /chronology/<календар>/events/<подія>. Старі посилання на вкладку «Події»
+  // календаря з ?event=… теж розпізнаються. Кампанія потрібна лише подіям кампанії.
   event: {
     service: 'chronology',
     label: 'Подія',
     parse(url, path) {
-      const m = new RegExp(`^/chronology/(${UUID})/events$`, 'i').exec(path);
-      const eventId = url.searchParams.get('event');
+      const page = new RegExp(`^/chronology/(${UUID})/events/(${UUID})$`, 'i').exec(path);
+      const m = page || new RegExp(`^/chronology/(${UUID})/events$`, 'i').exec(path);
+      const eventId = page ? page[2] : url.searchParams.get('event');
       if (!m || !isUuid(eventId)) return null;
       const campaign = url.searchParams.get('campaign_id');
       return { id: [m[1], eventId, isUuid(campaign) ? campaign : null].filter(Boolean).join(':').toLowerCase(), form: null };
     },
     href(id) {
       const [calId, eventId, campaignId] = id.split(':');
-      return `/chronology/${calId}/events?event=${eventId}${campaignId ? `&campaign_id=${campaignId}` : ''}`;
+      return `/chronology/${calId}/events/${eventId}${campaignId ? `?campaign_id=${campaignId}` : ''}`;
     },
     async fetch(id) {
       const [calId, eventId, campaignId] = id.split(':');

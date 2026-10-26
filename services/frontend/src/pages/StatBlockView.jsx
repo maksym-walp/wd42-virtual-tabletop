@@ -137,208 +137,224 @@ export default function StatBlockView({ kind: kindKey }) {
   const age = computedAge ?? entry.age;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
       <Link to={kind.basePath} className="mb-4 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> {kind.listTitle}
       </Link>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        {entry.image_url && (
-          <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
-            <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} />
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
-          <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
-            {kind.label}
-          </span>
-          {isDead && (
-            <span className="rounded border border-danger/40 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-danger">
-              Помер(ла)
-            </span>
+      {/* Макет як у заклинань: ліворуч — лор (зображення, назва, опис,
+          біографія, зв'язки), праворуч — механіка (атрибути, здоров'я,
+          навички, спорядження, заклинання, вміння). На мобільному — одна колонка. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
+          {entry.image_url && (
+            <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+              <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} />
+            </div>
           )}
-          {species && <Link to={`/compendium/species/${species.id}`} className="text-xs text-text-dim hover:text-accent">{species.name}</Link>}
-          {subspecies && <span className="text-xs text-text-dim">· {subspecies.name}</span>}
-          {race && <Link to={`/compendium/races/${race.id}`} className="text-xs text-text-dim hover:text-accent">{race.name}</Link>}
-          {people && <span className="text-xs text-text-dim">· {people.name}</span>}
-          {entry.is_public && <span className="ml-auto text-xs italic text-text-dim">публічний</span>}
-        </div>
 
-        <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
-          <h1 className="font-display text-3xl text-accent">{entry.name}</h1>
-          <div className="mt-1 flex shrink-0 items-center">
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-hover px-4 py-2.5">
+            <span className="rounded border border-border px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-text-dim">
+              {kind.label}
+            </span>
+            {isDead && (
+              <span className="rounded border border-danger/40 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-danger">
+                Помер(ла)
+              </span>
+            )}
+            {species && <Link to={`/compendium/species/${species.id}`} className="text-xs text-text-dim hover:text-accent">{species.name}</Link>}
+            {subspecies && <span className="text-xs text-text-dim">· {subspecies.name}</span>}
+            {race && <Link to={`/compendium/races/${race.id}`} className="text-xs text-text-dim hover:text-accent">{race.name}</Link>}
+            {people && <span className="text-xs text-text-dim">· {people.name}</span>}
+            {entry.is_public && <span className="ml-auto text-xs italic text-text-dim">публічний</span>}
+          </div>
+
+          <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-4">
+            <h1 className="font-display text-3xl text-accent">{entry.name}</h1>
+            <div className="mt-1 flex shrink-0 items-center">
               <ExportRecordButton url={`${kind.apiBase}/${id}/export`} filename={`${kindKey}_${id}.json`} />
               <ShareButton />
             </div>
-        </div>
-
-        <div className="my-2 grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-5">
-          {ATTRIBUTE_KEYS.map((key) => (
-            <SheetStat key={key} label={ATTRIBUTE_LABELS[key]} value={entry[key]} />
-          ))}
-        </div>
-
-        {entry.health && (
-          <div className="flex items-center justify-between border-b border-border bg-surface px-5 py-2.5">
-            <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Здоров'я</span>
-            {isNpc ? (
-              <div className="flex items-center gap-3">
-                {entry.health.rolled != null && (
-                  <span className="text-sm font-semibold text-text">{entry.health.rolled}</span>
-                )}
-                {canEdit ? (
-                  <RollButton
-                    formula={entry.health.formula}
-                    title={`Кинути ${entry.health.formula}`}
-                    onResult={(result) => handleRollHealth(result.total)}
-                  >
-                    {entry.health.rolled != null ? `Перекинути (${entry.health.formula})` : entry.health.formula}
-                  </RollButton>
-                ) : entry.health.rolled == null && (
-                  <span className="text-sm italic text-text-dim">не кинуто</span>
-                )}
-              </div>
-            ) : (
-              <RollButton formula={entry.health.formula} title={`Кинути ${entry.health.formula}`}>
-                {entry.health.formula}
-              </RollButton>
-            )}
           </div>
-        )}
 
-        <Section title="Навички">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-            {(entry.skills || []).map((skill) => (
-              <div key={skill.key} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-text-dim">{skill.label}</span>
-                <RollButton formula={`1${skill.dice}`} title={`Кинути ${skill.dice}`}>{skill.dice}</RollButton>
+          {isNpc ? (
+            (entry.description || entry.motivation || entry.backstory) && (
+              <Section title="Опис">
+                <div className="flex flex-col gap-3">
+                  {entry.description && (
+                    <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
+                  )}
+                  {entry.motivation && (
+                    <Subfield label="Мотивація">
+                      <SmartTextReader text={entry.motivation} className="text-[0.95rem] leading-relaxed text-text" />
+                    </Subfield>
+                  )}
+                  {entry.backstory && (
+                    <Subfield label="Передісторія">
+                      <SmartTextReader text={entry.backstory} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+                    </Subfield>
+                  )}
+                </div>
+              </Section>
+            )
+          ) : (
+            (entry.description || entry.history) && (
+              <Section title="Опис">
+                <div className="flex flex-col gap-3">
+                  {entry.description && (
+                    <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
+                  )}
+                  {entry.history && (
+                    <Subfield label="Походження">
+                      <SmartTextReader text={entry.history} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
+                    </Subfield>
+                  )}
+                </div>
+              </Section>
+            )
+          )}
+
+          {isNpc && (age != null || entry.gender || entry.birth_calendar_id || isDead) && (
+            <Section title="Біографія">
+              <div className="flex flex-col gap-2 text-sm text-text">
+                {age != null && (
+                  <p><span className="text-text-dim">{isDead ? 'Вік на момент смерті:' : 'Вік:'}</span> {age}</p>
+                )}
+                {entry.gender && <p><span className="text-text-dim">Стать:</span> {GENDER_OPTIONS[entry.gender] || entry.gender}</p>}
+                {entry.birth_calendar_id && (
+                  <CalendarDateLine
+                    label="Дата народження" data={birth} allCalendars={allCalendars}
+                    date={{ year: entry.birth_year, monthId: entry.birth_month_id, day: entry.birth_day }}
+                  />
+                )}
+                {entry.death_calendar_id && (
+                  <CalendarDateLine
+                    label="Дата смерті" data={death} allCalendars={allCalendars}
+                    date={{ year: entry.death_year, monthId: entry.death_month_id, day: entry.death_day }}
+                  />
+                )}
               </div>
+            </Section>
+          )}
+
+          {isNpc && entry.private_notes && (
+            <Section title="Приватні нотатки">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Бачиш лише ти та майстри гри</p>
+              <SmartTextReader text={entry.private_notes} className="mt-2 text-[0.95rem] leading-relaxed text-text" />
+            </Section>
+          )}
+
+          {isAdmin && (
+            <div className="flex gap-3 border-t border-border px-5 py-4">
+              <ChangeOwnerControl onSubmit={handleSetOwner} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-4 self-start">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-5">
+            {ATTRIBUTE_KEYS.map((key) => (
+              <SheetStat key={key} label={ATTRIBUTE_LABELS[key]} value={entry[key]} />
             ))}
           </div>
-        </Section>
 
-        {isNpc ? (
-          (entry.description || entry.motivation || entry.backstory) && (
-            <Section title="Опис">
-              <div className="flex flex-col gap-3">
-                {entry.description && (
-                  <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
-                )}
-                {entry.motivation && (
-                  <Subfield label="Мотивація">
-                    <SmartTextReader text={entry.motivation} className="text-[0.95rem] leading-relaxed text-text" />
-                  </Subfield>
-                )}
-                {entry.backstory && (
-                  <Subfield label="Передісторія">
-                    <SmartTextReader text={entry.backstory} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
-                  </Subfield>
-                )}
-              </div>
-            </Section>
-          )
-        ) : (
-          (entry.description || entry.history) && (
-            <Section title="Опис">
-              <div className="flex flex-col gap-3">
-                {entry.description && (
-                  <SmartTextReader text={entry.description} className="text-[0.95rem] leading-relaxed text-text" />
-                )}
-                {entry.history && (
-                  <Subfield label="Походження">
-                    <SmartTextReader text={entry.history} className="text-[0.95rem] italic leading-relaxed text-text-dim" />
-                  </Subfield>
-                )}
-              </div>
-            </Section>
-          )
-        )}
-
-        {isNpc && (age != null || entry.gender || entry.birth_calendar_id || isDead) && (
-          <Section title="Біографія">
-            <div className="flex flex-col gap-2 text-sm text-text">
-              {age != null && (
-                <p><span className="text-text-dim">{isDead ? 'Вік на момент смерті:' : 'Вік:'}</span> {age}</p>
-              )}
-              {entry.gender && <p><span className="text-text-dim">Стать:</span> {GENDER_OPTIONS[entry.gender] || entry.gender}</p>}
-              {entry.birth_calendar_id && (
-                <CalendarDateLine
-                  label="Дата народження" data={birth} allCalendars={allCalendars}
-                  date={{ year: entry.birth_year, monthId: entry.birth_month_id, day: entry.birth_day }}
-                />
-              )}
-              {entry.death_calendar_id && (
-                <CalendarDateLine
-                  label="Дата смерті" data={death} allCalendars={allCalendars}
-                  date={{ year: entry.death_year, monthId: entry.death_month_id, day: entry.death_day }}
-                />
+          {entry.health && (
+            <div className="flex items-center justify-between border-b border-border bg-surface px-5 py-2.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Здоров'я</span>
+              {isNpc ? (
+                <div className="flex items-center gap-3">
+                  {entry.health.rolled != null && (
+                    <span className="text-sm font-semibold text-text">{entry.health.rolled}</span>
+                  )}
+                  {canEdit ? (
+                    <RollButton
+                      formula={entry.health.formula}
+                      title={`Кинути ${entry.health.formula}`}
+                      onResult={(result) => handleRollHealth(result.total)}
+                    >
+                      {entry.health.rolled != null ? `Перекинути (${entry.health.formula})` : entry.health.formula}
+                    </RollButton>
+                  ) : entry.health.rolled == null && (
+                    <span className="text-sm italic text-text-dim">не кинуто</span>
+                  )}
+                </div>
+              ) : (
+                <RollButton formula={entry.health.formula} title={`Кинути ${entry.health.formula}`}>
+                  {entry.health.formula}
+                </RollButton>
               )}
             </div>
-          </Section>
-        )}
+          )}
 
-        {isNpc && <NpcFactionsSection npcId={id} Section={Section} />}
-        {isNpc && <NpcRelationshipsSection npcId={id} canEdit={canEdit} Section={Section} />}
-        {isNpc && <NpcEventsSection npcId={id} Section={Section} />}
-
-        {isNpc && entry.private_notes && (
-          <Section title="Приватні нотатки">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Бачиш лише ти та майстри гри</p>
-            <SmartTextReader text={entry.private_notes} className="mt-2 text-[0.95rem] leading-relaxed text-text" />
-          </Section>
-        )}
-
-        {equipment.length > 0 && (
-          <Section title="Спорядження">
-            <ul className="flex flex-col gap-1.5">
-              {equipment.map((e) => (
-                <li key={e.equipment_id} className="text-sm text-text">
-                  {e.equipment ? <Link to={`/equipment/${e.equipment.id}`} className="text-accent hover:underline">{e.equipment.name}</Link> : '(невідомо)'}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-        {spells.length > 0 && (
-          <Section title="Заклинання">
-            <ul className="flex flex-col gap-1.5">
-              {spells.map((s) => (
-                <li key={s.spell_id} className="text-sm text-text">
-                  {s.spell ? <Link to={`/spellbook/${s.spell.id}`} className="text-accent hover:underline">{s.spell.name}</Link> : '(невідомо)'}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-        {abilities.length > 0 && (
-          <Section title="Вміння">
-            <ul className="flex flex-col gap-1.5">
-              {abilities.map((a) => (
-                <li key={a.ability_id} className="text-sm text-text">
-                  {a.ability ? <Link to={`/abilities/${a.ability.id}`} className="text-accent hover:underline">{a.ability.name}</Link> : '(невідомо)'}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-        {isAdmin && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <ChangeOwnerControl onSubmit={handleSetOwner} />
+          <div>
+            <div className="bg-bg px-5 py-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Навички</span>
+            </div>
+            <div className="px-5 py-3.5">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                {(entry.skills || []).map((skill) => (
+                  <div key={skill.key} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-text-dim">{skill.label}</span>
+                    <RollButton formula={`1${skill.dice}`} title={`Кинути ${skill.dice}`}>{skill.dice}</RollButton>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
 
-        {canEdit && (
-          <div className="flex gap-3 border-t border-border px-5 py-4">
-            <Button variant="ghost" to={`${kind.basePath}/${id}/edit`}>Редагувати</Button>
-            <Button variant="danger" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Видалення...' : 'Видалити'}
-            </Button>
-          </div>
-        )}
+          {equipment.length > 0 && (
+            <Section title="Спорядження">
+              <ul className="flex flex-col gap-1.5">
+                {equipment.map((e) => (
+                  <li key={e.equipment_id} className="text-sm text-text">
+                    {e.equipment ? <Link to={`/equipment/${e.equipment.id}`} className="text-accent hover:underline">{e.equipment.name}</Link> : '(невідомо)'}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {spells.length > 0 && (
+            <Section title="Заклинання">
+              <ul className="flex flex-col gap-1.5">
+                {spells.map((s) => (
+                  <li key={s.spell_id} className="text-sm text-text">
+                    {s.spell ? <Link to={`/spellbook/${s.spell.id}`} className="text-accent hover:underline">{s.spell.name}</Link> : '(невідомо)'}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {abilities.length > 0 && (
+            <Section title="Вміння">
+              <ul className="flex flex-col gap-1.5">
+                {abilities.map((a) => (
+                  <li key={a.ability_id} className="text-sm text-text">
+                    {a.ability ? <Link to={`/abilities/${a.ability.id}`} className="text-accent hover:underline">{a.ability.name}</Link> : '(невідомо)'}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {canEdit && (
+            <div className="flex gap-3 border-t border-border px-5 py-4">
+              <Button variant="ghost" to={`${kind.basePath}/${id}/edit`}>Редагувати</Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Видалення...' : 'Видалити'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Фракції, зв'язки й події НІПа — окремі картки під механікою; порожні
+            (для того, хто не може їх редагувати) не показуються взагалі. */}
+        {isNpc && <NpcFactionsSection npcId={id} Section={CardSection} />}
+        {isNpc && <NpcRelationshipsSection npcId={id} canEdit={canEdit} Section={CardSection} />}
+        {isNpc && <NpcEventsSection npcId={id} Section={CardSection} />}
+        </div>
       </div>
     </div>
   );
@@ -394,6 +410,17 @@ function Section({ title, children }) {
   return (
     <div className="border-t border-border">
       <div className="bg-bg px-5 py-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
+      </div>
+      <div className="px-5 py-3.5">{children}</div>
+    </div>
+  );
+}
+
+function CardSection({ title, children }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border bg-surface-hover px-5 py-2.5">
         <span className="text-xs font-bold uppercase tracking-wide text-text-dim">{title}</span>
       </div>
       <div className="px-5 py-3.5">{children}</div>

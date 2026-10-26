@@ -5,14 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
-import npcsApi from '../api/npcs';
-import bestiaryApi from '../api/bestiary';
 import { totalDaysSinceEpoch, getActiveSeason } from '../utils/chronologyMath';
 import { makeTimeline, termsOf, dateFromTotalDays } from '../utils/chronologyEras';
 import { eventsOnDay, equivalentDates, equivalentDatesText } from '../utils/chronologySync';
 import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
-import EventForm from '../components/chronology/EventForm';
 import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
 import Field, { inputClass } from '../components/ui/Field';
@@ -42,7 +39,6 @@ export default function ChronologyView() {
   const [events, setEvents] = useState([]);
   const [calendars, setCalendars] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [characterOptions, setCharacterOptions] = useState([]);
   const [campaign, setCampaign] = useState(null);
   const isCampaignGm = Boolean(campaign?.is_gm);
   const [loading, setLoading] = useState(true);
@@ -72,9 +68,7 @@ export default function ChronologyView() {
     // campaign fetch now just means "no campaign context", same as omitting
     // ?campaign_id, instead of an unrelated page-load failure.
     // Locations are fetched for everyone — the day sheet resolves an
-    // event's place label for any viewer, not just managers. Characters are
-    // only needed to power EventForm's participant picker, which only a
-    // manager ever opens, so that fetch is skipped for everyone else.
+    // event's place label for any viewer, not just managers.
     Promise.all([
       chronologyApi.getOne(id),
       chronologyApi.listMonths(id),
@@ -84,11 +78,8 @@ export default function ChronologyView() {
       chronologyApi.listEvents(id, campaignId, { synced: true }),
       chronologyApi.list(),
       mapsApi.listLocations(),
-      canManage
-        ? Promise.all([npcsApi.list(), bestiaryApi.list()])
-        : Promise.resolve([[], []]),
     ])
-      .then(([cal, monthsList, weekdaysList, seasonsList, moonsList, eventsList, calendarsList, locationsList, [npcs, creatures]]) => {
+      .then(([cal, monthsList, weekdaysList, seasonsList, moonsList, eventsList, calendarsList, locationsList]) => {
         if (!alive) return;
         setCalendar(cal);
         setMonths(monthsList);
@@ -98,10 +89,6 @@ export default function ChronologyView() {
         setEvents(eventsList);
         setCalendars(calendarsList);
         setLocations(locationsList);
-        setCharacterOptions([
-          ...npcs.map((n) => ({ key: n.id, label: `${n.name} (НІП)` })),
-          ...creatures.map((c) => ({ key: c.id, label: `${c.name} (Істота)` })),
-        ]);
 
         // A ?year=&month_id=&day= link (from the Events tab's "Відкрити" on
         // an event with no location) wins over every other default below —
@@ -483,7 +470,6 @@ export default function ChronologyView() {
           isCampaignGm={isCampaignGm}
           calendar={calendar}
           locations={locations}
-          characterOptions={characterOptions}
           title={timeline.format(selectedT)}
           baseDate={baseOf(selectedT)}
           calendars={calendars}
@@ -499,10 +485,9 @@ export default function ChronologyView() {
 }
 
 function DayEventsSheet({
-  calendarId, campaignId, canManage, isCampaignGm, calendar, calendars, locations, characterOptions,
+  calendarId, campaignId, canManage, isCampaignGm, calendar, calendars, locations,
   title, baseDate, events, equivalents, onClose, onEventsChanged, onCampaignDateSet,
 }) {
-  const [addingOpen, setAddingOpen] = useState(false);
   const [settingDate, setSettingDate] = useState(false);
   const [dateMessage, setDateMessage] = useState('');
   const [error, setError] = useState('');
@@ -545,7 +530,7 @@ function DayEventsSheet({
   return (
     <Sheet open onClose={onClose} title={title}>
       <div className="flex flex-col gap-4">
-        {events.length === 0 && !addingOpen && (
+        {events.length === 0 && (
           <p className="text-sm text-text-dim">У цей день немає подій.</p>
         )}
 
@@ -567,7 +552,12 @@ function DayEventsSheet({
                 <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-semibold text-text">{e.name}</span>
+                    <Link
+                      to={`/chronology/${e.calendar_id}/events/${e.id}${campaignId ? `?campaign_id=${campaignId}` : ''}`}
+                      className="text-sm font-semibold text-text hover:text-accent"
+                    >
+                      {e.name}
+                    </Link>
                     <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">
                       {RECURRENCE_LABELS[e.recurrence] || e.recurrence}
                     </span>
@@ -601,23 +591,17 @@ function DayEventsSheet({
         {error && <p className="text-sm text-danger">{error}</p>}
         {dateMessage && <p className="text-sm text-sage">{dateMessage}</p>}
 
-        {canManage && !addingOpen && (
-          <Button variant="ghost" size="sm" onClick={() => setAddingOpen(true)} className="self-start">
+        {canManage && (
+          <Button
+            variant="ghost" size="sm" className="self-start"
+            to={`/chronology/events/new?${new URLSearchParams({
+              calendar: calendarId,
+              year: baseDate.year, month_id: baseDate.monthId, day: baseDate.day,
+              ...(campaignId ? { campaign_id: campaignId } : {}),
+            })}`}
+          >
             <Plus size={14} /> Додати подію
           </Button>
-        )}
-
-        {canManage && addingOpen && (
-          <EventForm
-            calendarId={calendarId}
-            campaignId={campaignId}
-            calendars={calendars}
-            locations={locations}
-            characterOptions={characterOptions}
-            initialDate={baseDate}
-            onCancel={() => setAddingOpen(false)}
-            onSaved={() => { setAddingOpen(false); onEventsChanged(); }}
-          />
         )}
 
         {/* Gated on isCampaignGm (this specific campaign's GM), not the

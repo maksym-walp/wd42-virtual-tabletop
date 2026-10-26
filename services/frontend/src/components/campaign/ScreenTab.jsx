@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Sparkles, Shield, Skull, Lock } from 'lucide-react';
+import { Heart, Sparkles, Shield, Skull, Lock, Dices, Plus } from 'lucide-react';
 import campaignApi from '../../api/campaigns';
 import characterApi from '../../api/characterSheet';
 import useDebounce from '../../hooks/useDebounce';
 import Card from '../ui/Card';
+import Button from '../ui/Button';
 import SmartTextarea from '../ui/SmartTextarea';
 import useBoard from './useBoard';
 import BoardGrid from './BoardGrid';
@@ -20,6 +21,9 @@ import { raceLabel } from '../../utils/characterRace';
 // Зміни з листа персонажа йдуть повз campaigns-сервіс (окрім ХП, яке він
 // синхронізує сам), тож статблоки ще й зрідка перечитуються.
 const STATBLOCK_POLL_MS = 30000;
+
+// Скільки досвіду майстер видає всім одним натисканням.
+const EXPERIENCE_STEPS = [1, 2, 5];
 
 const CHARACTERISTIC_ABBR = {
   agility: 'Спр', physique: 'Тіл', intellect: 'Інт', wisdom: 'Мдр', charisma: 'Хар',
@@ -39,7 +43,7 @@ export default function ScreenTab({ campaign, characters, onChange, screenVersio
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_20rem]">
       <section className="min-w-0">
-        <PlayerStatblocks characters={characters} version={charactersVersion} />
+        <PlayerStatblocks campaignId={campaign.id} characters={characters} version={charactersVersion} />
       </section>
       <section className="min-w-0">
         <BoardGrid
@@ -92,7 +96,7 @@ function GmNotes({ campaign, onChange }) {
   );
 }
 
-function PlayerStatblocks({ characters, version }) {
+function PlayerStatblocks({ campaignId, characters, version }) {
   const [sheets, setSheets] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -120,9 +124,27 @@ function PlayerStatblocks({ characters, version }) {
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, [load]);
 
+  // Ігрове натхнення: inspiration_used=false — персонаж його має. Оновлюємо
+  // оптимістично; якщо збереження не вдалось — перечитуємо лист.
+  const setInspiration = async (characterId, held) => {
+    const used = !held;
+    setSheets((prev) => {
+      const sheet = prev[characterId];
+      return sheet ? { ...prev, [characterId]: { ...sheet, character: { ...sheet.character, inspiration_used: used } } } : prev;
+    });
+    try {
+      await characterApi.update(characterId, { inspiration_used: used });
+    } catch {
+      load();
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="m-0 font-display text-lg text-text">Персонажі гравців</h3>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h3 className="m-0 font-display text-lg text-text">Персонажі</h3>
+        {characters.length > 0 && <ExperienceGrant campaignId={campaignId} />}
+      </div>
       {characters.length === 0 ? (
         <p className="text-sm text-text-dim">До кампанії ще не приєднано жодного персонажа.</p>
       ) : (
@@ -133,11 +155,68 @@ function PlayerStatblocks({ characters, version }) {
               entry={ch}
               sheet={sheets[ch.character_id]}
               failed={errors[ch.character_id]}
+              onInspirationChange={(held) => setInspiration(ch.character_id, held)}
             />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// Видача досвіду всім персонажам кампанії. Нові значення підтягнуться
+// real-time подією 'characters', яку публікує бекенд.
+function ExperienceGrant({ campaignId }) {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null); // { ok, text }
+
+  const grant = async (amount) => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { updated } = await campaignApi.grantExperience(campaignId, amount);
+      setStatus({ ok: true, text: `+${amount} досвіду · персонажів: ${updated}` });
+    } catch (err) {
+      setStatus({ ok: false, text: err.response?.data?.message || 'Помилка при видачі досвіду' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" title="Видати досвід усім персонажам">
+      <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Досвід</span>
+      {EXPERIENCE_STEPS.map((amount) => (
+        <Button key={amount} variant="ghost" size="sm" disabled={busy} onClick={() => grant(amount)}>
+          +{amount}
+        </Button>
+      ))}
+      {status && (
+        <span role="status" className={`text-xs ${status.ok ? 'text-sage' : 'text-danger'}`}>{status.text}</span>
+      )}
+    </div>
+  );
+}
+
+// Правий верхній кут картки: «+» видає ігрове натхнення, а видане показане
+// кубиком за харизмою персонажа (повторне натискання забирає його).
+function InspirationControl({ held, die, onChange }) {
+  if (!held) {
+    return (
+      <button type="button" onClick={() => onChange(true)}
+        title="Видати ігрове натхнення" aria-label="Видати ігрове натхнення"
+        className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-dashed border-border px-1.5 py-1 text-text-dim hover:border-gold/60 hover:text-gold">
+        <Dices size={14} /><Plus size={12} />
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={() => onChange(false)}
+      title={`Ігрове натхнення (${die === '—' ? 'без кубика' : die}) — натисніть, щоб забрати`}
+      aria-label="Забрати ігрове натхнення"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gold/60 bg-gold/10 px-1.5 py-1 text-xs font-bold text-gold hover:bg-gold/20">
+      <Dices size={14} />{die}
+    </button>
   );
 }
 
@@ -158,9 +237,14 @@ function Meter({ icon: Icon, label, value, max, extra, tone }) {
   );
 }
 
-function Statblock({ entry, sheet, failed }) {
+function Statblock({ entry, sheet, failed, onInspirationChange }) {
   const { conditions: conditionsConfig } = useCharacterConfig();
   const conditionLabels = Object.fromEntries(conditionsConfig.map((cond) => [cond.key, cond.label]));
+  const charisma = CHARACTERISTICS.find((ch) => ch.key === 'charisma');
+  const skillLevels = Object.fromEntries((sheet?.skills ?? []).map((s) => [s.skill_key, s.value]));
+  const inspirationDie = charisma?.effect(
+    skillsToCharLevel(charisma.skills.map((s) => skillLevels[s.key] ?? 1)),
+  ) ?? '—';
   const header = (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
@@ -171,7 +255,12 @@ function Statblock({ entry, sheet, failed }) {
           {ARCHETYPES[entry.archetype]?.label ?? entry.archetype} · {raceLabel(entry)} · {entry.owner_username}
         </p>
       </div>
-      {entry.is_private && <Lock size={14} className="mt-1 shrink-0 text-text-dim" aria-label="Приватний персонаж" />}
+      <div className="flex shrink-0 items-center gap-2">
+        {entry.is_private && <Lock size={14} className="text-text-dim" aria-label="Приватний персонаж" />}
+        {sheet && (
+          <InspirationControl held={!sheet.character.inspiration_used} die={inspirationDie} onChange={onInspirationChange} />
+        )}
+      </div>
     </div>
   );
 

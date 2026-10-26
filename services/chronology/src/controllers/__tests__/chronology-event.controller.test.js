@@ -176,6 +176,91 @@ describe('ChronologyEventController.update', () => {
   });
 });
 
+describe('ChronologyEventController event types', () => {
+  it('400s on a type that is not configured', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.getEventTypes.mockResolvedValue([{ key: 'battle', label: 'Битва', color: '#d9534f' }]);
+    const res = mockRes();
+    await ChronologyEventController.create(mockReq({
+      params: { id: 'c1' }, body: { name: 'x', color: '#000000', event_type: 'nope' },
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a configured type and an empty one', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.getEventTypes.mockResolvedValue([{ key: 'battle', label: 'Битва', color: '#d9534f' }]);
+    ChronologyEventModel.create.mockResolvedValue({ id: 'e1' });
+    for (const event_type of ['battle', '', null]) {
+      const res = mockRes();
+      await ChronologyEventController.create(mockReq({
+        params: { id: 'c1' }, body: { name: 'x', color: '#000000', event_type },
+      }), res);
+      expect(res.status).toHaveBeenCalledWith(201);
+    }
+  });
+
+  it('listTypes returns the configured types', async () => {
+    ChronologyEventModel.getEventTypes.mockResolvedValue([{ key: 'battle' }]);
+    const res = mockRes();
+    await ChronologyEventController.listTypes(mockReq(), res);
+    expect(res.json).toHaveBeenCalledWith({ event_types: [{ key: 'battle' }] });
+  });
+});
+
+describe('ChronologyEventController.getOne', () => {
+  const event = { id: 'e1', calendar_id: 'c1', is_public: true, campaign_id: null };
+  const params = { id: 'c1', eventId: 'e1' };
+  const player = { sub: 'u1', role: 'user' };
+
+  it('404s when the calendar is not visible or the event is not in it', async () => {
+    ChronologyModel.findById.mockResolvedValue(null);
+    const res = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(ChronologyEventModel.findDetailed).not.toHaveBeenCalled();
+
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.findDetailed.mockResolvedValue(null);
+    const res2 = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params }), res2);
+    expect(res2.status).toHaveBeenCalledWith(404);
+    expect(ChronologyEventModel.findDetailed).toHaveBeenCalledWith('e1', 'c1');
+  });
+
+  it('hides private and campaign events from regular users, unless opened from that campaign', async () => {
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1' });
+
+    ChronologyEventModel.findDetailed.mockResolvedValue({ ...event, is_public: false });
+    const res = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params, user: player }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+
+    ChronologyEventModel.findDetailed.mockResolvedValue({ ...event, campaign_id: 'camp-1' });
+    const res2 = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params, user: player }), res2);
+    expect(res2.status).toHaveBeenCalledWith(404);
+
+    const res3 = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params, query: { campaign_id: 'camp-1' }, user: player }), res3);
+    expect(res3.json).toHaveBeenCalled();
+  });
+
+  it('shows a public global event to a regular user, and any event to a manager', async () => {
+    ChronologyModel.findById.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.findDetailed.mockResolvedValue(event);
+    const res = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params, user: player }), res);
+    expect(res.json).toHaveBeenCalledWith({ event });
+
+    ChronologyEventModel.findDetailed.mockResolvedValue({ ...event, is_public: false, campaign_id: 'camp-1' });
+    const res2 = mockRes();
+    await ChronologyEventController.getOne(mockReq({ params }), res2);
+    expect(res2.json).toHaveBeenCalledWith({ event: expect.objectContaining({ id: 'e1' }) });
+  });
+});
+
 describe('ChronologyEventController.remove', () => {
   it('returns 404 when nothing was deleted', async () => {
     ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });

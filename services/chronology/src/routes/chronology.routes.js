@@ -17,6 +17,7 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 
 // Declared before '/:id' so 'events' is never read as a calendar id.
 router.get('/events/by-participant/:entryId', requireAuth, wrap(ChronologyEventController.listByParticipant));
+router.get('/event-types', requireAuth, wrap(ChronologyEventController.listTypes));
 
 router.get('/',        requireAuth, wrap(ChronologyController.list));
 router.post('/',       requireChronologyManager, wrap(ChronologyController.create));
@@ -55,6 +56,7 @@ router.delete('/:id/eras/:eraId', requireChronologyManager, wrap(ChronologyEraCo
 // ?campaign_id=... on the GET adds that campaign's own events on top of the
 // global (campaign_id IS NULL) lore events — see ChronologyEventController.list.
 router.get('/:id/events',           requireAuth, wrap(ChronologyEventController.list));
+router.get('/:id/events/:eventId',  requireAuth, wrap(ChronologyEventController.getOne));
 router.post('/:id/events',          requireChronologyManager, wrap(ChronologyEventController.create));
 router.put('/:id/events/:eventId',  requireChronologyManager, wrap(ChronologyEventController.update));
 router.delete('/:id/events/:eventId', requireChronologyManager, wrap(ChronologyEventController.remove));
