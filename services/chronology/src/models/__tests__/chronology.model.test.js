@@ -139,20 +139,27 @@ describe('ChronologyModel.update', () => {
     await ChronologyModel.update('cal-1', { name: 'Гарія' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/default_year=\$8, default_month_id=\$9/);
-    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, null, null, null, null, null, null, null]);
+    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, null, null, null, null, null, null, null, null, null]);
   });
 
   it('passes through an explicit default_year/default_month_id', async () => {
     await ChronologyModel.update('cal-1', { name: 'Гарія', default_year: 100, default_month_id: 'm1' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, 100, 'm1', null, null, null, null, null]);
+    expect(params).toEqual(['cal-1', 'Гарія', null, null, null, 0, false, 100, 'm1', null, null, null, null, null, null, null]);
   });
 
   it('stores custom terms, treating blanks as the default (null)', async () => {
     await ChronologyModel.update('cal-1', { name: 'Гарія', term_day: 'Доба', term_week: '', term_month: 'Декада', term_year: 'Оберт' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/term_day=\$10, term_week=\$11, term_season=\$12, term_year=\$13, term_month=\$14/);
-    expect(params.slice(9)).toEqual(['Доба', null, null, 'Оберт', 'Декада']);
+    expect(params.slice(9)).toEqual(['Доба', null, null, 'Оберт', 'Декада', null, null]);
+  });
+
+  it('stores the week length and the current day', async () => {
+    await ChronologyModel.update('cal-1', { name: 'Гарія', week_length: 10, default_day: 4 });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/week_length=\$15, default_day=\$16/);
+    expect(params.slice(14)).toEqual([10, 4]);
   });
 });
 

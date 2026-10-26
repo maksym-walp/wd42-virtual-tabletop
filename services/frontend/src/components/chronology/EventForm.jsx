@@ -4,6 +4,7 @@ import chronologyApi from '../../api/chronology';
 import { totalDaysSinceEpoch, DURATION_DISPLAY_LABELS } from '../../utils/chronologyMath';
 import { EVENT_COLOR_PRESETS } from '../../constants/chronologyColors';
 import { convertDate, isSynced } from '../../utils/chronologySync';
+import { weekdayCountOf } from '../../utils/chronologyEras';
 import ColorField from '../ui/ColorField';
 import EraDateFields from './EraDateFields';
 import Button from '../ui/Button';
@@ -263,7 +264,9 @@ export default function EventForm({
       {!activeType && <ColorField label="Колір" value={color} onChange={setColor} presets={EVENT_COLOR_PRESETS} />}
       <Field label="Повторення">
         <select className={inputClass} value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-          {Object.entries(RECURRENCE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          {Object.entries(RECURRENCE_LABELS)
+            .filter(([key]) => key !== 'weekly' || recurrence === 'weekly' || weekdayCountOf(owner || {}) > 0)
+            .map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select>
       </Field>
       <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">

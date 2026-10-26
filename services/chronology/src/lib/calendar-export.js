@@ -19,6 +19,12 @@ function buildCalendarExport(calendar, { months, weekdays, seasons, moons, eras 
   const moonNames = uniqueNames(moons.map((m) => m.name));
   const monthName = new Map(months.map((m, i) => [m.id, monthNames[i]]));
 
+  // Календар може мати лише тривалість тижня без назв днів (week_length) —
+  // тоді дні тижня експортуються номерами.
+  const weekNames = weekdays.length
+    ? weekdays.map((w) => w.name)
+    : Array.from({ length: Number(calendar.week_length) || 0 }, (_, i) => String(i + 1));
+
   const monthLen = {};
   months.forEach((m, i) => { monthLen[monthNames[i]] = Number(m.length); });
   const lunarCyc = {};
@@ -33,8 +39,8 @@ function buildCalendarExport(calendar, { months, weekdays, seasons, moons, eras 
     n_months: months.length,
     months: monthNames,
     month_len: monthLen,
-    week_len: weekdays.length,
-    weekdays: weekdays.map((w) => w.name),
+    week_len: weekNames.length,
+    weekdays: weekNames,
     n_moons: moons.length,
     moons: moonNames,
     lunar_cyc: lunarCyc,

@@ -4,7 +4,7 @@ import MoonPhase from '../MoonPhase';
 import {
   daysPerYear, totalDaysSinceEpoch, weekdayIndexOf, getActiveSeason,
 } from '../../utils/chronologyMath';
-import { makeTimeline, termsOf, TERM_DEFAULTS } from '../../utils/chronologyEras';
+import { makeTimeline, termsOf, weekdayCountOf, TERM_DEFAULTS, NO_WEEKDAY_COLUMNS } from '../../utils/chronologyEras';
 import { pluralizeUk } from '../../utils/pluralize';
 import { htmlToPreviewText } from '../../utils/richText';
 
@@ -36,9 +36,10 @@ export function CalendarMiniPreview({ calendar, year, monthId, day }) {
   const month = months[monthIndex];
   const viewYear = year ?? calendar.default_year ?? 1;
   const monthLength = Number(month.length);
-  const columns = weekdays.length || 7;
+  const weekCount = weekdayCountOf(calendar);
+  const columns = weekCount || NO_WEEKDAY_COLUMNS;
   const firstWeekday = weekdayIndexOf(
-    totalDaysSinceEpoch(months, viewYear, monthIndex, 1), calendar.first_day_offset, weekdays.length,
+    totalDaysSinceEpoch(months, viewYear, monthIndex, 1), calendar.first_day_offset, weekCount,
   );
   const focusDay = day && day <= monthLength ? Number(day) : 1;
   const season = getActiveSeason(seasons, months, monthIndex, focusDay);
@@ -78,11 +79,15 @@ export function CalendarMiniPreview({ calendar, year, monthId, day }) {
         </div>
 
         <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-          {weekdays.map((w, i) => (
-            <span key={i} className="truncate text-center text-[0.55rem] font-semibold uppercase text-text-dim">
-              {w.short_name || w.name.slice(0, 2)}
-            </span>
-          ))}
+          {weekdays.length > 0
+            ? weekdays.map((w, i) => (
+              <span key={i} className="truncate text-center text-[0.55rem] font-semibold uppercase text-text-dim">
+                {w.short_name || w.name.slice(0, 2)}
+              </span>
+            ))
+            : Array.from({ length: weekCount }, (_, i) => (
+              <span key={i} className="truncate text-center text-[0.55rem] font-semibold text-text-dim">{i + 1}</span>
+            ))}
           {cells.map((d, i) => {
             if (d == null) return <span key={`b${i}`} />;
             const daySeason = getActiveSeason(seasons, months, monthIndex, d);

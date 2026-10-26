@@ -12,7 +12,10 @@ import { termsOf } from '../../utils/chronologyEras';
 // видно на сітках усіх синхронізованих календарів, а дати перераховуються при
 // наведенні. `months` — місяці, що зараз у конструкторі (довжини беруться з
 // форми, а не з БД), щоб синхронізувати ще до збереження структури.
-export default function CalendarSyncSection({ calendarId, months }) {
+// `currentDate` — «поточна дата» цього календаря з конструктора ({ year,
+// monthId, day } у безперервному відліку): від неї й від поточної дати
+// основного календаря кнопка заповнює обидві пари полів (це одна й та сама мить).
+export default function CalendarSyncSection({ calendarId, months, currentDate }) {
   const [calendars, setCalendars] = useState(null);
   const [mine, setMine] = useState({ year: '1', monthIndex: 0, day: '1' });
   const [base, setBase] = useState({ year: '', monthIndex: 0, day: '' });
@@ -24,7 +27,6 @@ export default function CalendarSyncSection({ calendarId, months }) {
   if (calendars === null) return <p className="text-sm text-text-dim">Завантаження...</p>;
 
   const self = calendars.find((c) => c.id === calendarId);
-  const terms = termsOf(self);
   const baseCal = calendars.find((c) => c.is_default);
 
   if (!baseCal) {
@@ -34,6 +36,9 @@ export default function CalendarSyncSection({ calendarId, months }) {
     return <p className="text-sm text-text-dim">Це календар за замовчуванням — основа синхронізації. Решта календарів прив'язуються до нього у своїх налаштуваннях.</p>;
   }
 
+  // Кожна сторона дати підписана термінами власного календаря.
+  const terms = termsOf(self);
+  const baseTerms = termsOf(baseCal);
   const baseMonths = baseCal.preview_months || [];
   const synced = isSynced(self);
   // Що відповідає «дню 1 року 1» цього календаря в основному.
@@ -54,6 +59,22 @@ export default function CalendarSyncSection({ calendarId, months }) {
       }
     }
     return null;
+  };
+
+  const fillFromCurrentDates = () => {
+    const mi = months.findIndex((m) => m.id === currentDate?.monthId);
+    const bi = baseMonths.findIndex((m) => m.id === baseCal.default_month_id);
+    if (!currentDate || currentDate.year === '' || currentDate.day === '' || mi === -1) {
+      setError('Спершу вкажіть повну поточну дату цього календаря (рік, місяць, день) у «Загальних налаштуваннях»');
+      return;
+    }
+    if (baseCal.default_year == null || baseCal.default_day == null || bi === -1) {
+      setError(`У «${baseCal.name}» не вказана повна поточна дата — задайте її в налаштуваннях того календаря`);
+      return;
+    }
+    setMine({ year: String(currentDate.year), monthIndex: mi, day: String(currentDate.day) });
+    setBase({ year: String(baseCal.default_year), monthIndex: bi, day: String(baseCal.default_day) });
+    setError('');
   };
 
   const save = async () => {
@@ -79,17 +100,17 @@ export default function CalendarSyncSection({ calendarId, months }) {
     }
   };
 
-  const dateInputs = (value, set, monthList, who) => (
+  const dateInputs = (value, set, monthList, who, t) => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <Field label={`${terms.year} (${who})`}>
+      <Field label={`${t.year} (${who})`}>
         <input type="number" className={inputClass} value={value.year} onChange={(e) => set({ ...value, year: e.target.value })} />
       </Field>
-      <Field label={terms.month}>
+      <Field label={t.month}>
         <select className={inputClass} value={value.monthIndex} onChange={(e) => set({ ...value, monthIndex: Number(e.target.value) })}>
           {monthList.map((m, i) => <option key={m.id} value={i}>{m.name || 'Без назви'}</option>)}
         </select>
       </Field>
-      <Field label={terms.day}>
+      <Field label={t.day}>
         <input type="number" min={1} className={inputClass} value={value.day} onChange={(e) => set({ ...value, day: e.target.value })} />
       </Field>
     </div>
@@ -102,11 +123,19 @@ export default function CalendarSyncSection({ calendarId, months }) {
           ? <>Синхронізовано з «{baseCal.name}»: день 1 року 1 цього календаря = <span className="text-text">{dateLabel(baseCal, originInBase)}</span>.</>
           : <>Не синхронізовано. Вкажіть одну й ту саму мить у цьому календарі та в «{baseCal.name}» — події з'являтимуться в обох, а дати можна буде порівняти при наведенні.</>}
       </p>
+      <div>
+        <Button type="button" size="sm" variant="ghost" onClick={fillFromCurrentDates}>
+          Заповнити з поточних дат
+        </Button>
+        <p className="mt-1 text-xs text-text-dim">
+          Бере поточну дату цього календаря (з конструктора) і поточну дату «{baseCal.name}» — вони мають означати одну й ту саму мить.
+        </p>
+      </div>
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-bg p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">Ця дата в цьому календарі</p>
-        {dateInputs(mine, setMine, months, 'тут')}
+        {dateInputs(mine, setMine, months, 'тут', terms)}
         <p className="text-xs font-semibold uppercase tracking-wide text-text-dim">= ця дата в «{baseCal.name}»</p>
-        {dateInputs(base, setBase, baseMonths, 'там')}
+        {dateInputs(base, setBase, baseMonths, 'там', baseTerms)}
       </div>
       <p className="text-xs text-text-dim">
         Якщо потім змінити довжину місяців, відповідність зсунеться — повторіть синхронізацію.

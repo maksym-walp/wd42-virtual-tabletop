@@ -6,7 +6,7 @@ import chronologyApi from '../api/chronology';
 import campaignApi from '../api/campaigns';
 import mapsApi from '../api/maps';
 import { totalDaysSinceEpoch, getActiveSeason } from '../utils/chronologyMath';
-import { makeTimeline, termsOf, dateFromTotalDays } from '../utils/chronologyEras';
+import { makeTimeline, termsOf, dateFromTotalDays, NO_WEEKDAY_COLUMNS } from '../utils/chronologyEras';
 import { eventsOnDay, equivalentDates, equivalentDatesText } from '../utils/chronologySync';
 import { eventPlaceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
@@ -181,7 +181,7 @@ export default function ChronologyView() {
     );
   }
 
-  const totalWeekdays = weekdays.length;
+  const totalWeekdays = weekdays.length || Number(calendar.week_length) || 0;
   const terms = termsOf(calendar);
   // Локальний відлік календаря (ери) — повні months/weekdayCount свіжіші за
   // preview з getOne.
@@ -240,10 +240,12 @@ export default function ChronologyView() {
 
   // Клітинки — дні базового відліку від початку сторінки місяця до її кінця
   // (місяць може обриватися початком наступної ери).
+  // Без днів тижня сітка — просто ряди по NO_WEEKDAY_COLUMNS днів.
+  const columns = totalWeekdays || NO_WEEKDAY_COLUMNS;
   const cells = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
   for (let T = page.start; T <= page.end; T++) cells.push(T);
-  if (totalWeekdays > 0) while (cells.length % totalWeekdays !== 0) cells.push(null);
+  while (cells.length % columns !== 0) cells.push(null);
 
   const activeSeason = getActiveSeason(seasons, months, page.loc.monthIndex, 1);
   const scrimmed = Boolean(activeSeason?.bg_image_url);
@@ -381,76 +383,68 @@ export default function ChronologyView() {
             </div>
           )}
 
-          {totalWeekdays === 0 && (
-            <p className={`text-sm ${scrimmed ? 'text-white/80' : 'text-text-dim'}`}>
-              У календаря ще немає днів тижня — сітку показати неможливо, поки їх не додано в конструкторі.
-            </p>
-          )}
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+            {(weekdays.length > 0 ? weekdays : Array.from({ length: totalWeekdays }, (_, i) => ({ id: i, name: String(i + 1) }))).map((wd) => (
+              <div key={wd.id} className={`px-1 pb-1.5 text-center text-[0.65rem] font-bold uppercase tracking-wide ${scrimmed ? 'text-white/70' : 'text-text-dim'}`}>
+                {/* Below md (768px) there's rarely room for a full weekday
+                    name once a calendar has more than ~5-6 of them, so the
+                    GM-authored short_name (builder-set, not truncated
+                    client-side) takes over; falls back to the full name if
+                    short_name was never set. */}
+                <span className="hidden md:inline">{wd.name}</span>
+                <span className="md:hidden">{wd.short_name || wd.name}</span>
+              </div>
+            ))}
+            {cells.map((T, i) => {
+              if (T === null) return <div key={`blank-${i}`} />;
+              const day = T - page.start + 1;
+              const totalDays = T;
+              const dayEvents = eventsOnDay(events, syncCtx, T);
+              const equivalents = equivalentDatesText(calendars, syncTarget, baseOf(T));
+              const isToday = T === campaignT;
 
-          {totalWeekdays > 0 && (
-            <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${totalWeekdays}, minmax(0, 1fr))` }}>
-              {weekdays.map((wd) => (
-                <div key={wd.id} className={`px-1 pb-1.5 text-center text-[0.65rem] font-bold uppercase tracking-wide ${scrimmed ? 'text-white/70' : 'text-text-dim'}`}>
-                  {/* Below md (768px) there's rarely room for a full weekday
-                      name once a calendar has more than ~5-6 of them, so the
-                      GM-authored short_name (builder-set, not truncated
-                      client-side) takes over; falls back to the full name if
-                      short_name was never set. */}
-                  <span className="hidden md:inline">{wd.name}</span>
-                  <span className="md:hidden">{wd.short_name || wd.name}</span>
-                </div>
-              ))}
-              {cells.map((T, i) => {
-                if (T === null) return <div key={`blank-${i}`} />;
-                const day = T - page.start + 1;
-                const totalDays = T;
-                const dayEvents = eventsOnDay(events, syncCtx, T);
-                const equivalents = equivalentDatesText(calendars, syncTarget, baseOf(T));
-                const isToday = T === campaignT;
-
-                return (
-                  <button
-                    key={T}
-                    type="button"
-                    onClick={() => setSelectedT(T)}
-                    title={equivalents || undefined}
-                    className={[
-                      'flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors',
-                      scrimmed
-                        ? `border-white/20 hover:bg-white/10 ${isToday ? 'bg-white/20' : 'bg-black/20'}`
-                        : `border-border hover:bg-surface-hover ${isToday ? 'bg-accent/15' : 'bg-bg'}`,
-                    ].join(' ')}
-                  >
-                    <span className={`text-xs font-semibold ${scrimmed ? 'text-white' : 'text-text'} ${isToday ? 'text-accent' : ''}`}>
-                      {day}
-                    </span>
-                    {moons.length > 0 && (
-                      <div className="flex flex-wrap gap-0.5">
-                        {moons.map((m) => (
-                          <MoonPhase
-                            key={m.id}
-                            name={m.name}
-                            color={m.color}
-                            cycleLength={Number(m.cycle_length)}
-                            shift={Number(m.shift)}
-                            totalDaysPassed={totalDays}
-                            size={13}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {dayEvents.length > 0 && (
-                      <div className="mt-auto flex flex-wrap gap-1">
-                        {dayEvents.slice(0, 4).map((e) => (
-                          <span key={e.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: e.color }} title={e.name} />
-                        ))}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+              return (
+                <button
+                  key={T}
+                  type="button"
+                  onClick={() => setSelectedT(T)}
+                  title={equivalents || undefined}
+                  className={[
+                    'flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors',
+                    scrimmed
+                      ? `border-white/20 hover:bg-white/10 ${isToday ? 'bg-white/20' : 'bg-black/20'}`
+                      : `border-border hover:bg-surface-hover ${isToday ? 'bg-accent/15' : 'bg-bg'}`,
+                  ].join(' ')}
+                >
+                  <span className={`text-xs font-semibold ${scrimmed ? 'text-white' : 'text-text'} ${isToday ? 'text-accent' : ''}`}>
+                    {day}
+                  </span>
+                  {moons.length > 0 && (
+                    <div className="flex flex-wrap gap-0.5">
+                      {moons.map((m) => (
+                        <MoonPhase
+                          key={m.id}
+                          name={m.name}
+                          color={m.color}
+                          cycleLength={Number(m.cycle_length)}
+                          shift={Number(m.shift)}
+                          totalDaysPassed={totalDays}
+                          size={13}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {dayEvents.length > 0 && (
+                    <div className="mt-auto flex flex-wrap gap-1">
+                      {dayEvents.slice(0, 4).map((e) => (
+                        <span key={e.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: e.color }} title={e.name} />
+                      ))}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
           {page.truncated && (
             <p className={`mt-3 text-xs ${scrimmed ? 'text-white/70' : 'text-text-dim'}`}>
               Тут закінчується {page.loc.era ? `«${page.loc.era.name}»` : 'основна ера'}: з наступного дня починається {(() => {

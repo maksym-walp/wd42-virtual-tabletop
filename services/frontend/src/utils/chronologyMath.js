@@ -118,6 +118,7 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
     case 'monthly':
       return Number(event.day) === cell.day;
     case 'weekly': {
+      if (!weekdayCount) return false;
       if (event.year == null || !event.month_id || event.day == null) return false;
       const anchorMonthIndex = months.findIndex((m) => m.id === event.month_id);
       if (anchorMonthIndex === -1) return false;

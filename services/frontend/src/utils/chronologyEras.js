@@ -16,7 +16,11 @@ import {
 // «Календар» — рядок chronologyApi.list()/getOne() (структура в preview_*) або
 // об'єкт сторінки з повними months/eras/weekdayCount, які мають пріоритет.
 export const monthsOf = (cal) => cal.months || cal.preview_months || [];
-export const weekdayCountOf = (cal) => cal.weekdayCount ?? cal.weekday_count ?? (cal.preview_weekdays || []).length;
+// Скільки днів у ряду сітки, якщо в календаря немає днів тижня.
+export const NO_WEEKDAY_COLUMNS = 10;
+// Дні тижня можуть бути й без назв: тоді довжина тижня — calendars.week_length.
+export const weekdayCountOf = (cal) => cal.weekdayCount ?? cal.weekday_count
+  ?? ((cal.preview_weekdays || []).length || Number(cal.week_length) || 0);
 export const erasOf = (cal) => cal.eras || cal.preview_eras || [];
 
 // Зворотне до totalDaysSinceEpoch: день від початку епохи → дата базового

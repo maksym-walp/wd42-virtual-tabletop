@@ -92,6 +92,17 @@ describe('ChronologyController.update terms', () => {
   });
 });
 
+describe('ChronologyController.update week_length / default_day', () => {
+  it.each([[{ week_length: 0 }], [{ week_length: 1.5 }], [{ default_day: -1 }], [{ week_length: 5000 }]])(
+    'rejects %j', async (extra) => {
+      const res = mockRes();
+      await ChronologyController.update(mockReq({ params: { id: 'c1' }, body: { name: 'K', ...extra } }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChronologyModel.update).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('ChronologyController.setSync', () => {
   const call = (body, params = { id: 'c2' }) => {
     const res = mockRes();

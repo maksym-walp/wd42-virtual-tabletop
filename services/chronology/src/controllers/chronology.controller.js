@@ -51,6 +51,16 @@ const ChronologyController = {
       }
     }
 
+    for (const key of ['week_length', 'default_day']) {
+      const v = req.body[key];
+      if (v != null && !(Number.isInteger(v) && v > 0)) {
+        return res.status(400).json({ message: `${key} має бути додатним цілим числом` });
+      }
+    }
+    if (req.body.week_length > 1000) {
+      return res.status(400).json({ message: 'week_length не може перевищувати 1000' });
+    }
+
     if (req.body.default_month_id && !await ChronologyModel.monthBelongsToCalendar(req.body.default_month_id, req.params.id)) {
       return res.status(400).json({ message: 'default_month_id має належати цьому календарю' });
     }

@@ -66,3 +66,11 @@ describe('buildCalendarExport', () => {
     expect(out.first_day).toBe(0);
   });
 });
+
+describe('buildCalendarExport unnamed week', () => {
+  it('exports numbered weekdays when only the week length is set', () => {
+    const out = buildCalendarExport({ week_length: 3 }, { months, weekdays: [], seasons: [], moons: [] });
+    expect(out.week_len).toBe(3);
+    expect(out.weekdays).toEqual(['1', '2', '3']);
+  });
+});
