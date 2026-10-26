@@ -18,7 +18,7 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const EMPTY_SETTINGS = {
   name: '', description: '', current_era_name: '', previous_era_name: '',
   first_day_offset: 0, is_private: false, default_year: '', default_month_id: '',
-  term_day: '', term_week: '', term_season: '', term_year: '',
+  term_day: '', term_week: '', term_month: '', term_season: '', term_year: '',
 };
 
 // Дрібний домашній замінник Formik/react-hook-form (жодного з них немає в
@@ -86,6 +86,7 @@ export default function ChronologyBuilder() {
       default_month_id: calendar.default_month_id || '',
       term_day: calendar.term_day || '',
       term_week: calendar.term_week || '',
+      term_month: calendar.term_month || '',
       term_season: calendar.term_season || '',
       term_year: calendar.term_year || '',
     });
@@ -238,6 +239,7 @@ export default function ChronologyBuilder() {
           : null,
         term_day: settings.term_day.trim() || null,
         term_week: settings.term_week.trim() || null,
+        term_month: settings.term_month.trim() || null,
         term_season: settings.term_season.trim() || null,
         term_year: settings.term_year.trim() || null,
       });
@@ -265,7 +267,7 @@ export default function ChronologyBuilder() {
   }
 
   // Назви термінів у підписах конструктора відображають ще не збережені правки.
-  const terms = termsOf({ term_day: settings.term_day, term_week: settings.term_week, term_season: settings.term_season, term_year: settings.term_year });
+  const terms = termsOf({ term_day: settings.term_day, term_week: settings.term_week, term_month: settings.term_month, term_season: settings.term_season, term_year: settings.term_year });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
@@ -313,8 +315,8 @@ export default function ChronologyBuilder() {
           <div className="mb-4">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-dim">Назви термінів</p>
             <p className="mb-2 text-xs text-text-dim">Як цей календар називає ці поняття (називний відмінок, однина). Порожнє — стандартна назва.</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[['term_day', 'day'], ['term_week', 'week'], ['term_season', 'season'], ['term_year', 'year']].map(([field, key]) => (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {[['term_day', 'day'], ['term_week', 'week'], ['term_month', 'month'], ['term_season', 'season'], ['term_year', 'year']].map(([field, key]) => (
                 <Field key={field} label={TERM_DEFAULTS[key]}>
                   <input
                     className={inputClass}
@@ -357,7 +359,7 @@ export default function ChronologyBuilder() {
                 placeholder="Наприклад, 100"
               />
             </Field>
-            <Field label="Місяць за замовчуванням">
+            <Field label={`${terms.month} за замовчуванням`}>
               <select
                 className={inputClass}
                 value={settings.default_month_id}
@@ -384,9 +386,9 @@ export default function ChronologyBuilder() {
           <CalendarSyncSection calendarId={id} months={months.items} />
         </FormSection>
 
-        <FormSection title="Місяці">
+        <FormSection title={settings.term_month.trim() ? `${terms.month}: список` : 'Місяці'}>
           <div className="flex flex-col gap-3">
-            {months.items.length === 0 && <p className="text-sm text-text-dim">Ще немає жодного місяця.</p>}
+            {months.items.length === 0 && <p className="text-sm text-text-dim">{settings.term_month.trim() ? `${terms.month}: поки порожньо.` : 'Ще немає жодного місяця.'}</p>}
             {months.items.map((m, i) => (
               <EditableRow
                 key={m.id}
@@ -404,7 +406,7 @@ export default function ChronologyBuilder() {
                 </Field>
               </EditableRow>
             ))}
-            <AddRowButton label="Додати місяць" onClick={() => months.add()} />
+            <AddRowButton label={settings.term_month.trim() ? `Додати: ${terms.month.toLowerCase()}` : 'Додати місяць'} onClick={() => months.add()} />
           </div>
         </FormSection>
 
@@ -450,7 +452,7 @@ export default function ChronologyBuilder() {
                 <Field label="Назва" className="flex-[2]">
                   <input className={inputClass} value={s.name} onChange={(e) => seasons.update(s.id, { name: e.target.value })} maxLength={200} />
                 </Field>
-                <Field label="Місяць початку" className="w-full sm:w-44">
+                <Field label={`${terms.month} початку`} className="w-full sm:w-44">
                   <select
                     className={inputClass}
                     value={s.start_month_id}
@@ -516,7 +518,7 @@ export default function ChronologyBuilder() {
                 <Field label={`${terms.year} початку`} className="w-full sm:w-28">
                   <input type="number" className={inputClass} value={er.start_year} onChange={(e) => eras.update(er.id, { start_year: e.target.value })} />
                 </Field>
-                <Field label="Місяць початку" className="w-full sm:w-44">
+                <Field label={`${terms.month} початку`} className="w-full sm:w-44">
                   <select className={inputClass} value={er.start_month_id} onChange={(e) => eras.update(er.id, { start_month_id: e.target.value })}>
                     <option value="">Оберіть...</option>
                     {months.items.map((m) => <option key={m.id} value={m.id}>{m.name || 'Без назви'}</option>)}

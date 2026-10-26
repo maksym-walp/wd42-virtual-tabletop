@@ -84,7 +84,7 @@ export default function CalendarSyncSection({ calendarId, months }) {
       <Field label={`${terms.year} (${who})`}>
         <input type="number" className={inputClass} value={value.year} onChange={(e) => set({ ...value, year: e.target.value })} />
       </Field>
-      <Field label="Місяць">
+      <Field label={terms.month}>
         <select className={inputClass} value={value.monthIndex} onChange={(e) => set({ ...value, monthIndex: Number(e.target.value) })}>
           {monthList.map((m, i) => <option key={m.id} value={i}>{m.name || 'Без назви'}</option>)}
         </select>

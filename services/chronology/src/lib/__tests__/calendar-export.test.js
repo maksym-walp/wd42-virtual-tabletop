@@ -8,7 +8,7 @@ const months = [
 describe('buildCalendarExport eras and terms', () => {
   it('exports eras (cyclic or not), era names and custom terms', () => {
     const out = buildCalendarExport(
-      { current_era_name: 'Ера Дракона', term_year: 'Оберт' },
+      { current_era_name: 'Ера Дракона', term_year: 'Оберт', term_month: 'Декада' },
       {
         months, weekdays: [], seasons: [], moons: [],
         eras: [
@@ -23,6 +23,7 @@ describe('buildCalendarExport eras and terms', () => {
     ]);
     expect(out.era_names).toEqual({ current: 'Ера Дракона', previous: null });
     expect(out.terms.year).toBe('Оберт');
+    expect(out.terms.month).toBe('Декада');
   });
 });
 
@@ -45,7 +46,7 @@ describe('buildCalendarExport', () => {
       year: 5, first_day: 2, notes: {},
       seasons: [{ name: 'Зима', start_month: 'Дракон', start_day: 3, color: '#ffffff' }],
       eras: [], era_names: { current: null, previous: null },
-      terms: { day: null, week: null, season: null, year: null },
+      terms: { day: null, week: null, month: null, season: null, year: null },
     });
   });
 

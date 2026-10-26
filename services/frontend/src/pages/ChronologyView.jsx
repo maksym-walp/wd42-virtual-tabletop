@@ -169,7 +169,7 @@ export default function ChronologyView() {
   if (months.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
-        <EmptyState icon="🗓️" title="У календаря ще немає місяців">
+        <EmptyState icon="🗓️" title={calendar.term_month ? `У календаря ще немає: ${termsOf(calendar).month.toLowerCase()}` : 'У календаря ще немає місяців'}>
           {canManage ? 'Спершу побудуйте його структуру.' : 'Майстер ще не побудував цей календар.'}
           {canManage && (
             <div className="mt-4">
@@ -208,7 +208,7 @@ export default function ChronologyView() {
       year: Number(jump.year), monthIndex: Number(jump.monthIndex), day: 1,
     };
     if (!Number.isInteger(spec.year) || !timeline.isValidLocal(spec)) {
-      setJumpError('Такого місяця немає в цій ері (за межами її тривалості або циклу).');
+      setJumpError(`Такої дати (${terms.month.toLowerCase()} і рік) немає в цій ері — за межами її тривалості або циклу.`);
       return;
     }
     setViewT(timeline.toAbs(spec));
@@ -285,7 +285,7 @@ export default function ChronologyView() {
         <div className={scrimmed ? 'bg-black/55 p-4 backdrop-blur-[1px]' : 'bg-surface p-4'}>
           <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 ${scrimmed ? 'text-white' : 'text-text'}`}>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => goToMonth(-1)} aria-label="Попередній місяць"
+              <button type="button" onClick={() => goToMonth(-1)} aria-label={calendar.term_month ? `${terms.month}: назад` : 'Попередній місяць'}
                 className={`rounded-lg border p-1.5 ${scrimmed ? 'border-white/30 hover:bg-white/10' : 'border-border hover:bg-surface-hover'}`}>
                 <ChevronLeft size={18} />
               </button>
@@ -295,7 +295,7 @@ export default function ChronologyView() {
                   {timeline.yearText(page.loc)}
                 </div>
               </div>
-              <button type="button" onClick={() => goToMonth(1)} aria-label="Наступний місяць"
+              <button type="button" onClick={() => goToMonth(1)} aria-label={calendar.term_month ? `${terms.month}: вперед` : 'Наступний місяць'}
                 className={`rounded-lg border p-1.5 ${scrimmed ? 'border-white/30 hover:bg-white/10' : 'border-border hover:bg-surface-hover'}`}>
                 <ChevronRight size={18} />
               </button>
@@ -366,7 +366,7 @@ export default function ChronologyView() {
                   onKeyDown={(e) => { if (e.key === 'Enter') applyJump(); if (e.key === 'Escape') setJumpOpen(false); }}
                 />
               </Field>
-              <Field label="Місяць">
+              <Field label={terms.month}>
                 <select
                   className={inputClass}
                   value={jump.monthIndex}

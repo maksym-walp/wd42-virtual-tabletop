@@ -144,12 +144,13 @@ export function makeTimeline(cal) {
   };
 }
 
-// Власні назви термінів календаря (міграція 99): називний відмінок, однина.
-export const TERM_DEFAULTS = { day: 'День', week: 'Тиждень', season: 'Сезон', year: 'Рік' };
+// Власні назви термінів календаря (міграції 99, 104): називний відмінок, однина.
+export const TERM_DEFAULTS = { day: 'День', week: 'Тиждень', month: 'Місяць', season: 'Сезон', year: 'Рік' };
 export function termsOf(cal) {
   return {
     day: cal?.term_day || TERM_DEFAULTS.day,
     week: cal?.term_week || TERM_DEFAULTS.week,
+    month: cal?.term_month || TERM_DEFAULTS.month,
     season: cal?.term_season || TERM_DEFAULTS.season,
     year: cal?.term_year || TERM_DEFAULTS.year,
   };

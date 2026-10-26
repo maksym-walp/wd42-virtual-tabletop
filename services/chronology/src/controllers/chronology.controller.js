@@ -6,8 +6,8 @@ const ChronologyMoonModel = require('../models/chronology-moon.model');
 const ChronologyEraModel = require('../models/chronology-era.model');
 const { buildCalendarExport } = require('../lib/calendar-export');
 
-// Власні назви «День/Тиждень/Сезон/Рік» (міграція 99); порожнє = стандартна.
-const TERM_KEYS = ['term_day', 'term_week', 'term_season', 'term_year'];
+// Власні назви «День/Тиждень/Місяць/Сезон/Рік» (міграції 99, 104); порожнє = стандартна.
+const TERM_KEYS = ['term_day', 'term_week', 'term_month', 'term_season', 'term_year'];
 
 const ChronologyController = {
   async list(req, res) {

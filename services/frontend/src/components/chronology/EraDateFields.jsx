@@ -5,7 +5,7 @@ import Field, { inputClass } from '../ui/Field';
 
 const EMPTY = { year: '', monthId: '', day: '' };
 
-// Поля дати календаря: Рік / Місяць / День. Значення { year, monthId, day } —
+// Поля дати календаря: Рік / Місяць / День (назви — власні терміни календаря). Значення { year, monthId, day } —
 // завжди у безперервному базовому відліку (так дати зберігаються); якщо в
 // календаря є ери, поля показують і редагують ЛОКАЛЬНУ дату — «Ера, [цикл],
 // рік, місяць, день» (у новій ері відлік знову з 1), а сюди віддають базову.
@@ -72,7 +72,7 @@ export default function EraDateFields({ calendar, value, onChange, labelSuffix =
         <Field label={`${terms.year}${labelSuffix}`}>
           <input type="number" className={inputClass} value={val.year} onChange={set('year')} required={required} />
         </Field>
-        <Field label={`Місяць${labelSuffix}`}>
+        <Field label={`${terms.month}${labelSuffix}`}>
           <select className={inputClass} value={val.monthId} onChange={set('monthId')}>
             <option value="">Не задано</option>
             {months.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -124,7 +124,7 @@ export default function EraDateFields({ calendar, value, onChange, labelSuffix =
         <Field label={`${terms.year}${labelSuffix}`}>
           <input type="number" className={inputClass} value={draft.year} onChange={(e) => update({ year: e.target.value })} required={required} />
         </Field>
-        <Field label={`Місяць${labelSuffix}`}>
+        <Field label={`${terms.month}${labelSuffix}`}>
           <select className={inputClass} value={draft.monthIndex} onChange={(e) => update({ monthIndex: e.target.value })}>
             <option value="">Не задано</option>
             {months.map((m, i) => <option key={m.id} value={i}>{m.name}</option>)}

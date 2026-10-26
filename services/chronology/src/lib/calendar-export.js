@@ -61,7 +61,7 @@ function buildCalendarExport(calendar, { months, weekdays, seasons, moons, eras 
     era_names: { current: calendar.current_era_name ?? null, previous: calendar.previous_era_name ?? null },
     // Власні назви термінів календаря (null — стандартні).
     terms: {
-      day: calendar.term_day ?? null, week: calendar.term_week ?? null,
+      day: calendar.term_day ?? null, week: calendar.term_week ?? null, month: calendar.term_month ?? null,
       season: calendar.term_season ?? null, year: calendar.term_year ?? null,
     },
   };

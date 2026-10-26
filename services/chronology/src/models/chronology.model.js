@@ -76,19 +76,19 @@ const ChronologyModel = {
     const {
       name, description, current_era_name, previous_era_name,
       first_day_offset, is_private, default_year, default_month_id,
-      term_day, term_week, term_season, term_year,
+      term_day, term_week, term_month, term_season, term_year,
     } = data;
 
     const { rows } = await pool.query(
       `UPDATE chronology.calendars
        SET name=$2, description=$3, current_era_name=$4, previous_era_name=$5,
            first_day_offset=$6, is_private=$7, default_year=$8, default_month_id=$9,
-           term_day=$10, term_week=$11, term_season=$12, term_year=$13, updated_at=NOW()
+           term_day=$10, term_week=$11, term_season=$12, term_year=$13, term_month=$14, updated_at=NOW()
        WHERE id=$1
        RETURNING *`,
       [id, name, description ?? null, current_era_name ?? null, previous_era_name ?? null,
         first_day_offset ?? 0, is_private ?? false, default_year ?? null, default_month_id ?? null,
-        term_day || null, term_week || null, term_season || null, term_year || null]
+        term_day || null, term_week || null, term_season || null, term_year || null, term_month || null]
     );
     return rows[0] || null;
   },

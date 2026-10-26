@@ -121,7 +121,9 @@ export default function CalendarCard({ calendar: c, to, actions, date, label }) 
   const moonsCount = (c.preview_moons || []).length;
   const description = htmlToPreviewText(c.description, 160);
   const stats = [
-    months.length > 0 && `${months.length} ${pluralizeUk(months.length, ['місяць', 'місяці', 'місяців'])}`,
+    months.length > 0 && (c.term_month
+      ? `${termsOf(c).month}: ${months.length}`
+      : `${months.length} ${pluralizeUk(months.length, ['місяць', 'місяці', 'місяців'])}`),
     months.length > 0 && yearLengthText(c, daysPerYear(months)),
     moonsCount > 0 && `${moonsCount} ${pluralizeUk(moonsCount, ['супутник', 'супутники', 'супутників'])}`,
   ].filter(Boolean);
