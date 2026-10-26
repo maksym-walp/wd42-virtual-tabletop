@@ -3,6 +3,30 @@
 // kept out of chronologyMath.js since that file is pure calendar date math
 // with no notion of "an event" or cross-service data (locations).
 import { totalDaysSinceEpoch, yearLabel } from './chronologyMath';
+import { pluralizeUk } from './pluralize';
+
+// Види повторюваності події: назви для вибору у формі. «Кожні N днів» і «за
+// фазою супутника» мають параметри — повний підпис події дає recurrenceLabel.
+export const RECURRENCE_LABELS = {
+  none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева',
+  interval_days: 'Кожні N днів', lunar: 'За фазою супутника',
+};
+
+// Підпис повторюваності конкретної події; moons — супутники її календаря
+// (для назви супутника).
+export function recurrenceLabel(event, moons = []) {
+  const n = Number(event.recurrence_interval) || 1;
+  if (event.recurrence === 'interval_days') {
+    return n === 1 ? 'Щодня' : `Кожні ${n} ${pluralizeUk(n, ['день', 'дні', 'днів'])}`;
+  }
+  if (event.recurrence === 'lunar') {
+    const moon = moons.find((m) => m.id === event.moon_id);
+    const phase = event.moon_phase == null ? '' : `, фаза ${Number(event.moon_phase)}%`;
+    const every = n === 1 ? 'щоцикла' : `кожні ${n} ${pluralizeUk(n, ['цикл', 'цикли', 'циклів'])}`;
+    return `${moon ? moon.name : 'Супутник видалено'}${phase}, ${every}`;
+  }
+  return RECURRENCE_LABELS[event.recurrence] || event.recurrence;
+}
 
 // One side of an event's date (start or end): "day month, year era", falling
 // back gracefully as pieces go missing. null when there's no year at all —

@@ -5,14 +5,12 @@ import chronologyApi from '../api/chronology';
 import { useAuth } from '../context/AuthContext';
 import useEventLookups from '../hooks/useEventLookups';
 import useEventTypes from '../hooks/useEventTypes';
-import { eventDateRangeLabel, eventPlaceLabel } from '../utils/chronologyEvent';
+import { eventDateRangeLabel, eventPlaceLabel, recurrenceLabel } from '../utils/chronologyEvent';
 import { equivalentDates } from '../utils/chronologySync';
 import { makeTimeline } from '../utils/chronologyEras';
 import Button from '../components/ui/Button';
 import ShareButton from '../components/ShareButton';
 import SmartTextReader from '../components/SmartTextReader';
-
-const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 
 // Сторінка однієї події хронології: /chronology/:id/events/:eventId — замість
 // вікна поверх списку. Ліворуч — назва, тип, дата, місце, учасники; праворуч —
@@ -95,7 +93,7 @@ export default function ChronologyEventView() {
             >
               {type?.label || 'Подія'}
             </span>
-            <span className="text-xs text-text-dim">{RECURRENCE_LABELS[event.recurrence] || event.recurrence}</span>
+            <span className="text-xs text-text-dim">{recurrenceLabel(event, calendar.preview_moons || [])}</span>
             {event.campaign_id && <span className="text-xs italic text-text-dim">кампанії</span>}
             <span className="ml-auto text-xs italic text-text-dim">{event.is_public ? 'публічна' : 'приховано'}</span>
           </div>

@@ -5,6 +5,7 @@ import { totalDaysSinceEpoch, DURATION_DISPLAY_LABELS } from '../../utils/chrono
 import { EVENT_COLOR_PRESETS } from '../../constants/chronologyColors';
 import { convertDate, isSynced } from '../../utils/chronologySync';
 import { weekdayCountOf } from '../../utils/chronologyEras';
+import { RECURRENCE_LABELS } from '../../utils/chronologyEvent';
 import ColorField from '../ui/ColorField';
 import EraDateFields from './EraDateFields';
 import Button from '../ui/Button';
@@ -13,7 +14,6 @@ import MultiSelectDropdown from '../ui/MultiSelectDropdown';
 import SmartTextarea from '../ui/SmartTextarea';
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
-const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 
 // Create/edit form for a chronology event — the body of the event form page
 // (pages/ChronologyEventForm.jsx). `initialDate` prefills the date when the
@@ -46,6 +46,11 @@ export default function EventForm({
   const [color, setColor] = useState(event?.own_color || event?.color || '#e0a020');
   const [isPublic, setIsPublic] = useState(event?.is_public ?? true);
   const [recurrence, setRecurrence] = useState(event?.recurrence || 'none');
+  // «Кожні N днів» / «кожні N циклів супутника у фазі P %»: N — спільне поле.
+  const [stepCount, setStepCount] = useState(String(event?.recurrence_interval ?? '1'));
+  const [moonId, setMoonId] = useState(event?.moon_id || '');
+  const [moonPhase, setMoonPhase] = useState(String(event?.moon_phase ?? '50'));
+  const ownerMoons = owner?.preview_moons || [];
 
   const [year, setYear] = useState(String(event?.year ?? initialDate?.year ?? ''));
   const [monthId, setMonthId] = useState(event?.month_id || initialDate?.monthId || '');
@@ -90,6 +95,7 @@ export default function EventForm({
     move(year, monthId, day, setYear, setMonthId, setDay);
     if (isDuration) move(endYear, endMonthId, endDay, setEndYear, setEndMonthId, setEndDay);
     setOwnerId(nextId);
+    setMoonId('');
   };
 
   const handleSave = async () => {
@@ -103,6 +109,23 @@ export default function EventForm({
         const startDays = totalDaysSinceEpoch(months, Number(year), startIdx, Number(day));
         const endDays = totalDaysSinceEpoch(months, Number(endYear), endIdx, Number(endDay));
         if (endDays < startDays) { setError('Дата завершення не може бути раніше дати початку'); return; }
+      }
+    }
+
+    const stepped = recurrence === 'interval_days' || recurrence === 'lunar';
+    if (stepped && !(year !== '' && monthId && day !== '')) {
+      setError('Для такого повторення вкажіть повну дату події (рік, місяць, день) — від неї йде відлік');
+      return;
+    }
+    if (stepped && !(Number.isInteger(Number(stepCount)) && Number(stepCount) >= 1)) {
+      setError(recurrence === 'lunar' ? 'Кількість циклів має бути цілим числом від 1' : 'Кількість днів має бути цілим числом від 1');
+      return;
+    }
+    if (recurrence === 'lunar') {
+      if (!ownerMoons.some((m) => m.id === moonId)) { setError('Оберіть супутник'); return; }
+      if (moonPhase === '' || !(Number(moonPhase) >= 0 && Number(moonPhase) < 100)) {
+        setError('Фаза — відсоток циклу від 0 до 100 (не включно)');
+        return;
       }
     }
 
@@ -120,6 +143,9 @@ export default function EventForm({
         month_id: monthId || null,
         day: day === '' ? null : Number(day),
         recurrence,
+        recurrence_interval: stepped ? Number(stepCount) : null,
+        moon_id: recurrence === 'lunar' ? moonId : null,
+        moon_phase: recurrence === 'lunar' ? Number(moonPhase) : null,
         location_id: placeMode === 'location' ? (locationId || null) : null,
         region: placeMode === 'region' ? (region.trim() || null) : null,
         end_year: isDuration && endYear !== '' ? Number(endYear) : null,
@@ -266,9 +292,31 @@ export default function EventForm({
         <select className={inputClass} value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
           {Object.entries(RECURRENCE_LABELS)
             .filter(([key]) => key !== 'weekly' || recurrence === 'weekly' || weekdayCountOf(owner || {}) > 0)
+            .filter(([key]) => key !== 'lunar' || recurrence === 'lunar' || ownerMoons.length > 0)
             .map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select>
       </Field>
+      {recurrence === 'interval_days' && (
+        <Field label="Кожні, днів" hint="Відлік — від дати події, в обидва боки">
+          <input type="number" min={1} step={1} className={inputClass} value={stepCount} onChange={(e) => setStepCount(e.target.value)} />
+        </Field>
+      )}
+      {recurrence === 'lunar' && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label="Супутник">
+            <select className={inputClass} value={moonId} onChange={(e) => setMoonId(e.target.value)}>
+              <option value="">Оберіть...</option>
+              {ownerMoons.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Фаза, %" hint="Відсоток циклу: 0 — новий, 50 — повний">
+            <input type="number" min={0} max={99.99} step="any" className={inputClass} value={moonPhase} onChange={(e) => setMoonPhase(e.target.value)} />
+          </Field>
+          <Field label="Кожні, циклів" hint="Відлік — від циклу дати події">
+            <input type="number" min={1} step={1} className={inputClass} value={stepCount} onChange={(e) => setStepCount(e.target.value)} />
+          </Field>
+        </div>
+      )}
       <label className="flex cursor-pointer items-center gap-2.5 text-sm text-text">
         <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="h-5 w-5 accent-accent" />
         Публічна — видима всім гравцям

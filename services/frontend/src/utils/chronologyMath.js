@@ -99,6 +99,19 @@ export function eventDayRange(event, months) {
   return end >= start ? [start, end] : null;
 }
 
+// Чи припадає на день `total` (базового відліку) задана фаза супутника: день
+// містить момент, коли фаза досягає phasePct % циклу (0 — новий, 50 — повний).
+// Повертає номер циклу цього моменту (ціле, може бути від'ємним) або null.
+// Фаза дня T — (T + shift) mod cycle / cycle, як у MoonPhase.jsx.
+export function lunarPhaseCycle(total, cycleLength, shift, phasePct) {
+  const cycle = Number(cycleLength);
+  if (!(cycle > 0)) return null;
+  const p = Number(phasePct) / 100;
+  const x = (total + (Number(shift) || 0)) / cycle;
+  const k = Math.ceil(x - p - 1e-9);
+  return k + p < x + 1 / cycle - 1e-9 ? k : null;
+}
+
 // Does `event` land on this exact grid cell? "yearly"/"monthly"/"weekly"
 // ignore the parts of the anchor date that repeat (task: "if yearly, it
 // shows on that day/month regardless of the year"). Тривалі події поза
@@ -125,6 +138,28 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
       const anchorTotalDays = totalDaysSinceEpoch(months, Number(event.year), anchorMonthIndex, Number(event.day));
       const anchorWeekday = weekdayAt ? weekdayAt(anchorTotalDays) : weekdayIndexOf(anchorTotalDays, firstDayOffset, weekdayCount);
       return anchorWeekday === cell.weekdayIndex;
+    }
+    // Кожні N днів / кожні N циклів супутника у фазі P % — від дати події (в обидва
+    // боки, як і решта повторень). cell.total — день базового відліку, cell.moons —
+    // супутники календаря-власника.
+    case 'interval_days':
+    case 'lunar': {
+      const n = Number(event.recurrence_interval);
+      if (!(n >= 1) || cell.total == null || event.year == null || !event.month_id || event.day == null) return false;
+      const mi = months.findIndex((m) => m.id === event.month_id);
+      if (mi === -1) return false;
+      const anchor = totalDaysSinceEpoch(months, Number(event.year), mi, Number(event.day));
+      if (event.recurrence === 'interval_days') return mod(cell.total - anchor, n) === 0;
+
+      const moon = (cell.moons || []).find((m) => m.id === event.moon_id);
+      if (!moon || event.moon_phase == null) return false;
+      const k = lunarPhaseCycle(cell.total, moon.cycle_length, moon.shift, event.moon_phase);
+      if (k == null) return false;
+      // Перший цикл — перше входження фази в день події або після нього.
+      const cycle = Number(moon.cycle_length);
+      const x0 = (anchor + (Number(moon.shift) || 0)) / cycle;
+      const k0 = Math.ceil(x0 - Number(event.moon_phase) / 100 - 1e-9);
+      return mod(k - k0, n) === 0;
     }
     case 'none':
     default: {

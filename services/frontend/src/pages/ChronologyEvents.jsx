@@ -5,12 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import chronologyApi from '../api/chronology';
 import useEventLookups from '../hooks/useEventLookups';
 import useEventTypes from '../hooks/useEventTypes';
-import { eventDateRangeLabel, eventPlaceLabel, defaultCalendarId } from '../utils/chronologyEvent';
+import { eventDateRangeLabel, eventPlaceLabel, defaultCalendarId, recurrenceLabel } from '../utils/chronologyEvent';
 import {
-  eventInCalendar, eventWorldSortKey, equivalentDatesText, buildEventsExport, monthsOf,
+  eventInCalendar, eventWorldSortKey, equivalentDatesText, buildEventsExport, monthsOf, calendarOffset,
 } from '../utils/chronologySync';
+import { layoutTimeline } from '../utils/chronologyTimelineLayout';
 import { makeTimeline } from '../utils/chronologyEras';
-import { totalDaysSinceEpoch, yearLabel } from '../utils/chronologyMath';
+import { totalDaysSinceEpoch, yearLabel, eventHasEnd, eventDayRange } from '../utils/chronologyMath';
 import { htmlToPreviewText } from '../utils/richText';
 import Tooltip from '../components/ui/Tooltip';
 import ChronologyTabs from '../components/chronology/ChronologyTabs';
@@ -21,7 +22,6 @@ import useMediaQuery from '../hooks/useMediaQuery';
 import EmptyState from '../components/ui/EmptyState';
 import { inputClass } from '../components/ui/Field';
 
-const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 const NO_TYPE = '__none__';
 const MAX_PARTICIPANT_CHIPS = 4;
 
@@ -332,7 +332,10 @@ export default function ChronologyEvents() {
 const AXIS_GAP = 28; // px між паралельними осями
 
 // Стрічка часу: осі всіх вибраних календарів ідуть поряд посередині, а події
-// усіх цих календарів — разом по боках від них, чергуючись. Дата, порядок і
+// усіх цих календарів — разом по боках від них, у чотири доріжки (по дві з
+// кожного боку), щоб одночасні події не накладались. Тривала подія
+// розтягується від відмітки початку до відмітки кінця (розкладка — в
+// utils/chronologyTimelineLayout.js). Дата, порядок і
 // підписи років — за основним календарем (за замовчуванням, якщо він вибраний,
 // інакше першим із вибраних); подія стоїть на осі свого календаря. На вузьких
 // екранах осі зліва, а всі картки — праворуч від них.
@@ -379,25 +382,44 @@ function Timeline({
     return sortDir === 'asc' ? ka - kb : kb - ka;
   });
 
-  // Підряд ідучі події одного року — одна позначка на осях.
-  const groups = [];
-  for (const item of sorted) {
+  // Підпис року події: у локальному відліку календаря (з ерами).
+  const yearLabelOf = (item) => {
     const { owner, shown, foreign, converted } = viewOf(item.event);
     const own = foreign && converted === false;
-    const label = yearOf(shown, own ? owner : mainCalendar, own ? makeTimeline(owner) : mainTimeline);
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(item);
-    else groups.push({ label, items: [item] });
-  }
+    return yearOf(shown, own ? owner : mainCalendar, own ? makeTimeline(owner) : mainTimeline);
+  };
+  // Кінець тривалої одноразової події — на світовій осі (як і початок).
+  const endKeyOf = (e) => {
+    const owner = calendarsById.get(e.calendar_id);
+    if (!owner || e.recurrence !== 'none' || !eventHasEnd(e)) return null;
+    const range = eventDayRange(e, monthsOf(owner));
+    return range && range[1] > range[0] ? range[1] - calendarOffset(owner) : null;
+  };
+  const endLabelOf = (key, fallback) => {
+    const loc = mainTimeline.locate(key + calendarOffset(mainCalendar));
+    return loc ? mainTimeline.yearText(loc) : fallback;
+  };
+
+  const layout = layoutTimeline(sorted.map((item) => {
+    const start = eventWorldSortKey(item.event, calendarsById);
+    const end = Number.isFinite(start) ? endKeyOf(item.event) : null;
+    const labelStart = yearLabelOf(item);
+    return {
+      id: item.event.id, start, end, labelStart,
+      labelEnd: end != null ? endLabelOf(end, labelStart) : null,
+    };
+  }), { desc: sortDir === 'desc', wide });
 
   const pad = wide ? 24 : 12;
   const axesW = (n - 1) * AXIS_GAP + 2 * pad;
   // Позиція осі i: від центру колонки осей (широкий макет) або від її лівого краю (вузький).
   const axisX = (i) => (wide ? `calc(50% + ${(i - (n - 1) / 2) * AXIS_GAP}px)` : `${pad + i * AXIS_GAP}px`);
-  const columns = wide ? `minmax(0,1fr) ${axesW}px minmax(0,1fr)` : `${axesW}px minmax(0,1fr)`;
+  // Широкий макет: [дальня ліва | ближня ліва | осі | ближня права | дальня права].
+  const columns = wide
+    ? `minmax(0,1fr) minmax(0,1fr) ${axesW}px minmax(0,1fr) minmax(0,1fr)`
+    : `${axesW}px minmax(0,1fr)`;
 
   const total = merged.length;
-  let index = 0; // наскрізний індекс — чергуємо боки по всій стрічці
   return (
     <section aria-label="Стрічка подій" className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1">
@@ -456,31 +478,31 @@ function Timeline({
               )}
             </div>
           ))}
-          {groups.map((group) => (
-            <div key={group.label} className="relative">
-              <div className={`relative z-10 mb-3 flex ${wide ? 'justify-center' : 'justify-start'}`}>
+          <ol className="grid" style={{ gridTemplateColumns: columns }}>
+            {layout.labelRows.map(({ row, label }) => (
+              <li
+                key={`label-${row}`}
+                className={`relative z-10 mb-3 flex ${wide ? 'justify-center' : 'justify-start'}`}
+                style={{ gridRow: row, gridColumn: '1 / -1' }}
+              >
                 <span className="max-w-full rounded-full border border-accent/60 bg-surface px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent">
-                  {group.label}
+                  {label}
                 </span>
-              </div>
-              <ul className="flex flex-col gap-4 pb-6">
-                {group.items.map(({ event: e, axis }) => {
-                  const left = wide && index++ % 2 === 0;
-                  return (
-                    <TimelineItem
-                      key={e.id} event={e} left={left} wide={wide} axisX={axisX(axis)} columns={columns}
-                      calendar={mainCalendar} months={main.months} calendarTimeline={mainTimeline}
-                      calendars={calendars} viewOf={viewOf} multi={n > 1}
-                      type={eventTypesMap[e.event_type]}
-                      locationsById={locationsById} charactersById={charactersById}
-                      canManage={canManage} campaignId={campaignId}
-                      highlighted={e.id === highlightId} onDelete={onDelete}
-                    />
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+              </li>
+            ))}
+            {sorted.map(({ event: e, axis }) => (
+              <TimelineItem
+                key={e.id} event={e} slot={layout.placements.get(e.id)} wide={wide}
+                axisIn={pad + axis * AXIS_GAP} axesW={axesW}
+                calendar={mainCalendar} months={main.months} calendarTimeline={mainTimeline}
+                calendars={calendars} viewOf={viewOf} multi={n > 1}
+                type={eventTypesMap[e.event_type]}
+                locationsById={locationsById} charactersById={charactersById}
+                canManage={canManage} campaignId={campaignId}
+                highlighted={e.id === highlightId} onDelete={onDelete}
+              />
+            ))}
+          </ol>
         </div>
       )}
     </section>
@@ -510,7 +532,7 @@ function yearOf(shown, dateCal, timeline) {
 }
 
 function TimelineItem({
-  event: e, left, wide, axisX, columns, calendar, months, calendarTimeline, calendars, viewOf, multi, type,
+  event: e, slot, wide, axisIn, axesW, calendar, months, calendarTimeline, calendars, viewOf, multi, type,
   locationsById, charactersById, canManage, campaignId, highlighted, onDelete,
 }) {
   const place = eventPlaceLabel(e, locationsById);
@@ -527,28 +549,59 @@ function TimelineItem({
   const participants = e.participant_ids || [];
   const qs = campaignId ? `?campaign_id=${campaignId}` : '';
 
-  // Колонка осей посередині (широкий макет) або зліва (вузький); картка — з
-  // боку left/справа. Точка стоїть на осі свого календаря, відросток тягнеться
-  // від неї до картки.
-  const cardCol = wide ? (left ? 'col-start-1' : 'col-start-3') : 'col-start-2';
-  const axesCol = wide ? 'col-start-2' : 'col-start-1';
-  const connectorStyle = left ? { left: 0, width: axisX } : { left: axisX, right: 0 };
+  // Колонки широкого макета: 1 — дальня ліва, 2 — ближня ліва, 3 — осі, 4 —
+  // ближня права, 5 — дальня права; у вузькому: 1 — осі, 2 — картки.
+  const { lane, side, first, last, cardStart, cardEnd, span, displaced } = slot;
+  const left = wide && side === 'left';
+  const cardCol = !wide ? 2 : { L2: 1, L1: 2, R1: 4, R2: 5 }[lane];
+  const axesCol = wide ? 3 : 1;
+  // Позначка початку охоплює колонки від картки до осей: відросток тягнеться від
+  // точки на осі до картки (під картками — він лише в проміжках).
+  const markCols = !wide ? '1 / 2' : left ? `${cardCol} / 4` : `3 / ${cardCol + 1}`;
+  const dotPos = left ? { right: axesW - axisIn, transform: 'translateX(50%)' } : { left: axisIn, transform: 'translateX(-50%)' };
+  // Відросток закінчується біля краю картки (її бічний відступ — mx-1.5 = 0.375rem).
+  const cardGap = wide ? '0.375rem' : 0;
+  const connectorStyle = left ? { left: cardGap, right: axesW - axisIn } : { left: axisIn, right: cardGap };
+  const axesOnly = { gridColumn: axesCol };
 
   return (
-    <li data-event-id={e.id} className="grid items-start" style={{ gridTemplateColumns: columns }}>
-      <div className={`relative row-start-1 self-stretch ${axesCol}`} aria-hidden>
-        <span className="absolute top-[1.65rem] h-px bg-border" style={connectorStyle} />
+    <li className="contents">
+      <div
+        className="pointer-events-none relative min-h-[2.5rem]"
+        style={{ gridRow: `${first} / ${first + 1}`, gridColumn: markCols }}
+        aria-hidden
+      >
+        {!displaced && <span className="absolute top-[1.65rem] h-px bg-border" style={connectorStyle} />}
         <span
-          className="absolute top-5 z-10 h-3.5 w-3.5 -translate-x-1/2 rounded-full ring-4 ring-bg"
-          style={{ left: axisX, backgroundColor: e.color }}
+          className="absolute top-5 z-10 h-3.5 w-3.5 rounded-full ring-4 ring-bg"
+          style={{ ...dotPos, backgroundColor: e.color }}
         />
       </div>
+      {span && (
+        <>
+          {/* Смуга тривалості між відмітками початку й кінця (кінець — у першому
+              рядку після картки, тож смуга трохи заходить у нього). */}
+          <div className="pointer-events-none relative" style={{ gridRow: `${first} / ${last}`, ...axesOnly }} aria-hidden>
+            <span
+              className="absolute w-1.5 -translate-x-1/2 rounded-full opacity-70"
+              style={{ left: axisIn, top: '1.65rem', bottom: '-1.65rem', backgroundColor: e.color }}
+            />
+          </div>
+          <div className="pointer-events-none relative min-h-[2.5rem]" style={{ gridRow: `${last} / ${last + 1}`, ...axesOnly }} aria-hidden>
+            <span
+              className="absolute top-5 z-10 h-3.5 w-3.5 -translate-x-1/2 rounded-full ring-4 ring-bg"
+              style={{ left: axisIn, backgroundColor: e.color }}
+            />
+          </div>
+        </>
+      )}
 
       <article
-        className={`row-start-1 min-w-0 rounded-lg border bg-surface p-3 ${cardCol} ${
-          highlighted ? 'border-accent ring-2 ring-accent/50' : 'border-border'
-        }`}
-        style={{ borderLeft: `4px solid ${e.color}` }}
+        data-event-id={e.id}
+        className={`relative z-[1] mb-4 min-w-0 rounded-lg border bg-surface p-3 ${wide ? 'mx-1.5' : ''} ${
+          span ? 'self-stretch' : 'self-start'
+        } ${highlighted ? 'border-accent ring-2 ring-accent/50' : 'border-border'}`}
+        style={{ gridColumn: cardCol, gridRow: `${cardStart} / ${cardEnd}`, borderLeft: `4px solid ${e.color}` }}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -563,7 +616,7 @@ function TimelineItem({
               )}
               {e.recurrence !== 'none' && (
                 <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">
-                  {RECURRENCE_LABELS[e.recurrence] || e.recurrence}
+                  {recurrenceLabel(e, owner?.preview_moons || [])}
                 </span>
               )}
               {e.campaign_id && (

@@ -73,6 +73,53 @@ describe('ChronologyEventController.create', () => {
     expect(ChronologyEventModel.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [{ recurrence: 'interval_days' }],
+    [{ recurrence: 'interval_days', recurrence_interval: 0 }],
+    [{ recurrence: 'lunar', recurrence_interval: 1, moon_phase: 50 }],
+    [{ recurrence: 'lunar', recurrence_interval: 1, moon_id: 'mo1', moon_phase: 100 }],
+    [{ recurrence: 'lunar', recurrence_interval: 1, moon_id: 'mo1' }],
+  ])('returns 400 on invalid interval/lunar fields %j', async (extra) => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    const req = mockReq({ params: { id: 'c1' }, body: { name: 'Обряд', color: '#ff0000', ...extra } });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the moon does not belong to this calendar', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.moonBelongsToCalendar.mockResolvedValue(false);
+    const req = mockReq({
+      params: { id: 'c1' },
+      body: { name: 'Обряд', color: '#ff0000', recurrence: 'lunar', recurrence_interval: 1, moon_id: 'other', moon_phase: 50 },
+    });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid lunar recurrence', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.moonBelongsToCalendar.mockResolvedValue(true);
+    ChronologyEventModel.create.mockResolvedValue({ id: 'e1' });
+    const req = mockReq({
+      params: { id: 'c1' },
+      body: { name: 'Обряд', color: '#ff0000', recurrence: 'lunar', recurrence_interval: 2, moon_id: 'mo1', moon_phase: 50 },
+    });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
   it('returns 400 when month_id does not belong to this calendar', async () => {
     ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
     ChronologyEventModel.monthBelongsToCalendar.mockResolvedValue(false);

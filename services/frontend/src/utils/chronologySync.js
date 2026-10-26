@@ -73,11 +73,13 @@ export function eventsOnDay(events, ctx, T) {
     let result = null;
     let tl = null;
     let ownerT = T;
+    let ownerCal = target;
     if (ownerId === target.id) {
       tl = targetTimeline;
     } else {
       const owner = calendarsById.get(ownerId);
       if (owner && isSynced(owner) && isSynced(target)) {
+        ownerCal = owner;
         if (!ctx.timelines.has(ownerId)) ctx.timelines.set(ownerId, makeTimeline(owner));
         tl = ctx.timelines.get(ownerId);
         ownerT = world + calendarOffset(owner);
@@ -87,7 +89,10 @@ export function eventsOnDay(events, ctx, T) {
       const d = dateFromTotalDays(tl.months, ownerT);
       if (d) {
         result = {
-          cell: { year: d.year, monthId: d.monthId, day: d.day, weekdayIndex: tl.weekdayAt(ownerT) },
+          cell: {
+            year: d.year, monthId: d.monthId, day: d.day, weekdayIndex: tl.weekdayAt(ownerT),
+            total: ownerT, moons: ownerCal.moons || ownerCal.preview_moons || [],
+          },
           tl,
         };
       }
@@ -183,14 +188,22 @@ export function buildEventsExport({ calendars, events, locationsById, characters
       const d = range && dateFromTotalDays(monthsOf(owner), range[1]);
       originEnd = d && mapDate(owner, d);
     }
+    const moon = owner && e.recurrence === 'lunar'
+      ? (owner.preview_moons || []).find((m) => m.id === e.moon_id) : null;
+    const interval = e.recurrence === 'interval_days' || e.recurrence === 'lunar' ? Number(e.recurrence_interval) || null : null;
     const period = owner && e.recurrence === 'yearly' ? daysPerYear(monthsOf(owner))
-      : owner && e.recurrence === 'weekly' ? weekdayCountOf(owner) : null;
+      : owner && e.recurrence === 'weekly' ? weekdayCountOf(owner)
+        : e.recurrence === 'interval_days' ? interval
+          : moon && interval ? interval * Number(moon.cycle_length) : null;
     return {
       name: e.name,
       description: plainText ? plainText(e.description) : (e.description || ''),
       color: e.color,
       recurrence: e.recurrence,
       recurrence_period_days: period,
+      recurrence_interval: interval,
+      moon: moon ? moon.name : null,
+      moon_phase: moon && e.moon_phase != null ? Number(e.moon_phase) : null,
       duration_display: hasEnd ? e.duration_display : null,
       start: owner && base && owner.id === base.id ? originStart : (inBase ? dateIn(base, inBase, '') : null),
       end: !hasEnd ? null

@@ -93,7 +93,7 @@ describe('ChronologyEventModel.create', () => {
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Битва за Гарію', null, '#ff0000', true, null, null, null, 'none',
-      null, null, null, null, null, 'start', null,
+      null, null, null, null, null, 'start', null, null, null, null,
     ]);
     expect(pool.query.mock.calls[1][0]).toMatch(/DELETE FROM chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[1][1]).toEqual(['e1']);
@@ -112,10 +112,30 @@ describe('ChronologyEventModel.create', () => {
     const [, insertParams] = pool.query.mock.calls[0];
     expect(insertParams).toEqual([
       'cal-1', null, 'Облога Гарії', null, '#4caf50', true, 100, 'm1', 1, 'none',
-      'loc-1', null, 100, 'm2', 5, 'every_day', null,
+      'loc-1', null, 100, 'm2', 5, 'every_day', null, null, null, null,
     ]);
     expect(pool.query.mock.calls[2][0]).toMatch(/INSERT INTO chronology.calendar_event_participants/);
     expect(pool.query.mock.calls[2][1]).toEqual(['e1', 'npc-1', 'npc-2']);
+  });
+
+  it('stores the interval for interval_days and the moon fields only for lunar', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 'e1' }] });
+    await ChronologyEventModel.create('cal-1', {
+      name: 'Ринок', color: '#ff0000', recurrence: 'interval_days', recurrence_interval: 5, moon_id: 'mo1', moon_phase: 50,
+    });
+    expect(pool.query.mock.calls[0][1].slice(17)).toEqual([5, null, null]);
+
+    pool.query.mockClear();
+    await ChronologyEventModel.create('cal-1', {
+      name: 'Обряд', color: '#ff0000', recurrence: 'lunar', recurrence_interval: 2, moon_id: 'mo1', moon_phase: 50,
+    });
+    expect(pool.query.mock.calls[0][1].slice(17)).toEqual([2, 'mo1', 50]);
+
+    pool.query.mockClear();
+    await ChronologyEventModel.create('cal-1', {
+      name: 'Свято', color: '#ff0000', recurrence: 'yearly', recurrence_interval: 2, moon_id: 'mo1', moon_phase: 50,
+    });
+    expect(pool.query.mock.calls[0][1].slice(17)).toEqual([null, null, null]);
   });
 });
 

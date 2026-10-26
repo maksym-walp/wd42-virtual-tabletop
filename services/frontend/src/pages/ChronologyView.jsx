@@ -8,7 +8,7 @@ import mapsApi from '../api/maps';
 import { totalDaysSinceEpoch, getActiveSeason } from '../utils/chronologyMath';
 import { makeTimeline, termsOf, dateFromTotalDays, NO_WEEKDAY_COLUMNS } from '../utils/chronologyEras';
 import { eventsOnDay, equivalentDates, equivalentDatesText } from '../utils/chronologySync';
-import { eventPlaceLabel } from '../utils/chronologyEvent';
+import { eventPlaceLabel, recurrenceLabel } from '../utils/chronologyEvent';
 import MoonPhase from '../components/MoonPhase';
 import SmartTextReader from '../components/SmartTextReader';
 import Button from '../components/ui/Button';
@@ -16,8 +16,6 @@ import Field, { inputClass } from '../components/ui/Field';
 import EmptyState from '../components/ui/EmptyState';
 import Sheet from '../components/ui/Sheet';
 import ShareButton from '../components/ShareButton';
-
-const RECURRENCE_LABELS = { none: 'Одноразова', yearly: 'Щорічна', monthly: 'Щомісячна', weekly: 'Щотижнева' };
 
 export default function ChronologyView() {
   const { id } = useParams();
@@ -185,7 +183,7 @@ export default function ChronologyView() {
   const terms = termsOf(calendar);
   // Локальний відлік календаря (ери) — повні months/weekdayCount свіжіші за
   // preview з getOne.
-  const syncTarget = { ...calendar, months, weekdayCount: totalWeekdays };
+  const syncTarget = { ...calendar, months, weekdayCount: totalWeekdays, moons };
   const timeline = makeTimeline(syncTarget);
   const page = timeline.monthPage(viewT);
   const activeMonth = months[page.loc.monthIndex];
@@ -553,7 +551,7 @@ function DayEventsSheet({
                       {e.name}
                     </Link>
                     <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">
-                      {RECURRENCE_LABELS[e.recurrence] || e.recurrence}
+                      {recurrenceLabel(e, moons)}
                     </span>
                     {e.campaign_id && (
                       <span className="rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] text-text-dim">Кампанія</span>

@@ -3,7 +3,7 @@ const ChronologyModel = require('../models/chronology.model');
 const { loadChronologyOr404, loadChronologyForManageOr404 } = require('./load-chronology');
 
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
-const VALID_RECURRENCE = ['none', 'yearly', 'monthly', 'weekly'];
+const VALID_RECURRENCE = ['none', 'yearly', 'monthly', 'weekly', 'interval_days', 'lunar'];
 const VALID_DURATION_DISPLAY = ['start', 'start_end', 'every_day', 'none'];
 
 async function validateBody(body) {
@@ -20,6 +20,20 @@ async function validateBody(body) {
   if (!VALID_RECURRENCE.includes(recurrence)) {
     return `recurrence має бути одним з: ${VALID_RECURRENCE.join(', ')}`;
   }
+  // «Кожні N днів» і «кожні N циклів супутника у фазі P%» (міграція 106).
+  if (recurrence === 'interval_days' || recurrence === 'lunar') {
+    const n = body.recurrence_interval;
+    if (!(Number.isInteger(n) && n > 0 && n <= 100000)) {
+      return 'recurrence_interval має бути додатним цілим числом';
+    }
+  }
+  if (recurrence === 'lunar') {
+    if (!body.moon_id) return 'moon_id є обовʼязковим для повторення за фазою супутника';
+    const phase = body.moon_phase;
+    if (typeof phase !== 'number' || !(phase >= 0 && phase < 100)) {
+      return 'moon_phase має бути числом від 0 до 100 (не включно) — відсоток циклу';
+    }
+  }
   if (!VALID_DURATION_DISPLAY.includes(duration_display)) {
     return `duration_display має бути одним з: ${VALID_DURATION_DISPLAY.join(', ')}`;
   }
@@ -35,7 +49,7 @@ async function validateBody(body) {
   return null;
 }
 
-// month_id/end_month_id (if given) must belong to this same calendar — same
+// month_id/end_month_id (і moon_id для lunar) must belong to this same calendar — same
 // guard the season endpoints already apply to start_month_id.
 async function validateMonthRefs(body, calendarId) {
   if (body.month_id && !await ChronologyEventModel.monthBelongsToCalendar(body.month_id, calendarId)) {
@@ -43,6 +57,9 @@ async function validateMonthRefs(body, calendarId) {
   }
   if (body.end_month_id && !await ChronologyEventModel.monthBelongsToCalendar(body.end_month_id, calendarId)) {
     return 'end_month_id має належати цьому календарю';
+  }
+  if (body.recurrence === 'lunar' && !await ChronologyEventModel.moonBelongsToCalendar(body.moon_id, calendarId)) {
+    return 'moon_id має належати цьому календарю';
   }
   return null;
 }
