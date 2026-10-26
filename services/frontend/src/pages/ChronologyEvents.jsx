@@ -332,8 +332,8 @@ export default function ChronologyEvents() {
 const AXIS_GAP = 28; // px між паралельними осями
 
 // Стрічка часу: осі всіх вибраних календарів ідуть поряд посередині, а події
-// усіх цих календарів — разом по боках від них, у чотири доріжки (по дві з
-// кожного боку), щоб одночасні події не накладались. Тривала подія
+// усіх цих календарів — разом по боках від них, у чотири колонки (по дві з
+// кожного боку; колонка залежить від виду події). Тривала подія
 // розтягується від відмітки початку до відмітки кінця (розкладка — в
 // utils/chronologyTimelineLayout.js). Дата, порядок і
 // підписи років — за основним календарем (за замовчуванням, якщо він вибраний,
@@ -407,6 +407,8 @@ function Timeline({
     return {
       id: item.event.id, start, end, labelStart,
       labelEnd: end != null ? endLabelOf(end, labelStart) : null,
+      recurring: item.event.recurrence !== 'none',
+      foreign: item.event.calendar_id !== mainCalendar.id,
     };
   }), { desc: sortDir === 'desc', wide });
 
@@ -549,15 +551,17 @@ function TimelineItem({
   const participants = e.participant_ids || [];
   const qs = campaignId ? `?campaign_id=${campaignId}` : '';
 
-  // Колонки широкого макета: 1 — дальня ліва, 2 — ближня ліва, 3 — осі, 4 —
-  // ближня права, 5 — дальня права; у вузькому: 1 — осі, 2 — картки.
-  const { lane, side, first, last, cardStart, cardEnd, span, displaced } = slot;
+  // Колонки сітки широкого макета: 1, 2 — ліві, 3 — осі, 4, 5 — праві; у
+  // вузькому: 1 — осі, 2 — картки.
+  const { colStart, colEnd, side, first, last, cardStart, cardEnd, span, displaced } = slot;
   const left = wide && side === 'left';
-  const cardCol = !wide ? 2 : { L2: 1, L1: 2, R1: 4, R2: 5 }[lane];
+  // Колонки розкладки 1–4 → лінії сітки (колонка осей між 2 і 3).
+  const gridCol = (c) => (c <= 2 ? c : c + 1);
+  const cardCols = !wide ? '2 / 3' : `${gridCol(colStart)} / ${gridCol(colEnd) + 1}`;
   const axesCol = wide ? 3 : 1;
   // Позначка початку охоплює колонки від картки до осей: відросток тягнеться від
   // точки на осі до картки (під картками — він лише в проміжках).
-  const markCols = !wide ? '1 / 2' : left ? `${cardCol} / 4` : `3 / ${cardCol + 1}`;
+  const markCols = !wide ? '1 / 2' : left ? `${gridCol(colStart)} / 4` : `3 / ${gridCol(colEnd) + 1}`;
   const dotPos = left ? { right: axesW - axisIn, transform: 'translateX(50%)' } : { left: axisIn, transform: 'translateX(-50%)' };
   // Відросток закінчується біля краю картки (її бічний відступ — mx-1.5 = 0.375rem).
   const cardGap = wide ? '0.375rem' : 0;
@@ -601,7 +605,7 @@ function TimelineItem({
         className={`relative z-[1] mb-4 min-w-0 rounded-lg border bg-surface p-3 ${wide ? 'mx-1.5' : ''} ${
           span ? 'self-stretch' : 'self-start'
         } ${highlighted ? 'border-accent ring-2 ring-accent/50' : 'border-border'}`}
-        style={{ gridColumn: cardCol, gridRow: `${cardStart} / ${cardEnd}`, borderLeft: `4px solid ${e.color}` }}
+        style={{ gridColumn: cardCols, gridRow: `${cardStart} / ${cardEnd}`, borderLeft: `4px solid ${e.color}` }}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">

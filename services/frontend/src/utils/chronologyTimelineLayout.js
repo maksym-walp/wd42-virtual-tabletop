@@ -4,27 +4,37 @@
 // впорядкована: кожна відмітка часу (початок або кінець події) — окремий рядок,
 // події з однаковою відміткою ділять рядок. Тривала подія розтягується від
 // рядка свого початку до рядка кінця й тому «накриває» все, що сталося за цей
-// час. Щоб події, які відбуваються одночасно, не накладались, у широкому макеті
-// є 4 доріжки — по дві з кожного боку осі (L1/R1 ближчі до неї, L2/R2 дальші).
-// У вузькому — одна доріжка й без розтягування (як звичайний список).
+// час.
 //
-// items — у порядку подачі: { id, start, end, labelStart, labelEnd }, де start —
-// ключ на світовій осі (Infinity — без дати), end — ключ кінця або null,
-// label* — підпис року, під яким стоїть відмітка. desc — стрічка «нові → давні»:
-// тоді тривала подія починається (зверху) з кінця й тягнеться до початку.
+// У широкому макеті 4 колонки — по дві з кожного боку осі (зліва направо: 1, 2
+// | вісь | 3, 4), і кожен вид події має свою:
+//   1 — повторювані,  2 — тривалі,  3 — без тривалості й повторень,
+//   4 — події не з основного календаря.
+// Подія за замовчуванням займає ширину обох колонок свого боку; якщо в цей час
+// сусідня колонка зайнята, вона стискається до своєї. Якщо власна колонка
+// зайнята (дві тривалі події водночас), подія переходить у найближчу вільну.
+// У вузькому — одна колонка й без розтягування (як звичайний список).
 //
-// Повертає { labelRows: [{ row, label }], placements: Map(id → { lane, side,
-// first, last, cardStart, cardEnd, span, displaced }) } — номери рядків
-// 1-базні; last/cardEnd — виключно (рядок після останнього); first/last — рядки
-// відміток початку/кінця на осі (за напрямком стрічки), cardStart/cardEnd — де
-// стоїть картка. Якщо вільної доріжки в рядку немає, картка зсувається нижче
-// (displaced), а відмітки на осі лишаються на своїх місцях.
+// items — у порядку подачі: { id, start, end, labelStart, labelEnd, recurring,
+// foreign }, де start — ключ на світовій осі (Infinity — без дати), end — ключ
+// кінця або null, label* — підпис року, під яким стоїть відмітка. desc — стрічка
+// «нові → давні»: тоді тривала подія починається (зверху) з кінця й тягнеться до
+// початку.
+//
+// Повертає { labelRows: [{ row, label }], placements: Map(id → { col, colStart,
+// colEnd, side, first, last, cardStart, cardEnd, span, displaced }) } — номери
+// рядків 1-базні; колонки 1–4 (colStart..colEnd включно); last/cardEnd —
+// виключно (рядок після останнього); first/last — рядки відміток початку/кінця
+// на осі (за напрямком стрічки), cardStart/cardEnd — де стоїть картка. Якщо
+// вільної колонки в рядку немає, картка зсувається нижче (displaced), а
+// відмітки на осі лишаються на своїх місцях.
 
-const LANES_WIDE = ['L1', 'R1', 'L2', 'R2'];
-const LANES_NARROW = ['L1'];
+// Колонки за близькістю до «своєї» (перша — власна).
+const FALLBACK = { 1: [1, 2, 3, 4], 2: [2, 1, 3, 4], 3: [3, 4, 2, 1], 4: [4, 3, 2, 1] };
+const MATE = { 1: 2, 2: 1, 3: 4, 4: 3 };
 
 export function layoutTimeline(items, { desc = false, wide = true } = {}) {
-  const lanes = wide ? LANES_WIDE : LANES_NARROW;
+  const cols = wide ? [1, 2, 3, 4] : [1];
 
   const entries = items.map((it, order) => {
     const span = wide && Number.isFinite(it.start) && it.end != null && it.end > it.start;
@@ -80,29 +90,26 @@ export function layoutTimeline(items, { desc = false, wide = true } = {}) {
   }
 
   const ordered = [...dated, ...undated];
-  const laneLast = Object.fromEntries(lanes.map((l) => [l, 0])); // останній зайнятий рядок
-  let lastSide = 'R'; // перша картка піде ліворуч
+  const colLast = Object.fromEntries(cols.map((c) => [c, 0])); // останній зайнятий рядок
   const placements = new Map();
 
   for (const e of ordered) {
     const trueEnd = e.span ? e.lastRow : e.firstRow + 1;
+    // Власна колонка за видом події (у вузькому макеті — єдина).
+    const own = !wide ? 1 : e.it.foreign ? 4 : e.it.recurring ? 1 : e.span ? 2 : 3;
+    const order = wide ? FALLBACK[own] : [1];
     let start = e.firstRow;
-    let free = lanes.filter((l) => laneLast[l] < start);
+    let free = order.filter((c) => colLast[c] < start);
     if (!free.length) {
-      start = Math.min(...lanes.map((l) => laneLast[l])) + 1;
-      free = lanes.filter((l) => laneLast[l] < start);
+      start = Math.min(...cols.map((c) => colLast[c])) + 1;
+      free = order.filter((c) => colLast[c] < start);
     }
-    const inner = free.filter((l) => l.endsWith('1'));
-    const pool = inner.length ? inner : free;
-    const opposite = lastSide === 'L' ? 'R' : 'L';
-    const lane = pool.find((l) => l[0] === opposite) || pool[0];
-    lastSide = lane[0];
-
+    const col = free[0];
     const cardEnd = Math.max(trueEnd, start + 1);
-    laneLast[lane] = cardEnd - 1;
+    colLast[col] = cardEnd - 1;
     placements.set(e.it.id, {
-      lane,
-      side: lane[0] === 'L' ? 'left' : 'right',
+      col, colStart: col, colEnd: col,
+      side: wide && col > 2 ? 'right' : 'left',
       first: e.firstRow,
       last: e.span ? e.lastRow : null,
       cardStart: start,
@@ -110,6 +117,20 @@ export function layoutTimeline(items, { desc = false, wide = true } = {}) {
       span: e.span,
       displaced: start !== e.firstRow,
     });
+  }
+
+  // Ширина двох колонок: подія займає й сусідню колонку свого боку, якщо в її
+  // рядках там нічого немає.
+  if (wide) {
+    const all = [...placements.values()];
+    for (const p of all) {
+      const mate = MATE[p.col];
+      const clash = all.some((q) => q !== p && q.col === mate && q.cardStart < p.cardEnd && p.cardStart < q.cardEnd);
+      if (!clash) {
+        p.colStart = Math.min(p.col, mate);
+        p.colEnd = Math.max(p.col, mate);
+      }
+    }
   }
 
   return { labelRows, placements, rowCount: row };
