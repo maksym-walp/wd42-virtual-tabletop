@@ -9,7 +9,7 @@
 | Метод | Шлях          | Авторизація | Тіло запиту | Відповідь |
 |-------|---------------|-------------|-------------|-----------|
 | GET   | `/me`         | обов'язкова | —           | `200 { profile }` — профіль поточного користувача (`user_profile.profiles`); якщо рядка ще нема, створюється при першому зверненні (get-or-create) |
-| GET   | `/u/:username`| обов'язкова | —           | `200 { username, characters, equipment, spells, abilities, maneuvers, collections }` — публічна активність користувача; `404 { message: "Користувача не знайдено" }`, якщо такого `username` нема серед активних (`auth.users.is_active = true`) |
+| GET   | `/u/:username`| обов'язкова | —           | `200 { username, characters, equipment, spells, abilities, collections }` — публічна активність користувача; `404 { message: "Користувача не знайдено" }`, якщо такого `username` нема серед активних (`auth.users.is_active = true`) |
 
 Помилки, які не оброблені явно в контролері (наприклад, збій БД), пролітають до спільного error-handler'а в `src/index.js`, що повертає `err.statusCode || 500`.
 
@@ -36,8 +36,8 @@ user_profile.profiles (
 - `character_sheet.characters`
 - `equipment.items`, `equipment.weapons`, `equipment.armor` (union-ом в один список), `equipment.collections`
 - `spellbook.spells`, `spellbook.collections`
-- `abilities.entries`, `abilities.collections`
-- `maneuvers.entries`, `maneuvers.collections`
+- `abilities.entries`, `abilities.collections` (маневри живуть у тих самих `abilities.entries` після міграцій 52/72)
+- `compendium.races` — назва раси персонажа (`race_name`)
 
 ## Змінні оточення
 

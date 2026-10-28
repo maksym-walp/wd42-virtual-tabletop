@@ -33,7 +33,7 @@
 Тіло: `{ name, description?, is_public?, back_image_url?, data: { suits, ranks, cards } }`.
 
 - `suits`: `[{ id, name, image_url }]` (до 12), `ranks`: `[{ id, name }]` (до 60).
-- `cards`: `[{ id, suit_id|null, rank_id|null, name, description, image_url }]` (до 200). Карти без масті (наприклад, старші аркани) мають `suit_id: null`. `name` і `description` необов'язкові, коли в карти є і масть, і номінал (клієнт показує «номінал · масть»); якщо масті чи номіналу немає — `name` обов'язкове. `description` до 2000 символів. Карти зберігаються явно, а не як «масть × номінал», щоб кожній можна було дати власні назву й зображення.
+- `cards`: `[{ id, suit_id|null, rank_id|null, name, description, effect, interpretation, image_url }]` (до 200). Карти без масті (наприклад, старші аркани) мають `suit_id: null`. `name` і `description` необов'язкові, коли в карти є і масть, і номінал (клієнт показує «номінал · масть»); якщо масті чи номіналу немає — `name` обов'язкове. `description`, `effect` (ефект) і `interpretation` (трактування) — до 2000 символів кожне; `effect` і `interpretation` необов'язкові (за замовчуванням порожній рядок). Карти зберігаються явно, а не як «масть × номінал», щоб кожній можна було дати власні назву й зображення.
 - `image_url` карти — лице; `image_url` масті — сорочка всіх карт цієї масті (клієнт показує її замість сорочки колоди `back_image_url`).
 - Зображення — лише `/uploads/...` (завантаження через media, `entity_type=deck-card`) або `https://`.
 - У списку: `back_image_url`, `cards_count`, `suits_count`.

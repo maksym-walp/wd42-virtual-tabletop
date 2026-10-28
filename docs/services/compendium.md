@@ -2,7 +2,7 @@
 
 Вікі-довідник світу: види (`species`) з підвидами (`subspecies`) та раси (`races`) з народами (`peoples`). Порт **3014**, проксується Nginx як `/api/compendium/`.
 
-До `database/migrations/86-split-compendium.sql` сервіс також тримав НІПів, істот, фракції й колекції — тепер це окремі сервіси [npcs](../npcs/README.md) (НІПи та фракції) і [bestiary](../bestiary/README.md) (істоти). Вони посилаються на види/раси звідси голими UUID і читають `compendium.species`/`subspecies` міжсхемно, щоб обчислити кубик здоровʼя.
+До `database/migrations/86-split-compendium.sql` сервіс також тримав НІПів, істот, фракції й колекції — тепер це окремі сервіси [npcs](npcs.md) (НІПи та фракції) і [bestiary](bestiary.md) (істоти). Вони посилаються на види/раси звідси голими UUID і читають `compendium.species`/`subspecies` міжсхемно, щоб обчислити кубик здоровʼя.
 
 ## Ендпоінти
 
@@ -34,7 +34,7 @@
 
 ### Раси (`/races`) і народи (`/peoples`)
 
-Та сама форма, що й види/підвиди, але без `health_die`. Народ має обовʼязковий `race_id` при створенні (фільтр `?race_id=` на списку) і додаткове поле `origin` ("Походження народу").
+Та сама форма, що й види/підвиди, але без `health_die`; раса додатково має `image_url`. Народ має обовʼязковий `race_id` при створенні (фільтр `?race_id=` на списку) і додаткове поле `origin` ("Походження народу").
 
 ### RBAC і видимість
 
@@ -50,14 +50,16 @@
 
 - `compendium.species` — `name`, `description`, `is_public`, `created_by`, `health_die` (`VARCHAR(3) CHECK IN ('d4','d6','d8','d10','d12','d20')`, default `d6`).
 - `compendium.subspecies` — те саме + `species_id` (FK на `compendium.species`, `ON DELETE CASCADE`).
-- `compendium.races` — `name`, `description`, `is_public`, `created_by`.
+- `compendium.races` — `name`, `description`, `is_public`, `created_by`, `image_url` (завантаження з `entity_type=compendium-race` через [media](media.md)).
 - `compendium.peoples` — те саме + `race_id` (FK на `compendium.races`, `ON DELETE CASCADE`) і `origin`.
 
 Тригери `AFTER DELETE` на всіх чотирьох таблицях (`compendium.clear_taxonomy_refs()`, `86-split-compendium.sql`) обнуляють відповідні `species_id`/`subspecies_id`/`race_id`/`people_id` у `npcs.npcs` і `bestiary.creatures` — це зберігає колишню семантику `ON DELETE SET NULL`, яка була FK, поки записи жили в цій же схемі. Тригер спрацьовує й для підвидів/народів, видалених каскадом разом із видом/расою.
 
 Усі списки/деталі додатково повертають обчислене поле `is_owner` (`created_by = поточний користувач`).
 
-Міграції: `44-compendium-service.sql`, `48-compendium-health-fields.sql`, `74-compendium-races.sql`, `78-legacy-text-to-rich-html.sql`, `86-split-compendium.sql`.
+Раси та народи — джерело для створення персонажа: які з них доступні гравцям і які бонуси вони дають, налаштовує адмін у конфігу `character_races` ([admin](admin.md)); [character-sheet](character-sheet.md) показує лише ті, що ще публічні. Міграції 95–96 перевели персонажів з текстової раси на `race_id`/`people_id`.
+
+Міграції: `44-compendium-service.sql`, `48-compendium-health-fields.sql`, `74-compendium-races.sql`, `78-legacy-text-to-rich-html.sql`, `86-split-compendium.sql`, `95-character-peoples.sql`, `96-character-races-from-compendium.sql`.
 
 ## Змінні оточення
 

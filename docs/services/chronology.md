@@ -84,8 +84,10 @@
 
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
+| GET | `/event-types` | так | — | `200 { event_types: [{ key, label, color }] }` — типи подій, які задає адмін ([admin](admin.md), ключ `event_types`, міграція 103); шлях без `:id`, змонтований до календарних |
+| GET | `/:id/events/:eventId` | так (видимість календаря) | — (опційно `?campaign_id=`) | `200 { event }` з деталями — для сторінки події; приватні події й події кампаній бачать менеджери (кампанійні ще й ті, хто відкриває їх із контексту цієї кампанії), інакше `404` |
 | GET | `/:id/events` | так | — (опційно `?campaign_id=...`, `?scope=synced`) | `200 { events: [...] }` (кожен елемент несе `participant_ids: string[]`). `scope=synced` для синхронізованого календаря додає події всіх видимих синхронізованих календарів (кожна несе свій `calendar_id`) |
-| POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, is_public?, year?, month_id?, day?, recurrence?, recurrence_interval?, moon_id?, moon_phase?, location_id?, region?, end_year?, end_month_id?, end_day?, duration_display?, participant_ids? }` | `201 { event }` / `400` |
+| POST | `/:id/events` | admin/game_master | `{ campaign_id?, name, description?, color, event_type?, is_public?, year?, month_id?, day?, recurrence?, recurrence_interval?, moon_id?, moon_phase?, location_id?, region?, end_year?, end_month_id?, end_day?, duration_display?, participant_ids? }` | `201 { event }` / `400` |
 | PUT | `/:id/events/:eventId` | admin/game_master | те саме, що й POST; `calendar_id` ≠ `:id` переносить подію в інший календар (`month_id` мають бути його) | `200 { event }` / `400` / `404` |
 | DELETE | `/:id/events/:eventId` | admin/game_master | — | `200 { message }` / `404` |
 | POST | `/:id/events/:eventId/participants` | admin/game_master | `{ entry_id }` | `201 { event_id, entry_id }` / `400` без `entry_id` / `404` якщо подія не в цьому календарі |
@@ -93,6 +95,7 @@
 | GET | `/events/by-participant/:entryId` | так | — | `200 { events: [...] }` — події з усіх видимих календарів, де `entryId` — учасник; кожна несе `calendar_name`, `current_era_name`/`previous_era_name`, `month_name`/`end_month_name` |
 
 Примітки:
+- `event_type` — ключ із `GET /event-types` (невідомий → `400`); порожній — подія без типу. Якщо тип заданий, подія відображається кольором типу, а не власним `color`.
 - `campaign_id` відсутній/`null` → глобальна лор-подія, видима у будь-якій кампанії з цим календарем. Заданий → подія належить лише цій кампанії.
 - `GET` без `?campaign_id`: лише глобальні події (`campaign_id IS NULL`). З `?campaign_id=X`: глобальні події **плюс** події кампанії `X`.
 - `is_public` (за замовчуванням `true`) ховає подію від звичайних користувачів у `GET` — `admin`/`game_master` бачать усі події незалежно від `is_public`.
@@ -108,12 +111,13 @@
 
 Сервіс володіє схемою `chronology` (перейменована з `calendar` — таблиці всередині зберегли свої назви):
 
-- `chronology.calendars` — сам календар (`creator_id`, `name`, `description`, `current_era_name`, `previous_era_name`, `first_day_offset`, `is_private`, `default_year`, `default_month_id` → `calendar_months.id` (`ON DELETE SET NULL`), …). Видимість: власник + адмін завжди; будь-який автентифікований користувач, якщо `is_private = false`.
+- `chronology.calendars` — сам календар (`creator_id`, `name`, `description`, `current_era_name`, `previous_era_name`, `first_day_offset`, `is_private`, `default_year`, `default_month_id` → `calendar_months.id` (`ON DELETE SET NULL`), `is_default`, `sync_offset_days`, `term_day`/`term_week`/`term_month`/`term_season`/`term_year`, `week_length`, …). Видимість: власник + адмін завжди; будь-який автентифікований користувач, якщо `is_private = false`.
+- `chronology.calendar_eras` — ери (міграція 99): `calendar_id`, `name`, `start_year`, `start_month_id` (→ `calendar_months.id`), `start_day`, `cycle_years`.
 - `chronology.calendar_months` — місяці календаря (`calendar_id`, `name`, `length`, `order_num`).
 - `chronology.calendar_weekdays` — дні тижня (`calendar_id`, `name`, `short_name`, `order_num`).
 - `chronology.calendar_seasons` — сезони (`calendar_id`, `name`, `start_month_id` → `calendar_months.id`, `start_day`, `color`, `bg_image_url`).
 - `chronology.calendar_moons` — супутники (`calendar_id`, `name`, `cycle_length`, `shift`, `color`).
-- `chronology.calendar_events` — лор-/сесійні події (`calendar_id`, `campaign_id` — нативно nullable, крос-сервісний UUID без FK на `campaigns.campaigns.id`, як і скрізь у репо для крос-сервісних посилань, — `name`, `description`, `color`, `is_public`, `year`, `month_id` → `calendar_months.id`, `day`, `recurrence` — ENUM `chronology.event_recurrence` (`none`/`yearly`/`monthly`/`weekly`/`interval_days`/`lunar`), `recurrence_interval`, `moon_id` → `calendar_moons.id` (SET NULL), `moon_phase`, `location_id` — крос-сервісний UUID → `maps.locations.id`, `region`, `end_year`, `end_month_id` → `calendar_months.id`, `end_day`; `location_id`/`region` взаємовиключні через `CHECK`).
+- `chronology.calendar_events` — лор-/сесійні події (`calendar_id`, `campaign_id` — нативно nullable, крос-сервісний UUID без FK на `campaigns.campaigns.id`, як і скрізь у репо для крос-сервісних посилань, — `name`, `description`, `color`, `is_public`, `year`, `month_id` → `calendar_months.id`, `day`, `recurrence` — ENUM `chronology.event_recurrence` (`none`/`yearly`/`monthly`/`weekly`/`interval_days`/`lunar`), `recurrence_interval`, `moon_id` → `calendar_moons.id` (SET NULL), `moon_phase`, `location_id` — крос-сервісний UUID → `maps.locations.id`, `region`, `end_year`, `end_month_id` → `calendar_months.id`, `end_day`, `duration_display`, `event_type` (ключ з `admin.site_configs.event_types`, без FK); `location_id`/`region` взаємовиключні через `CHECK`).
 - `chronology.calendar_event_participants` — учасники події (`event_id` → `calendar_events.id` `ON DELETE CASCADE`, `entry_id` — крос-сервісний UUID → `npcs.npcs.id` або `bestiary.creatures.id` (до `86-split-compendium.sql` — `compendium.compendium_entries.id`; id збережено), складений `PRIMARY KEY (event_id, entry_id)`).
 
 Усі дочірні таблиці мають `calendar_id` з `ON DELETE CASCADE` — видалення календаря прибирає всю його структуру. `calendar_seasons.start_month_id`, `calendar_events.month_id`/`end_month_id` теж каскадні: видалення місяця прибирає сезони й події, що на нього посилаються.

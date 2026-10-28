@@ -61,6 +61,15 @@ Junction-таблиці з голими міжсхемними UUID, однак�
 | PATCH | `/npcs/:id/relationships/:relationshipId` | власник-GM або admin | `{ label, note? }` | `200 { relationship }` / `404` |
 | DELETE | `/npcs/:id/relationships/:relationshipId` | власник-GM або admin | — | `204` / `404` |
 
+### З боку персонажа гравця (`/characters`)
+
+Лише читання: звʼязки та членство у фракціях, подивлені з боку ігрового персонажа (вкладка «Наратив» листа в [character-sheet](character-sheet.md)). Самі персонажі живуть у `character_sheet`; тут їхні дані — рядки цього сервісу, де персонаж є ціллю звʼязку чи учасником фракції. Доступ мають ті, хто бачить лист: адмін, будь-який `game_master`, власник, будь-хто для публічного персонажа, ГМ кампанії, до якої персонажа прикріплено; інакше `404`.
+
+| Метод | Шлях | Авторизація | Відповідь |
+|---|---|---|---|
+| GET | `/characters/:characterId/relationships` | Bearer JWT (лист видимий) | `200 { relationships }` — звʼязки НІПів з цим персонажем (видимі глядачу); `400` для не-UUID |
+| GET | `/characters/:characterId/factions` | Bearer JWT (лист видимий) | `200 { factions }` — фракції, де персонаж учасник (видимі глядачу) |
+
 ### Фракції (`/factions`)
 
 CRUD (`GET/POST /factions`, `GET/PATCH/DELETE /factions/:id`, `PATCH /factions/:id/owner`) з полями `name`, `description`, `symbol_url`, `is_public`, плюс:

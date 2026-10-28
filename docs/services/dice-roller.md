@@ -4,13 +4,14 @@
 
 ## Ендпоінти
 
-Усі шляхи — відносно кореня сервіса (Nginx проксує `/api/dice/*` сюди). Усі три ендпоінти потребують `Authorization: Bearer <access_token>` (`requireAuth`, `src/middleware/auth.middleware.js`, перевіряється `JWT_ACCESS_SECRET`) — неавтентифікованих маршрутів немає.
+Усі шляхи — відносно кореня сервіса (Nginx проксує `/api/dice/*` сюди). Усі чотири ендпоінти потребують `Authorization: Bearer <access_token>` (`requireAuth`, `src/middleware/auth.middleware.js`, перевіряється `JWT_ACCESS_SECRET`) — неавтентифікованих маршрутів немає.
 
 | Метод | Шлях | Авторизація | Тіло запиту / query | Відповідь |
 |---|---|---|---|---|
 | POST | `/rolls` | Bearer JWT | `{ formula: string }` | `201 { roll }` / `400`, якщо `formula` відсутнє або не є рядком |
 | GET | `/rolls` | Bearer JWT | query: `limit?`, `offset?` | `200 { rolls: [...] }` |
 | GET | `/stats` | Bearer JWT | — | `200 { stats }` |
+| DELETE | `/rolls` | Bearer JWT | — | `204` — видаляє всю історію кидків поточного користувача |
 
 Примітки:
 - `POST /rolls` розбирає й обчислює формулу через `rollFormula()` (`src/formula/index.js`) і одразу зберігає результат через `RollModel.create`. Помилку формули (`FormulaError`, невірний синтаксис / перевищені ліміти) контролер не перехоплює — вона прокидається у глобальний error-handler (`err.statusCode || 500`, `src/index.js`), який зазвичай віддає `400` з текстом помилки українською.
@@ -50,7 +51,7 @@ WrappedGroup := ('adv'|'dis'|'wadv'|'wdis'|'bal'|'ext') '(' DiceGroup ')'
 
 Сервіс володіє схемою `dice_roller` (`database/init/07-dice-roller.sql`):
 
-- `dice_roller.rolls` — один рядок на кожен кидок (append-only, без `update`/`delete`-ендпоінтів): `id` (UUID), `user_id`, `formula` (текст оригінальної формули), `total` (підсумкове число), `groups` (JSONB — покроковий розбір, що саме випало по кожному доданку), `created_at`.
+- `dice_roller.rolls` — один рядок на кожен кидок (без `update`-ендпоінта; історію можна лише очистити цілком через `DELETE /rolls`): `id` (UUID), `user_id`, `formula` (текст оригінальної формули), `total` (підсумкове число), `groups` (JSONB — покроковий розбір, що саме випало по кожному доданку), `created_at`.
 - Індекс `idx_dice_roller_rolls_user_created` на `(user_id, created_at DESC)` — під історію (`GET /rolls`, сортування за часом) і статистику.
 
 `GET /stats` рахує зведення прямо в SQL (`RollModel.getStats`, `src/models/roll.model.js`): розкладає `groups` через `jsonb_array_elements`, окремо для простих кубиків (`type = 'dice'`) і обгорнутих (`type IN ('adv','dis','wadv','wdis','bal','ext')`, бере лише `kept`-значення кожного кубика), рахує суму/мін/макс по гранях і кількість `nat20`/`nat1` серед d20.

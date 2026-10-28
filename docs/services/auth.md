@@ -46,7 +46,7 @@ auth.refresh_tokens (
 )
 ```
 
-Роль (`role`) — `user` або `admin`. Самостійного шляху отримати `admin` немає: роль видається лише через `ADMIN_USERNAMES` при старті сервіса (`src/config/seedAdmins.js`).
+Роль (`role`) — `user`, `game_master` або `admin`. Реєстрація завжди створює `user`; `admin` видається через `ADMIN_USERNAMES` при старті сервіса (`src/config/seedAdmins.js`), а будь-яку з трьох ролей адмін може виставити іншому користувачеві через [admin](admin.md) (`PATCH /api/admin/users/:id/role`). Нова роль потрапляє в access-токен при наступному `/refresh`.
 
 ## Схема токенів і cookie
 
