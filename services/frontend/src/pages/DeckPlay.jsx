@@ -7,6 +7,7 @@ import Sheet from '../components/ui/Sheet';
 import Lightbox from '../components/ui/Lightbox';
 import { inputClass } from '../components/ui/Field';
 import DeckCard from '../components/tools/DeckCard';
+import CardTexts from '../components/tools/CardTexts';
 import { faceImage, cardTitle } from '../utils/deck';
 import * as engine from '../utils/deckEngine';
 
@@ -252,7 +253,7 @@ function Pile({ pile, piles, cardsById, suitsById, ranksById, titleOf, hasSuits,
               </button>
             )}
           </p>
-          {topCard.description && <p className="mt-1 whitespace-pre-line text-xs text-text-muted">{topCard.description}</p>}
+          <CardTexts card={topCard} compact className="mt-1" />
         </div>
       )}
 
@@ -350,7 +351,7 @@ function SpreadPile({ pile, piles, cardsById, suitsById, ranksById, titleOf, bac
                   </button>
                 )}
               </p>
-              {c.faceUp && card?.description && <p className="line-clamp-4 whitespace-pre-line text-[0.7rem] leading-snug text-text-muted">{card.description}</p>}
+              {c.faceUp && card && <CardTexts card={card} compact clamp />}
               {targets.length > 0 && (
                 <select
                   className="rounded border border-border bg-bg px-1 py-1 text-[0.7rem] text-text"

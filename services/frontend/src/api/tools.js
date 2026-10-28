@@ -2,7 +2,7 @@ import api from './client';
 
 const BASE = '/api/tools';
 
-// Сузір'я й колоди мають однакове API (див. services/tools/README.md), тож
+// Сузір'я й колоди мають однакове API (див. docs/services/tools.md), тож
 // клієнт для обох будується однією фабрикою.
 function createDocumentApi(path) {
   const url = `${BASE}/${path}`;

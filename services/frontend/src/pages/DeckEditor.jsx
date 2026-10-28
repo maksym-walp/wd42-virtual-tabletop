@@ -247,6 +247,24 @@ export default function DeckEditor() {
                       onChange={(e) => patchItem('cards', card.id, { description: e.target.value })}
                       aria-label="Опис карти"
                     />
+                    <textarea
+                      className={`${inputClass} !min-h-0`}
+                      rows={2}
+                      maxLength={2000}
+                      value={card.effect ?? ''}
+                      placeholder="Ефект (необов'язково)"
+                      onChange={(e) => patchItem('cards', card.id, { effect: e.target.value })}
+                      aria-label="Ефект карти"
+                    />
+                    <textarea
+                      className={`${inputClass} !min-h-0`}
+                      rows={2}
+                      maxLength={2000}
+                      value={card.interpretation ?? ''}
+                      placeholder="Трактування (необов'язково)"
+                      onChange={(e) => patchItem('cards', card.id, { interpretation: e.target.value })}
+                      aria-label="Трактування карти"
+                    />
                   </div>
                   <Button type="button" variant="ghost" size="icon" onClick={() => setDoc((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== card.id) }))} aria-label="Видалити карту"><Trash2 size={15} /></Button>
                 </li>

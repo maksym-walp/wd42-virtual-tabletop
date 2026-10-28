@@ -38,7 +38,7 @@ export function parseNames(text) {
 export const newSuit = (name) => ({ id: newId(), name, image_url: null });
 export const newRank = (name) => ({ id: newId(), name });
 export const newCard = (extra = {}) => ({
-  id: newId(), suit_id: null, rank_id: null, name: '', description: '', image_url: null, ...extra,
+  id: newId(), suit_id: null, rank_id: null, name: '', description: '', effect: '', interpretation: '', image_url: null, ...extra,
 });
 
 // Назва й опис необов'язкові, коли в карти є і масть, і номінал; інакше назва

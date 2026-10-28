@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import Sheet from '../components/ui/Sheet';
 import ShareButton from '../components/ShareButton';
 import DeckCard from '../components/tools/DeckCard';
+import CardTexts from '../components/tools/CardTexts';
 import { cardTitle } from '../utils/deck';
 import { exportOne } from '../utils/toolsImportTemplates';
 
@@ -100,7 +101,7 @@ export default function DeckView() {
             <p className="text-sm text-text-dim">
               {[suitsById.get(selected.suit_id)?.name, ranksById.get(selected.rank_id)?.name].filter(Boolean).join(' · ') || 'Без масті й номіналу'}
             </p>
-            {selected.description && <p className="w-full whitespace-pre-line text-sm text-text-muted">{selected.description}</p>}
+            <CardTexts card={selected} />
           </div>
         )}
       </Sheet>

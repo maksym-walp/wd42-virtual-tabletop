@@ -96,6 +96,31 @@ describe('sanitizeDeckData', () => {
     expect(() => sanitizeDeckData(data)).toThrow(/опис/);
   });
 
+  it('keeps optional card effect and interpretation, defaulting to empty', () => {
+    const data = base();
+    data.cards[0].effect = '  Добери карту  ';
+    data.cards[0].interpretation = ' Новий початок ';
+    const [card] = sanitizeDeckData(data).cards;
+    expect(card.effect).toBe('Добери карту');
+    expect(card.interpretation).toBe('Новий початок');
+
+    delete data.cards[0].effect;
+    delete data.cards[0].interpretation;
+    const [bare] = sanitizeDeckData(data).cards;
+    expect(bare.effect).toBe('');
+    expect(bare.interpretation).toBe('');
+  });
+
+  it('rejects an over-long card effect or interpretation', () => {
+    const data = base();
+    data.cards[0].effect = 'x'.repeat(2001);
+    expect(() => sanitizeDeckData(data)).toThrow(/ефект/);
+
+    data.cards[0].effect = '';
+    data.cards[0].interpretation = 'x'.repeat(2001);
+    expect(() => sanitizeDeckData(data)).toThrow(/трактування/);
+  });
+
   it('rejects more than the maximum number of cards', () => {
     const data = base();
     data.cards = Array.from({ length: MAX_CARDS + 1 }, (_, i) => ({ id: `c${i}`, name: `Карта ${i}` }));

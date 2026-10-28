@@ -61,6 +61,8 @@ export function buildDeckImportTemplate() {
 //       name        — до 150 символів. Обов'язкове, якщо немає suit_id або rank_id;
 //                     коли є і масть, і номінал — можна "" (назва буде «номінал · масть»)
 //       description — опис карти, до 2000 символів (необов'язковий)
+//       effect      — ефект карти, до 2000 символів (необов'язковий)
+//       interpretation — трактування карти, до 2000 символів (необов'язкове)
 //       image_url   — лице карти: "/uploads/..." або "https://..." чи null
 //
 {
@@ -78,7 +80,7 @@ export function buildDeckImportTemplate() {
       { "id": "two", "name": "Двійка" }
     ],
     "cards": [
-      { "id": "c1", "suit_id": "cups", "rank_id": "ace", "name": "Туз Кубків", "description": "Початок почуттів", "image_url": null },
+      { "id": "c1", "suit_id": "cups", "rank_id": "ace", "name": "Туз Кубків", "description": "Початок почуттів", "effect": "Добери одну карту", "interpretation": "Нова любов чи дружба", "image_url": null },
       { "id": "c2", "suit_id": "cups", "rank_id": "two", "name": "", "description": "", "image_url": null },
       { "id": "c3", "suit_id": "swords", "rank_id": "ace", "name": "", "description": "", "image_url": null },
       { "id": "c4", "suit_id": "swords", "rank_id": "two", "name": "", "description": "", "image_url": null },

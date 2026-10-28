@@ -18,10 +18,11 @@ function uniqueIds(items, field) {
 // Документ колоди:
 //   suits: [{ id, name, image_url }]            — масті (необов'язкові)
 //   ranks: [{ id, name }]                       — номінали
-//   cards: [{ id, suit_id|null, rank_id|null, name, description, image_url }]
+//   cards: [{ id, suit_id|null, rank_id|null, name, description, effect, interpretation, image_url }]
 // Карти без масті (наприклад, старші аркани таро) — suit_id: null. Карти
 // зберігаються явно (а не як масть × номінал), щоб кожній можна було дати
-// власні назву, опис і зображення.
+// власні назву, опис, ефект, трактування і зображення. Ефект і трактування
+// необов'язкові (порожній рядок), у старих колодах їх просто нема.
 // Назва й опис необов'язкові, коли в карти є і масть, і номінал (назву тоді
 // складає клієнт: «Туз · Кубки»); якщо масті чи номіналу немає — назва обов'язкова.
 function sanitizeDeckData(raw) {
@@ -62,6 +63,8 @@ function sanitizeDeckData(raw) {
       rank_id: rankId,
       name,
       description: cleanText(card.description, 2000, `${field}, опис`),
+      effect: cleanText(card.effect, 2000, `${field}, ефект`),
+      interpretation: cleanText(card.interpretation, 2000, `${field}, трактування`),
       image_url: cleanImageUrl(card.image_url, `${field}, зображення`),
     };
   });
