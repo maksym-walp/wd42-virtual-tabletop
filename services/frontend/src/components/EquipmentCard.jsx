@@ -26,12 +26,14 @@ export default function EquipmentCard({ item, ...rest }) {
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{item.name}</h3>
       <AuthorBadge username={item.owner_username} variant="inline" className="px-3.5 pb-1" />
 
-      {(item.damage_die || item.modifier || item.defense_value != null || item.armor_weight || item.price != null) && (
+      {(item.damage_die || item.modifier || item.defense_value != null || item.armor_weight || item.heal_die || item.price != null) && (
         <StatGrid className="grid-cols-3">
           {item.damage_die && <StatBox label="Шкода" value={item.damage_die} />}
           {item.modifier && <StatBox label="Модифікатор" value={weaponModifierLabel(item.modifier)} />}
           {item.defense_value != null && <StatBox label="Захист" value={item.defense_value} />}
           {item.armor_weight && <StatBox label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
+          {item.heal_die && <StatBox label="Зцілення" value={`d${item.heal_die}`} />}
+          {item.portions && <StatBox label="Порцій" value={item.portions} />}
           {item.price != null && <StatBox label="Ціна" value={item.price} />}
         </StatGrid>
       )}

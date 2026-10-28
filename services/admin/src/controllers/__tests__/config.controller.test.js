@@ -92,8 +92,9 @@ describe('ConfigController.update', () => {
 
 describe('ConfigController.update — conditions', () => {
   const valid = [
-    { key: 'exhaustion', label: 'Втома', description: 'Опис', max_level: 6 },
-    { key: 'injury', label: 'Поранення', description: '', max_level: null },
+    { key: 'fatigue', label: 'Втома', description: 'Опис', max_level: 5 },
+    { key: 'illness', label: 'Хвороба', description: '', max_level: 5 },
+    { key: 'trauma', label: 'Травма', description: '', max_level: 5 },
   ];
   const put = async (value) => {
     const res = mockRes();
@@ -101,20 +102,26 @@ describe('ConfigController.update — conditions', () => {
     return res;
   };
 
-  it('200 for a valid list and stores descriptions as-is', async () => {
+  it('200 for the fixed set and stores descriptions as-is', async () => {
     ConfigModel.upsert.mockResolvedValue({ key: 'conditions', value: valid });
     const res = await put(valid);
     expect(ConfigModel.upsert).toHaveBeenCalledWith('conditions', valid);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('400 for a non-integer max_level', async () => {
-    const res = await put([{ key: 'x', label: 'X', max_level: 2.5 }]);
+  it('400 when a condition is missing, added or renamed', async () => {
+    expect((await put(valid.slice(0, 2))).status).toHaveBeenCalledWith(400);
+    expect((await put([...valid, { key: 'poison', label: 'Отруєння', max_level: 5 }])).status).toHaveBeenCalledWith(400);
+    expect((await put([{ ...valid[0], key: 'exhaustion' }, valid[1], valid[2]])).status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when max_level is not 5', async () => {
+    const res = await put([{ ...valid[0], max_level: 6 }, valid[1], valid[2]]);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
   it('400 for a too-long description', async () => {
-    const res = await put([{ key: 'x', label: 'X', description: 'a'.repeat(2001) }]);
+    const res = await put([{ ...valid[0], description: 'a'.repeat(2001) }, valid[1], valid[2]]);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 });

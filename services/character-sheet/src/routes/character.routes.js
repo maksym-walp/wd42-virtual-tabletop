@@ -8,6 +8,10 @@ const EquipmentController = require('../controllers/equipment.controller');
 const AbilityController = require('../controllers/ability.controller');
 const RitualTrackerController = require('../controllers/ritual-tracker.controller');
 const ConfigController = require('../controllers/config.controller');
+const RestController = require('../controllers/rest.controller');
+const TimerController = require('../controllers/timer.controller');
+const EffectsController = require('../controllers/effects.controller');
+const PotionController = require('../controllers/potion.controller');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -23,6 +27,9 @@ router.get('/',       wrap(CharacterController.list));
 router.get('/community', wrap(CharacterController.listCommunity));
 // Перед /:id, інакше 'config' сприймався б як id персонажа.
 router.get('/config', wrap(ConfigController.getCharacterConfig));
+// Пакетні ефекти станів (трекер бою) і таймер діяльності (лише ГМ) — теж до /:id.
+router.get('/effects', wrap(EffectsController.list));
+router.post('/timer/advance', wrap(TimerController.advance));
 router.post('/',      wrap(CharacterController.create));
 router.get('/:id',    wrap(CharacterController.getSheet));
 router.put('/:id',    wrap(CharacterController.update));
@@ -30,6 +37,8 @@ router.put('/:id/people', wrap(CharacterController.setPeople));
 router.delete('/:id', wrap(CharacterController.remove));
 router.patch('/:id/owner', requireAdmin, wrap(CharacterController.setOwner));
 router.post('/:id/duplicate', wrap(CharacterController.duplicate));
+router.get('/:id/rest/preview', wrap(RestController.preview));
+router.post('/:id/rest', wrap(RestController.rest));
 
 // Skills
 router.get('/:id/skills',         wrap(SkillController.getAll));
@@ -52,6 +61,7 @@ router.get('/:id/equipment',                 wrap(EquipmentController.list));
 router.post('/:id/equipment',                wrap(EquipmentController.add));
 router.patch('/:id/equipment/:equipmentId',  wrap(EquipmentController.patch));
 router.delete('/:id/equipment/:equipmentId', wrap(EquipmentController.remove));
+router.post('/:id/equipment/:equipmentId/drink', wrap(PotionController.drink));
 
 // Abilities (вміння, all archetypes) — references abilities.entries catalog
 router.get('/:id/abilities',               wrap(AbilityController.list));

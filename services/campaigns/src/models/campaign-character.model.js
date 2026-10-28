@@ -27,6 +27,14 @@ const CampaignCharacterModel = {
     return rows;
   },
 
+  async listCharacterIds(campaignId) {
+    const { rows } = await pool.query(
+      `SELECT character_id FROM campaigns.campaign_characters WHERE campaign_id = $1 ORDER BY added_at ASC`,
+      [campaignId]
+    );
+    return rows.map((r) => r.character_id);
+  },
+
   // Cross-schema join: campaign_characters -> character_sheet.characters -> auth.users
   async listWithOwners(campaignId) {
     const { rows } = await pool.query(

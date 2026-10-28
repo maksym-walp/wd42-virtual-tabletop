@@ -9,6 +9,15 @@ const authorizeCharacterWrite = require('./authorize-character-write');
 const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 const { treeSpellAccess } = require('../models/spell-access.model');
 const SiteConfigModel = require('../models/site-config.model');
+const CharacterStateModel = require('../models/character-state.model');
+const { sheetDerived } = require('../rules');
+const { normalizeConditions } = require('../rules/conditions');
+
+// Таймер діяльності й результат відпочинку змінюють лише POST /timer/advance
+// (ГМ) і POST /:id/rest — загальний PUT їх не приймає.
+const TIMER_FIELDS = ['rest_timer_hours', 'timer_checks_done', 'timer_checks_passed', 'last_rest'];
+
+const isDeathScale = (v) => v === null || (Number.isInteger(v) && v >= -3 && v <= 3);
 
 const CharacterController = {
   async list(req, res) {
@@ -64,7 +73,7 @@ const CharacterController = {
     // edit menu.
     const isGmViewer = !isOwner && (isCampaignGm || isAdmin);
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, campaignIds] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -73,6 +82,7 @@ const CharacterController = {
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
       treeSpellAccess(char.id),
+      CharacterStateModel.campaignIdsFor(char.id),
     ]);
 
     // is_owner drives all edit UI on the frontend — a campaign GM or an admin
@@ -81,6 +91,10 @@ const CharacterController = {
     res.json({
       character: { ...char, owner_username },
       skills, spells, tree, equipment, abilities, rituals,
+      // Ефекти станів, таймер діяльності (last_rest — у character).
+      ...sheetDerived(char, skills),
+      // Кампанії персонажа — лист слухає їхні real-time події.
+      campaign_ids: campaignIds,
       // Що дерево відкрило для заклинань: { traditions, max_complexity }.
       spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
       is_owner: isOwner || isCampaignGm || isAdmin,
@@ -107,16 +121,52 @@ const CharacterController = {
 
     res.json({
       character: { ...char, owner_username }, skills, spells, tree, equipment, abilities, rituals,
+      ...sheetDerived(char, skills),
+      campaign_ids: [],
       spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
       is_owner: false, is_gm: false, is_spell_master: false,
     });
   },
 
+  // Будь-який запис conditions проходить нормалізацію правил
+  // (rules/conditions.js): ліміти рівнів, блок Втоми 5, падіння на 6-му
+  // рівні (death_scale), постійний ефект Травми 5 (навички Тілобудови —
+  // тоді у відповіді є skills).
   async update(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
 
-    const updated = await CharacterModel.update(req.params.id, req.body);
-    res.json({ character: updated });
+    if (TIMER_FIELDS.some((key) => key in req.body)) {
+      return res.status(400).json({ message: 'Таймер діяльності змінює лише ГМ, а результат відпочинку — сам відпочинок' });
+    }
+    if ('death_scale' in req.body && !isDeathScale(req.body.death_scale)) {
+      return res.status(400).json({ message: 'death_scale — ціле від −3 до 3 або null' });
+    }
+    if (!('conditions' in req.body)) {
+      const updated = await CharacterModel.update(req.params.id, req.body);
+      return res.json({ character: updated });
+    }
+
+    const { conditions, death_scale: deathScale, ...rest } = req.body;
+    const state = await CharacterStateModel.withCharacterLock(req.params.id, async (client, { character, skills }) => {
+      const next = normalizeConditions(character.conditions, conditions, {
+        deathScale: 'death_scale' in req.body ? deathScale : character.death_scale,
+        skills,
+      });
+      const freshSkills = next.physique_reset
+        ? await CharacterStateModel.resetPhysique(client, character.id, next.physique_reset.keys, next.physique_reset.value)
+        : null;
+      const saved = await CharacterStateModel.saveState(client, character.id, {
+        conditions: next.conditions, death_scale: next.death_scale,
+      });
+      return { character: saved, skills: freshSkills ?? skills, skillsChanged: !!freshSkills };
+    });
+    if (!state) return res.status(404).json({ message: 'Персонажа не знайдено' });
+
+    const character = Object.keys(rest).length
+      ? await CharacterModel.update(req.params.id, rest)
+      : state.character;
+    const { effects } = sheetDerived(character, state.skills);
+    res.json({ character, effects, ...(state.skillsChanged ? { skills: state.skills } : {}) });
   },
 
   // Вибір/зняття підвиду (народу) — body { people_id: uuid | null }. Підвид

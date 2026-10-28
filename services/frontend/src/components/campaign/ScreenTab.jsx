@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Sparkles, Shield, Skull, Lock, Dices, Plus } from 'lucide-react';
 import campaignApi from '../../api/campaigns';
@@ -17,6 +17,10 @@ import {
   ARCHETYPES, CHARACTERISTICS, skillsToCharLevel,
 } from '../../constants/characterSheet';
 import { raceLabel } from '../../utils/characterRace';
+import { effectChips, chipClass } from '../../utils/effectChips';
+import { useAuth } from '../../context/AuthContext';
+import ActivityTimerPanel from './ActivityTimerPanel';
+import { RestResultModal } from '../character/RestControls';
 
 // Зміни з листа персонажа йдуть повз campaigns-сервіс (окрім ХП, яке він
 // синхронізує сам), тож статблоки ще й зрідка перечитуються.
@@ -97,8 +101,15 @@ function GmNotes({ campaign, onChange }) {
 }
 
 function PlayerStatblocks({ campaignId, characters, version }) {
+  const { user } = useAuth();
+  const { conditions: conditionsConfig } = useCharacterConfig();
+  const conditionLabels = Object.fromEntries(conditionsConfig.map((cond) => [cond.key, cond.label]));
   const [sheets, setSheets] = useState({});
   const [errors, setErrors] = useState({});
+  // Відпочинок, який натиснув гравець, — показуємо майстрові модалкою.
+  // lastRestSeen: id персонажа → at останнього відомого відпочинку.
+  const lastRestSeen = useRef(null);
+  const [incomingRest, setIncomingRest] = useState(null);
 
   const ids = characters.map((c) => c.character_id).join(',');
 
@@ -113,7 +124,17 @@ function PlayerStatblocks({ campaignId, characters, version }) {
     });
     setSheets(nextSheets);
     setErrors(nextErrors);
-  }, [ids]);
+
+    const firstLoad = lastRestSeen.current === null;
+    const seen = lastRestSeen.current ?? {};
+    for (const [characterId, sheet] of Object.entries(nextSheets)) {
+      const rest = sheet.character.last_rest;
+      if (!rest?.at || seen[characterId] === rest.at) continue;
+      seen[characterId] = rest.at;
+      if (!firstLoad && rest.by?.user_id !== user?.id) setIncomingRest({ rest, name: sheet.character.name });
+    }
+    lastRestSeen.current = seen;
+  }, [ids, user?.id]);
 
   useEffect(() => { load(); }, [load, version]);
 
@@ -145,6 +166,14 @@ function PlayerStatblocks({ campaignId, characters, version }) {
         <h3 className="m-0 font-display text-lg text-text">Персонажі</h3>
         {characters.length > 0 && <ExperienceGrant campaignId={campaignId} />}
       </div>
+      {characters.length > 0 && (
+        <ActivityTimerPanel campaignId={campaignId} characters={characters} sheets={sheets}
+          labels={conditionLabels} onChanged={load} />
+      )}
+      {incomingRest && (
+        <RestResultModal result={incomingRest.rest} characterName={incomingRest.name} labels={conditionLabels}
+          onClose={() => setIncomingRest(null)} />
+      )}
       {characters.length === 0 ? (
         <p className="text-sm text-text-dim">До кампанії ще не приєднано жодного персонажа.</p>
       ) : (
@@ -273,10 +302,11 @@ function Statblock({ entry, sheet, failed, onInspirationChange }) {
     );
   }
 
-  const { character: c, skills, equipment } = sheet;
+  const { character: c, skills, equipment, effects } = sheet;
   const maxHp = computeMaxHp(c, skills);
-  const maxMagic = computeMaxMagic(c, skills);
-  const defense = computePassiveDefense(equipment, c.defense_bonus);
+  const maxMagic = computeMaxMagic(c, skills, effects);
+  const defense = computePassiveDefense(equipment, c.defense_bonus, effects?.passive_defense_factor);
+  const chips = effectChips(effects, { conditionLabels });
   const skillMap = Object.fromEntries((skills ?? []).map((s) => [s.skill_key, s.value]));
   const conditions = (c.conditions ?? []).filter((cond) => cond.level > 0);
 
@@ -320,6 +350,11 @@ function Statblock({ entry, sheet, failed, onInspirationChange }) {
               {conditionLabels[cond.type] ?? cond.type} {cond.level}
             </span>
           ))}
+        </div>
+      )}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {chips.map((chip) => <span key={chip.key} className={chipClass(chip.tone)}>{chip.text}</span>)}
         </div>
       )}
     </Card>

@@ -36,6 +36,42 @@ const characterApi = {
     return data.character;
   },
 
+  // Зміна станів (і будь-що разом із ними): сервер нормалізує стани за
+  // правилами й повертає { character, effects, skills? } — skills лише тоді,
+  // коли Травма 5 щойно знизила навички Тілобудови.
+  async updateConditions(id, payload) {
+    const { data } = await api.put(`${BASE}/${id}`, payload);
+    return data;
+  },
+
+  // kind — 'short' | 'full' | 'long'; choice — { condition } для
+  // повноцінного відпочинку. Без потрібного вибору — 400 { code: 'choice_required', options }.
+  async rest(id, kind, choice) {
+    const { data } = await api.post(`${BASE}/${id}/rest`, { kind, ...(choice ? { choice } : {}) });
+    return data; // { result, character, effects, timer }
+  },
+
+  // Що дасть кожна форма відпочинку зараз: { short, full, long } —
+  // { label, duration_hours, choice_options, lines } (без кидків і запису).
+  async restPreview(id) {
+    const { data } = await api.get(`${BASE}/${id}/rest/preview`);
+    return data.preview;
+  },
+
+  // Випити portions порцій зілля з запасу персонажа →
+  // { result, character, item (null — зілля скінчилось), effects, timer, potions }.
+  async drinkPotion(id, equipmentId, portions) {
+    const { data } = await api.post(`${BASE}/${id}/equipment/${equipmentId}/drink`, { portions });
+    return data;
+  },
+
+  // Пакетні ефекти станів для трекера бою: { [id]: { effects, conditions, heroic_left, timer } }.
+  async getEffects(ids) {
+    if (!ids.length) return {};
+    const { data } = await api.get(`${BASE}/effects`, { params: { ids: ids.join(',') } });
+    return data.characters;
+  },
+
   async remove(id) {
     await api.delete(`${BASE}/${id}`);
   },
@@ -79,7 +115,7 @@ const characterApi = {
     return data.spells;
   },
 
-  // progress — { form_tier?, primary_form?, mastered_forms? } (див. character-sheet README).
+  // progress — { form_tier?, primary_form?, mastered_forms? } (див. docs/services/character-sheet.md).
   async addSpell(characterId, spellId, progress = {}) {
     const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId, ...progress });
     return data.spell;

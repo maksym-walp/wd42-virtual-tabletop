@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { createCatalogRouter, unionRouter, weaponOptionsRouter } = require('./routes/catalog.routes');
+const { createCatalogRouter, unionRouter, weaponOptionsRouter, potionOptionsRouter } = require('./routes/catalog.routes');
 const collectionRoutes = require('./routes/collection.routes');
 
 const app = express();
@@ -16,7 +16,7 @@ app.use(cors({
 app.use(express.json());
 
 // Must all be mounted before unionRouter: its GET /:id at root would
-// otherwise swallow GET /collections, /items, /weapons, /armor and /artifacts
+// otherwise swallow GET /collections, /items, /weapons, /armor, /artifacts and /potions
 // (each matching id='<prefix>') since it's registered at the same '/' prefix.
 app.use('/collections', collectionRoutes);
 app.use('/items',     createCatalogRouter('item'));
@@ -24,6 +24,8 @@ app.use('/weapons/options', weaponOptionsRouter);
 app.use('/weapons',   createCatalogRouter('weapon'));
 app.use('/armor',     createCatalogRouter('armor'));
 app.use('/artifacts', createCatalogRouter('artifact'));
+app.use('/potions/options', potionOptionsRouter);
+app.use('/potions',   createCatalogRouter('potion'));
 app.use('/', unionRouter);
 
 app.use((err, req, res, next) => {

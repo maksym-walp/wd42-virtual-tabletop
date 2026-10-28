@@ -8,6 +8,7 @@ import {
 import { CHARACTERISTICS } from '../constants/characterSheet';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import useWeaponOptions from '../hooks/useWeaponOptions';
+import usePotionOptions, { portionsWord } from '../hooks/usePotionOptions';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
 import ImageUploadField from '../components/ui/ImageUploadField';
@@ -25,6 +26,7 @@ const EMPTY = {
   price: '', image_url: '', image_crop: null,
   weapon_type: '', weapon_grip: [], modifier: '',
   armor_weight: '',
+  effect: 'healing', potion_tier: 'tincture', potion_size: 'ampoule',
   collectionIds: [],
 };
 
@@ -36,6 +38,7 @@ export default function EquipmentForm() {
   const { user } = useAuth();
   const canManageCanonical = user?.role === 'admin' || user?.role === 'game_master';
   const { weaponTypes, weaponGrips } = useWeaponOptions();
+  const { tiers: potionTiers, sizes: potionSizes, effects: potionEffects } = usePotionOptions();
 
   // Coming from a specific type tab (?type=armor from /equipment/armor's
   // "+ Новий предмет") preselects that type instead of always defaulting to
@@ -72,6 +75,7 @@ export default function EquipmentForm() {
           price: i.price ?? '', image_url: i.image_url || '', image_crop: i.image_crop || null,
           weapon_type: i.weapon_type || '', weapon_grip: i.weapon_grip || [], modifier: i.modifier || '',
           armor_weight: i.armor_weight || '',
+          effect: i.effect || 'healing', potion_tier: i.potion_tier || 'tincture', potion_size: i.potion_size || 'ampoule',
         }));
       })
       .catch(() => navigate('/equipment'))
@@ -183,7 +187,7 @@ export default function EquipmentForm() {
             <KindSwitch
               kinds={domain.kindSwitch}
               active={form.type}
-              localKeys={['weapon', 'armor', 'item']}
+              localKeys={['weapon', 'armor', 'item', 'potion']}
               onSelectLocal={(key) => setForm((f) => ({ ...f, type: key }))}
             />
           </Field>
@@ -264,6 +268,25 @@ export default function EquipmentForm() {
                 <select className={inputClass} value={form.armor_weight} onChange={set('armor_weight')}>
                   <option value="">Не обрано</option>
                   {Object.entries(ARMOR_WEIGHTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+          {form.type === 'potion' && (
+            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Ефект">
+                <select className={inputClass} value={form.effect} onChange={set('effect')}>
+                  {potionEffects.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Рівень (кубик за порцію)">
+                <select className={inputClass} value={form.potion_tier} onChange={set('potion_tier')}>
+                  {potionTiers.map((t) => <option key={t.key} value={t.key}>{t.label} — d{t.die}</option>)}
+                </select>
+              </Field>
+              <Field label="Розмір (порцій)">
+                <select className={inputClass} value={form.potion_size} onChange={set('potion_size')}>
+                  {potionSizes.map((x) => <option key={x.key} value={x.key}>{x.label} — {x.portions} {portionsWord(x.portions)}</option>)}
                 </select>
               </Field>
             </div>

@@ -2,6 +2,7 @@ jest.mock('../../models/campaign.model');
 jest.mock('../../models/campaign-character.model');
 jest.mock('../../models/combat-scene.model');
 jest.mock('../../models/combatant.model');
+jest.mock('../../clients/character-sheet.client');
 
 const CampaignModel = require('../../models/campaign.model');
 const CampaignCharacterModel = require('../../models/campaign-character.model');
@@ -9,6 +10,7 @@ const CombatSceneModel = require('../../models/combat-scene.model');
 const CombatantModel = require('../../models/combatant.model');
 const CombatController = require('../combat.controller');
 const bus = require('../../realtime/bus');
+const CharacterSheetClient = require('../../clients/character-sheet.client');
 
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
@@ -725,5 +727,76 @@ describe('CombatController real-time events', () => {
     off1(); off2();
     expect(l1.mock.calls.map(([t]) => t)).toEqual(['combat', 'characters']);
     expect(l2.mock.calls.map(([t]) => t)).toEqual(['combat', 'characters']);
+  });
+});
+
+describe('CombatController.endCombat', () => {
+  const req = (user = { sub: 'gm-1' }) => ({ params: { id: 'c1' }, body: {}, user, headers: { authorization: 'Bearer gm' } });
+
+  beforeEach(() => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+  });
+
+  it('403s for a non-GM', async () => {
+    const res = mockRes();
+    await CombatController.endCombat(req({ sub: 'player' }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('adds one hour per started round to every character combatant, then marks the scene ended', async () => {
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue({ id: 's1', round_number: 3, ended_at: null });
+    CombatantModel.listByScene.mockResolvedValue([
+      { id: 'x1', character_id: 'ch1' }, { id: 'x2', character_id: null }, { id: 'x3', character_id: 'ch1' }, { id: 'x4', character_id: 'ch2' },
+    ]);
+    CharacterSheetClient.advanceTimer.mockResolvedValue({
+      results: [{ character_id: 'ch1', name: 'А', skipped: false, fatigue_before: 1, fatigue_after: 2, checks: [] }],
+    });
+    CombatSceneModel.end.mockResolvedValue({ id: 's1', ended_at: 'now' });
+    const publish = jest.spyOn(bus, 'publish');
+    const res = mockRes();
+
+    await CombatController.endCombat(req(), res);
+
+    expect(CharacterSheetClient.advanceTimer).toHaveBeenCalledWith('Bearer gm', {
+      characterIds: ['ch1', 'ch2'], hours: 3, sourceKey: 'combat:s1',
+    });
+    expect(CombatSceneModel.end).toHaveBeenCalledWith('s1', 'c1');
+    expect(publish).toHaveBeenCalledWith('c1', 'combat');
+    expect(publish).toHaveBeenCalledWith('c1', 'characters');
+    const payload = res.json.mock.calls[0][0];
+    expect(payload).toMatchObject({ already_ended: false, hours: 3 });
+    expect(payload.notifications).toHaveLength(1);
+    publish.mockRestore();
+  });
+
+  it('is idempotent: an already ended scene adds no hours', async () => {
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue({ id: 's1', round_number: 3, ended_at: '2026-10-28' });
+    const res = mockRes();
+
+    await CombatController.endCombat(req(), res);
+
+    expect(CharacterSheetClient.advanceTimer).not.toHaveBeenCalled();
+    expect(CombatSceneModel.end).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).toMatchObject({ already_ended: true, hours: 0 });
+  });
+
+  it('leaves the scene open when character-sheet is unavailable (502)', async () => {
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue({ id: 's1', round_number: 1, ended_at: null });
+    CombatantModel.listByScene.mockResolvedValue([{ id: 'x1', character_id: 'ch1' }]);
+    const err = Object.assign(new Error('Сервіс листів персонажів недоступний'), { statusCode: 502 });
+    CharacterSheetClient.advanceTimer.mockRejectedValue(err);
+
+    await expect(CombatController.endCombat(req(), mockRes())).rejects.toBe(err);
+    expect(CombatSceneModel.end).not.toHaveBeenCalled();
+  });
+
+  it('409s for next-turn and next-round on an ended scene', async () => {
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue({ id: 's1', ended_at: 'now' });
+    const turn = mockRes();
+    await CombatController.nextTurn(req(), turn);
+    expect(turn.status).toHaveBeenCalledWith(409);
+    const round = mockRes();
+    await CombatController.nextRound(req(), round);
+    expect(round.status).toHaveBeenCalledWith(409);
   });
 });

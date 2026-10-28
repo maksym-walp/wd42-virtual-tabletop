@@ -7,6 +7,7 @@ import { getDomainTabs } from '../collectionsDomains';
 import ScopeFilter from '../components/ScopeFilter';
 import { EQUIPMENT_ENDPOINTS, EQUIPMENT_NEW_LABELS, WEAPON_MODIFIERS, DAMAGE_DICE, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
 import useWeaponOptions from '../hooks/useWeaponOptions';
+import usePotionOptions, { portionsWord } from '../hooks/usePotionOptions';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildEquipmentImportTemplate } from '../utils/equipmentImportTemplate';
 import { inputClass } from '../components/ui/Field';
@@ -28,6 +29,9 @@ import { CatalogPreview, EquipmentPreview } from '../components/catalog/previews
 // for НІПи/Бестіарій/Види. `type` picks which type-table this instance reads.
 export default function EquipmentCatalog({ type }) {
   const { weaponTypes, weaponGrips, weaponTypesMap, weaponGripsMap } = useWeaponOptions();
+  const { tiers: potionTiers, sizes: potionSizes, tiersMap, sizesMap, effectsMap } = usePotionOptions();
+  const [potionTier, setPotionTier] = useState('');
+  const [potionSize, setPotionSize] = useState('');
   const [scope, setScope]   = useState('');
   const [weaponType, setWeaponType] = useState('');
   const [modifier, setModifier] = useState('');
@@ -52,6 +56,8 @@ export default function EquipmentCatalog({ type }) {
     setModifier('');
     setDamageDie('');
     setWeaponGrip('');
+    setPotionTier('');
+    setPotionSize('');
   }, [type]);
 
   const fetchItems = useCallback(() => {
@@ -64,13 +70,17 @@ export default function EquipmentCatalog({ type }) {
       if (damageDie) params.set('damage_die', damageDie);
       if (weaponGrip) params.set('weapon_grip', weaponGrip);
     }
+    if (type === 'potion') {
+      if (potionTier) params.set('potion_tier', potionTier);
+      if (potionSize) params.set('potion_size', potionSize);
+    }
 
     setLoading(true);
     return api.get(`${EQUIPMENT_ENDPOINTS[type]}/?${params}`)
       .then(({ data }) => setItems(data.items))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [type, search, sort, dir, scope, weaponType, modifier, damageDie, weaponGrip]);
+  }, [type, search, sort, dir, scope, weaponType, modifier, damageDie, weaponGrip, potionTier, potionSize]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -113,7 +123,8 @@ export default function EquipmentCatalog({ type }) {
   };
 
   const showCards = view === 'cards';
-  const activeFilterCount = (type === 'weapon' ? [weaponType, modifier, damageDie, weaponGrip].filter(Boolean).length : 0);
+  const activeFilterCount = type === 'weapon' ? [weaponType, modifier, damageDie, weaponGrip].filter(Boolean).length
+    : type === 'potion' ? [potionTier, potionSize].filter(Boolean).length : 0;
   const newHref = `/equipment/new?type=${type}`;
   const newLabel = EQUIPMENT_NEW_LABELS[type] || 'Новий предмет';
 
@@ -133,6 +144,17 @@ export default function EquipmentCatalog({ type }) {
     ...(type === 'armor' ? [
       { key: 'armor_weight', label: 'Вага', render: (item) => ARMOR_WEIGHTS[item.armor_weight]?.label ?? '—' },
       { key: 'defense_value', label: 'Захист', sortKey: 'defense_value', render: (item) => item.defense_value ?? '—' },
+    ] : []),
+    ...(type === 'potion' ? [
+      { key: 'effect', label: 'Ефект', render: (item) => effectsMap[item.effect]?.label ?? item.effect ?? '—' },
+      {
+        key: 'heal_die', label: 'Рівень', sortKey: 'heal_die',
+        render: (item) => `${tiersMap[item.potion_tier]?.label ?? item.potion_tier} · d${item.heal_die}`,
+      },
+      {
+        key: 'portions', label: 'Розмір', sortKey: 'portions',
+        render: (item) => `${sizesMap[item.potion_size]?.label ?? item.potion_size} · ${item.portions} ${portionsWord(item.portions)}`,
+      },
     ] : []),
     { key: 'price', label: 'Ціна', sortKey: 'price', render: (item) => item.price ?? '—' },
   ];
@@ -190,6 +212,25 @@ export default function EquipmentCatalog({ type }) {
           </div>
         </SidebarFilters>
       )}
+
+      {type === 'potion' && (
+        <SidebarFilters open={filtersOpen} onToggle={() => setFiltersOpen((o) => !o)} activeCount={activeFilterCount}>
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Рівень</span>
+            <select className={inputClass} value={potionTier} onChange={(e) => setPotionTier(e.target.value)}>
+              <option value="">Усі рівні</option>
+              {potionTiers.map((t) => <option key={t.key} value={t.key}>{t.label} (d{t.die})</option>)}
+            </select>
+          </div>
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-dim">Розмір</span>
+            <select className={inputClass} value={potionSize} onChange={(e) => setPotionSize(e.target.value)}>
+              <option value="">Усі розміри</option>
+              {potionSizes.map((x) => <option key={x.key} value={x.key}>{x.label} ({x.portions} {portionsWord(x.portions)})</option>)}
+            </select>
+          </div>
+        </SidebarFilters>
+      )}
     </>
   );
 
@@ -201,7 +242,7 @@ export default function EquipmentCatalog({ type }) {
       {loading ? (
         <p className="py-12 text-center text-text-dim">Завантаження...</p>
       ) : items.length === 0 ? (
-        <EmptyState title="Предметів не знайдено" action={<Button to={newHref}>Створити перший</Button>} />
+        <EmptyState title={type === 'potion' ? 'Зіль не знайдено' : 'Предметів не знайдено'} action={<Button to={newHref}>Створити перший</Button>} />
       ) : showCards ? (
         <div className={CATALOG_GRID}>
           {items.map((item) => <EquipmentCard key={item.id} item={item} {...bindPreview(item)} />)}

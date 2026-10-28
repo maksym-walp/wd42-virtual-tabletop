@@ -199,3 +199,17 @@ describe('EquipmentController.remove', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Видалено' });
   });
 });
+
+describe('EquipmentController.patch — potion stock', () => {
+  it('forwards containers and open_portions and validates them', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    EquipmentModel.patch.mockResolvedValue({ id: 'link-1', containers: 2 });
+    const res = mockRes();
+    await EquipmentController.patch({ params: { id: 'c1', equipmentId: 'e1' }, body: { containers: 2, open_portions: 1 }, user: { sub: 'u1' } }, res);
+    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', expect.objectContaining({ containers: 2, open_portions: 1 }));
+
+    const bad = mockRes();
+    await EquipmentController.patch({ params: { id: 'c1', equipmentId: 'e1' }, body: { containers: -1 }, user: { sub: 'u1' } }, bad);
+    expect(bad.status).toHaveBeenCalledWith(400);
+  });
+});

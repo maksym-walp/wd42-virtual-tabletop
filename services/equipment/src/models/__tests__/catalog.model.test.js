@@ -7,6 +7,7 @@ const ItemModel = createCatalogModel('item');
 const WeaponModel = createCatalogModel('weapon');
 const ArmorModel = createCatalogModel('armor');
 const ArtifactModel = createCatalogModel('artifact');
+const PotionModel = createCatalogModel('potion');
 
 function mockClient() {
   const client = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
@@ -500,5 +501,42 @@ describe('artifact kind', () => {
       .resolves.toEqual({ id: 'art1', type: 'artifact' });
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO equipment\.artifacts/);
+  });
+});
+
+describe('potion kind', () => {
+  it('queries equipment.potions and filters by tier and size', async () => {
+    await PotionModel.findAll('u1', { potion_tier: 'balm', potion_size: 'flask', sort: 'heal_die' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/FROM equipment\.potions i/);
+    expect(sql).toMatch(/i\.potion_tier = \$2/);
+    expect(sql).toMatch(/i\.potion_size = \$3/);
+    expect(sql).toMatch(/ORDER BY i\.heal_die ASC/);
+    expect(params).toEqual(['u1', 'balm', 'flask']);
+  });
+
+  it('never writes the generated heal_die/portions columns and fills NOT NULL defaults', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 'p1' }] });
+    await expect(PotionModel.create('u1', { name: 'Зілля' })).resolves.toEqual({ id: 'p1', type: 'potion' });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO equipment\.potions/);
+    expect(sql).not.toMatch(/heal_die|portions/);
+    expect(params.slice(-3)).toEqual(['healing', 'tincture', 'ampoule']);
+  });
+
+  it('resets unknown imported tier/size to defaults', async () => {
+    pool.query.mockResolvedValue({ rowCount: 1 });
+    await UnionModel.bulkImport('u1', [{ type: 'potion', name: 'Х', potion_tier: 'mega', potion_size: 'flask', effect: 'healing' }]);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO equipment\.potions/);
+    expect(params.slice(-3)).toEqual(['healing', 'tincture', 'flask']);
+  });
+
+  it('is part of the union read model and kind lookup', async () => {
+    await UnionModel.findAll('u1', {});
+    expect(pool.query.mock.calls[0][0]).toMatch(/'potion'::varchar[\s\S]*FROM equipment\.potions/);
+    pool.query.mockResolvedValueOnce({ rows: [{ kind: 'potion' }] });
+    await expect(findKindById('p1', 'u1')).resolves.toBe('potion');
+    expect(pool.query.mock.calls[1][0]).toMatch(/SELECT 'potion' FROM equipment\.potions/);
   });
 });

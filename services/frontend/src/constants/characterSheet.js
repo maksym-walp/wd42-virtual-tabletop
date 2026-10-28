@@ -178,15 +178,14 @@ const CHARISMA_INSPIRATION = { 1: '—', 2: 'd4', 3: 'd6', 4: 'd8', 5: 'd10', 6:
 // Archetype healing die (one step below health die)
 export const HEALING_DIE = { fighter: 'd8', spellcaster: 'd4', rogue: 'd6' };
 
-// Запасні значення — актуальний список (з описами) редагує адмін
-// (admin.site_configs 'conditions', див. hooks/useCharacterConfig.js).
-// key — значення type у conditions персонажа; max_level null — без обмеження.
+// Запасні значення — назви й описи редагує адмін (admin.site_configs
+// 'conditions', див. hooks/useCharacterConfig.js). Набір фіксований; ефекти
+// рівнів рахує character-sheet (блок effects листа, тексти — condition_levels).
+// key — значення type у conditions персонажа.
 export const CONDITIONS = [
-  { key: 'exhaustion', label: 'Втома',           description: '', max_level: 6 },
-  { key: 'injury',     label: 'Поранення',        description: '', max_level: null },
-  { key: 'illness',    label: 'Хвороба',           description: '', max_level: null },
-  { key: 'poison',     label: 'Отруєння',          description: '', max_level: null },
-  { key: 'trauma',     label: 'Серйозна травма',   description: '', max_level: null },
+  { key: 'fatigue', label: 'Втома',   description: '', max_level: 5 },
+  { key: 'illness', label: 'Хвороба', description: '', max_level: 5 },
+  { key: 'trauma',  label: 'Травма',  description: '', max_level: 5 },
 ];
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];

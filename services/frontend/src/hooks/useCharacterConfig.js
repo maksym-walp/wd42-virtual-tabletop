@@ -24,6 +24,9 @@ function fetchConfig() {
           // name, description, skill_bonuses }] }]. Констант-запасного варіанту
           // нема — раси живуть у компендіумі.
           races: data.races ?? [],
+          // Тексти ефектів станів по рівнях — їх задають правила
+          // character-sheet; власних таблиць фронтенд не має.
+          condition_levels: data.condition_levels ?? {},
         };
         return cache;
       })
@@ -37,7 +40,7 @@ export function invalidateCharacterConfig() {
   cache = null;
 }
 
-const FALLBACK = { conditions: CONDITIONS, currencies: CURRENCIES, races: [] };
+const FALLBACK = { conditions: CONDITIONS, currencies: CURRENCIES, races: [], condition_levels: {} };
 
 export default function useCharacterConfig() {
   const [config, setConfig] = useState(cache || FALLBACK);

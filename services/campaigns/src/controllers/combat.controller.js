@@ -5,6 +5,8 @@ const CampaignCharacterModel = require('../models/campaign-character.model');
 const bus = require('../realtime/bus');
 const { loadCampaignOr404, canManage, canView, isAdmin } = require('./load-campaign');
 const { deriveCombatStats } = require('../utils/compendium-combat-stats');
+const CharacterSheetClient = require('../clients/character-sheet.client');
+const { fatigueNotifications } = require('./timer.controller');
 
 const HIDDEN_COMBATANT_FIELDS = ['id', 'name', 'description', 'is_hidden'];
 
@@ -160,6 +162,7 @@ const CombatController = {
 
     const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
     if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
+    if (scene.ended_at) return res.status(409).json({ message: 'Бій уже завершено' });
 
     const next = await CombatantModel.findNextToAct(scene.id);
     if (!next) return res.status(404).json({ message: 'Усі комбатанти вже походили цього раунду' });
@@ -176,10 +179,41 @@ const CombatController = {
 
     const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
     if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
+    if (scene.ended_at) return res.status(409).json({ message: 'Бій уже завершено' });
 
     const updated = await CombatSceneModel.advanceRound(scene.id, campaign.id);
     bus.publish(campaign.id, 'combat');
     res.json({ scene: updated });
+  },
+
+  // Завершення бою: кожен розпочатий раунд — година таймера діяльності
+  // кожному персонажу-учаснику. Спершу години (ідемпотентно через
+  // source_key = combat:<sceneId>), потім позначка ended_at — тож повтор
+  // після 502 безпечний, а повторне натискання годин не додає.
+  async endCombat(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+    if (!canManage(campaign, req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
+
+    const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
+    if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
+    if (scene.ended_at) return res.json({ scene, already_ended: true, hours: 0, results: [], notifications: [] });
+
+    const hours = Math.max(1, Number(scene.round_number) || 1);
+    const combatants = await CombatantModel.listByScene(scene.id);
+    const characterIds = [...new Set(combatants.map((c) => c.character_id).filter(Boolean))];
+
+    let results = [];
+    if (characterIds.length) {
+      ({ results } = await CharacterSheetClient.advanceTimer(req.headers?.authorization, {
+        characterIds, hours, sourceKey: `combat:${scene.id}`,
+      }));
+    }
+
+    const ended = await CombatSceneModel.end(scene.id, campaign.id);
+    bus.publish(campaign.id, 'combat');
+    if (characterIds.length) bus.publish(campaign.id, 'characters');
+    res.json({ scene: ended, already_ended: false, hours, results, notifications: fatigueNotifications(results) });
   },
 
   // Зворотний бік двосторонньої синхронізації: лист персонажа сповіщає сюди

@@ -1,7 +1,7 @@
 const CampaignModel = require('../models/campaign.model');
 const CampaignCharacterModel = require('../models/campaign-character.model');
 const bus = require('../realtime/bus');
-const { canManage, canView } = require('./load-campaign');
+const { canManage, canView, isAdmin } = require('./load-campaign');
 
 const CampaignCharacterController = {
   // Спосіб А: гравець сам приєднує власного персонажа за invite_code
@@ -98,6 +98,22 @@ const CampaignCharacterController = {
     const updated = await CampaignCharacterModel.grantExperienceToAll(campaign.id, amount);
     bus.publish(campaign.id, 'characters');
     res.json({ updated: updated.length });
+  },
+
+  // POST /characters/:characterId/notify — лист персонажа після відпочинку чи
+  // зміни станів просить розіслати 'characters' у всі кампанії персонажа,
+  // щоб інша сторона (власник або ГМ) побачила зміни одразу.
+  async notifyCharacterChanged(req, res) {
+    const character = await CampaignModel.findCharacterOwner(req.params.characterId);
+    if (!character) return res.status(404).json({ message: 'Персонажа не знайдено' });
+    if (character.user_id !== req.user.sub && !isAdmin(req.user)
+      && !await CampaignModel.isCampaignGmForCharacter(req.params.characterId, req.user.sub)) {
+      return res.status(403).json({ message: 'Доступ заборонено' });
+    }
+
+    const campaignIds = await CampaignModel.campaignIdsForCharacter(req.params.characterId);
+    for (const campaignId of campaignIds) bus.publish(campaignId, 'characters');
+    res.json({ campaigns: campaignIds.length });
   },
 
   // A player leaves the campaign: every character THEY own gets detached.

@@ -13,11 +13,15 @@ jest.mock('../../models/catalog.model', () => {
     __model: model,
     createCatalogModel: jest.fn(() => model),
     UnionModel: { findAll: jest.fn(), findById: jest.fn(), bulkImport: jest.fn() },
+    KINDS: {
+      weapon: {}, armor: {}, item: {}, artifact: {},
+      potion: { allowed: { effect: ['healing'], potion_tier: ['tincture', 'balm'], potion_size: ['ampoule', 'flask'] } },
+    },
   };
 });
 
 const { __model: Model, createCatalogModel, UnionModel } = require('../../models/catalog.model');
-const { createCatalogController, UnionController } = require('../catalog.controller');
+const { createCatalogController, UnionController, getPotionOptionsHandler } = require('../catalog.controller');
 
 const controller = createCatalogController('weapon');
 
@@ -280,5 +284,36 @@ describe('UnionController.import', () => {
     expect(UnionModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ imported: 3 });
+  });
+});
+
+describe('potion kind', () => {
+  const potions = createCatalogController('potion');
+
+  it('400s on an unknown tier or size instead of failing the DB CHECK', async () => {
+    const res = mockRes();
+    await potions.create(mockReq({ body: { name: 'Зілля', potion_tier: 'mega' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    const res2 = mockRes();
+    await potions.update(mockReq({ params: { id: 'p1' }, body: { name: 'Зілля', potion_size: 'barrel' } }), res2);
+    expect(res2.status).toHaveBeenCalledWith(400);
+    expect(Model.create).not.toHaveBeenCalled();
+    expect(Model.update).not.toHaveBeenCalled();
+  });
+
+  it('creates a potion with known values', async () => {
+    Model.create.mockResolvedValue({ id: 'p1' });
+    const res = mockRes();
+    await potions.create(mockReq({ body: { name: 'Бальзам', potion_tier: 'balm', potion_size: 'flask' } }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('serves tiers with dice and sizes with portions', () => {
+    const res = mockRes();
+    getPotionOptionsHandler({}, res);
+    const { tiers, sizes, effects } = res.json.mock.calls[0][0];
+    expect(tiers.map((t) => t.die)).toEqual([4, 6, 8, 10, 12]);
+    expect(sizes.map((x) => x.portions)).toEqual([1, 3, 6, 10]);
+    expect(effects).toEqual([{ key: 'healing', label: 'Зцілення' }]);
   });
 });

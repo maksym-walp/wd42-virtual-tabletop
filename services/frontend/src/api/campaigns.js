@@ -194,6 +194,25 @@ const campaignApi = {
   // Зворотний бік двосторонньої синхронізації ХП: лист персонажа сповіщає
   // сюди, а бекенд сам знаходить усіх комбатантів цього персонажа (в будь-
   // якій кампанії/сцені) й оновлює їхнє health/temp_hp.
+  // Таймер діяльності (лише ГМ): hours ∈ {1, 4, 8, 12}.
+  async advanceTimer(id, hours) {
+    const { data } = await api.post(`${BASE}/${id}/timer/advance`, { hours });
+    return data; // { results, notifications }
+  },
+
+  // Завершення бою: години за розпочаті раунди учасникам-персонажам.
+  async endCombat(id) {
+    const { data } = await api.post(`${BASE}/${id}/combat/end`);
+    return data; // { scene, already_ended, hours, results, notifications }
+  },
+
+  // Після відпочинку чи зміни станів на листі — щоб інша сторона (власник
+  // або ГМ) отримала real-time подію 'characters'.
+  async notifyCharacter(characterId) {
+    const { data } = await api.post(`${BASE}/characters/${characterId}/notify`);
+    return data;
+  },
+
   async syncCombatantHp(characterId, { health, temp_hp }) {
     const { data } = await api.patch(`${BASE}/characters/${characterId}/hp`, { health, temp_hp });
     return data.combatants;

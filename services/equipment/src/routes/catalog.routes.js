@@ -1,5 +1,7 @@
 const express = require('express');
-const { createCatalogController, UnionController, getWeaponOptionsHandler } = require('../controllers/catalog.controller');
+const {
+  createCatalogController, UnionController, getWeaponOptionsHandler, getPotionOptionsHandler,
+} = require('../controllers/catalog.controller');
 const { requireAuth, requireCanonicalManager, requireAdminOwner } = require('../middleware/auth.middleware');
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -10,7 +12,11 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const weaponOptionsRouter = express.Router();
 weaponOptionsRouter.get('/', requireAuth, wrap(getWeaponOptionsHandler));
 
-// Повний CRUD одного виду спорядження: /items, /weapons, /armor, /artifacts.
+// Так само перед /potions: рівні, розміри й ефекти зілля.
+const potionOptionsRouter = express.Router();
+potionOptionsRouter.get('/', requireAuth, wrap(getPotionOptionsHandler));
+
+// Повний CRUD одного виду спорядження: /items, /weapons, /armor, /artifacts, /potions.
 function createCatalogRouter(kind) {
   const controller = createCatalogController(kind);
   const router = express.Router();
@@ -36,4 +42,4 @@ unionRouter.post('/import', requireCanonicalManager, wrap(UnionController.import
 unionRouter.get('/',    requireAuth, wrap(UnionController.list));
 unionRouter.get('/:id', requireAuth, wrap(UnionController.getOne));
 
-module.exports = { createCatalogRouter, unionRouter, weaponOptionsRouter };
+module.exports = { createCatalogRouter, unionRouter, weaponOptionsRouter, potionOptionsRouter };

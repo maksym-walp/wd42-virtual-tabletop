@@ -6,6 +6,7 @@ const BoardController = require('../controllers/board.controller');
 const EventsController = require('../controllers/events.controller');
 const CampaignSessionController = require('../controllers/campaign-session.controller');
 const CombatController = require('../controllers/combat.controller');
+const TimerController = require('../controllers/timer.controller');
 
 const router = express.Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -32,6 +33,8 @@ router.get('/:id/characters', wrap(CampaignCharacterController.list));
 router.delete('/:id/characters/:characterId', wrap(CampaignCharacterController.remove));
 router.post('/:id/characters/experience', wrap(CampaignCharacterController.grantExperience));
 router.post('/:id/leave', wrap(CampaignCharacterController.leave));
+// Таймер діяльності персонажів (правила — у character-sheet).
+router.post('/:id/timer/advance', wrap(TimerController.advance));
 
 // Стіл (zone=table) і Ширма (zone=screen)
 router.get('/:id/board', wrap(BoardController.list));
@@ -49,6 +52,7 @@ router.delete('/:id/sessions/:sessionId', wrap(CampaignSessionController.remove)
 router.get('/:id/combat', wrap(CombatController.getCurrent));
 router.post('/:id/combat/next-turn', wrap(CombatController.nextTurn));
 router.post('/:id/combat/next-round', wrap(CombatController.nextRound));
+router.post('/:id/combat/end', wrap(CombatController.endCombat));
 router.post('/:id/combat/scenes', wrap(CombatController.createScene));
 router.patch('/:id/combat/scenes/:sceneId', wrap(CombatController.updateScene));
 router.delete('/:id/combat/scenes/:sceneId', wrap(CombatController.removeScene));
@@ -59,5 +63,6 @@ router.delete('/:id/combat/combatants/:combatantId', wrap(CombatController.remov
 // Не прив'язаний до конкретної кампанії: лист персонажа не знає, у якому бою
 // (якщо взагалі) цей персонаж зараз перебуває.
 router.patch('/characters/:characterId/hp', wrap(CombatController.syncHpFromCharacterSheet));
+router.post('/characters/:characterId/notify', wrap(CampaignCharacterController.notifyCharacterChanged));
 
 module.exports = router;

@@ -120,6 +120,8 @@ export function EquipmentPreview({ item, artifact = false }) {
         { label: 'Модифікатор', value: item.modifier && weaponModifierLabel(item.modifier) },
         { label: 'Захист', value: item.defense_value },
         { label: 'Вага', value: ARMOR_WEIGHTS[item.armor_weight]?.label },
+        { label: 'Зцілення', value: item.heal_die && `d${item.heal_die} / порція` },
+        { label: 'Порцій', value: item.portions },
         { label: 'Ціна', value: item.price },
       ]}
       description={item.description}

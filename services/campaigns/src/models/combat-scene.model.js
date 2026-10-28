@@ -70,6 +70,18 @@ const CombatSceneModel = {
     return scene;
   },
 
+  // Позначає бій завершеним (ended_at). Повторне завершення нічого не змінює.
+  async end(id, campaignId) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.combat_scenes
+       SET ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+       WHERE id = $1 AND campaign_id = $2
+       RETURNING *`,
+      [id, campaignId]
+    );
+    return rows[0] || null;
+  },
+
   // combatants cascade-delete with the scene (FK ON DELETE CASCADE).
   async remove(id, campaignId) {
     const { rowCount } = await pool.query(

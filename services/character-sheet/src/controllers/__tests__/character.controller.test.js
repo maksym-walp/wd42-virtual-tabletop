@@ -8,6 +8,7 @@ jest.mock('../../models/ritual-tracker.model');
 jest.mock('../../models/campaign-access.model');
 jest.mock('../../models/spell-access.model');
 jest.mock('../../models/site-config.model');
+jest.mock('../../models/character-state.model');
 jest.mock('../authorize-character-write');
 
 const CharacterModel = require('../../models/character.model');
@@ -20,6 +21,7 @@ const RitualTrackerModel = require('../../models/ritual-tracker.model');
 const { isCampaignGmForCharacter } = require('../../models/campaign-access.model');
 const { treeSpellAccess } = require('../../models/spell-access.model');
 const SiteConfigModel = require('../../models/site-config.model');
+const CharacterStateModel = require('../../models/character-state.model');
 const authorizeCharacterWrite = require('../authorize-character-write');
 const CharacterController = require('../character.controller');
 
@@ -42,6 +44,15 @@ function mockAggregationModels() {
   RitualTrackerModel.findAll.mockResolvedValue(['ritual-x']);
   CharacterModel.findOwnerUsername.mockResolvedValue('ownerName');
   treeSpellAccess.mockResolvedValue({ traditions: ['t1'], maxComplexity: 'medium' });
+  CharacterStateModel.campaignIdsFor.mockResolvedValue(['camp-1']);
+}
+
+// withCharacterLock виконує колбек одразу з поданим станом.
+function mockLockedState(character, skills = []) {
+  const client = {};
+  CharacterStateModel.withCharacterLock.mockImplementation((id, fn) => fn(client, { character, skills }));
+  CharacterStateModel.saveState.mockImplementation(async (c, id, fields) => ({ ...character, ...fields }));
+  return client;
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -235,6 +246,9 @@ describe('CharacterController.getSheet', () => {
     expect(payload.equipment).toEqual(['equip-x']);
     expect(payload.abilities).toEqual(['ability-x']);
     expect(payload.rituals).toEqual(['ritual-x']);
+    expect(payload.campaign_ids).toEqual(['camp-1']);
+    expect(payload.effects.roll_mode).toBe('normal');
+    expect(payload.timer).toEqual({ hours: 0, next_check_at: 12, checks_done: 0, checks_passed: 0 });
   });
 
   it('allows a global game_master role even when private and not campaign GM, but keeps is_owner false', async () => {
@@ -344,6 +358,74 @@ describe('CharacterController.update', () => {
 
     expect(CharacterModel.update).toHaveBeenCalledWith('c1', { name: 'New' });
     expect(res.json).toHaveBeenCalledWith({ character: { id: 'c1', name: 'New' } });
+  });
+  it('400s on activity timer fields', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    const res = mockRes();
+
+    await CharacterController.update(mockReq({ params: { id: 'c1' }, body: { rest_timer_hours: 0 } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterModel.update).not.toHaveBeenCalled();
+  });
+
+  it('400s on an out-of-range death_scale', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    const res = mockRes();
+
+    await CharacterController.update(mockReq({ params: { id: 'c1' }, body: { death_scale: 5 } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('normalizes conditions: the 6th level knocks the character out', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    mockLockedState({ id: 'c1', archetype: 'rogue', conditions: [{ type: 'fatigue', level: 5 }], death_scale: null });
+    const res = mockRes();
+
+    await CharacterController.update(mockReq({ params: { id: 'c1' }, body: { conditions: [{ type: 'fatigue', level: 6 }] } }), res);
+
+    expect(CharacterStateModel.saveState).toHaveBeenCalledWith(expect.anything(), 'c1', {
+      conditions: [{ type: 'fatigue', level: 6 }], death_scale: 0,
+    });
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.character.death_scale).toBe(0);
+    expect(payload.effects.unconscious).toBe(true);
+    expect(payload.skills).toBeUndefined();
+  });
+
+  it('resets Physique skills and returns them when Травма reaches 5', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    mockLockedState({ id: 'c1', archetype: 'rogue', conditions: [{ type: 'trauma', level: 4, skill_keys: [] }] });
+    CharacterStateModel.resetPhysique.mockResolvedValue([{ skill_key: 'strength', value: 1 }]);
+    const res = mockRes();
+
+    await CharacterController.update(mockReq({ params: { id: 'c1' }, body: { conditions: [{ type: 'trauma', level: 5 }] } }), res);
+
+    expect(CharacterStateModel.resetPhysique).toHaveBeenCalledWith(expect.anything(), 'c1', ['strength', 'immunity', 'magic_sense', 'endurance'], 1);
+    expect(res.json.mock.calls[0][0].skills).toEqual([{ skill_key: 'strength', value: 1 }]);
+  });
+
+  it('propagates the Втома 5 block as a 400 error', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    mockLockedState({ id: 'c1', conditions: [{ type: 'fatigue', level: 5 }, { type: 'illness', level: 2 }] });
+
+    await expect(CharacterController.update(mockReq({
+      params: { id: 'c1' }, body: { conditions: [{ type: 'fatigue', level: 5 }, { type: 'illness', level: 1 }] },
+    }), mockRes())).rejects.toMatchObject({ statusCode: 400 });
+    expect(CharacterStateModel.saveState).not.toHaveBeenCalled();
+  });
+
+  it('writes the other fields after the conditions', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    mockLockedState({ id: 'c1', conditions: [] });
+    CharacterModel.update.mockResolvedValue({ id: 'c1', notes: 'x', conditions: [] });
+    const res = mockRes();
+
+    await CharacterController.update(mockReq({ params: { id: 'c1' }, body: { conditions: [], notes: 'x' } }), res);
+
+    expect(CharacterModel.update).toHaveBeenCalledWith('c1', { notes: 'x' });
+    expect(res.json.mock.calls[0][0].character.notes).toBe('x');
   });
 });
 

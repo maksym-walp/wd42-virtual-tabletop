@@ -10,37 +10,62 @@ const pool = require('../config/db');
 // single sheet row type working for any of them, and since every split/merge
 // preserved row ids, sheets that predate them keep pointing at the same rows.
 // Columns a given catalog doesn't have are projected as NULL so all arms share
-// one shape.
+// one shape. Potions (equipment.potions, migration 110) are the fifth arm:
+// heal_die/portions are generated there from tier/size.
 const CATALOG = `(
         SELECT id, name, 'item'::varchar AS type,
                NULL::varchar AS damage_die, NULL::smallint AS defense_value,
                description, is_public, price, image_url,
                NULL::varchar AS weapon_type, NULL::varchar[] AS weapon_grip,
                NULL::varchar AS armor_weight,
-               NULL::varchar AS creator, NULL::varchar AS rarity
+               NULL::varchar AS creator, NULL::varchar AS rarity,
+               NULL::varchar AS effect, NULL::varchar AS potion_tier, NULL::varchar AS potion_size,
+               NULL::smallint AS heal_die, NULL::smallint AS portions
         FROM equipment.items
         UNION ALL
         SELECT id, name, 'weapon'::varchar,
                damage_die, NULL::smallint,
                description, is_public, price, image_url,
                weapon_type, weapon_grip, NULL::varchar,
-               NULL::varchar, NULL::varchar
+               NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.weapons
         UNION ALL
         SELECT id, name, 'armor'::varchar,
                NULL::varchar, defense_value,
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar[], armor_weight,
-               NULL::varchar, NULL::varchar
+               NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.armor
         UNION ALL
         SELECT id, name, 'artifact'::varchar,
                NULL::varchar, NULL::smallint,
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar[], NULL::varchar,
-               creator, rarity
+               creator, rarity,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.artifacts
+        UNION ALL
+        SELECT id, name, 'potion'::varchar,
+               NULL::varchar, NULL::smallint,
+               description, is_public, price, image_url,
+               NULL::varchar, NULL::varchar[], NULL::varchar,
+               NULL::varchar, NULL::varchar,
+               effect, potion_tier, potion_size, heal_die, portions
+        FROM equipment.potions
       )`;
+
+const ITEM_JSON = `CASE WHEN ei.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', ei.id, 'name', ei.name, 'type', ei.type,
+                'damage_die', ei.damage_die, 'defense_value', ei.defense_value,
+                'description', ei.description, 'is_public', ei.is_public,
+                'price', ei.price, 'image_url', ei.image_url,
+                'weapon_type', ei.weapon_type, 'weapon_grip', ei.weapon_grip,
+                'armor_weight', ei.armor_weight, 'creator', ei.creator, 'rarity', ei.rarity,
+                'effect', ei.effect, 'potion_tier', ei.potion_tier, 'potion_size', ei.potion_size,
+                'heal_die', ei.heal_die, 'portions', ei.portions
+              ) END AS item`;
 
 const EquipmentModel = {
   // LEFT JOIN cross-schema into the catalogs so the sheet can render the
@@ -50,14 +75,7 @@ const EquipmentModel = {
   async findAll(characterId) {
     const { rows } = await pool.query(
       `SELECT ce.*,
-              CASE WHEN ei.id IS NULL THEN NULL ELSE jsonb_build_object(
-                'id', ei.id, 'name', ei.name, 'type', ei.type,
-                'damage_die', ei.damage_die, 'defense_value', ei.defense_value,
-                'description', ei.description, 'is_public', ei.is_public,
-                'price', ei.price, 'image_url', ei.image_url,
-                'weapon_type', ei.weapon_type, 'weapon_grip', ei.weapon_grip,
-                'armor_weight', ei.armor_weight, 'creator', ei.creator, 'rarity', ei.rarity
-              ) END AS item
+              ${ITEM_JSON}
        FROM character_sheet.equipment ce
        LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id
        WHERE ce.character_id = $1
@@ -78,7 +96,9 @@ const EquipmentModel = {
     return rows[0] || null;
   },
 
-  async patch(characterId, equipmentId, { mastery_count, mastered, is_equipped }) {
+  // containers / open_portions — запас зілля (повні ємності й залишок у
+  // відкритій); для інших видів ці колонки не використовуються.
+  async patch(characterId, equipmentId, { mastery_count, mastered, is_equipped, containers, open_portions }) {
     // Auto-master when mastery_count reaches 3
     const effectiveMastered = mastered ?? (mastery_count >= 3 ? true : undefined);
 
@@ -111,22 +131,49 @@ const EquipmentModel = {
          UPDATE character_sheet.equipment
          SET mastery_count = COALESCE($3, mastery_count),
              mastered      = COALESCE($4, mastered),
-             is_equipped   = COALESCE($5, is_equipped)
+             is_equipped   = COALESCE($5, is_equipped),
+             containers    = COALESCE($6, containers),
+             open_portions = COALESCE($7, open_portions)
          WHERE character_id = $1 AND equipment_id = $2
          RETURNING *
        )
        SELECT ce.*,
-              CASE WHEN ei.id IS NULL THEN NULL ELSE jsonb_build_object(
-                'id', ei.id, 'name', ei.name, 'type', ei.type,
-                'damage_die', ei.damage_die, 'defense_value', ei.defense_value,
-                'description', ei.description, 'is_public', ei.is_public,
-                'price', ei.price, 'image_url', ei.image_url,
-                'weapon_type', ei.weapon_type, 'weapon_grip', ei.weapon_grip,
-                'armor_weight', ei.armor_weight, 'creator', ei.creator, 'rarity', ei.rarity
-              ) END AS item
+              ${ITEM_JSON}
        FROM updated ce
        LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id`,
-      [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null, is_equipped ?? null]
+      [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null, is_equipped ?? null,
+        containers ?? null, open_portions ?? null]
+    );
+    return rows[0] || null;
+  },
+
+  // Рядок зілля з листа разом із даними каталогу — під блокуванням
+  // транзакції випивання (client з withCharacterLock).
+  async findPotionForUpdate(client, characterId, equipmentId) {
+    const { rows } = await client.query(
+      `SELECT ce.*, ${ITEM_JSON}
+       FROM character_sheet.equipment ce
+       JOIN ${CATALOG} ei ON ei.id = ce.equipment_id AND ei.type = 'potion'
+       WHERE ce.character_id = $1 AND ce.equipment_id = $2
+       FOR UPDATE OF ce`,
+      [characterId, equipmentId]
+    );
+    return rows[0] || null;
+  },
+
+  // Порожнє зілля зникає з листа.
+  async saveStock(client, characterId, equipmentId, { containers, open_portions }) {
+    if (containers <= 0 && open_portions <= 0) {
+      await client.query(
+        `DELETE FROM character_sheet.equipment WHERE character_id = $1 AND equipment_id = $2`,
+        [characterId, equipmentId]
+      );
+      return null;
+    }
+    const { rows } = await client.query(
+      `UPDATE character_sheet.equipment SET containers = $3, open_portions = $4
+       WHERE character_id = $1 AND equipment_id = $2 RETURNING *`,
+      [characterId, equipmentId, containers, open_portions]
     );
     return rows[0] || null;
   },

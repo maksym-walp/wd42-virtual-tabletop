@@ -28,7 +28,7 @@ export function buildEquipmentImportTemplate(weaponTypes, weaponGrips) {
 // Власником усіх імпортованих записів стає користувач, що робить імпорт.
 //
 // Спільні поля (усі види):
-//   type         — обов'язкове: "item" | "weapon" | "armor" | "artifact"
+//   type         — обов'язкове: "item" | "weapon" | "armor" | "artifact" | "potion"
 //   name         — обов'язкове, рядок
 //   description  — рядок або null
 //   is_public    — true / false
@@ -41,6 +41,9 @@ export function buildEquipmentImportTemplate(weaponTypes, weaponGrips) {
 //             modifier — ${modifierList}, або ключ будь-якого навику персонажа
 //   armor:    defense_value — число; armor_weight — один з: ${armorWeightList}
 //   artifact: creator — рядок; rarity — один з: ${rarityList}
+//   potion:   effect — "healing"; potion_tier — "tincture" (d4) | "decoction" (d6) |
+//             "balm" (d8) | "elixir" (d10) | "extract" (d12); potion_size — "ampoule" (1 порція) |
+//             "tube" (3) | "flask" (6) | "carafe" (10); невідоме значення стає першим у списку
 //   item:     додаткових полів немає
 //
 [

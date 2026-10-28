@@ -8,6 +8,7 @@ export const EQUIPMENT_TYPES = {
   weapon:   { label: 'Зброя' },
   armor:    { label: 'Обладунок' },
   item:     { label: 'Предмет' },
+  potion:   { label: 'Зілля' },
 };
 
 // Кожен вид спорядження — окрема таблиця й окремий ендпоінт
@@ -20,6 +21,7 @@ export const EQUIPMENT_ENDPOINTS = {
   armor:    '/api/equipment/armor',
   item:     '/api/equipment/items',
   artifact: '/api/equipment/artifacts',
+  potion:   '/api/equipment/potions',
 };
 
 // Frontend route segment per type — weapon/armor keep their type key as the
@@ -31,6 +33,7 @@ export const EQUIPMENT_TYPE_PATHS = {
   armor:    'armor',
   item:     'items',
   artifact: 'artifacts',
+  potion:   'potions',
 };
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
@@ -73,4 +76,5 @@ export const EQUIPMENT_NEW_LABELS = {
   weapon: 'Нова зброя',
   armor:  'Новий обладунок',
   item:   'Новий предмет',
+  potion: 'Нове зілля',
 };

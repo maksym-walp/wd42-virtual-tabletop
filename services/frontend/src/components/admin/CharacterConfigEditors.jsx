@@ -108,64 +108,39 @@ function checkKeys(entries, what) {
 // ── Стани ────────────────────────────────────────────────────────────────────
 
 function validateConditions(value) {
-  if (!value.length) return 'Потрібен хоча б один стан';
-  const keysError = checkKeys(value, 'стан');
-  if (keysError) return keysError;
-  for (const c of value) {
-    if (c.max_level != null && (!Number.isInteger(c.max_level) || c.max_level < 1 || c.max_level > 20)) {
-      return `«${c.label}»: максимальний рівень — ціле від 1 до 20 або порожньо`;
-    }
-  }
+  if (value.some((c) => !c.label?.trim())) return 'Кожен стан має мати назву';
+  if (value.some((c) => (c.description ?? '').length > 2000)) return 'Опис стану — не довше 2000 символів';
   return null;
 }
 
+// Набір станів фіксований (Втома, Хвороба, Травма; рівні 1–5): ефекти рівнів
+// задають правила character-sheet, тож без додавання, видалення,
+// перетягування, зміни key і макс. рівня — лише назва й опис.
 export function ConditionsConfigCard({ config, onChange, onSaved }) {
   const value = config.value;
-  const drag = useRowDrag(value, onChange);
   const { saving, error, save } = useSave('conditions', value, validateConditions, onSaved);
   const update = (rowId, patch) => onChange(value.map((c) => (c._rowId === rowId ? { ...c, ...patch } : c)));
 
   return (
     <ConfigShell
       title="Стани персонажа"
-      hint="Кожен рівень стану закреслює один кубик здоровʼя. key — значення, що зберігається в листі персонажа: якщо змінити key, рівні цього стану в наявних персонажів перестануть рахуватися в ньому."
+      hint="Три стани з рівнями 1–5; кожен рівень закреслює один кубик здоровʼя, 6-й — непритомність. Ефекти рівнів задані правилами гри; тут — лише назва й опис, який гравці бачать за іконкою ⓘ."
       saving={saving}
       error={error}
       onSave={save}
-      addLabel="Додати стан"
-      onAdd={() => onChange([...value, { key: '', label: '', description: '', max_level: null, _rowId: newRowId() }])}
     >
-      {value.map((c, index) => (
-        <div
-          key={c._rowId}
-          {...drag.rowProps(index)}
-          className={`flex gap-2 rounded-lg border border-border p-2.5 ${drag.overIndex === index ? 'bg-surface-hover' : ''}`}
-        >
-          <span {...drag.handleProps(index)} className="mt-2.5 shrink-0 cursor-grab text-text-dim active:cursor-grabbing" aria-label="Перетягнути">
-            <GripVertical size={16} />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_7rem]">
-              <input className={inputClass} placeholder="Назва" value={c.label}
-                onChange={(e) => update(c._rowId, { label: e.target.value })} />
-              <input className={keyInputClass} placeholder="key" value={c.key}
-                onChange={(e) => update(c._rowId, { key: e.target.value })} />
-              <input
-                type="number" min="1" max="20" className={inputClass} placeholder="Макс. рів."
-                value={c.max_level ?? ''}
-                onChange={(e) => update(c._rowId, { max_level: e.target.value === '' ? null : Number(e.target.value) })}
-              />
-            </div>
-            <textarea
-              rows={2} className={inputClass} placeholder="Опис стану — його бачитимуть гравці за іконкою ⓘ"
-              value={c.description ?? ''}
-              onChange={(e) => update(c._rowId, { description: e.target.value })}
-            />
+      {value.map((c) => (
+        <div key={c._rowId} className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+            <input className={inputClass} placeholder="Назва" value={c.label}
+              onChange={(e) => update(c._rowId, { label: e.target.value })} />
+            <input className={keyInputClass} value={c.key} readOnly aria-label="key" />
           </div>
-          <button type="button" onClick={() => onChange(value.filter((x) => x._rowId !== c._rowId))}
-            aria-label="Видалити стан" className="shrink-0 self-start rounded-lg p-2 text-text-dim hover:text-danger">
-            <X size={16} />
-          </button>
+          <textarea
+            rows={2} className={inputClass} placeholder="Опис стану — його бачитимуть гравці за іконкою ⓘ"
+            value={c.description ?? ''}
+            onChange={(e) => update(c._rowId, { description: e.target.value })}
+          />
         </div>
       ))}
     </ConfigShell>

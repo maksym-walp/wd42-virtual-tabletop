@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
 import { EQUIPMENT_TYPES, EQUIPMENT_ENDPOINTS, EQUIPMENT_TYPE_PATHS, weaponModifierLabel, ARMOR_WEIGHTS } from '../constants/equipment';
+import usePotionOptions, { portionsWord } from '../hooks/usePotionOptions';
 import useWeaponOptions from '../hooks/useWeaponOptions';
 import { recordView, removeView } from '../utils/recentlyViewed';
 import Button from '../components/ui/Button';
@@ -19,6 +20,7 @@ export default function EquipmentView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { weaponTypesMap, weaponGripsMap } = useWeaponOptions();
+  const potionOptions = usePotionOptions();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -134,6 +136,13 @@ export default function EquipmentView() {
             )}
             {item.defense_value != null && <SheetStat label="Пасивний захист" value={item.defense_value} />}
             {item.armor_weight && <SheetStat label="Вага" value={ARMOR_WEIGHTS[item.armor_weight]?.label} />}
+            {item.type === 'potion' && (
+              <>
+                <SheetStat label="Ефект" value={potionOptions.effectsMap[item.effect]?.label ?? item.effect} />
+                <SheetStat label="Рівень" value={`${potionOptions.tiersMap[item.potion_tier]?.label ?? item.potion_tier} · d${item.heal_die} за порцію`} />
+                <SheetStat label="Розмір" value={`${potionOptions.sizesMap[item.potion_size]?.label ?? item.potion_size} · ${item.portions} ${portionsWord(item.portions)}`} />
+              </>
+            )}
             {item.price != null && <SheetStat label="Орієнтовна вартість" value={item.price} />}
           </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, Crop, Info, Coffee, Moon, FlaskRound } from 'lucide-react';
+import { Pencil, Copy, Check, Upload, ImagePlus, Trash2, Shield, Crop, Minus, Plus } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
@@ -19,7 +19,7 @@ import { abilityTiers, abilityVariantForms, abilityForCharacter } from '../const
 import {
   ARCHETYPES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  valueToLevel, modifierDie, skillsToCharLevel, SKILL_PROGRESS_MARKS,
+  valueToLevel, skillsToCharLevel, SKILL_PROGRESS_MARKS,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import DevelopmentTree from '../components/DevelopmentTree';
@@ -43,6 +43,14 @@ import NarrativeTab from '../components/character/NarrativeTab';
 import CharacterSidebar from '../components/character/CharacterSidebar';
 import useCharacterConfig from '../hooks/useCharacterConfig';
 import useMediaQuery from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import ConditionsSection from '../components/character/ConditionsSection';
+import DeathScaleSlider from '../components/character/DeathScaleSlider';
+import RestControls, { RestResultModal, LastRestBlock, ActivityTimer } from '../components/character/RestControls';
+import PotionControls, { availablePortions, potionStockLabel } from '../components/character/PotionControls';
+import usePotionOptions, { potionSummary, portionsWord } from '../hooks/usePotionOptions';
+import CampaignEventsListener from '../components/campaign/CampaignEventsListener';
+import { skillRoll } from '../utils/skillRoll';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +83,8 @@ export default function CharacterSheet({ publicView = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { conditions: conditionsConfig, currencies, races } = useCharacterConfig();
+  const { conditions: conditionsConfig, currencies, races, condition_levels: conditionLevels } = useCharacterConfig();
+  const { user } = useAuth();
   // На xl+ праворуч стоїть колонка з нотатками й вбудованими кубиками.
   const wide = useMediaQuery('(min-width: 1280px)');
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
@@ -97,6 +106,10 @@ export default function CharacterSheet({ publicView = false }) {
   const [editingInspiration, setEditingInspiration] = useState(false);
   const [editingAllSkills, setEditingAllSkills] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  // Результат відпочинку, який натиснула інша сторона (ГМ чи власник) —
+  // приходить real-time подією; lastRestSeen — щоб не показувати його двічі.
+  const [incomingRest, setIncomingRest] = useState(null);
+  const lastRestSeen = useRef(null);
 
   const handleCopyId = (characterId) => {
     navigator.clipboard.writeText(characterId).then(() => {
@@ -121,6 +134,7 @@ export default function CharacterSheet({ publicView = false }) {
     ])
       .then(([sheet, spells, equipmentCatalog, abilityCatalog, abilityCollections, traditions]) => {
         setData(sheet);
+        lastRestSeen.current = sheet.character.last_rest?.at ?? null;
         recordView({
           type: 'character', id, name: sheet.character.name,
           href: `/characters/${id}`, image_url: sheet.character.image_url,
@@ -181,6 +195,65 @@ export default function CharacterSheet({ publicView = false }) {
     setData(prev => ({ ...prev, character: { ...prev.character, ...patch } }));
     pendingPatch.current = { ...pendingPatch.current, ...patch };
     saveVitals();
+  };
+
+  // Real-time подія 'characters' з кампаній персонажа: інша сторона змінила
+  // стани, таймер чи відпочила — перечитуємо лист, не гублячи ще не збережені
+  // правки (pendingPatch). Чужий новий відпочинок показуємо модалкою.
+  const reloadSheet = useCallback(async () => {
+    try {
+      const fresh = await characterApi.getSheet(id);
+      setData(prev => (prev ? { ...prev, ...fresh, character: { ...fresh.character, ...pendingPatch.current } } : prev));
+      const rest = fresh.character.last_rest;
+      if (rest?.at && rest.at !== lastRestSeen.current) {
+        lastRestSeen.current = rest.at;
+        if (rest.by?.user_id !== user?.id) setIncomingRest(rest);
+      }
+    } catch { /* наступна подія спробує ще раз */ }
+  }, [id, user?.id]);
+
+  // Стани нормалізує сервер (блок Втоми 5, падіння на 6-му рівні, Травма 5),
+  // тож зберігаємо одразу, без дебаунсу, і беремо стан із відповіді.
+  const changeConditions = async (conditions) => {
+    try {
+      const resp = await characterApi.updateConditions(id, { conditions });
+      setData(prev => ({
+        ...prev,
+        character: { ...prev.character, ...resp.character, ...pendingPatch.current },
+        effects: resp.effects,
+        ...(resp.skills ? { skills: resp.skills } : {}),
+      }));
+      campaignApi.notifyCharacter(id).catch(() => {});
+    } catch (err) {
+      window.alert(err.response?.data?.message || 'Не вдалося змінити стан');
+    }
+  };
+
+  // Зілля: сервер уже записав ХП, стани й звикання; порожнє зілля зникає.
+  const handleDrank = ({ character, item, effects, timer, potions }, equipmentId) => {
+    for (const key of ['current_hp', 'conditions', 'death_scale']) delete pendingPatch.current[key];
+    setData(prev => ({
+      ...prev,
+      character: { ...prev.character, ...character },
+      effects, timer, potions,
+      equipment: item
+        ? prev.equipment.map(e => (e.equipment_id === equipmentId ? { ...e, ...item } : e))
+        : prev.equipment.filter(e => e.equipment_id !== equipmentId),
+    }));
+    campaignApi.syncCombatantHp(id, { health: character.current_hp, temp_hp: character.temp_hp })
+      .catch(() => campaignApi.notifyCharacter(id).catch(() => {}));
+  };
+
+  // Відпочинок уже записав вітали на сервері — незбережені правки тих самих
+  // полів застаріли. Синхронізація ХП з боєм заодно розсилає 'characters'.
+  const handleRested = ({ result, character, effects, timer, potions }) => {
+    lastRestSeen.current = result.at;
+    for (const key of ['current_hp', 'current_magic', 'heroic_actions_used', 'conditions', 'death_scale']) {
+      delete pendingPatch.current[key];
+    }
+    setData(prev => ({ ...prev, character: { ...prev.character, ...character }, effects, timer, potions }));
+    campaignApi.syncCombatantHp(id, { health: character.current_hp, temp_hp: character.temp_hp })
+      .catch(() => campaignApi.notifyCharacter(id).catch(() => {}));
   };
 
   // Вибір/зняття підвиду: бонуси до навичок змінюються на бекенді дельтою,
@@ -317,7 +390,8 @@ export default function CharacterSheet({ publicView = false }) {
   if (error)   return <div className="px-4 py-16 text-center text-danger">{error}</div>;
   if (!data)   return null;
 
-  const { character: c, skills, spells, equipment, abilities, rituals, is_owner, is_gm } = data;
+  const { character: c, skills, spells, equipment, abilities, rituals, is_owner, is_gm, effects, timer } = data;
+  const conditionLabels = Object.fromEntries(conditionsConfig.map((cond) => [cond.key, cond.label]));
   const archetype = ARCHETYPES[c.archetype];
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
 
@@ -371,10 +445,11 @@ export default function CharacterSheet({ publicView = false }) {
   const maxDiceCount   = PHYSIQUE_HEALTH[physiqueLevel] ?? 6;
   const totalCondLevel = (c.conditions || []).reduce((s, cond) => s + (cond.level || 0), 0);
   const healthDiceAll  = c.health_dice_values || [];
-  const activeDice     = healthDiceAll.slice(0, maxDiceCount - totalCondLevel);
+  const activeDice     = healthDiceAll.slice(0, Math.max(0, maxDiceCount - totalCondLevel));
   const maxHp          = activeDice.reduce((s, v) => s + v, 0);
   const magicSenseVal  = skillMap['magic_sense']?.value ?? 1;
-  const maxMagic       = magicSenseVal * archetype.magicMult;
+  // Ефективний максимум (Хвороба ≥3 — половина) рахує character-sheet.
+  const maxMagic       = effects?.max_magic_effective ?? magicSenseVal * archetype.magicMult;
   const mysticismVal   = skillMap['mysticism']?.value ?? 1;
   // Базовий ліміт чарів: Містицизм × половина множника архетипу.
   const baseKnownSpells = mysticismVal * (archetype.magicMult / 2);
@@ -393,7 +468,9 @@ export default function CharacterSheet({ publicView = false }) {
   });
   const equippedArmorItem = equippedArmorEntry && (equippedArmorEntry.item || allEquipment.find(a => a.id === equippedArmorEntry.equipment_id));
   const equippedDefense = equippedArmorItem?.defense_value || 0;
-  const totalDefense    = equippedDefense + (c.defense_bonus ?? 0);
+  // Травма 3+ — пасивний захист удвічі менший (множник з effects, угору).
+  const defenseFactor   = effects?.passive_defense_factor ?? 1;
+  const totalDefense    = Math.ceil((equippedDefense + (c.defense_bonus ?? 0)) * defenseFactor);
   const heroicTotal    = HEROIC_COUNT[charLevels.wisdom];
   const heroicLeft     = heroicTotal - c.heroic_actions_used;
   const gameInspirationDie = INSPIRATION_DIE[charLevels.charisma];
@@ -542,7 +619,10 @@ export default function CharacterSheet({ publicView = false }) {
             onAction={handleSkillAction}
             onEditAll={() => setEditingAllSkills(true)}
             initiativeDie={INITIATIVE_DIE[charLevels.agility]}
-            heroic={{ total: heroicTotal, left: heroicLeft }}
+            initiativeModifier={effects?.initiative_modifier ?? 0}
+            effects={effects}
+            conditionLabels={conditionLabels}
+            heroic={{ total: heroicTotal, left: heroicLeft, disabled: !!effects?.heroic_disabled }}
             onHeroicChange={(left) => patchCharacter({ heroic_actions_used: Math.max(0, Math.min(heroicTotal, heroicTotal - left)) })}
             extras={(
               <div className="flex flex-col gap-3">
@@ -611,7 +691,7 @@ export default function CharacterSheet({ publicView = false }) {
                 />
                 <BannerBox
                   label="ПАСИВНИЙ ЗАХИСТ"
-                  sub={totalDefense}
+                  sub={defenseFactor < 1 ? <span title="Травма: пасивний захист удвічі менший" className="text-danger">{totalDefense}</span> : totalDefense}
                   onClick={is_owner ? openDefenseEditor : undefined}
                 />
               </div>
@@ -622,8 +702,17 @@ export default function CharacterSheet({ publicView = false }) {
                 maxDiceCount={maxDiceCount}
                 totalCondLevel={totalCondLevel}
                 conditionsConfig={conditionsConfig}
+                conditionLevels={conditionLevels}
+                conditionLabels={conditionLabels}
+                effects={effects}
+                timer={timer}
                 is_owner={is_owner} archetype={archetype}
                 patchCharacter={patchCharacter}
+                onConditionsChange={changeConditions}
+                onRested={handleRested}
+                potions={equipment.filter((e) => e.item?.type === 'potion')}
+                potionState={data.potions}
+                onDrank={handleDrank}
               />
             )}
           />
@@ -698,6 +787,13 @@ export default function CharacterSheet({ publicView = false }) {
       </div>
       </div>
 
+      {!publicView && (data.campaign_ids ?? []).map((campaignId) => (
+        <CampaignEventsListener key={campaignId} campaignId={campaignId} handlers={{ characters: reloadSheet }} />
+      ))}
+      {incomingRest && (
+        <RestResultModal result={incomingRest} characterName={c.name} labels={conditionLabels} onClose={() => setIncomingRest(null)} />
+      )}
+
       {/* ─── Права колонка: нотатки + кубики (на вужчих екранах — під вкладкою) ─── */}
       <CharacterSidebar c={c} is_owner={is_owner} patchCharacter={patchCharacter} showDice={wide && !publicView} />
 
@@ -709,6 +805,7 @@ export default function CharacterSheet({ publicView = false }) {
                 ? `Одягнено: ${equippedArmorItem.name} (захист ${equippedDefense})`
                 : 'Обладунок не одягнено — захист від спорядження: 0.'}
               {' '}Разом із модифікатором нижче дає пасивний захист.
+              {defenseFactor < 1 && ' Травма: результат удвічі менший (угору).'}
             </p>
             <Field label="Модифікатор">
               <input
@@ -725,7 +822,7 @@ export default function CharacterSheet({ publicView = false }) {
               />
             </Field>
             <p className="text-sm text-text-dim">
-              Разом: {equippedDefense + (parseInt(defenseBonusDraft, 10) || 0)}
+              Разом: {Math.ceil((equippedDefense + (parseInt(defenseBonusDraft, 10) || 0)) * defenseFactor)}
             </p>
             <Button onClick={() => {
               patchCharacter({ defense_bonus: parseInt(defenseBonusDraft, 10) || 0 });
@@ -939,7 +1036,7 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 
 function SkillsTab({
   characteristics, skillMap, charLevels, is_owner, is_gm, canUseInspiration, onAction, onEditAll,
-  health, extras, initiativeDie, heroic, onHeroicChange,
+  health, extras, initiativeDie, initiativeModifier = 0, effects, conditionLabels, heroic, onHeroicChange,
 }) {
   // Особливі значення в шапках характеристик: кубик ініціативи кидається
   // прямо звідси, героїчні дії Мудрості — лічильник «залишилось / макс».
@@ -947,8 +1044,8 @@ function SkillsTab({
     if (char.key === 'agility' && initiativeDie && initiativeDie !== '—') {
       return (
         <RollButton
-          formula={`1${initiativeDie}`}
-          title={`Кинути ${initiativeDie} (ініціатива)`}
+          formula={`1${initiativeDie}${initiativeModifier ? initiativeModifier : ''}`}
+          title={`Кинути ${initiativeDie} (ініціатива)${initiativeModifier ? ` ${initiativeModifier} від Втоми` : ''}`}
           icon={false}
           className="p-0 text-sm font-bold text-gold"
         >
@@ -961,11 +1058,13 @@ function SkillsTab({
         <span className="inline-flex items-center gap-1">
           {is_owner && (
             <button type="button" aria-label="Використати героїчну дію"
+              title={heroic.disabled ? 'Втома: героїчні дії недоступні' : undefined}
               className="flex h-5 w-5 items-center justify-center rounded border border-border text-xs text-text disabled:opacity-40"
-              disabled={heroic.left <= 0}
+              disabled={heroic.left <= 0 || heroic.disabled}
               onClick={() => onHeroicChange(heroic.left - 1)}>−</button>
           )}
-          <span className={heroic.left > 0 ? 'text-gold' : ''}>{heroic.left} / {heroic.total}</span>
+          <span className={heroic.disabled ? 'text-text-dim line-through' : heroic.left > 0 ? 'text-gold' : ''}
+            title={heroic.disabled ? 'Втома: героїчні дії недоступні' : undefined}>{heroic.left} / {heroic.total}</span>
           {is_owner && (
             <button type="button" aria-label="Повернути героїчну дію"
               className="flex h-5 w-5 items-center justify-center rounded border border-border text-xs text-text disabled:opacity-40"
@@ -1007,6 +1106,9 @@ function SkillsTab({
                 return (
                   <SkillRow
                     key={skill.key}
+                    skillKey={skill.key}
+                    effects={effects}
+                    conditionLabels={conditionLabels}
                     label={skill.label}
                     value={s.value}
                     progress={s.progress_marks}
@@ -1059,9 +1161,13 @@ const SKILL_ACTIONS = [
   { key: 'narrative',    label: 'Покращити наративно',       hint: 'нічого не витрачає' },
 ];
 
-function SkillRow({ label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
-  const die = modifierDie(value);
-  const rollFormula = die === '—' ? '1d20' : `1d20+1${die}`;
+// Дві кнопки кидка: перевірка з d20 (ефекти станів — перешкода Втоми,
+// знижений кубик чи заборона Травми — уже в effects) і кидок лише
+// кубика-модифікатора без d20 (перешкоди Втоми на нього не діють).
+function SkillRow({ skillKey, effects, conditionLabels, label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
+  const roll = skillRoll(skillKey, value, effects, conditionLabels);
+  const die = roll.die ?? '—';
+  const rollFormula = roll.d20Formula;
   const isPlayerEditable = is_owner && !is_gm;
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1074,8 +1180,8 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canUseInspiration =
   // the edit menu below exposes manually (for a physically-rolled die) —
   // one progress mark, nothing spent.
   const handleRollResult = (result) => {
-    const d20 = result?.groups?.find(g => g.type === 'dice' && g.sides === 20);
-    const nat = d20?.rolls?.[0];
+    const d20 = result?.groups?.find(g => g.sides === 20);
+    const nat = d20?.type === 'dice' ? d20.rolls?.[0] : d20?.dice?.[0]?.kept;
     if (nat !== 1 && nat !== 20) return;
     if (nat === 20 && progress >= SKILL_PROGRESS_MARKS) return;
     if (nat === 1 && progress <= 0) return;
@@ -1102,15 +1208,33 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canUseInspiration =
           )}
           <RollButton
             formula={rollFormula}
-            title={`Кинути ${label}: ${rollFormula}`}
+            disabled={roll.disabled}
+            title={roll.disabled ? roll.disabledReason : `Кинути ${label}: ${rollFormula}`}
             size={11}
-            className="min-w-[28px] rounded border border-border bg-bg px-1.5 py-0.5 text-xs font-semibold"
+            className={`min-w-[28px] rounded border bg-bg px-1.5 py-0.5 text-xs font-semibold ${roll.modeChip ? 'border-danger/50' : 'border-border'}`}
             onResult={isPlayerEditable ? handleRollResult : undefined}
           >
             {die === '—' ? '—' : `+${die}`}
           </RollButton>
+          <RollButton
+            formula={roll.dieFormula ?? '1d4'}
+            disabled={!roll.dieFormula || roll.disabled}
+            icon={false}
+            title={roll.disabled ? roll.disabledReason
+              : roll.dieFormula ? `Кинути лише кубик-модифікатор ${label}: ${roll.dieFormula}` : 'Навичка 1–3: кубика-модифікатора нема'}
+            className="min-w-[24px] rounded border border-border bg-bg px-1 py-0.5 text-xs font-semibold"
+          >
+            {roll.die ?? '—'}
+          </RollButton>
         </div>
       </div>
+      {(roll.modeChip || roll.lowered || roll.disabled) && (
+        <div className="flex flex-wrap gap-1 text-[0.65rem] font-semibold">
+          {roll.disabled && <span className="rounded-full bg-danger/10 px-1.5 text-danger">недоступна (Травма)</span>}
+          {!roll.disabled && roll.lowered && <span className="rounded-full bg-gold/10 px-1.5 text-gold">кубик {roll.baseDie ?? '—'} → {roll.die ?? '—'} (Травма)</span>}
+          {!roll.disabled && roll.modeChip && <span className="rounded-full bg-danger/10 px-1.5 text-danger">{roll.modeChip}</span>}
+        </div>
+      )}
       <div className="flex items-center gap-1">
         {Array.from({ length: SKILL_PROGRESS_MARKS }).map((_, i) => (
           <span key={i} className="flex h-5 w-5 items-center justify-center">
@@ -1151,53 +1275,18 @@ function SkillRow({ label, value, progress, is_owner, is_gm, canUseInspiration =
   );
 }
 
-// Короткий і тривалий відпочинок — поки лише кнопки: механіку (що саме
-// відновлюється) ще не реалізовано ні тут, ні на бекенді.
-const RESTS = [
-  { key: 'short', label: 'Короткий відпочинок', Icon: Coffee },
-  { key: 'long', label: 'Тривалий відпочинок', Icon: Moon },
-];
-
-// Зілля зцілення чотирьох розмірів — так само поки лише кнопки-заглушки.
-// iconSize — щоб розмір пляшечки було видно без підпису.
-const HEALING_POTIONS = [
-  { key: 'small', label: 'Мале зілля зцілення', iconSize: 11 },
-  { key: 'medium', label: 'Середнє зілля зцілення', iconSize: 13 },
-  { key: 'large', label: 'Велике зілля зцілення', iconSize: 15 },
-  { key: 'huge', label: 'Величезне зілля зцілення', iconSize: 17 },
-];
-
 // ── HealthCard ────────────────────────────────────────────────────────────────
 
-// Здоровʼя (поточне/макс, кубики здоровʼя, тимчасове) і рятунки від смерті —
-// стоїть на вкладці «Характеристики» поруч із характеристиками.
-function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, is_owner, archetype, patchCharacter }) {
+// Здоровʼя (поточне/макс, кубики здоровʼя, тимчасове), відпочинок і таймер
+// діяльності, шкала смерті та стани — стоїть на вкладці «Характеристики»
+// поруч із характеристиками. Правила відпочинку й станів — на сервері
+// (character-sheet), тут лише показ і виклики.
+function HealthCard({
+  c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, conditionLevels, conditionLabels, effects, timer,
+  is_owner, archetype, patchCharacter, onConditionsChange, onRested, potions, potionState, onDrank,
+}) {
   const { rollAndShow, rolling } = useDice();
-  const [infoCondition, setInfoCondition] = useState(null);
-  const [restNotice, setRestNotice] = useState('');
 
-  const setConditionLevel = (type, level) => {
-    const conditions = [...(c.conditions || [])];
-    const idx = conditions.findIndex(cond => cond.type === type);
-    if (level === 0) {
-      if (idx !== -1) conditions.splice(idx, 1);
-    } else if (idx === -1) {
-      conditions.push({ type, level });
-    } else {
-      conditions[idx] = { ...conditions[idx], level };
-    }
-    patchCharacter({ conditions });
-  };
-
-  // Стани з конфігу + ті, що є в персонажа, але зникли з конфігу (адмін
-  // прибрав) — щоб їхній рівень, який досі зменшує ПЗ, не ховався.
-  const knownKeys = new Set(conditionsConfig.map((cond) => cond.key));
-  const conditionRows = [
-    ...conditionsConfig,
-    ...(c.conditions || [])
-      .filter((cond) => !knownKeys.has(cond.type) && cond.level > 0)
-      .map((cond) => ({ key: cond.type, label: cond.type, description: '', max_level: null })),
-  ];
   const healthDice   = c.health_dice_values || [];
   const crossedCount = totalCondLevel;
 
@@ -1214,7 +1303,7 @@ function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, 
     if (!roll) return;
     const newRolls = roll.groups.find(g => g.type === 'dice')?.rolls ?? [];
     const allDice = [...existing, ...newRolls].sort((a, b) => a - b);
-    const currentHp = allDice.slice(0, maxDiceCount - crossedCount).reduce((s, v) => s + v, 0);
+    const currentHp = allDice.slice(0, Math.max(0, maxDiceCount - crossedCount)).reduce((s, v) => s + v, 0);
     patchCharacter({ health_dice_values: allDice, current_hp: currentHp });
   };
 
@@ -1223,23 +1312,12 @@ function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, 
       <div className="flex items-start justify-between gap-2">
         <SectionTitle>Здоров'я</SectionTitle>
         {is_owner && (
-          <div className="flex shrink-0 gap-1">
-            {RESTS.map(({ key, label, Icon }) => (
-              <button
-                key={key}
-                type="button"
-                title={label}
-                aria-label={label}
-                onClick={() => setRestNotice(`«${label}» ще не підключено — відновлення зʼявиться згодом.`)}
-                className="flex h-8 w-8 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover hover:text-accent"
-              >
-                <Icon size={15} />
-              </button>
-            ))}
+          <div className="flex shrink-0 items-center gap-1">
+            <PotionControls characterId={c.id} potions={potions} potionState={potionState} labels={conditionLabels} onDrank={onDrank} />
+            <RestControls characterId={c.id} characterName={c.name} labels={conditionLabels} onRested={onRested} />
           </div>
         )}
       </div>
-      {restNotice && <p className="mb-2 text-xs text-text-dim">{restNotice}</p>}
       <p className="-mt-1 mb-3 text-xs italic text-text-dim">Кубик здоров'я — {archetype.healthDie}</p>
 
       <div className="flex gap-2">
@@ -1303,100 +1381,32 @@ function HealthCard({ c, maxHp, maxDiceCount, totalCondLevel, conditionsConfig, 
             </div>
           </div>
         </div>
-        {is_owner && (
-          <div className="flex shrink-0 flex-col gap-1">
-            {HEALING_POTIONS.map(({ key, label, iconSize }) => (
-              <button
-                key={key}
-                type="button"
-                title={label}
-                aria-label={label}
-                onClick={() => setRestNotice(`«${label}» ще не підключено — зцілення зʼявиться згодом.`)}
-                className="flex h-8 w-8 items-center justify-center rounded border border-border text-text-dim hover:bg-surface-hover hover:text-danger"
-              >
-                <FlaskRound size={iconSize} />
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+      <div className="mt-4 border-t border-border pt-3" />
+      <ActivityTimer timer={timer} />
+      <div className="mt-2">
+        <p className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Останній відпочинок</p>
+        <LastRestBlock lastRest={c.last_rest} labels={conditionLabels} />
+      </div>
+
       <div className="mt-4 border-t border-border pt-4" />
-      <SectionTitle>Рятунки від смерті</SectionTitle>
+      <SectionTitle>Шкала смерті</SectionTitle>
       <div className="-mt-1 mb-3 flex items-center justify-between">
         <p className="text-xs italic text-text-dim">Кидок — d12</p>
         <RollButton formula="1d12" title="Кинути d12" size={16} />
       </div>
-      <div className="mb-2 flex gap-[3px]">
-        {[-3, -2, -1, 0, 1, 2, 3].map(v => {
-          const isActive = c.death_scale != null && c.death_scale === v;
-          const toneClass = v < 0 ? 'text-danger' : v > 0 ? 'text-sage' : 'text-gold';
-          const activeClass = v < 0 ? 'border-danger bg-danger/25' : v > 0 ? 'border-sage bg-sage/25' : 'border-gold bg-gold/25';
-          return (
-            <button key={v}
-              className={`flex h-10 flex-1 items-center justify-center rounded border-[1.5px] text-sm font-bold ${toneClass} ${isActive ? activeClass : 'border-border bg-bg'}`}
-              onClick={() => is_owner && setDeathScale(isActive ? null : v)}
-              disabled={!is_owner}
-            >
-              {v === -3 ? '☠' : v === 3 ? '✓' : v > 0 ? `+${v}` : v}
-            </button>
-          );
-        })}
-      </div>
-      {c.death_scale != null && (
-        <p className="text-sm text-text-dim">
-          {c.death_scale <= -3 ? 'Смерть' :
-           c.death_scale < 0  ? `Провалів: ${Math.abs(c.death_scale)}` :
-           c.death_scale === 0 ? 'Непритомний' :
-           `Успіхів: ${c.death_scale}`}
-        </p>
-      )}
+      <DeathScaleSlider value={c.death_scale} editable={is_owner} onChange={setDeathScale} />
 
       <div className="mt-3 border-t border-border pt-3" />
       <SectionTitle>Стани та ефекти</SectionTitle>
-      {conditionRows.map(cond => {
-        const current = c.conditions?.find(x => x.type === cond.key);
-        const level   = current?.level ?? 0;
-        const maxLevel = cond.max_level ?? null;
-        return (
-          <div key={cond.key} className="flex items-center justify-between border-b border-bg py-1.5">
-            <div className="flex items-center gap-1">
-              <span className="text-sm text-text-muted">{cond.label}</span>
-              {maxLevel && (
-                <span className="text-xs text-text-dim">(макс {maxLevel})</span>
-              )}
-              {cond.description && (
-                <button
-                  type="button"
-                  onClick={() => setInfoCondition(cond)}
-                  aria-label={`Що таке «${cond.label}»`}
-                  title="Опис стану"
-                  className="rounded p-1 text-text-dim hover:bg-surface-hover hover:text-accent"
-                >
-                  <Info size={14} />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {is_owner && (
-                <button className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, Math.max(0, level - 1))} disabled={level === 0}>−</button>
-              )}
-              <span className={`w-6 text-center text-sm font-bold ${level > 0 ? 'text-danger' : 'text-text-dim'}`}>
-                {level > 0 ? level : '—'}
-              </span>
-              {is_owner && (
-                <button className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-text disabled:opacity-40" onClick={() => setConditionLevel(cond.key, level + 1)}
-                  disabled={maxLevel !== null && level >= maxLevel}>+</button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-
-      {infoCondition && (
-        <Sheet open onClose={() => setInfoCondition(null)} title={infoCondition.label}>
-          <p className="whitespace-pre-line text-sm leading-relaxed text-text">{infoCondition.description}</p>
-        </Sheet>
-      )}
+      <ConditionsSection
+        conditions={c.conditions || []}
+        effects={effects}
+        conditionsConfig={conditionsConfig}
+        conditionLevels={conditionLevels}
+        editable={is_owner}
+        onChange={onConditionsChange}
+      />
     </div>
   );
 }
@@ -1786,6 +1796,7 @@ const EQUIPMENT_SECTIONS = [
   { type: 'armor', addLabel: 'обладунок' },
   { type: 'artifact', addLabel: 'артефакт' },
   { type: 'item', addLabel: 'предмет' },
+  { type: 'potion', addLabel: 'зілля' },
 ];
 
 function EquipmentTab({ c, patchCharacter, currencies, equipment, allEquipment, is_owner, onAdd, onPatch, onRemove }) {
@@ -1803,7 +1814,7 @@ function EquipmentTab({ c, patchCharacter, currencies, equipment, allEquipment, 
     />
   );
 
-  // Зброя | Обладунок, Артефакт | Предмет — по парі в рядку на ширших екранах.
+  // Зброя | Обладунок, Артефакт | Предмет, Зілля — по парі в рядку на ширших екранах.
   return (
     <div>
       <MoneySection c={c} is_owner={is_owner} patchCharacter={patchCharacter} currencies={currencies} />
@@ -1876,6 +1887,8 @@ function EquipmentTypeSection({ type, addLabel, equipment, allEquipment, is_owne
 }
 
 function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
+  const { tiersMap, sizesMap } = usePotionOptions();
+  const isPotion = item?.type === 'potion';
   return (
     <div className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-bg px-3 py-2.5">
       <Link to={item ? `${item.type === 'artifact' ? '/equipment/artifacts' : '/equipment'}/${item.id}` : '#'} className="flex flex-1 flex-col gap-0.5">
@@ -1885,9 +1898,27 @@ function EquipmentItem({ entry, item, is_owner, onRemove, onPatch }) {
             item?.damage_die && `Шкода: ${item.damage_die}`,
             item?.defense_value != null && `Захист: ${item.defense_value}`,
             item?.type === 'armor' && entry.is_equipped && 'Одягнено',
+            isPotion && potionSummary(item, { tiersMap, sizesMap }),
           ].filter(Boolean).join(' · ')}
         </span>
+        {isPotion && (
+          <span className="text-xs text-text-dim">
+            Є {availablePortions(entry)} {portionsWord(availablePortions(entry))}: {potionStockLabel(entry, sizesMap)}
+          </span>
+        )}
       </Link>
+
+      {isPotion && is_owner && (
+        <div className="flex shrink-0 items-center gap-1" title="Повні ємності">
+          <button type="button" aria-label="Мінус ємність" disabled={!entry.containers}
+            onClick={() => onPatch({ containers: entry.containers - 1 })}
+            className="flex h-8 w-8 items-center justify-center rounded border border-border text-text disabled:opacity-40"><Minus size={13} /></button>
+          <span className="w-5 text-center text-sm font-semibold text-text">{entry.containers}</span>
+          <button type="button" aria-label="Плюс ємність" disabled={entry.containers >= 99}
+            onClick={() => onPatch({ containers: entry.containers + 1 })}
+            className="flex h-8 w-8 items-center justify-center rounded border border-border text-text disabled:opacity-40"><Plus size={13} /></button>
+        </div>
+      )}
 
       {item?.type === 'weapon' && item.damage_die && (
         <RollButton formula={`1${item.damage_die}`} title={`Кинути ${item.damage_die}`} />

@@ -1,4 +1,5 @@
-const { createCatalogModel, UnionModel, getWeaponOptions } = require('../models/catalog.model');
+const { createCatalogModel, UnionModel, getWeaponOptions, KINDS } = require('../models/catalog.model');
+const { POTION_TIERS, POTION_SIZES, POTION_EFFECTS } = require('../constants/potions');
 const { canonicalOnCreate } = require('../middleware/auth.middleware');
 
 // Один набір хендлерів на кожен вид спорядження — таблиці різні, поведінка
@@ -7,6 +8,12 @@ function createCatalogController(kind) {
   const Model = createCatalogModel(kind);
   const notFound = `${Model.label} не знайдено`;
   const forbidden = `${Model.label} не знайдено або недостатньо прав`;
+
+  // Поля з фіксованим набором значень (рівень/розмір/ефект зілля): невідоме
+  // значення — 400, а не помилка CHECK у БД.
+  const allowed = KINDS[kind].allowed || {};
+  const invalidField = (body) => Object.keys(allowed)
+    .find((field) => body[field] != null && body[field] !== '' && !allowed[field].includes(body[field]));
 
   return {
     async list(req, res) {
@@ -22,6 +29,8 @@ function createCatalogController(kind) {
 
     async create(req, res) {
       if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
+      const bad = invalidField(req.body);
+      if (bad) return res.status(400).json({ message: `Невідоме значення поля ${bad}` });
       const item = await Model.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
       res.status(201).json({ item });
     },
@@ -30,6 +39,8 @@ function createCatalogController(kind) {
     // id, тож форма завжди шле PUT на ендпоінт ОБРАНОГО виду, навіть якщо
     // запис досі лежить у таблиці попереднього (див. moveKind у моделі).
     async update(req, res) {
+      const bad = invalidField(req.body);
+      if (bad) return res.status(400).json({ message: `Невідоме значення поля ${bad}` });
       const item = await Model.update(req.params.id, req.user.sub, req.body, req.user.role === 'admin');
       if (!item) return res.status(404).json({ message: forbidden });
       res.json({ item });
@@ -124,5 +135,10 @@ async function getWeaponOptionsHandler(req, res) {
   res.json(await getWeaponOptions());
 }
 
+// Рівні (кубик зцілення), розміри (порції) й ефекти зілля для форми й каталогу.
+function getPotionOptionsHandler(req, res) {
+  res.json({ tiers: POTION_TIERS, sizes: POTION_SIZES, effects: POTION_EFFECTS });
+}
+
 module.exports = {
-  sanitizeForExport, createCatalogController, UnionController, getWeaponOptionsHandler };
+  sanitizeForExport, createCatalogController, UnionController, getWeaponOptionsHandler, getPotionOptionsHandler };

@@ -6,7 +6,9 @@ import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
-import { modifierDie } from '../constants/characterSheet';
+import { skillRoll } from '../utils/skillRoll';
+import { effectChips, chipClass } from '../utils/effectChips';
+import { formatCheck } from '../components/character/RestControls';
 import { useDice } from '../context/DiceContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -168,6 +170,10 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Ефекти станів персонажів-комбатантів (GET /api/characters/effects):
+  // модифікатор ініціативи, дії, реакції, героїчні дії.
+  const [effectsById, setEffectsById] = useState({});
+  const [endSummary, setEndSummary] = useState(null);
 
   const load = useCallback(() => (
     campaignApi.getCombat(campaignId)
@@ -181,6 +187,16 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
   // (CampaignDetail → useCampaignEvents змінює version). Рідке опитування
   // лишається запасним шляхом на випадок розірваного стріму.
   useEffect(() => { if (version) load(); }, [version, load]);
+
+  const characterIdsKey = [...new Set(combatants.map((c) => c.character_id).filter(Boolean))].sort().join(',');
+  useEffect(() => {
+    if (!characterIdsKey) { setEffectsById({}); return; }
+    let alive = true;
+    characterApi.getEffects(characterIdsKey.split(','))
+      .then((byId) => { if (alive) setEffectsById(byId); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [characterIdsKey, version]);
 
   useEffect(() => {
     const tick = () => { if (!document.hidden) load(); };
@@ -238,6 +254,36 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
     }
   };
 
+  // Завершення бою: кожен розпочатий раунд — година таймера діяльності
+  // персонажам-учасникам (повторне натискання годин не додає).
+  const handleEndCombat = async () => {
+    if (!window.confirm(`Завершити бій? Кожен персонаж-учасник отримає ${scene.round_number} год таймера діяльності (за розпочаті раунди).`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      const summary = await campaignApi.endCombat(campaignId);
+      setEndSummary(summary);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалося завершити бій');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleNewScene = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await campaignApi.createCombatScene(campaignId, {});
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Помилка при створенні сцени');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleDeleteScene = async () => {
     if (!window.confirm('Видалити цю бойову сцену разом з усіма комбатантами?')) return;
     setBusy(true);
@@ -256,15 +302,27 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
     <div className="flex flex-col gap-5">
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="m-0 font-display text-lg text-text">Раунд {scene.round_number}</p>
+          <p className="m-0 font-display text-lg text-text">
+            Раунд {scene.round_number}
+            {scene.ended_at && <span className="ml-2 font-sans text-sm text-text-dim">· бій завершено</span>}
+          </p>
           {isGm && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={handleNextTurn} disabled={busy || notActed.length === 0}>
-                Наступний хід &gt;
-              </Button>
-              <Button size="sm" onClick={handleNextRound} disabled={busy}>
-                Наступний раунд &gt;&gt;
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              {scene.ended_at ? (
+                <Button size="sm" onClick={handleNewScene} disabled={busy}>Почати новий бій</Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="ghost" onClick={handleNextTurn} disabled={busy || notActed.length === 0}>
+                    Наступний хід &gt;
+                  </Button>
+                  <Button size="sm" onClick={handleNextRound} disabled={busy}>
+                    Наступний раунд &gt;&gt;
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={handleEndCombat} disabled={busy}>
+                    Завершити бій
+                  </Button>
+                </>
+              )}
               <Button size="sm" variant="ghost" onClick={handleDeleteScene} disabled={busy} aria-label="Видалити сцену">
                 <Trash2 size={15} />
               </Button>
@@ -291,9 +349,57 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
         campaignId={campaignId}
         onChanged={load}
         myCharacterIds={myCharacterIds}
+        effectsById={effectsById}
       />
 
+      {endSummary && <EndCombatSummary summary={endSummary} onClose={() => setEndSummary(null)} />}
+
       <SceneImage campaignId={campaignId} scene={scene} isGm={isGm} onChanged={load} />
+    </div>
+  );
+}
+
+function EndCombatSummary({ summary, onClose }) {
+  const applied = summary.results.filter((r) => !r.skipped);
+  return (
+    <Sheet open onClose={onClose} title="Бій завершено">
+      {summary.already_ended ? (
+        <p className="text-sm text-text-dim">Бій уже було завершено — години таймера повторно не додано.</p>
+      ) : (
+        <div className="flex flex-col gap-3 text-sm">
+          <p className="text-text">
+            Розпочатих раундів: <b>{summary.hours}</b> → по {summary.hours} год таймера діяльності.
+          </p>
+          {applied.length === 0 && <p className="text-text-dim">Персонажів гравців у бою не було.</p>}
+          <ul className="flex flex-col gap-2">
+            {applied.map((r) => (
+              <li key={r.character_id}>
+                <b className="text-text">{r.name}</b>: +{r.hours_added} год (разом {r.timer.hours})
+                {r.fatigue_after > r.fatigue_before && <span className="text-danger"> · Втома {r.fatigue_before} → {r.fatigue_after}</span>}
+                {r.checks.length > 0 && (
+                  <ul className="pl-3 text-xs text-text-dim">
+                    {r.checks.map((c, i) => <li key={i}>{formatCheck(c)}</li>)}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <Button className="mt-4 w-full" onClick={onClose}>Зрозуміло</Button>
+    </Sheet>
+  );
+}
+
+// Бейджі ефектів станів біля персонажа-комбатанта (лише бойові).
+const COMBAT_CHIP_KEYS = new Set(['dead', 'unconscious', 'initiative', 'actions', 'reactions', 'heroic']);
+
+function CombatEffectBadges({ effects }) {
+  const chips = effectChips(effects).filter((chip) => COMBAT_CHIP_KEYS.has(chip.key));
+  if (!chips.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {chips.map((chip) => <span key={chip.key} className={chipClass(chip.tone)}>{chip.text}</span>)}
     </div>
   );
 }
@@ -331,7 +437,7 @@ function NoSceneYetGm({ campaignId, onCreated }) {
 // роздільник / "вже походили цього раунду".
 // ================================================================
 
-function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myCharacterIds }) {
+function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myCharacterIds, effectsById = {} }) {
   if (notActed.length === 0 && acted.length === 0) {
     return (
       <EmptyState title="У бою ще немає комбатантів">
@@ -358,6 +464,7 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
             <CombatantRow
               key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged}
               isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
+              effects={c.character_id ? effectsById[c.character_id]?.effects : null}
             />
           ))}
           {acted.length > 0 && (
@@ -371,6 +478,7 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
             <CombatantRow
               key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged} dimmed
               isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
+              effects={c.character_id ? effectsById[c.character_id]?.effects : null}
             />
           ))}
         </tbody>
@@ -379,7 +487,7 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
   );
 }
 
-function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }) {
+function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, effects }) {
   const rowRef = useRef(null);
   const [local, setLocal] = useState(combatant);
   // null — не в режимі редагування: поле показує реальне поточне ХП з `local`.
@@ -443,16 +551,18 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
   const stepHp = (delta) => applyAndSyncHp(delta > 0 ? '+1' : '-1');
 
   // Ухилення кидається повною формулою навички: 1d20 + кубик-модифікатор
-  // (якщо значення навички це дає), а не заглушкою. NPC не мають навичок у
-  // цій системі — для них лишається голий 1d20.
+  // (якщо значення навички це дає) з урахуванням ефектів станів листа
+  // (перешкода Втоми, кубик Травми). NPC не мають навичок у цій системі —
+  // для них лишається голий 1d20.
   const rollEvasion = async () => {
     try {
       let formula = '1d20';
       if (combatant.character_id) {
-        const { skills } = await characterApi.getSheet(combatant.character_id);
+        const { skills, effects: sheetEffects } = await characterApi.getSheet(combatant.character_id);
         const evasion = skills.find((s) => s.skill_key === 'evasion');
-        const die = modifierDie(evasion?.value ?? 1);
-        formula = die === '—' ? '1d20' : `1d20+1${die}`;
+        const roll = skillRoll('evasion', evasion?.value ?? 1, sheetEffects);
+        if (roll.disabled) return;
+        formula = roll.d20Formula;
       }
       const result = await rollDice(formula);
       await handleDiceResult('active_defense', result);
@@ -490,6 +600,11 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
   };
 
   const hpDisplay = formatHp(local.health, local.temp_hp, local.max_health);
+  // Втома знижує ініціативу: трекер сам кидає її — віднімаємо одразу у
+  // формулі; при ручному вводі лише підказка.
+  const initiativeModifier = effects?.initiative_modifier ?? 0;
+  const initiativeFormula = `1d6${initiativeModifier || ''}`;
+  const initiativeHint = initiativeModifier ? `${initiativeModifier} до ініціативи (Втома) — врахуйте при ручному вводі` : undefined;
 
   // Гравці ніколи не бачать колонку "Опис" — вона суто для GM. Для NPC
   // (де решта чисел і так затерті на фронті) її текст замість цього
@@ -506,7 +621,10 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
 
     return (
       <tr ref={rowRef} className={rowClass}>
-        <td className={cellClass}><span className="text-text">{combatant.name}</span></td>
+        <td className={cellClass}>
+          <span className="text-text">{combatant.name}</span>
+          <CombatEffectBadges effects={effects} />
+        </td>
         <td className={cellClass}>
           {isMine ? (
             <IntInput
@@ -572,6 +690,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
               <IntInput
                 className={`${compactInputClass} w-14 text-center`}
                 value={local.initiative}
+                title={initiativeHint}
                 onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
                 onBlur={() => commit('initiative')}
               />
@@ -580,9 +699,9 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
             )}
             {canRoll && (
               <RollButton
-                formula="1d6"
+                formula={initiativeFormula}
                 showWidget={false}
-                title="Кинути кубик спритності (заглушка: 1d6 — навички ще не підключені)"
+                title={`Кинути кубик спритності (заглушка: ${initiativeFormula} — навички ще не підключені)`}
                 onResult={(roll) => handleDiceResult('initiative', roll)}
               />
             )}
@@ -617,6 +736,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
         ) : (
           <span className="text-text">{combatant.name}</span>
         )}
+        <CombatEffectBadges effects={effects} />
       </td>
       <td className={cellClass}>
         {canEditFully && isNpc ? (
@@ -690,6 +810,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
             <IntInput
               className={`${compactInputClass} w-14 text-center`}
               value={local.initiative}
+              title={initiativeHint}
               onChange={(v) => setLocal((p) => ({ ...p, initiative: v }))}
               onBlur={() => commit('initiative')}
             />
@@ -698,9 +819,9 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed }
           )}
           {canRoll && (
             <RollButton
-              formula="1d6"
+              formula={initiativeFormula}
               showWidget={false}
-              title="Кинути кубик спритності (заглушка: 1d6 — навички ще не підключені)"
+              title={`Кинути кубик спритності (заглушка: ${initiativeFormula} — навички ще не підключені)`}
               onResult={(roll) => handleDiceResult('initiative', roll)}
             />
           )}

@@ -4,6 +4,7 @@ jest.mock('../../models/campaign-character.model');
 const CampaignModel = require('../../models/campaign.model');
 const CampaignCharacterModel = require('../../models/campaign-character.model');
 const CampaignCharacterController = require('../campaign-character.controller');
+const bus = require('../../realtime/bus');
 
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
@@ -306,5 +307,38 @@ describe('CampaignCharacterController.leave', () => {
     expect(CampaignCharacterModel.removeAllForUser).toHaveBeenCalledWith('c1', 'player-1');
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
+  });
+});
+
+describe('CampaignCharacterController.notifyCharacterChanged', () => {
+  const req = (user) => ({ params: { characterId: 'ch1' }, body: {}, user });
+
+  it('404s for a missing character', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue(null);
+    const res = mockRes();
+    await CampaignCharacterController.notifyCharacterChanged(req({ sub: 'u1' }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('403s for a stranger', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'owner' });
+    CampaignModel.isCampaignGmForCharacter.mockResolvedValue(false);
+    const res = mockRes();
+    await CampaignCharacterController.notifyCharacterChanged(req({ sub: 'stranger' }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('publishes characters in every campaign of the character for the owner', async () => {
+    CampaignModel.findCharacterOwner.mockResolvedValue({ id: 'ch1', user_id: 'owner' });
+    CampaignModel.campaignIdsForCharacter.mockResolvedValue(['k1', 'k2']);
+    const publish = jest.spyOn(bus, 'publish');
+    const res = mockRes();
+
+    await CampaignCharacterController.notifyCharacterChanged(req({ sub: 'owner' }), res);
+
+    expect(publish).toHaveBeenCalledWith('k1', 'characters');
+    expect(publish).toHaveBeenCalledWith('k2', 'characters');
+    expect(res.json).toHaveBeenCalledWith({ campaigns: 2 });
+    publish.mockRestore();
   });
 });

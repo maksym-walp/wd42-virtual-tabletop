@@ -38,17 +38,24 @@ function validateDescription(entry) {
   return null;
 }
 
-// Стани: key/label як у решти конфігів + опис і необовʼязковий максимальний
-// рівень (null — без обмеження). key — значення type у conditions персонажа.
+// Стани: набір фіксований (як magic_forms) — їхні ефекти по рівнях задають
+// правила character-sheet (src/rules/conditions.js), тож адмін редагує лише
+// назву й опис. max_level завжди 5. key — значення type у conditions персонажа.
+const CONDITION_KEYS = ['fatigue', 'illness', 'trauma'];
+const CONDITION_MAX_LEVEL = 5;
+
 function validateConditions(value) {
   const base = validateValue(value);
   if (base) return base;
+  const keys = value.map((entry) => entry.key);
+  if (keys.length !== CONDITION_KEYS.length || CONDITION_KEYS.some((key) => !keys.includes(key))) {
+    return `набір станів фіксований: ${CONDITION_KEYS.join(', ')}`;
+  }
   for (const entry of value) {
     const descError = validateDescription(entry);
     if (descError) return descError;
-    const max = entry.max_level;
-    if (max != null && (!Number.isInteger(max) || max < 1 || max > 20)) {
-      return `max_level стану "${entry.key}" має бути цілим від 1 до 20 або порожнім`;
+    if (entry.max_level !== CONDITION_MAX_LEVEL) {
+      return `max_level стану "${entry.key}" — завжди ${CONDITION_MAX_LEVEL}`;
     }
   }
   return null;

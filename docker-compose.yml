@@ -189,11 +189,14 @@ services:
     env_file: .env
     environment:
       PORT: 3010
+      CHARACTER_SHEET_URL: ${CHARACTER_SHEET_URL:-http://character-sheet:3005}
     volumes:
       - ./services/campaigns/src:/app/src:delegated
     depends_on:
       postgres:
         condition: service_healthy
+      character-sheet:
+        condition: service_started
     networks:
       - walp-network
 

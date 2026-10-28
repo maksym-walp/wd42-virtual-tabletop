@@ -11,6 +11,7 @@ const EQUIPMENT_TABLES = {
   weapon: 'equipment.weapons',
   armor: 'equipment.armor',
   artifact: 'equipment.artifacts',
+  potion: 'equipment.potions',
 };
 
 // $1 = ref_id, $2 = user id, $3 = isAdmin

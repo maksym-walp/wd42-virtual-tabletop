@@ -10,6 +10,7 @@ describe('ConfigController.getCharacterConfig', () => {
 
     await ConfigController.getCharacterConfig({ user: { sub: 'u1' } }, res);
 
-    expect(res.json).toHaveBeenCalledWith({ conditions: [], currencies: [], races: [] });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ conditions: [], currencies: [], races: [] }));
+    expect(res.json.mock.calls[0][0].condition_levels.fatigue).toHaveLength(5);
   });
 });

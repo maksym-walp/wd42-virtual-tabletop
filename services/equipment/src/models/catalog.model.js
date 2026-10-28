@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
 const { serializeImageCrop } = require('../utils/image-crop');
+const { POTION_TIERS, POTION_SIZES, POTION_EFFECTS } = require('../constants/potions');
 
 // Каталог спорядження живе у чотирьох таблицях — по одній на вид
 // (39-equipment-split-tables.sql; артефакти приєднались як четвертий вид у
@@ -39,6 +40,22 @@ const KINDS = {
     columns: ['creator', 'rarity'],
     sortExpr: { rarity: "array_position(ARRAY['common','uncommon','rare','legendary'], i.rarity)" },
     filters: { rarity: 'i.rarity', creator: 'i.creator' },
+  },
+  // Зілля (міграція 110): heal_die і portions — згенеровані з рівня й
+  // розміру колонки, тож у запис не потрапляють; defaults — значення для
+  // NOT NULL-колонок, коли поле не передали (переїзд виду, імпорт).
+  potion: {
+    table: 'equipment.potions',
+    label: 'Зілля',
+    columns: ['effect', 'potion_tier', 'potion_size'],
+    defaults: { effect: 'healing', potion_tier: 'tincture', potion_size: 'ampoule' },
+    allowed: {
+      effect: POTION_EFFECTS.map((e) => e.key),
+      potion_tier: POTION_TIERS.map((t) => t.key),
+      potion_size: POTION_SIZES.map((s) => s.key),
+    },
+    sortExpr: { heal_die: 'i.heal_die', portions: 'i.portions' },
+    filters: { potion_tier: 'i.potion_tier', potion_size: 'i.potion_size', effect: 'i.effect' },
   },
 };
 
@@ -94,26 +111,38 @@ const CATALOG_UNION = `(
                NULL::varchar AS damage_die, NULL::varchar AS weapon_type,
                NULL::varchar[] AS weapon_grip, NULL::varchar AS modifier,
                NULL::smallint AS defense_value, NULL::varchar AS armor_weight,
-               NULL::varchar AS creator, NULL::varchar AS rarity
+               NULL::varchar AS creator, NULL::varchar AS rarity,
+               NULL::varchar AS effect, NULL::varchar AS potion_tier, NULL::varchar AS potion_size,
+               NULL::smallint AS heal_die, NULL::smallint AS portions
         FROM equipment.items
         UNION ALL
         SELECT ${UNION_COMMON}, 'weapon'::varchar,
                damage_die, weapon_type, weapon_grip, modifier,
                NULL::smallint, NULL::varchar,
-               NULL::varchar, NULL::varchar
+               NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.weapons
         UNION ALL
         SELECT ${UNION_COMMON}, 'armor'::varchar,
                NULL::varchar, NULL::varchar, NULL::varchar[], NULL::varchar,
                defense_value, armor_weight,
-               NULL::varchar, NULL::varchar
+               NULL::varchar, NULL::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.armor
         UNION ALL
         SELECT ${UNION_COMMON}, 'artifact'::varchar,
                NULL::varchar, NULL::varchar, NULL::varchar[], NULL::varchar,
                NULL::smallint, NULL::varchar,
-               creator, rarity
+               creator, rarity,
+               NULL::varchar, NULL::varchar, NULL::varchar, NULL::smallint, NULL::smallint
         FROM equipment.artifacts
+        UNION ALL
+        SELECT ${UNION_COMMON}, 'potion'::varchar,
+               NULL::varchar, NULL::varchar, NULL::varchar[], NULL::varchar,
+               NULL::smallint, NULL::varchar,
+               NULL::varchar, NULL::varchar,
+               effect, potion_tier, potion_size, heal_die, portions
+        FROM equipment.potions
       )`;
 
 // Вид не зберігається колонкою, тож дописуємо його до відповіді тут — по
@@ -136,6 +165,8 @@ async function findKindById(id, userId, isAdmin = false) {
      SELECT 'armor' FROM equipment.armor WHERE id = $1 AND ${visibility}
      UNION ALL
      SELECT 'artifact' FROM equipment.artifacts WHERE id = $1 AND ${visibility}
+     UNION ALL
+     SELECT 'potion' FROM equipment.potions WHERE id = $1 AND ${visibility}
      LIMIT 1`,
     params
   );
@@ -169,7 +200,7 @@ async function moveKind(targetKind, id, userId, data, isAdmin = false) {
     }
 
     const columns = [...COMMON_COLUMNS, ...target.columns];
-    const values = columns.map((column) => normalize(column, data));
+    const values = columns.map((column) => normalize(column, data, target));
     const placeholders = columns.map((_, idx) => `$${idx + 5}`);
 
     const { rows } = await client.query(
@@ -194,8 +225,9 @@ async function moveKind(targetKind, id, userId, data, isAdmin = false) {
   }
 }
 
-function normalize(column, data) {
+function normalize(column, data, kindConfig = null) {
   if (column === 'is_public') return data.is_public ?? false;
+  if (kindConfig?.defaults && column in kindConfig.defaults) return data[column] || kindConfig.defaults[column];
   // Кадр без зображення не має сенсу — і рядок JSON для jsonb-колонки.
   if (column === 'image_crop') return serializeImageCrop(data.image_url ? data.image_crop : null);
   return data[column] ?? null;
@@ -268,7 +300,7 @@ function createCatalogModel(kind) {
     },
 
     async create(userId, data) {
-      const values = writeColumns.map((column) => normalize(column, data));
+      const values = writeColumns.map((column) => normalize(column, data, KINDS[kind]));
       const placeholders = writeColumns.map((_, idx) => `$${idx + 3}`);
       const { rows } = await pool.query(
         `INSERT INTO ${table} (user_id, is_canonical, ${writeColumns.join(', ')})
@@ -281,7 +313,7 @@ function createCatalogModel(kind) {
 
     async update(id, userId, data, isAdmin = false) {
       const assignments = writeColumns.map((column, idx) => `${column}=$${idx + 4}`);
-      const values = writeColumns.map((column) => normalize(column, data));
+      const values = writeColumns.map((column) => normalize(column, data, KINDS[kind]));
       const { rows } = await pool.query(
         `UPDATE ${table}
          SET ${assignments.join(', ')}, updated_at=NOW()
@@ -374,9 +406,12 @@ const RARITY_VALUES = ['common', 'uncommon', 'rare', 'legendary'];
 // Значення з файлу імпорту не довірені: CHECK на колонці rarity завалив би
 // увесь багаторядковий INSERT через один кривий запис, тож невідому рідкість
 // скидаємо в NULL (запис імпортується, рідкість можна виправити вручну).
-function normalizeImported(column, row) {
+function normalizeImported(column, row, kindConfig = null) {
   if (column === 'rarity') return RARITY_VALUES.includes(row.rarity) ? row.rarity : null;
-  return normalize(column, row);
+  // Невідомий рівень/розмір/ефект зілля — значення за замовчуванням.
+  const allowed = kindConfig?.allowed?.[column];
+  if (allowed && !allowed.includes(row[column])) return kindConfig.defaults[column];
+  return normalize(column, row, kindConfig);
 }
 
 // Один багаторядковий INSERT у таблицю виду: [sql, values].
@@ -393,7 +428,7 @@ function buildKindInsert(userId, kind, rows, isCanonical) {
       ...COMMON_COLUMNS.map((column) => (
         column === 'image_url' || column === 'thumbnail_url' || column === 'image_crop' ? null : normalize(column, row)
       )),
-      ...columns.map((column) => normalizeImported(column, row))
+      ...columns.map((column) => normalizeImported(column, row, KINDS[kind]))
     );
     return `(${writeColumns.map((_, idx) => `$${start + idx + 1}`).join(', ')})`;
   });
@@ -483,4 +518,5 @@ module.exports = {
   findKindById,
   UnionModel,
   getWeaponOptions,
+  normalize,
 };
