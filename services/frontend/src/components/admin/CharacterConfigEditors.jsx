@@ -289,8 +289,13 @@ export function CurrenciesConfigCard({ config, onChange, onSaved }) {
 
 // ── Раси та підвиди персонажа ────────────────────────────────────────────────
 
-const MAX_PEOPLE_BONUS = 5;
+const MAX_SKILL_BONUS = 10;
 const MAX_RACE_BUDGET = 20;
+
+const isSkillBonus = (n) => Number.isInteger(n) && n !== 0 && Math.abs(n) <= MAX_SKILL_BONUS;
+// Старі записи без bonus_value означають +1; null — admin стер поле.
+const raceBonusValue = (race) => (race.bonus_value === undefined ? 1 : race.bonus_value);
+const BONUS_RANGE_HINT = `ненульове ціле від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
 
 function validateRaces(value) {
   const seenRaces = new Set();
@@ -298,6 +303,9 @@ function validateRaces(value) {
     if (!race.race_id) return 'Оберіть расу у кожному блоці';
     if (seenRaces.has(race.race_id)) return 'Та сама раса додана двічі';
     seenRaces.add(race.race_id);
+    if (race.bonus_characteristic && !isSkillBonus(raceBonusValue(race))) {
+      return `Бонус раси до навичок — ${BONUS_RANGE_HINT}`;
+    }
     if (!Number.isInteger(race.bonus_budget) || race.bonus_budget < 0 || race.bonus_budget > MAX_RACE_BUDGET) {
       return `Додаткові очки раси — ціле від 0 до ${MAX_RACE_BUDGET}`;
     }
@@ -311,9 +319,7 @@ function validateRaces(value) {
         if (!bonus.skill) return 'Оберіть навичку у кожному бонусі';
         if (skills.has(bonus.skill)) return 'Навичка повторюється в одного підвиду';
         skills.add(bonus.skill);
-        if (!Number.isInteger(bonus.value) || bonus.value < 1 || bonus.value > MAX_PEOPLE_BONUS) {
-          return `Бонус до навички — ціле від 1 до ${MAX_PEOPLE_BONUS}`;
-        }
+        if (!isSkillBonus(bonus.value)) return `Бонус до навички — ${BONUS_RANGE_HINT}`;
       }
     }
   }
@@ -349,13 +355,13 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
   return (
     <ConfigShell
       title="Раси та підвиди персонажа"
-      hint="Раси, які гравець може обрати при створенні персонажа, — публічні раси компендіуму (назва, опис і зображення беруться звідти). Для кожної налаштуйте механіку (як і раніше: +1 до 4 навичок однієї характеристики та/або додаткові очки пулу) і підвиди — народи цієї раси з компендіуму з бонусами до навичок. Бонуси безкоштовні: додаються до значення навички й не віднімаються з пулу очок."
+      hint="Раси, які гравець може обрати при створенні персонажа, — публічні раси компендіуму (назва, опис і зображення беруться звідти). Для кожної налаштуйте механіку (бонус або штраф до 4 навичок однієї характеристики — число зі знаком — та/або додаткові очки пулу), чи вона основна (неосновні гравець бачить лише після натискання «Інші народи») і підвиди — народи цієї раси з компендіуму з бонусами до навичок. Бонуси безкоштовні: додаються до значення навички й не віднімаються з пулу очок."
       saving={saving}
       error={error}
       onSave={save}
       addLabel="Додати расу"
       onAdd={() => onChange([...value, {
-        race_id: '', bonus_characteristic: null, bonus_budget: 0, peoples: [], _rowId: newRowId(),
+        race_id: '', is_main: true, bonus_characteristic: null, bonus_value: 1, bonus_budget: 0, peoples: [], _rowId: newRowId(),
       }])}
     >
       {!value.length && <p className="text-sm text-text-dim">Жодної раси не відкрито — гравці не зможуть створити персонажа.</p>}
@@ -381,13 +387,26 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
 
             <div className="flex flex-wrap items-center gap-3 text-sm text-text-dim">
               <label className="inline-flex items-center gap-2">
-                +1 до навичок
+                <input type="checkbox" checked={race.is_main !== false} aria-label="Основна раса"
+                  onChange={(e) => update(race._rowId, { is_main: e.target.checked })} />
+                Основна (інакше — під «Інші народи»)
+              </label>
+              <label className="inline-flex items-center gap-2">
+                До навичок
                 <select className={`${inputClass} w-auto`} value={race.bonus_characteristic ?? ''} aria-label="Характеристика з бонусом"
                   onChange={(e) => update(race._rowId, { bonus_characteristic: e.target.value || null })}>
                   <option value="">— немає —</option>
                   {CHARACTERISTICS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                 </select>
               </label>
+              {race.bonus_characteristic && (
+                <label className="inline-flex items-center gap-2">
+                  Значення (з мінусом — штраф)
+                  <input type="number" min={-MAX_SKILL_BONUS} max={MAX_SKILL_BONUS} className={`${inputClass} w-20`}
+                    value={raceBonusValue(race) ?? ''} aria-label="Бонус раси до навичок"
+                    onChange={(e) => update(race._rowId, { bonus_value: e.target.value === '' ? null : Number(e.target.value) })} />
+                </label>
+              )}
               <label className="inline-flex items-center gap-2">
                 Додаткові очки пулу
                 <input type="number" min="0" max={MAX_RACE_BUDGET} className={`${inputClass} w-20`} value={race.bonus_budget ?? 0}
@@ -420,8 +439,7 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
                               </optgroup>
                             ))}
                           </select>
-                          <span className="text-text-dim">+</span>
-                          <input type="number" min="1" max={MAX_PEOPLE_BONUS} className={`${inputClass} w-20`} value={bonus.value}
+                          <input type="number" min={-MAX_SKILL_BONUS} max={MAX_SKILL_BONUS} className={`${inputClass} w-20`} value={bonus.value}
                             aria-label="Бонус"
                             onChange={(e) => updateBonus(race, pIndex, bIndex, { value: e.target.value === '' ? null : Number(e.target.value) })} />
                           <button type="button" aria-label="Прибрати бонус" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger"

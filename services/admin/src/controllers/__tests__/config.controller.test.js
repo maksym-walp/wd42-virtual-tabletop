@@ -276,10 +276,27 @@ describe('ConfigController.update — character_races', () => {
     expect((await put(withPeople([{ people_id: P1, skill_bonuses: dup }]))).status).toHaveBeenCalledWith(400);
   });
 
-  it.each([0, 6, 1.5, '2'])('400 for people bonus value %p', async (value) => {
+  it.each([0, 11, -11, 1.5, '2'])('400 for people bonus value %p', async (value) => {
     const res = await put(withPeople([{ people_id: P2, skill_bonuses: [{ skill: 'will', value }] }]));
     expect(res.status).toHaveBeenCalledWith(400);
     expect(ConfigModel.upsert).not.toHaveBeenCalled();
+  });
+
+  it('200 for negative people bonuses and a signed race bonus with is_main', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
+    const res = await put([{
+      ...race, bonus_value: -2, is_main: false,
+      peoples: [{ people_id: P1, skill_bonuses: [{ skill: 'strength', value: -3 }, { skill: 'will', value: 4 }] }],
+    }]);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 11, -11, 1.5, '2'])('400 for race bonus_value %p', async (bonus_value) => {
+    expect((await put([{ ...race, bonus_value }])).status).toHaveBeenCalledWith(400);
+  });
+
+  it.each(['yes', 1])('400 for is_main %p', async (is_main) => {
+    expect((await put([{ ...race, is_main }])).status).toHaveBeenCalledWith(400);
   });
 });
 

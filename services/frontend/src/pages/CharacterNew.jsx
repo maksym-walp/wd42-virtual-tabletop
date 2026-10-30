@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TreePine } from 'lucide-react';
+import { TreePine, ChevronDown } from 'lucide-react';
 import characterApi from '../api/characterSheet';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
@@ -27,23 +27,27 @@ const INITIAL_MONEY = Object.fromEntries(
   CURRENCIES.flatMap((c) => [[c.high.key, 0], [c.low.key, 0]])
 );
 
-// Раса (з конфігу адміна) може давати +1 (старт 2 замість 1) до 4 навичок однієї
-// характеристики (bonus_characteristic) і/або додаткові очки пулу (bonus_budget).
-function boostedSkillKeysFor(race) {
+// Раса (з конфігу адміна) може давати бонус або штраф (bonus_value зі знаком, типово +1)
+// до 4 навичок однієї характеристики (bonus_characteristic) і/або додаткові очки
+// пулу (bonus_budget).
+function raceSkillBonusFor(race) {
   const char = CHARACTERISTICS.find((c) => c.key === race?.bonus_characteristic);
-  return new Set(char?.skills.map((s) => s.key) ?? []);
+  const value = race?.bonus_value ?? 1;
+  return Object.fromEntries((char?.skills ?? []).map((s) => [s.key, value]));
 }
+const signed = (n) => (n < 0 ? `−${-n}` : `+${n}`);
 // Підвид додає свій бонус до навичок зверху на расовий — теж безкоштовно.
 function peopleBonusFor(people) {
   const bonus = {};
   for (const { skill, value } of people?.skill_bonuses ?? []) bonus[skill] = (bonus[skill] || 0) + value;
   return bonus;
 }
-// Стартове (і мінімальне) значення кожної навички: 1 + расовий буст + бонус підвиду.
+// Стартове (і мінімальне) значення кожної навички: 1 + расовий бонус + бонус підвиду,
+// але не нижче 1 і не вище 12 (штраф не опускає навичку під одиницю).
 function skillFloorsFor(race, people) {
-  const boosted = boostedSkillKeysFor(race);
+  const raceBonus = raceSkillBonusFor(race);
   const bonus = peopleBonusFor(people);
-  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.min(12, 1 + (boosted.has(k) ? 1 : 0) + (bonus[k] || 0))]));
+  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.max(1, Math.min(12, 1 + (raceBonus[k] || 0) + (bonus[k] || 0)))]));
 }
 function budgetFor(race) {
   return BASE_BUDGET + (race?.bonus_budget ?? 0);
@@ -53,7 +57,7 @@ function budgetFor(race) {
 function raceBonusLabel(race) {
   const parts = [];
   const char = CHARACTERISTICS.find((c) => c.key === race.bonus_characteristic);
-  if (char) parts.push(`+1 до навичок: ${char.label}`);
+  if (char) parts.push(`${signed(race.bonus_value ?? 1)} до навичок: ${char.label}`);
   if (race.bonus_budget) parts.push(`+${race.bonus_budget} очок до пулу`);
   return parts.join(' · ');
 }
@@ -254,7 +258,7 @@ export default function CharacterNew() {
         {step === 2 && (
           <Step2Skills
             skills={skills} setSkills={setSkills} remaining={skillRemaining}
-            budget={skillBudget} setBudget={setSkillBudget} boostedKeys={boostedSkillKeysFor(race)}
+            budget={skillBudget} setBudget={setSkillBudget} race={race}
             floors={skillFloors} people={people}
           />
         )}
@@ -350,6 +354,27 @@ function WizardSteps({ step }) {
 
 function Step1Basics({ name, setName, archetype, setArchetype, races, raceId, setRace, peopleId, setPeopleId }) {
   const { theme } = useTheme();
+  // Неосновні раси (is_main: false) ховаються за «Інші народи»; якщо обрана саме така —
+  // список лишається розгорнутим, щоб вибір не зникав з екрана.
+  const mainRaces = races.filter((r) => r.is_main !== false);
+  const otherRaces = races.filter((r) => r.is_main === false);
+  const [showOthers, setShowOthers] = useState(false);
+  const othersOpen = showOthers || otherRaces.some((r) => r.id === raceId);
+  const renderRace = (r) => (
+    <ChoiceCard
+      key={r.id}
+      selected={raceId === r.id}
+      onClick={() => setRace(r.id)}
+      title={r.name}
+      description={htmlToPreviewText(r.description || '')}
+      subtitle={raceBonusLabel(r)}
+      image={r.image_url}
+    >
+      {raceId === r.id && r.peoples.length > 0 && (
+        <PeopleSelect peoples={r.peoples} value={peopleId} onChange={setPeopleId} />
+      )}
+    </ChoiceCard>
+  );
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
   return (
     <Card>
@@ -388,21 +413,19 @@ function Step1Basics({ name, setName, archetype, setArchetype, races, raceId, se
           <p className="text-sm text-text-dim">Адміністратор ще не відкрив жодної раси для персонажів.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {races.map((r) => (
-              <ChoiceCard
-                key={r.id}
-                selected={raceId === r.id}
-                onClick={() => setRace(r.id)}
-                title={r.name}
-                description={htmlToPreviewText(r.description || '')}
-                subtitle={raceBonusLabel(r)}
-                image={r.image_url}
+            {mainRaces.map(renderRace)}
+            {otherRaces.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowOthers((v) => !v)}
+                aria-expanded={othersOpen}
+                className="flex min-h-24 items-center justify-center gap-2 rounded-lg border-[1.5px] border-dashed border-border bg-bg p-3 text-text-muted transition-colors hover:border-accent hover:text-accent"
               >
-                {raceId === r.id && r.peoples.length > 0 && (
-                  <PeopleSelect peoples={r.peoples} value={peopleId} onChange={setPeopleId} />
-                )}
-              </ChoiceCard>
-            ))}
+                <strong>Інші народи ({otherRaces.length})</strong>
+                <ChevronDown size={16} className={`transition-transform ${othersOpen ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+            {othersOpen && otherRaces.map(renderRace)}
           </div>
         )}
       </Field>
@@ -471,7 +494,7 @@ function ChoicePlaceholder({ letter, color }) {
   );
 }
 
-function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedKeys, floors, people }) {
+function Step2Skills({ skills, setSkills, remaining, budget, setBudget, race, floors, people }) {
   const floorFor = (key) => floors[key] ?? 1;
 
   const setSkill = (key, delta) => {
@@ -483,9 +506,10 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedK
     });
   };
 
-  const boostedLabel = CHARACTERISTICS.find((c) => c.skills.some((s) => boostedKeys.has(s.key)))?.label;
+  const raceChar = CHARACTERISTICS.find((c) => c.key === race?.bonus_characteristic);
+  const raceBonus = race?.bonus_value ?? 1;
   const skillLabels = Object.fromEntries(CHARACTERISTICS.flatMap((c) => c.skills.map((s) => [s.key, s.label])));
-  const peopleBonuses = (people?.skill_bonuses ?? []).map((b) => `+${b.value} ${skillLabels[b.skill]}`);
+  const peopleBonuses = (people?.skill_bonuses ?? []).map((b) => `${signed(b.value)} ${skillLabels[b.skill]}`);
 
   return (
     <Card>
@@ -496,14 +520,14 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, boostedK
         </div>
       </div>
       <p className="mb-2 text-sm text-text-dim">
-        {boostedLabel
-          ? `Навички характеристики «${boostedLabel}» починаються з 2, решта — з 1. `
+        {raceChar
+          ? `Раса ${signed(raceBonus)} до навичок характеристики «${raceChar.label}», решта починаються з 1 (нижче 1 навичка не опускається). `
           : 'Усі навички починаються з 1. '}
-        Розподіліть очки між навичками (від {boostedLabel ? '2 для бустнутих' : '1'} до 12).
+        Розподіліть очки між навичками (від стартового значення до 12).
       </p>
       {peopleBonuses.length > 0 && (
         <p className="mb-2 text-sm text-text-dim">
-          Підвид «{people.name}» безкоштовно дає: {peopleBonuses.join(', ')}.
+          Підвид «{people.name}» безкоштовно змінює: {peopleBonuses.join(', ')}.
         </p>
       )}
       <p className="mb-5 text-xs text-text-dim">

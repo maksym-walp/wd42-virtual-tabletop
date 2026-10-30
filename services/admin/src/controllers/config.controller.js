@@ -116,8 +116,9 @@ function validateMagicForms(value) {
 }
 
 // Раси персонажа: які публічні раси компендіуму (race_id) гравець може обрати,
-// їхня механіка (+1 до 4 навичок однієї характеристики та/або додаткові очки
-// пулу) і підвиди — народи компендіуму (people_id) з бонусами до навичок
+// їхня механіка (±N до 4 навичок однієї характеристики — bonus_value, типово 1,
+// може бути від'ємним — та/або додаткові очки пулу), чи вона основна (is_main,
+// типово true; неосновні гравець бачить лише після «Інші народи») і підвиди — народи компендіуму (people_id) з бонусами до навичок
 // (skill → value). На відміну від решти конфігів, порожній список коректний
 // (рас ще не відкрито). Ключі характеристик і навичок фіксовані (CHECK у
 // character_sheet.skills). Існування й публічність записів компендіуму тут не
@@ -131,8 +132,11 @@ const SKILL_KEYS = [
   'will', 'deception', 'artistry', 'persuasion',
 ];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_PEOPLE_BONUS = 5;
+const MAX_SKILL_BONUS = 10;
 const MAX_RACE_BUDGET = 20;
+
+// Бонус до навички — ціле число зі знаком: від -MAX до -1 або від 1 до MAX.
+const isSkillBonus = (n) => Number.isInteger(n) && n !== 0 && Math.abs(n) <= MAX_SKILL_BONUS;
 
 function validatePeopleEntry(entry, seenPeoples) {
   if (!entry || typeof entry.people_id !== 'string' || !UUID_PATTERN.test(entry.people_id)) {
@@ -148,8 +152,8 @@ function validatePeopleEntry(entry, seenPeoples) {
     if (!bonus || !SKILL_KEYS.includes(bonus.skill)) return `невідома навичка: ${bonus?.skill}`;
     if (seenSkills.has(bonus.skill)) return `навичка ${bonus.skill} повторюється у підвиду ${entry.people_id}`;
     seenSkills.add(bonus.skill);
-    if (!Number.isInteger(bonus.value) || bonus.value < 1 || bonus.value > MAX_PEOPLE_BONUS) {
-      return `бонус до ${bonus.skill} має бути цілим від 1 до ${MAX_PEOPLE_BONUS}`;
+    if (!isSkillBonus(bonus.value)) {
+      return `бонус до ${bonus.skill} має бути ненульовим цілим від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
     }
   }
   return null;
@@ -167,6 +171,12 @@ function validateCharacterRaces(value) {
 
     if (entry.bonus_characteristic != null && !CHARACTERISTIC_KEYS.includes(entry.bonus_characteristic)) {
       return `невідома характеристика: ${entry.bonus_characteristic}`;
+    }
+    if (entry.bonus_value != null && !isSkillBonus(entry.bonus_value)) {
+      return `бонус раси до навичок має бути ненульовим цілим від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
+    }
+    if (entry.is_main != null && typeof entry.is_main !== 'boolean') {
+      return 'is_main має бути true або false';
     }
     const budget = entry.bonus_budget ?? 0;
     if (!Number.isInteger(budget) || budget < 0 || budget > MAX_RACE_BUDGET) {

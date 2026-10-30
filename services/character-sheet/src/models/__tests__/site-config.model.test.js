@@ -64,11 +64,24 @@ describe('SiteConfigModel.getCharacterConfig', () => {
 
     expect(races).toEqual([{
       id: 'r1', name: 'Люди', description: '<p>Опис</p>', image_url: '/u/h.png',
-      bonus_characteristic: 'agility', bonus_budget: 0,
+      is_main: true, bonus_characteristic: 'agility', bonus_value: 1, bonus_budget: 0,
       peoples: [{ id: 'p1', name: 'Північні', description: 'Опис народу', skill_bonuses: bonus }],
     }]);
     expect(pool.query.mock.calls[1][0]).toMatch(/compendium\.races .*is_public = true/);
     expect(pool.query.mock.calls[2][0]).toMatch(/compendium\.peoples .*is_public = true/);
+  });
+});
+
+describe('SiteConfigModel.getCharacterConfig — race flags', () => {
+  it('passes through is_main and a signed bonus_value', async () => {
+    pool.query
+      .mockResolvedValueOnce({
+        rows: [{ key: 'character_races', value: [{ race_id: 'r1', is_main: false, bonus_characteristic: 'will', bonus_value: -2 }] }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', name: 'Інші', description: '', image_url: null }] });
+
+    const { races } = await SiteConfigModel.getCharacterConfig();
+    expect(races[0]).toMatchObject({ is_main: false, bonus_characteristic: 'will', bonus_value: -2 });
   });
 });
 
