@@ -61,20 +61,59 @@ Nginx проксує `/api/campaigns/` → цей сервіс (див. [кор�
 
 | Метод | Шлях | Авторизація | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/:id/combat` | учасник | — | `200 { scene, combatants }` або `{ scene: null, combatants: [] }`; для гравців приховані комбатанти (`is_hidden`) віддаються лише як заглушка (`id`, `name`, `description`, `is_hidden`) — без здоров'я, захистів, ініціативи й нотаток |
+| GET | `/:id/combat` | учасник | — | `200 { scene, combatants, log }` або `{ scene: null, combatants: [] }`; для гравців приховані комбатанти (`is_hidden`) віддаються лише як заглушка (`id`, `name`, `description`, `is_hidden`) — без здоров'я, захистів, ініціативи й нотаток; `log` — останні 50 записів журналу бою, гравцям без записів про прихованих комбатантів |
 | POST | `/:id/combat/scenes` | GM-only | `{ image_url? }` | `201 { scene }` |
 | PATCH | `/:id/combat/scenes/:sceneId` | GM-only | `{ image_url?, round_number? }` | `200 { scene }` / `404` |
 | DELETE | `/:id/combat/scenes/:sceneId` | GM-only | — | `204` / `404` |
 | POST | `/:id/combat/scenes/:sceneId/combatants` | GM-only | або `{ name*, character_id?, passive_defense?, active_defense?, health?, max_health?, temp_hp?, initiative?, notes?, description?, is_hidden? }`, або `{ compendium_entry_id, quantity? }` | `201 { combatant }` / `201 { combatants }` (з довідника, до 20 за раз: ім'я з номером, показники виводяться з НІПа чи істоти — `deriveCombatStats`); `404` сцена/запис/персонаж; `400` без `name` |
-| PATCH | `/:id/combat/combatants/:combatantId` | GM-only; **гравець** — лише `health`, `temp_hp`, `initiative`, `active_defense`, `passive_defense`, `notes` і лише на своєму комбатанті (його персонаж) | будь-які поля комбатанта | `200 { combatant }` / `403` / `404` |
+| PATCH | `/:id/combat/combatants/:combatantId` | GM-only; **гравець** — лише `health`, `temp_hp`, `initiative`, `active_defense`, `passive_defense`, `notes`, `reaction_reserved`, `actions_used`, `actions_log` і лише на своєму комбатанті (його персонаж) | будь-які поля комбатанта | `200 { combatant }` / `403` / `404` |
 | DELETE | `/:id/combat/combatants/:combatantId` | GM-only | — | `204` / `404` |
 | POST | `/:id/combat/next-turn` | GM-only | — | `200 { combatant }` — з тих, хто ще не діяв, обирає найвищу ініціативу й позначає `has_acted_this_round`; `404` якщо сцени нема або всі вже діяли; `409` — бій завершено |
 | POST | `/:id/combat/next-round` | GM-only | — | `200 { scene }` — збільшує `round_number` і скидає `has_acted_this_round`; `409` — бій завершено |
+| POST | `/:id/combat/attack` | ГМ, **або** гравець, чий персонаж — `attacker_id` (атака пише в рядок **цілі**, тож звичайна перевірка «свій рядок» не підходить) | `{ attacker_id*, target_id*, hit*: { total, natural, formula? }, dodge?: { total, formula? }, damage?: { total, formula? }, weapon?: {…} }` | `200 { outcome, dodge, log_entry, attacker, target, sheet }`; `400` — без комбатантів, атака самого себе чи без `hit.total`; `409` — бій завершено. Див. «Атака» нижче |
+| POST | `/:id/combat/log` | ГМ або власник комбатанта | `{ combatant_id, kind, payload }` — `kind` з `dodge`/`initiative`/`death_save`/`damage` | `201 { log_entry }` — кидок, що нікого не атакує, але має лишитися видимим іншим гравцям |
 | POST | `/:id/combat/end` | GM-only | — | `200 { scene, already_ended, hours, results, notifications }` — кожен розпочатий раунд (`round_number`) = година таймера діяльності кожному персонажу-учаснику (різні `character_id` комбатантів), через character-sheet з `source_key = combat:<sceneId>`; потім `ended_at`; публікує `combat` і `characters`. **Ідемпотентно**: завершена сцена → `already_ended: true`, годин не додається; при `502` сцена лишається незавершеною, повтор безпечний |
 | POST | `/characters/:characterId/notify` | власник персонажа, його ГМ кампанії або адмін (шлях **без** `:id` кампанії) | — | `200 { campaigns }` — публікує `characters` у всіх кампаніях персонажа; лист викликає після відпочинку чи зміни станів, щоб інша сторона побачила результат одразу |
 | PATCH | `/characters/:characterId/hp` | власник персонажа, його ГМ кампанії або адмін (шлях **без** `:id` кампанії) | `{ health?, temp_hp? }` | `200 { combatants }` — оновлює здоров'я усіх комбатантів цього персонажа в усіх кампаніях і публікує `combat`/`characters`; так лист персонажа синхронізує ХП з боєм |
 
 `compendium_entry_id` у комбатанта — історична назва: після міграції 86 це id запису з [npcs](npcs.md) (`npcs.npcs`) або [bestiary](bestiary.md) (`bestiary.creatures`); кубик здоров'я береться з виду/підвиду в [compendium](compendium.md).
+
+#### Атака
+
+Кубики кидає **клієнт** через [dice-roller](dice-roller.md) — так гравець
+бачить розбивку наявним компонентом результату, а кидок лягає в його
+історію; сюди їдуть уже готові числа (той самий підхід, що й у кнопки
+ухилення, яка була тут і раніше). Сервер робить те, що має бути спільним:
+
+1. **Ухилення.** Якщо в цілі `reaction_reserved` і прийшов `dodge` — новий
+   результат стає `active_defense` (замінює наявний, лише якщо вищий),
+   прапорець знімається. Активний захист діє до початку наступного ходу
+   комбатанта (4.5.1), тож його гасить `markActed`, а не кінець раунду.
+2. **Порівняння** (4.4.1, `src/utils/attack.js`): `G = passive + active`;
+   `T > G` — влучання, `T == G` — промах і пасивний захист −1, `T < G` —
+   промах. Натуральна 20 влучає завжди, натуральна 1 — ніколи.
+3. **Зношування** (4.4.2): `W = T − G` знімається з пасивного захисту цілі
+   (не нижче 0); активний захист не зношується.
+4. **Шкода** (4.4.3) порівнюється з **уже зношеним** пасивним захистом.
+   Персонажу гравця її застосовує [character-sheet](character-sheet.md)
+   (`POST /:id/damage`) — там поточний максимум здоровʼя, пороги Травми та
+   масивної шкоди й шкала смерті; НІПу числа віднімаються тут.
+5. Атака списує дію (`actions_used`, `actions_log` — для правила
+   повторення 4.10) і пише запис журналу.
+
+Арифметику порівняння рахує campaigns, а не character-sheet: захист лежить
+на комбатанті, і НІП-проти-НІПа взагалі не має листа.
+
+#### Журнал бою
+
+`campaigns.combat_log_entries` (міграція 114) — кожен автоматичний кидок
+пояснює себе тому, кого він стосується. Атакувальник бачить результат
+одразу, а ціль (інший гравець за іншим екраном) — саме з журналу: інакше в
+неї просто мовчки зникає здоровʼя. `payload` (`JSONB`) тримає повну
+розбивку кроку; бекенд його не інтерпретує. Імена учасників зберігаються
+копією (`actor_name`/`target_name`), бо комбатанта можуть прибрати зі сцени,
+а запис має лишитися читабельним. `is_gm_only` ставиться, коли задіяний
+прихований комбатант — журнал не має розкривати те, що ховає таблиця.
 
 ### Стіл і Ширма
 
@@ -108,7 +147,8 @@ Nginx проксує `/api/campaigns/` → цей сервіс (див. [кор�
 - **`campaigns.campaign_board_items`** (`src/models/board-item.model.js`) — записи Столу/Ширми: `id`, `campaign_id` (FK, `ON DELETE CASCADE`), `zone`, `kind`, `ref_id`/`ref_subtype` (крос-схемне джерело, без FK), знімок `title`/`subtitle`/`image_url`/`image_crop`/`content`, `is_visible`, `is_featured` (частковий UNIQUE — один на кампанію), `position`, `created_at`, `updated_at`.
 - **`campaigns.campaign_sessions`** (`src/models/campaign-session.model.js`) — хроніка: `campaign_id` (FK `CASCADE`), `title`, `content`, `session_date`, `visited_locations`, `related_events`, `npcs`, часові мітки.
 - **`campaigns.combat_scenes`** (`combat-scene.model.js`) — `campaign_id` (FK `CASCADE`), `round_number`, `image_url`, `ended_at` (міграція 108), часові мітки.
-- **`campaigns.combatants`** (`combatant.model.js`) — `combat_scene_id` (FK `CASCADE`), `character_id` та `compendium_entry_id` (голі UUID), `name`, `description`, `notes`, `health`, `max_health`, `temp_hp`, `active_defense`, `passive_defense`, `initiative`, `is_hidden`, `has_acted_this_round`.
+- **`campaigns.combatants`** (`combatant.model.js`) — `combat_scene_id` (FK `CASCADE`), `character_id` та `compendium_entry_id` (голі UUID), `name`, `description`, `notes`, `health`, `max_health`, `temp_hp`, `active_defense`, `passive_defense`, `initiative`, `is_hidden`, `has_acted_this_round`; міграція 113 додала `reaction_reserved` (лишив дію на реакцію — і цим вмикає автоухилення), `actions_used`/`actions_log` (трекер дій і правило повторення 4.10; скидає `markActed` на початку ходу та `advanceRound`) і `attack_die`/`damage_die` для «ручних» НІПів без запису довідника.
+- **`campaigns.combat_log_entries`** (`combat-log.model.js`, міграція 114) — журнал бою: `combat_scene_id` (FK `CASCADE`), `round_number`, `actor_combatant_id`/`target_combatant_id` (FK `SET NULL`), `actor_name`/`target_name` (копії), `kind`, `payload JSONB`, `is_gm_only`.
 - **`campaigns.campaign_maps`** — звʼязок кампанія↔мапа для maps-сервісу; пишеться разом із записом `map` на дошці.
 - **`campaigns.campaign_gallery`** — застаріла, з міграції 87 не використовується (вміст перенесено на Стіл як записи `image`).
 
@@ -126,7 +166,7 @@ Nginx проксує `/api/campaigns/` → цей сервіс (див. [кор�
 | `JWT_ACCESS_SECRET` | `src/middleware/auth.middleware.js` | — | перевірка access-токена в `requireAuth` |
 | `FRONTEND_URL` | `src/index.js` | `http://localhost` | дозволений origin для CORS |
 | `PORT` | `src/index.js` | `3010` | порт, на якому слухає сервіс |
-| `CHARACTER_SHEET_URL` | `src/clients/character-sheet.client.js` | `http://character-sheet:3005` | адреса character-sheet для таймера діяльності й завершення бою |
+| `CHARACTER_SHEET_URL` | `src/clients/character-sheet.client.js` | `http://character-sheet:3005` | адреса character-sheet для таймера діяльності, завершення бою та застосування шкоди по персонажу |
 
 ## Запуск
 

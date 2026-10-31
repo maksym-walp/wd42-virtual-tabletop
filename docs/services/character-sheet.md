@@ -17,19 +17,21 @@
 
 | Метод | Шлях | Доступ | Тіло запиту | Відповідь |
 |---|---|---|---|---|
-| GET | `/public/:id` | публічний, **без токена** (лише `is_public`) | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, effects, timer, campaign_ids: [], is_owner: false, is_gm: false, is_spell_master: false }` / `404` |
+| GET | `/public/:id` | публічний, **без токена** (лише `is_public`) | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, effects, timer, roll_profiles, campaign_ids: [], is_owner: false, is_gm: false, is_spell_master: false }` / `404` |
 | GET | `/` | лише логін | query: `include=campaigns` | `{ characters: [...] }` — свої (адмін: усі); з `include=campaigns` ще й персонажі кампаній, де користувач — ГМ, з `gm_campaigns` |
 | GET | `/community` | лише логін | query: `limit` (15) | `{ characters }` — публічні персонажі інших не-адмінів (рейл «Творіння спільноти») |
 | GET | `/config` | лише логін | — | довідники листа: `{ conditions, currencies, races, condition_levels }` (перші три — з `admin.site_configs`; `condition_levels` — тексти ефектів станів по рівнях з `rules/conditions.js`) |
-| GET | `/effects` | лише логін; віддає лише видимих персонажів (власник, ГМ кампанії, учасник тієї ж кампанії, адмін) | query: `ids=a,b` (до 50 UUID) | `{ characters: { [id]: { effects, timer, conditions, heroic_left } } }` — невидимі id мовчки пропускаються (трекер бою) |
+| GET | `/effects` | лише логін; віддає лише видимих персонажів (власник, ГМ кампанії, учасник тієї ж кампанії, адмін) | query: `ids=a,b` (до 50 UUID) | `{ characters: { [id]: { effects, timer, roll_profiles, weapons, conditions, heroic_left } } }` — невидимі id мовчки пропускаються (трекер бою). `weapons` — `[{ equipment_id, name, damage_die, modifier, mastered }]`, щоб трекер міг запропонувати зброю у виборі атаки; модифікатори дерева й зброю читають пакетними запитами (`treeModifiersForMany`, `EquipmentModel.weaponsForMany`), інакше вийшов би N+1 на кожного комбатанта |
 | POST | `/timer/advance` | **лише ГМ кампанії кожного з персонажів** або `admin` (власник — ні) | `{ character_ids: [uuid], hours (0 < h ≤ 1000), source_key? }` | `{ results: [{ character_id, name, skipped, reason?, hours_added, timer_speed, checks, fatigue_before, fatigue_after, death_scale, timer }] }` / `400` / `403` на весь запит. Повторний `source_key` для персонажа → `skipped: true, reason: 'already_applied'` |
 | POST | `/` | лише логін | `{ name, archetype, race_id, people_id?, skills? }` | `201 { character }` / `400` (бракує поля, раса чи підвид недоступні) |
-| GET | `/:id` | читання листа | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, effects, timer, potions, campaign_ids, is_owner, is_gm, is_spell_master }` (`character.last_rest` — останній відпочинок; `potions` — звикання до зілля: `{ habit_rank, habituated, next_die, excess_portions }`) |
+| GET | `/:id` | читання листа | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, effects, timer, roll_profiles, potions, campaign_ids, is_owner, is_gm, is_spell_master }` (`character.last_rest` — останній відпочинок; `potions` — звикання до зілля: `{ habit_rank, habituated, next_die, excess_portions }`) |
 | PUT | `/:id` | автор запису | поля `characters` (див. модель); поля таймера (`rest_timer_hours`, `timer_checks_*`) і `last_rest` → `400` | `{ character }`; якщо є `conditions` — нормалізація (див. нижче), відповідь `{ character, effects, skills? }` (`skills` — коли Травма 5 щойно знизила Тілобудову); `400` — некоректні стани, блок Втоми 5, `death_scale` поза −3…3 |
 | PUT | `/:id/people` | автор запису | `{ people_id: uuid \| null }` | зміна/зняття підвиду; бонуси до навичок застосовуються дельтою; `400` якщо підвид не відкрито для раси |
 | POST | `/:id/duplicate` | автор запису | `{ name?, archetype?, race_id? }` | `201 { character }` — копія, опційно з іншою расою/архетипом |
 | GET | `/:id/rest/preview` | автор запису | — | `{ preview: { short, full, long } }` — для кожної форми `{ kind, label, duration_hours, choice_options, lines }`: що дасть відпочинок зараз, без кидків і запису (підказка в меню) |
 | POST | `/:id/rest` | автор запису (хто натиснув — той і обирає стан) | `{ kind: 'short' \| 'full' \| 'long', choice?: { condition: 'fatigue' \| 'illness' } }` | `{ result, character, effects, timer }`; результат зберігається в `characters.last_rest` разом з `at` і `by: { user_id, username }`. Без потрібного вибору — `400 { message, code: 'choice_required', options }` |
+| POST | `/:id/damage` | автор запису | `{ amount }` — шкода, що **вже пройшла пасивний захист** | `{ result, character, effects, timer, roll_profiles }`; `result` — `{ amount, max_hp, hp_before, hp_after, temp_after, hp_lost, fell, massive, trauma_suggested, unconscious_hit, death_scale }`. Поглинання рахує той, хто веде бій ([campaigns](campaigns.md)): захист лежить на комбатанті, а не на листі |
+| POST | `/:id/death-save` | автор запису | `{ rolled }` — ціле 1–12 (кубик кидає клієнт через [dice-roller](dice-roller.md), щоб гравець бачив результат) | `{ result: { rolled, success, death_scale, awake, dead }, character, … }` / `400`, якщо персонаж не на шкалі смерті |
 | PATCH | `/:id/owner` | лише `admin` | `{ owner_username }` | `{ character }` / `400` / `404` |
 | DELETE | `/:id` | автор запису | — | `{ message }` |
 | GET | `/:id/skills` | читання листа | — | `{ skills }` |
@@ -44,7 +46,7 @@
 | DELETE | `/:id/tree/:nodeId` | автор запису | — | `{ message }` / `404` |
 | GET | `/:id/equipment` | лише логін | — | `{ equipment }` |
 | POST | `/:id/equipment` | автор запису | `{ equipment_id }` | `201 { item }` / `404` (невидиме) |
-| PATCH | `/:id/equipment/:equipmentId` | автор запису | `{ mastery_count?, mastered?, is_equipped?, containers?, open_portions? }` (запас зілля — цілі 0–99, інакше `400`) | `{ item }` |
+| PATCH | `/:id/equipment/:equipmentId` | автор запису | `{ mastered?, is_equipped?, containers?, open_portions? }` (запас зілля — цілі 0–99, інакше `400`) | `{ item }` |
 | DELETE | `/:id/equipment/:equipmentId` | автор запису | — | `{ message }` |
 | POST | `/:id/equipment/:equipmentId/drink` | автор запису | `{ portions }` (1–50) | `{ result, character, item, effects, timer, potions }` — випити порції зілля з запасу (див. «Зілля»); `item: null` — зілля скінчилось і зникло з листа; `400` — більше порцій, ніж є, або зілля без ефекту зцілення; `404` — зілля нема в листі |
 | GET | `/:id/abilities` | лише логін | — | `{ abilities }` |
@@ -71,6 +73,52 @@
 - **`rest.js`** — `short` (+4 год таймера, 8 при Хворобі ≥ 4, далі множник Хвороби; +1 кубик зцілення архетипу, з перешкодою при Хворобі ≥ 1; +K енергії), `full` (−1 рівень Втоми або Хвороби на вибір, при Втомі 5 — лише Втома; здоровʼя +½ бракуючого до поточного максимуму після зняття стану; +K·d4 енергії; скидає таймер; −1 використана героїчна дія), `long` (знімає всю Втому й Хворобу та 1 рівень Травми; здоровʼя й енергія — до максимуму; усі героїчні дії; скидає таймер). Енергія — не вище `max_magic_effective` і не відновлюється при Хворобі 5. K — 2/4/6 (fighter/rogue/spellcaster), кубик зцілення d8/d6/d4.
 - **`stats.js`** — базові таблиці листа (кубики здоровʼя, мінімуми рівнів, героїчні дії, K), дзеркало frontend-констант ([conventions](../conventions.md#дзеркало-базових-характеристик)). Поточний максимум ХП — сума незакреслених кубиків: кожен рівень стану закреслює найбільший.
 - Зміни стану — у транзакції з `SELECT … FOR UPDATE` (`character-state.model.js`). Ідемпотентність нарахування годин — `timer_events (character_id, source_key)` (`combat:<sceneId>` від [campaigns](campaigns.md)).
+
+### Профілі кидків (`src/rules/modifiers.js`, міграція 112)
+
+`roll_profiles` — готова відповідь на питання «як саме кидати оцю перевірку
+просто зараз». Клієнт власних правил не має: він лише складає рядок формули
+для [dice-roller](dice-roller.md) і показує `sources` — звідки взялася
+перевага чи перешкода.
+
+Джерел два: ефекти станів (вище) і **модифікатори відкритих вузлів дерева**
+(`skill_tree.nodes.modifiers`, читає `models/tree-modifiers.model.js` —
+міжсхемне читання, як `spell-access.model.js`; назва вузла їде разом із
+модифікатором, бо гравцеві треба показати не лише «перевага», а й звідки
+вона).
+
+- **`mergeRollModes(modes)`** — правило 1.1.4: фактори переваги й перешкоди
+  складаються в подвійні або нівелюють одне одного. Нетто (`adv` +1,
+  `wadv` +2, `dis` −1, `wdis` −2) затискається в ±2 — потрійних не буває.
+  Баланс і Екстремум — не фактори переваги, а окремі режими (1.1.5): діють
+  лише коли нетто нульове, а разом нівелюються як протилежні.
+- **`rollProfiles(modifiers, effects, skills)`** → запис на кожну з 26 цілей
+  (20 навичок + `initiative`, `attack`, `damage_dice`, `death_save`,
+  `endurance_timer`, `immunity_check`):
+  `{ die, mode, bonus, d20, disabled, sources, situational }`;
+  `damage_dice` натомість `{ count, sources, situational }` — Майстерність M
+  (4.4.3): за замовчуванням 1 кубик, зростає **лише** вузлами дерева.
+- **Перешкода Втоми стосується лише перевірок d20** (5.2.1), тож у профілі
+  `death_save` (d12, 5.3.2), `endurance_timer` і `immunity_check` (лише
+  кубик-модифікатор без d20) вона **не** враховується, а на `initiative`
+  Втома діє числом (`initiative_modifier`), а не режимом.
+- `situational: true` на модифікаторі означає «не застосовувати саме»:
+  такий запис їде в `profile.situational`, і гравець вмикає його
+  перемикачем у вікні кидка, коли умова з `note` справді виконана.
+- Влучання власного кубика не має — його дає навичка зброї
+  (`weapons[].modifier`), тож споживач зливає профіль `attack` із профілем
+  обраної навички.
+
+### Бойові наслідки (`src/rules/combat.js`)
+
+- **`applyDamage`** — шкода, що вже пройшла пасивний захист: тимчасове
+  здоровʼя приймає удар першим; падіння на 0 ставить маркер шкали смерті на
+  0 (5.3.1); **масивна шкода** (≥ 2× поточного максимуму) додає один провал;
+  удар від половини максимуму повертає `trauma_suggested` — саму Травму не
+  ставимо, бо 5.2.3 лишає майстру вибір, яку частину тіла пошкоджено.
+  Розділ 5.3.4: здоровʼя непритомного шкода не знижує, але замальовує провал.
+- **`applyDeathSave`** — d12, 7–12 успіх (5.3.2). Модифікаторів немає,
+  правило критів 1.1.3 не діє; `+3` — отямився, `−3` — помер.
 
 ### Зілля (`src/rules/potions.js`)
 
@@ -114,7 +162,7 @@
 | `known_spells` | прогрес по заклинанню: `mastered`, `cast_count`, `form_tier`, `primary_form`, `mastered_forms`, `gm_granted` |
 | `abilities` | вміння (і маневри) листа: `ability_id`, `form_tier`, `primary_form`, `mastered_forms` |
 | `tree_progress` | відкриті вузли (`node_id` → `skill_tree.nodes`), `unlocked_at`; унікальні за `(character_id, node_id)` |
-| `equipment` | прив'язане спорядження (`equipment_id` → одна з пʼяти таблиць [equipment](equipment.md)): `mastery_count`, `mastered`, `is_equipped` (захист = **одна** екіпірована броня + `defense_bonus`); для зіль — `containers`, `open_portions` (міграція 111) |
+| `equipment` | прив'язане спорядження (`equipment_id` → одна з пʼяти таблиць [equipment](equipment.md)): `mastered`, `is_equipped` (захист = **одна** екіпірована броня + `defense_bonus`); для зіль — `containers`, `open_portions` (міграція 111). Лічильник `mastery_count` (0–3) прибрала міграція 115: книга правил (4.2) вважає зброю освоєною після першого успішного використання, тож лишився один прапорець — його й так єдиний показував фронтенд |
 | `ritual_trackers` | трекери ритуалів: `name`, `rounds`, `participants` (JSONB `[{name, successes: [bool,...]}]`) |
 | `timer_events` | ідемпотентні нарахування годин таймера: `character_id`, `source_key`, `hours`, `created_at`; `UNIQUE (character_id, source_key)` (міграція 107) |
 

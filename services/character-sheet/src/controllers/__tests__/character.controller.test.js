@@ -9,6 +9,7 @@ jest.mock('../../models/campaign-access.model');
 jest.mock('../../models/spell-access.model');
 jest.mock('../../models/site-config.model');
 jest.mock('../../models/character-state.model');
+jest.mock('../../models/tree-modifiers.model');
 jest.mock('../authorize-character-write');
 
 const CharacterModel = require('../../models/character.model');

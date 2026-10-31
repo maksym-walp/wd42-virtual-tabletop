@@ -10,6 +10,7 @@ import SidePanel, { useSidePanelShift } from './ui/SidePanel';
 import SkillTreeBackdrop from './SkillTreeBackdrop';
 import SmartTextReader from './SmartTextReader';
 import { NodeGainsSummary, GrantList, nodeSpellAccessLines } from './NodeGrants';
+import { NodeModifierList } from './NodeModifiersPicker';
 
 const TREE_NODE_R = 22;
 const TREE_ARROW_GAP = 5;
@@ -378,6 +379,7 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
   const grantedItems = grants.filter((g) => g.mode === 'grant');
   const unlockItems = grants.filter((g) => g.mode === 'unlock');
   const effectLines = node.effect || [];
+  const modifiers = node.modifiers || [];
   const narrativeLines = node.narrative_condition || [];
   const costLabel = `${node.cost} ${node.cost === 1 ? 'пункт' : 'пунктів'} досвіду`;
 
@@ -404,6 +406,15 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
           <ul className="list-disc space-y-0.5 pl-4 text-sm leading-relaxed text-text-muted">
             {effectLines.map((line, i) => <li key={i}>{line}</li>)}
           </ul>
+        </div>
+      )}
+
+      {modifiers.length > 0 && (
+        <div className="mt-2 rounded-md border border-accent/30 bg-accent/5 p-3">
+          <p className="mb-1 text-xs uppercase tracking-wide text-text-dim">Модифікатори кидків</p>
+          <div className="text-sm leading-relaxed text-text-muted">
+            <NodeModifierList modifiers={modifiers} />
+          </div>
         </div>
       )}
 

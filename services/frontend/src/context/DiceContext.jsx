@@ -21,6 +21,10 @@ export function DiceProvider({ children }) {
   const [modifier, setModifier] = useState(0);
   const [formulaInput, setFormulaInput] = useState('');
   const [inlinePanelActive, setInlinePanelActive] = useState(false);
+  // Відкрите вікно кидка перевірки (RollDialog): { title, profile, onResult }.
+  // Живе тут, а не в листі персонажа, щоб будь-яка сторінка могла попросити
+  // кидок, не монтуючи власну модалку.
+  const [rollRequest, setRollRequest] = useState(null);
 
   const registerInlinePanel = useCallback(() => {
     inlinePanels.current += 1;
@@ -31,6 +35,12 @@ export function DiceProvider({ children }) {
       setInlinePanelActive(inlinePanels.current > 0);
     };
   }, []);
+
+  // config: { title, profile, onResult?, closeOnResult? } — profile це
+  // roll_profiles[ціль] з character-sheet (кубик, режим, бонус, джерела,
+  // ситуативні модифікатори). Правил тут немає, лише дані.
+  const requestRoll = useCallback((config) => setRollRequest(config), []);
+  const closeRollDialog = useCallback(() => setRollRequest(null), []);
 
   const open = () => setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -70,6 +80,7 @@ export function DiceProvider({ children }) {
         isOpen, open, close, toggle, rolling, error, lastRoll, recent, roll, rollAndShow, clearRecent,
         inlinePanelActive, registerInlinePanel,
         mode, setMode, modifier, setModifier, formulaInput, setFormulaInput,
+        rollRequest, requestRoll, closeRollDialog,
       }}
     >
       {children}

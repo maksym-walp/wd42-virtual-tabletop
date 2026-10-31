@@ -118,7 +118,7 @@ describe('EquipmentController.add', () => {
 describe('EquipmentController.patch', () => {
   it('stops without touching the model when authorization fails', async () => {
     authorizeCharacterWrite.mockResolvedValue(null);
-    const req = mockReq({ params: { id: 'c1', equipmentId: 'e1' }, body: { mastery_count: 3 } });
+    const req = mockReq({ params: { id: 'c1', equipmentId: 'e1' }, body: { mastered: true } });
     const res = mockRes();
 
     await EquipmentController.patch(req, res);
@@ -138,30 +138,30 @@ describe('EquipmentController.patch', () => {
   });
 
   // Exact-field forwarding matters: extra body fields must not leak into the model call.
-  it('forwards exactly mastery_count, mastered and is_equipped to the model, dropping other body fields', async () => {
+  it('forwards exactly mastered and is_equipped to the model, dropping other body fields', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    EquipmentModel.patch.mockResolvedValue({ id: 'link-1', mastery_count: 3, mastered: true });
+    EquipmentModel.patch.mockResolvedValue({ id: 'link-1', mastered: true });
     const req = mockReq({
       params: { id: 'c1', equipmentId: 'e1' },
-      body: { mastery_count: 3, mastered: true, is_equipped: true, name: 'sneaky extra field', notes: 'ignored' },
+      body: { mastered: true, is_equipped: true, name: 'sneaky extra field', notes: 'ignored' },
     });
     const res = mockRes();
 
     await EquipmentController.patch(req, res);
 
-    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 3, mastered: true, is_equipped: true });
-    expect(res.json).toHaveBeenCalledWith({ item: { id: 'link-1', mastery_count: 3, mastered: true } });
+    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastered: true, is_equipped: true });
+    expect(res.json).toHaveBeenCalledWith({ item: { id: 'link-1', mastered: true } });
   });
 
   it('forwards undefined fields as undefined when omitted from the body', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     EquipmentModel.patch.mockResolvedValue({ id: 'link-1' });
-    const req = mockReq({ params: { id: 'c1', equipmentId: 'e1' }, body: { mastery_count: 1 } });
+    const req = mockReq({ params: { id: 'c1', equipmentId: 'e1' }, body: { mastered: true } });
     const res = mockRes();
 
     await EquipmentController.patch(req, res);
 
-    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastery_count: 1, mastered: undefined, is_equipped: undefined });
+    expect(EquipmentModel.patch).toHaveBeenCalledWith('c1', 'e1', { mastered: true, is_equipped: undefined });
   });
 });
 

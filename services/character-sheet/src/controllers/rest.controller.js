@@ -3,6 +3,7 @@ const SkillModel = require('../models/skill.model');
 const CharacterStateModel = require('../models/character-state.model');
 const { rest, previewRest, REST_KINDS } = require('../rules/rest');
 const { sheetDerived } = require('../rules');
+const { treeModifiers } = require('../models/tree-modifiers.model');
 
 const RestController = {
   // GET /:id/rest/preview — що дасть кожна форма відпочинку зараз (без кидків
@@ -47,7 +48,7 @@ const RestController = {
     }
     if (!out) return res.status(404).json({ message: 'Персонажа не знайдено' });
 
-    res.json({ result: out.result, character: out.character, ...sheetDerived(out.character, out.skills) });
+    res.json({ result: out.result, character: out.character, ...sheetDerived(out.character, out.skills, await treeModifiers(out.character.id)) });
   },
 };
 

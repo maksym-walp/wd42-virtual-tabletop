@@ -61,8 +61,12 @@ const CombatSceneModel = {
     );
     const scene = rows[0] || null;
     if (scene) {
+      // Новий раунд — усім по три дії знову, а журнал повторень (4.10)
+      // порожній. Активний захист і залишена реакція живуть до початку
+      // власного ходу комбатанта (4.5.1), тож тут їх не чіпаємо.
       await pool.query(
-        `UPDATE campaigns.combatants SET has_acted_this_round = false, updated_at = NOW()
+        `UPDATE campaigns.combatants
+         SET has_acted_this_round = false, actions_used = 0, actions_log = '{}', updated_at = NOW()
          WHERE combat_scene_id = $1`,
         [id]
       );

@@ -9,6 +9,7 @@ import { createCollectionsApi } from '../api/collections';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import NodeGrantsPicker from '../components/NodeGrantsPicker';
 import NodeSpellAccessPicker from '../components/NodeSpellAccessPicker';
+import NodeModifiersPicker, { NodeModifierList } from '../components/NodeModifiersPicker';
 import traditionsApi from '../api/traditions';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
@@ -353,7 +354,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
+      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
     });
@@ -368,7 +369,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
+      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
@@ -381,6 +382,7 @@ export default function SkillTree() {
       enableNarrative: (n.narrative_condition?.length ?? 0) > 0,
       narrative_condition: n.narrative_condition || [],
       effect: n.effect || [],
+      modifiers: n.modifiers || [],
       grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode, form_key: g.form_key ?? null })),
       unlocks_traditions: n.unlocks_traditions || [],
       unlocks_complexity: n.unlocks_complexity ?? null,
@@ -1021,6 +1023,12 @@ function NodePanel({ open, node, nodes, edges, level, isGM, grantCatalogs, onEdi
         </InfoBlock>
       )}
 
+      {node.modifiers?.length > 0 && (
+        <InfoBlock label="Модифікатори кидків">
+          <NodeModifierList modifiers={node.modifiers} />
+        </InfoBlock>
+      )}
+
       {hasNarrative && (
         <InfoBlock label="Наративна умова">
           <ul className="list-disc space-y-1 pl-4">
@@ -1273,6 +1281,18 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
             ...f, effect: f.effect.map((v, idx) => (idx === i ? val : v)),
           }))}
         />
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Модифікатори кидків</span>
+          <p className="text-xs text-text-dim">
+            Те, що система застосує сама: перевага, перешкода чи бонус до названої перевірки.
+            Збігаються з ефектами станів за правилом 1.1.4 — перевага й перешкода нівелюють одне одного.
+          </p>
+          <NodeModifiersPicker
+            value={form.modifiers || []}
+            onChange={(modifiers) => onChange((f) => ({ ...f, modifiers }))}
+          />
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння</span>

@@ -31,40 +31,53 @@ describe('EquipmentModel catalog resolution', () => {
     expect(sql).toMatch(/LEFT JOIN \([\s\S]+\) ei ON ei\.id = ce\.equipment_id/);
   });
 
-  it('resolves the same four catalogs after a mastery patch, not just on list', async () => {
-    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 1 });
+  it('resolves the same four catalogs after a patch, not just on list', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { mastered: true });
     const [sql] = pool.query.mock.calls[0];
     for (const table of ['equipment.items', 'equipment.weapons', 'equipment.armor', 'equipment.artifacts']) {
       expect(sql).toContain(`FROM ${table}`);
     }
   });
+
+  // Регресія: прибираючи лічильник освоєності (міграція 115), легко лишити
+  // в ORDER BY колонку, якої в таблиці немає — pg тут мокається, тож такий
+  // недогляд виявляється лише на справжній БД (було: ce.created_at).
+  it('sorts by columns that actually exist on the sheet row', async () => {
+    await EquipmentModel.findAll('c1');
+    const [sql] = pool.query.mock.calls[0];
+    const orderBy = sql.slice(sql.lastIndexOf('ORDER BY'));
+    expect(orderBy).toContain('ce.mastered');
+    for (const gone of ['ce.mastery_count', 'ce.created_at', 'ce.slot']) {
+      expect(orderBy).not.toContain(gone);
+    }
+  });
 });
 
-describe('EquipmentModel.patch auto-mastery rule', () => {
-  it('does not force mastery below the 3-use threshold', async () => {
-    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 2 });
+// Лічильник 0-3 вирізано міграцією 115: освоєність — один прапорець, який
+// гравець ставить сам (розділ 4.2 — зброя освоєна після першого успішного
+// використання). Кількість кубиків шкоди до нього стосунку не має.
+describe('EquipmentModel.patch mastered flag', () => {
+  it('leaves mastered untouched when the caller did not send it', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { is_equipped: false });
     const params = pool.query.mock.calls[0][1];
-    expect(params[3]).toBeNull();
+    expect(params[2]).toBeNull();
   });
 
-  it('auto-masters once mastery_count reaches 3', async () => {
-    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 3 });
-    const params = pool.query.mock.calls[0][1];
-    expect(params[3]).toBe(true);
-  });
+  it('passes an explicit mastered value through', async () => {
+    await EquipmentModel.patch('c1', 'eq1', { mastered: true });
+    expect(pool.query.mock.calls[0][1][2]).toBe(true);
 
-  it('lets an explicit mastered value override the auto-rule', async () => {
-    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 5, mastered: false });
-    const params = pool.query.mock.calls[0][1];
-    expect(params[3]).toBe(false);
+    pool.query.mockClear();
+    await EquipmentModel.patch('c1', 'eq1', { mastered: false });
+    expect(pool.query.mock.calls[0][1][2]).toBe(false);
   });
 });
 
 describe('EquipmentModel.patch is_equipped mutual exclusivity', () => {
   it('skips the unequip-others query entirely when is_equipped is not provided', async () => {
-    await EquipmentModel.patch('c1', 'eq1', { mastery_count: 1 });
+    await EquipmentModel.patch('c1', 'eq1', { mastered: true });
     expect(pool.query).toHaveBeenCalledTimes(1);
-    expect(pool.query.mock.calls[0][1][4]).toBeNull();
+    expect(pool.query.mock.calls[0][1][3]).toBeNull();
   });
 
   it('runs an unequip-others query before the main update when is_equipped is true', async () => {
@@ -81,12 +94,12 @@ describe('EquipmentModel.patch is_equipped mutual exclusivity', () => {
     expect(unequipParams).toEqual(['c1', 'eq1']);
 
     const [, mainParams] = pool.query.mock.calls[1];
-    expect(mainParams[4]).toBe(true);
+    expect(mainParams[3]).toBe(true);
   });
 
   it('does not run the unequip-others query when explicitly un-equipping (is_equipped: false)', async () => {
     await EquipmentModel.patch('c1', 'eq1', { is_equipped: false });
     expect(pool.query).toHaveBeenCalledTimes(1);
-    expect(pool.query.mock.calls[0][1][4]).toBe(false);
+    expect(pool.query.mock.calls[0][1][3]).toBe(false);
   });
 });

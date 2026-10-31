@@ -3,6 +3,7 @@ const CharacterStateModel = require('../models/character-state.model');
 const EquipmentModel = require('../models/equipment.model');
 const { drinkPotion, consumeStock, MAX_PORTIONS_PER_DRINK } = require('../rules/potions');
 const { sheetDerived } = require('../rules');
+const { treeModifiers } = require('../models/tree-modifiers.model');
 
 const PotionController = {
   // POST /:id/equipment/:equipmentId/drink { portions } — випити кілька порцій
@@ -40,7 +41,7 @@ const PotionController = {
     if (!out) return res.status(404).json({ message: 'Персонажа не знайдено' });
     if (out.missing) return res.status(404).json({ message: 'Цього зілля немає в листі' });
 
-    res.json({ result: out.result, character: out.character, item: out.item, ...sheetDerived(out.character, out.skills) });
+    res.json({ result: out.result, character: out.character, item: out.item, ...sheetDerived(out.character, out.skills, await treeModifiers(out.character.id)) });
   },
 };
 

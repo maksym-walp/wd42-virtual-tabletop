@@ -1,5 +1,6 @@
 jest.mock('../../models/character-state.model');
 jest.mock('../../models/equipment.model');
+jest.mock('../../models/tree-modifiers.model');
 jest.mock('../authorize-character-write');
 
 const CharacterStateModel = require('../../models/character-state.model');

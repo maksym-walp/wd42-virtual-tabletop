@@ -30,14 +30,14 @@ describe('CombatantModel.add', () => {
     expect(combatant).toEqual({ id: 'cb1', name: 'Goblin' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/INSERT INTO campaigns\.combatants/);
-    expect(params).toEqual(['s1', null, 'Goblin', 12, 14, 7, 3, 'weak', 'a sneaky goblin', true, 20, 5]);
+    expect(params).toEqual(['s1', null, 'Goblin', 12, 14, 7, 3, 'weak', 'a sneaky goblin', true, 20, 5, null, null]);
   });
 
   it('links a character_id when provided and defaults optional fields', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'cb1' }] });
     await CombatantModel.add('s1', { character_id: 'ch1', name: 'Hero' });
     const [, params] = pool.query.mock.calls[0];
-    expect(params).toEqual(['s1', 'ch1', 'Hero', null, null, null, null, null, null, false, null, null]);
+    expect(params).toEqual(['s1', 'ch1', 'Hero', null, null, null, null, null, null, false, null, null, null, null]);
   });
 });
 
@@ -92,7 +92,7 @@ describe('CombatantModel.update', () => {
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/FROM campaigns\.combat_scenes s/);
     expect(sql).toMatch(/WHERE c\.id = \$1 AND c\.combat_scene_id = s\.id AND s\.campaign_id = \$2/);
-    expect(params).toEqual(['cb1', 'c1', null, null, null, 5, null, null, null, null, null, null]);
+    expect(params).toEqual(['cb1', 'c1', null, null, null, 5, null, null, null, null, null, null, null, null, null, null, null]);
   });
 
   it('overwrites is_hidden to false explicitly (not treated as "omitted")', async () => {

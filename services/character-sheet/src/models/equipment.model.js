@@ -14,7 +14,7 @@ const pool = require('../config/db');
 // heal_die/portions are generated there from tier/size.
 const CATALOG = `(
         SELECT id, name, 'item'::varchar AS type,
-               NULL::varchar AS damage_die, NULL::smallint AS defense_value,
+               NULL::varchar AS damage_die, NULL::varchar AS modifier, NULL::smallint AS defense_value,
                description, is_public, price, image_url,
                NULL::varchar AS weapon_type, NULL::varchar[] AS weapon_grip,
                NULL::varchar AS armor_weight,
@@ -24,7 +24,7 @@ const CATALOG = `(
         FROM equipment.items
         UNION ALL
         SELECT id, name, 'weapon'::varchar,
-               damage_die, NULL::smallint,
+               damage_die, modifier, NULL::smallint,
                description, is_public, price, image_url,
                weapon_type, weapon_grip, NULL::varchar,
                NULL::varchar, NULL::varchar,
@@ -32,7 +32,7 @@ const CATALOG = `(
         FROM equipment.weapons
         UNION ALL
         SELECT id, name, 'armor'::varchar,
-               NULL::varchar, defense_value,
+               NULL::varchar, NULL::varchar, defense_value,
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar[], armor_weight,
                NULL::varchar, NULL::varchar,
@@ -40,7 +40,7 @@ const CATALOG = `(
         FROM equipment.armor
         UNION ALL
         SELECT id, name, 'artifact'::varchar,
-               NULL::varchar, NULL::smallint,
+               NULL::varchar, NULL::varchar, NULL::smallint,
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar[], NULL::varchar,
                creator, rarity,
@@ -48,7 +48,7 @@ const CATALOG = `(
         FROM equipment.artifacts
         UNION ALL
         SELECT id, name, 'potion'::varchar,
-               NULL::varchar, NULL::smallint,
+               NULL::varchar, NULL::varchar, NULL::smallint,
                description, is_public, price, image_url,
                NULL::varchar, NULL::varchar[], NULL::varchar,
                NULL::varchar, NULL::varchar,
@@ -58,7 +58,7 @@ const CATALOG = `(
 
 const ITEM_JSON = `CASE WHEN ei.id IS NULL THEN NULL ELSE jsonb_build_object(
                 'id', ei.id, 'name', ei.name, 'type', ei.type,
-                'damage_die', ei.damage_die, 'defense_value', ei.defense_value,
+                'damage_die', ei.damage_die, 'modifier', ei.modifier, 'defense_value', ei.defense_value,
                 'description', ei.description, 'is_public', ei.is_public,
                 'price', ei.price, 'image_url', ei.image_url,
                 'weapon_type', ei.weapon_type, 'weapon_grip', ei.weapon_grip,
@@ -79,10 +79,30 @@ const EquipmentModel = {
        FROM character_sheet.equipment ce
        LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id
        WHERE ce.character_id = $1
-       ORDER BY ce.mastered ASC, ce.mastery_count DESC`,
+       ORDER BY ce.mastered ASC, ei.name ASC NULLS LAST, ce.id`,
       [characterId]
     );
     return rows;
+  },
+
+  // Зброя з листів кількох персонажів одним запитом — трекер бою питає
+  // пачкою разом з ефектами, щоб не робити N+1 на кожного комбатанта.
+  // → { [characterId]: [{ equipment_id, name, damage_die, modifier, mastered }] }
+  async weaponsForMany(characterIds) {
+    if (!characterIds.length) return {};
+    const { rows } = await pool.query(
+      `SELECT ce.character_id, ce.equipment_id, ce.mastered, ei.name, ei.damage_die, ei.modifier
+       FROM character_sheet.equipment ce
+       JOIN ${CATALOG} ei ON ei.id = ce.equipment_id
+       WHERE ce.character_id = ANY($1::uuid[]) AND ei.type = 'weapon'
+       ORDER BY ei.name ASC`,
+      [characterIds]
+    );
+    const byCharacter = {};
+    for (const { character_id, ...weapon } of rows) {
+      (byCharacter[character_id] ||= []).push(weapon);
+    }
+    return byCharacter;
   },
 
   async add(characterId, equipmentId) {
@@ -98,10 +118,7 @@ const EquipmentModel = {
 
   // containers / open_portions — запас зілля (повні ємності й залишок у
   // відкритій); для інших видів ці колонки не використовуються.
-  async patch(characterId, equipmentId, { mastery_count, mastered, is_equipped, containers, open_portions }) {
-    // Auto-master when mastery_count reaches 3
-    const effectiveMastered = mastered ?? (mastery_count >= 3 ? true : undefined);
-
+  async patch(characterId, equipmentId, { mastered, is_equipped, containers, open_portions }) {
     // Одночасно вдягнений лише один обладунок: перш ніж виставити is_equipped
     // на цьому рядку, знімаємо прапорець з усіх ІНШИХ armor-рядків персонажа —
     // але лише якщо сам цей рядок і є обладунком (EXISTS-підзапит нижче).
@@ -129,11 +146,10 @@ const EquipmentModel = {
     const { rows } = await pool.query(
       `WITH updated AS (
          UPDATE character_sheet.equipment
-         SET mastery_count = COALESCE($3, mastery_count),
-             mastered      = COALESCE($4, mastered),
-             is_equipped   = COALESCE($5, is_equipped),
-             containers    = COALESCE($6, containers),
-             open_portions = COALESCE($7, open_portions)
+         SET mastered      = COALESCE($3, mastered),
+             is_equipped   = COALESCE($4, is_equipped),
+             containers    = COALESCE($5, containers),
+             open_portions = COALESCE($6, open_portions)
          WHERE character_id = $1 AND equipment_id = $2
          RETURNING *
        )
@@ -141,7 +157,7 @@ const EquipmentModel = {
               ${ITEM_JSON}
        FROM updated ce
        LEFT JOIN ${CATALOG} ei ON ei.id = ce.equipment_id`,
-      [characterId, equipmentId, mastery_count ?? null, effectiveMastered ?? null, is_equipped ?? null,
+      [characterId, equipmentId, mastered ?? null, is_equipped ?? null,
         containers ?? null, open_portions ?? null]
     );
     return rows[0] || null;

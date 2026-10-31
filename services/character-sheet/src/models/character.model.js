@@ -359,8 +359,8 @@ const CharacterModel = {
         await applyPeople(client, copy.id, null, {});
       }
       await client.query(
-        `INSERT INTO character_sheet.equipment (character_id, equipment_id, mastery_count, mastered, is_equipped)
-         SELECT $2, equipment_id, mastery_count, mastered, is_equipped
+        `INSERT INTO character_sheet.equipment (character_id, equipment_id, mastered, is_equipped)
+         SELECT $2, equipment_id, mastered, is_equipped
          FROM character_sheet.equipment WHERE character_id = $1`,
         [sourceId, copy.id]
       );

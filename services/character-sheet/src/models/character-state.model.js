@@ -5,7 +5,7 @@ const pool = require('../config/db');
 // з блокуванням рядка, щоб паралельні таймер/відпочинок не затерли одне одного.
 
 const STATE_FIELDS = [
-  'conditions', 'death_scale', 'current_hp', 'current_magic', 'heroic_actions_used',
+  'conditions', 'death_scale', 'current_hp', 'temp_hp', 'current_magic', 'heroic_actions_used',
   'rest_timer_hours', 'timer_checks_done', 'timer_checks_passed', 'last_rest',
   'potion_habit_rank', 'potion_habituated', 'potion_excess_portions',
 ];

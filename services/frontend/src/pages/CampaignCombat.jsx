@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices, Swords, Skull } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import characterApi from '../api/characterSheet';
 import npcsApi from '../api/npcs';
 import bestiaryApi from '../api/bestiary';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
-import { skillRoll } from '../utils/skillRoll';
+import { buildRollFormula, mergeRollModes } from '../utils/rollProfile';
+import { combatantProfile, combatantWeapons } from '../utils/combatantProfile';
+import { SKILL_TARGETS } from '../constants/nodeModifiers';
 import { effectChips, chipClass } from '../utils/effectChips';
 import { formatCheck } from '../components/character/RestControls';
 import { useDice } from '../context/DiceContext';
@@ -160,6 +162,7 @@ const COLUMN_HEADERS = [
   { key: 'active_defense', label: 'Ухилення', Icon: DodgeShieldIcon },
   { key: 'health', label: "Здоров'я", Icon: Heart },
   { key: 'initiative', label: 'Ініціатива', Icon: InitiativeIcon },
+  { key: 'actions', label: 'Дії', Icon: Footprints },
   { key: 'notes', label: 'Примітки', Icon: Tag },
   { key: 'description', label: 'Опис', Icon: FileText, gmOnly: true },
 ];
@@ -174,10 +177,13 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
   // модифікатор ініціативи, дії, реакції, героїчні дії.
   const [effectsById, setEffectsById] = useState({});
   const [endSummary, setEndSummary] = useState(null);
+  // Журнал бою: кожен автоматичний кидок пояснює себе тому, кого він
+  // стосується — навіть якщо кидав хтось інший за іншим екраном.
+  const [log, setLog] = useState([]);
 
   const load = useCallback(() => (
     campaignApi.getCombat(campaignId)
-      .then((data) => { setScene(data.scene); setCombatants(data.combatants); })
+      .then((data) => { setScene(data.scene); setCombatants(data.combatants); setLog(data.log ?? []); })
       .catch(() => setError('Не вдалось завантажити бойову сцену'))
   ), [campaignId]);
 
@@ -350,11 +356,111 @@ export default function CombatTab({ campaignId, isGm, characters, version }) {
         onChanged={load}
         myCharacterIds={myCharacterIds}
         effectsById={effectsById}
+        combatants={visible}
       />
+
+      <CombatLog entries={log} />
 
       {endSummary && <EndCombatSummary summary={endSummary} onClose={() => setEndSummary(null)} />}
 
       <SceneImage campaignId={campaignId} scene={scene} isGm={isGm} onChanged={load} />
+    </div>
+  );
+}
+
+// ================================================================
+// Журнал бою: кожен автоматичний кидок пояснює себе — що кинули, проти
+// чого порівняли і що з цього вийшло. Це єдиний спосіб для гравця, по
+// якому щойно вдарили, побачити, чому в нього зникло здоровʼя: кидав
+// хтось інший, за іншим екраном.
+//
+// Записи про прихованих комбатантів бекенд гравцям не віддає взагалі.
+// ================================================================
+
+const LOG_KIND_LABEL = {
+  attack: 'Атака', dodge: 'Ухилення', initiative: 'Ініціатива',
+  death_save: 'Рятівний кидок', damage: 'Шкода',
+};
+
+function CombatLog({ entries = [] }) {
+  const [open, setOpen] = useState(true);
+  if (!entries.length) return null;
+
+  return (
+    <Card className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="font-display text-sm text-text">Журнал бою</span>
+        <span className="text-xs text-text-dim">{open ? 'згорнути' : `${entries.length} записів`}</span>
+      </button>
+
+      {open && (
+        <ul className="mt-2 flex max-h-72 flex-col gap-1.5 overflow-y-auto text-sm">
+          {entries.map((entry) => (
+            <li key={entry.id} className="border-b border-bg pb-1.5 last:border-0">
+              <LogLine entry={entry} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function LogLine({ entry }) {
+  const p = entry.payload || {};
+  const actor = entry.actor_name || '—';
+
+  if (entry.kind === 'attack') {
+    const hit = p.hit || {};
+    return (
+      <div className="flex flex-col">
+        <span className="text-text">
+          <strong>{actor}</strong> атакує <strong>{entry.target_name || '—'}</strong>
+          {p.weapon?.name ? ` (${p.weapon.name})` : ''}
+          {': '}
+          <span className={hit.hit ? 'font-semibold text-sage' : 'font-semibold text-danger'}>
+            {hit.hit ? 'влучив' : 'промах'}
+          </span>
+        </span>
+        <span className="text-xs text-text-dim">
+          влучання {hit.total} проти захисту {hit.total_defense}
+          {p.dodge ? ` (ухилення ${p.dodge.rolled})` : ''}
+          {hit.wear > 0 ? `; захист ${hit.passive_before} → ${hit.passive_after}` : ''}
+          {hit.hit ? `; шкода ${p.damage?.damage ?? 0} − ${p.damage?.absorbed ?? 0} = ${p.damage?.hp_damage ?? 0} ХП` : ''}
+        </span>
+        {p.sheet?.massive && <span className="text-xs font-semibold text-danger">масивна шкода — падіння з провалом</span>}
+        {p.sheet?.trauma_suggested && <span className="text-xs font-semibold text-gold">можлива Травма</span>}
+      </div>
+    );
+  }
+
+  if (entry.kind === 'death_save') {
+    return (
+      <div className="flex flex-col">
+        <span className="text-text">
+          <strong>{actor}</strong> — рятівний кидок від смерті:{' '}
+          <span className={p.success ? 'font-semibold text-sage' : 'font-semibold text-danger'}>
+            {p.total} — {p.success ? 'успіх' : 'провал'}
+          </span>
+        </span>
+        <span className="text-xs text-text-dim">
+          маркер {p.death_scale}
+          {p.awake ? ' — отямився' : ''}{p.dead ? ' — помер' : ''}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      <span className="text-text">
+        <strong>{actor}</strong> — {(LOG_KIND_LABEL[entry.kind] ?? entry.kind).toLowerCase()}: {p.total ?? '—'}
+      </span>
+      {p.formula && <span className="text-xs text-text-dim">{p.formula}</span>}
     </div>
   );
 }
@@ -437,7 +543,7 @@ function NoSceneYetGm({ campaignId, onCreated }) {
 // роздільник / "вже походили цього раунду".
 // ================================================================
 
-function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myCharacterIds, effectsById = {} }) {
+function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myCharacterIds, effectsById = {}, combatants = [] }) {
   if (notActed.length === 0 && acted.length === 0) {
     return (
       <EmptyState title="У бою ще немає комбатантів">
@@ -446,7 +552,7 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
     );
   }
 
-  const colCount = isGm ? 8 : 6;
+  const colCount = isGm ? 9 : 7;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -464,7 +570,8 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
             <CombatantRow
               key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged}
               isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
-              effects={c.character_id ? effectsById[c.character_id]?.effects : null}
+              sheet={c.character_id ? effectsById[c.character_id] : null}
+              targets={combatants}
             />
           ))}
           {acted.length > 0 && (
@@ -478,7 +585,8 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
             <CombatantRow
               key={c.id} combatant={c} isGm={isGm} campaignId={campaignId} onChanged={onChanged} dimmed
               isMine={!!c.character_id && myCharacterIds.has(c.character_id)}
-              effects={c.character_id ? effectsById[c.character_id]?.effects : null}
+              sheet={c.character_id ? effectsById[c.character_id] : null}
+              targets={combatants}
             />
           ))}
         </tbody>
@@ -487,9 +595,327 @@ function CombatantsTable({ notActed, acted, isGm, campaignId, onChanged, myChara
   );
 }
 
-function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, effects }) {
+// Натуральна грань d20 у відповіді dice-roller: у простій групі це
+// rolls[0], у обгорнутій (перевага/перешкода) — залишене значення.
+function naturalD20(roll) {
+  const d20 = roll?.groups?.find((g) => g.sides === 20);
+  if (!d20) return null;
+  return d20.type === 'dice' ? d20.rolls?.[0] ?? null : d20.dice?.[0]?.kept ?? null;
+}
+
+// Повторення дій (4.10): друга однакова дія за хід — з перешкодою, третя —
+// з подвійною. Тут ідеться саме про атаку, тож діє лише виняток бійця
+// (чаклунів виняток стосується чарування, а пройдисвіту винятків немає).
+// Архетип приходить у блоці персонажа з GET /api/characters/effects;
+// у НІПа його немає — вони повторень не уникають.
+function repeatAttackDisadvantage(previousAttacks, archetype) {
+  if (archetype === 'fighter') return null;
+  if (previousAttacks >= 2) return 'wdis';
+  if (previousAttacks === 1) return 'dis';
+  return null;
+}
+
+// ================================================================
+// Атака просто з таблиці: обрати зброю й ціль, решту система робить сама.
+//
+// Кубики кидаються тут, через dice-roller, щоб гравець бачив розбивку і
+// кидок потрапив у його історію. Порівняння з захистом, зношування й
+// поглинання рахує бекенд (campaigns/src/utils/attack.js), наслідки для
+// листа персонажа — character-sheet. Сюди повертається повний розбір, який
+// і показується гравцеві.
+// ================================================================
+
+function AttackSheet({ attacker, targets, campaignId, sheet, effects, onClose, onDone }) {
+  const { roll: rollDice, rolling } = useDice();
+  const [weapons, setWeapons] = useState([]);
+  const [weaponId, setWeaponId] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [skillKey, setSkillKey] = useState('');
+  const [chosen, setChosen] = useState([]);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    combatantWeapons(attacker, sheet)
+      .then((list) => { if (!alive) return; setWeapons(list); setWeaponId(list[0]?.equipment_id ?? ''); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [attacker, sheet]);
+
+  const weapon = weapons.find((w) => w.equipment_id === weaponId) ?? null;
+  // «Універсальна» зброя (і та, якій модифікатор не проставили) лишає вибір
+  // навички гравцеві — як і вузол, що дозволяє бити вищою з двох навичок.
+  const needsSkillChoice = !weapon || !weapon.modifier || weapon.modifier === 'universal';
+  const usedSkill = needsSkillChoice ? skillKey : weapon.modifier;
+
+  const attackProfile = sheet?.roll_profiles?.attack ?? null;
+  const situational = attackProfile?.situational ?? [];
+
+  const canAttack = !!targetId && (!needsSkillChoice || !!skillKey) && !busy && !rolling;
+
+  const handleAttack = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const target = targets.find((t) => t.id === targetId);
+
+      // Режим влучання: профіль дерева й станів + перешкода за неосвоєну
+      // зброю (4.2) + перешкода за повторення тієї самої дії (4.10).
+      const factors = [];
+      const notes = [];
+      if (attackProfile?.mode && attackProfile.mode !== 'normal') factors.push(attackProfile.mode);
+      if (weapon && weapon.mastered === false) { factors.push('dis'); notes.push('неосвоєна зброя'); }
+      const repeats = (attacker.actions_log ?? []).filter((a) => a === 'attack').length;
+      const repeatPenalty = repeatAttackDisadvantage(repeats, sheet?.archetype);
+      if (repeatPenalty) { factors.push(repeatPenalty); notes.push('повторення дії'); }
+      for (const mod of chosen) factors.push(mod.mode);
+
+      const skillProfile = usedSkill ? await combatantProfile(attacker, sheet, usedSkill) : null;
+      if (skillProfile?.mode && skillProfile.mode !== 'normal') factors.push(skillProfile.mode);
+
+      const mode = mergeRollModes(factors);
+      const bonus = (attackProfile?.bonus ?? 0) + (skillProfile?.bonus ?? 0)
+        + chosen.filter((m) => m.mode === 'bonus').reduce((sum, m) => sum + m.value, 0);
+
+      const hitFormula = buildRollFormula({ die: skillProfile?.die ?? null, mode, bonus, withD20: true });
+      const hitRoll = await rollDice(hitFormula);
+      const natural = naturalD20(hitRoll);
+
+      // Ціль тримала реакцію — кидаємо за неї ухилення (лише кубик, 4.5.1).
+      let dodge = null;
+      if (target?.reaction_reserved) {
+        const dodgeProfile = await combatantProfile(target, null, 'evasion');
+        const dodgeFormula = buildRollFormula({ ...dodgeProfile, withD20: false });
+        if (dodgeFormula) {
+          const dodgeRoll = await rollDice(dodgeFormula);
+          dodge = { total: dodgeRoll.total, formula: dodgeFormula };
+        }
+      }
+
+      // Шкода: M кубиків зброї, де M — Майстерність із дерева (4.4.3).
+      const count = sheet?.roll_profiles?.damage_dice?.count ?? 1;
+      const die = weapon?.damage_die ?? attacker.damage_die ?? 'd4';
+      const damageFormula = `${count}${die}`;
+      const damageRoll = await rollDice(damageFormula);
+
+      const payload = await campaignApi.combatAttack(campaignId, {
+        attacker_id: attacker.id,
+        target_id: targetId,
+        hit: { total: hitRoll.total, natural, formula: hitFormula },
+        dodge,
+        damage: { total: damageRoll.total, formula: damageFormula },
+        weapon: {
+          name: weapon?.name ?? 'Імпровізована зброя',
+          damage_die: die,
+          skill_key: usedSkill ?? null,
+          notes,
+        },
+      });
+      setResult({ ...payload, hitFormula, damageFormula, mode, notes });
+      onDone();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Не вдалося здійснити атаку');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={`Атака: ${attacker.name}`}>
+      <div className="flex flex-col gap-3">
+        <Field label="Зброя">
+          <select className={inputClass} value={weaponId} onChange={(e) => setWeaponId(e.target.value)}>
+            {weapons.length === 0 && <option value="">Без зброї (d4)</option>}
+            {weapons.map((w) => (
+              <option key={w.equipment_id} value={w.equipment_id}>
+                {w.name} ({w.damage_die ?? 'd4'}){w.mastered === false ? ' — не освоєна' : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {needsSkillChoice && (
+          <Field label="Навичка влучання">
+            <select className={inputClass} value={skillKey} onChange={(e) => setSkillKey(e.target.value)}>
+              <option value="">— оберіть навичку —</option>
+              {SKILL_TARGETS.map((t) => (
+                <option key={t.key} value={t.key}>{t.group} · {t.label}</option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <Field label="Ціль">
+          <select className={inputClass} value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="">— оберіть ціль —</option>
+            {targets.filter((t) => t.id !== attacker.id).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.reaction_reserved ? ' (тримає реакцію)' : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {situational.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Ситуативне</span>
+            {situational.map((mod) => (
+              <label key={mod.id} className="flex cursor-pointer items-start gap-2 text-sm text-text">
+                <input
+                  type="checkbox" className="mt-0.5"
+                  checked={chosen.some((m) => m.id === mod.id)}
+                  onChange={() => setChosen((prev) => (
+                    prev.some((m) => m.id === mod.id) ? prev.filter((m) => m.id !== mod.id) : [...prev, mod]
+                  ))}
+                />
+                <span>
+                  <span className="font-semibold">{mod.source}</span>
+                  {mod.note && <span className="text-text-dim"> — {mod.note}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+
+        {result ? <AttackResult result={result} onClose={onClose} /> : (
+          <Button onClick={handleAttack} disabled={!canAttack}>
+            {busy || rolling ? 'Кидаємо…' : 'Атакувати'}
+          </Button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+// Повний розбір атаки для того, хто її здійснив: що випало, з чим
+// порівнювалось і що з цього вийшло.
+function AttackResult({ result, onClose }) {
+  const o = result.outcome;
+  const sheet = result.sheet;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg p-3 text-sm">
+      <p className={o.hit ? 'font-semibold text-sage' : 'font-semibold text-danger'}>
+        {o.natural20 && 'Натуральна 20 — '}
+        {o.natural1 && 'Натуральна 1 — '}
+        {o.hit ? 'Влучання' : o.outcome === 'tie' ? 'Промах урівень із захистом' : 'Промах'}
+      </p>
+      <p className="text-text-muted">
+        Влучання {o.total} ({result.hitFormula}) проти захисту {o.total_defense}
+        {result.dodge && ` (ухилення ${result.dodge.rolled})`}
+      </p>
+      {o.wear > 0 && (
+        <p className="text-text-muted">Зношування −{o.wear}: пасивний захист {o.passive_before} → {o.passive_after}</p>
+      )}
+      {o.hit && (
+        <p className="text-text-muted">
+          Шкода {o.damage} ({result.damageFormula}) − поглинуто {o.absorbed} = <strong className="text-text">{o.hp_damage}</strong> ХП
+        </p>
+      )}
+      {sheet?.massive && <p className="font-semibold text-danger">Масивна шкода: ціль падає з одним провалом</p>}
+      {sheet?.fell && !sheet?.massive && <p className="font-semibold text-danger">Ціль непритомна</p>}
+      {sheet?.trauma_suggested && (
+        <p className="font-semibold text-gold">
+          Удар від половини максимуму здоровʼя — майстер може додати рівень Травми
+        </p>
+      )}
+      {result.notes?.length > 0 && <p className="text-xs text-text-dim">Перешкода: {result.notes.join(', ')}</p>}
+      <Button variant="ghost" onClick={onClose}>Закрити</Button>
+    </div>
+  );
+}
+
+// ================================================================
+// Трекер дій: три кружечки (менше — якщо Втома забрала дії, 5.2.1) плюс
+// позначка залишеної на реакцію дії. Клік по кружечку ставить саме стільки
+// витрачених дій; клік по вже останньому витраченому — знімає його.
+// Залишена реакція — це ще й «буде ухилятися»: перша вхідна атака кине
+// кубик Ухилення сама (4.5.1).
+// ================================================================
+
+function ActionTracker({ used, total, reserved, reactionsDisabled, canEdit, onSet, onToggleReaction }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: total }).map((_, i) => {
+          const spent = i < used;
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={!canEdit}
+              aria-label={`${i + 1} дія з ${total}`}
+              title={spent ? 'Витрачена дія' : 'Вільна дія'}
+              onClick={() => onSet(spent && i === used - 1 ? i : i + 1)}
+              className={`h-3.5 w-3.5 rounded-full border-[1.5px] transition-colors ${
+                spent ? 'border-danger bg-danger' : 'border-text-dim bg-transparent'
+              } ${canEdit ? 'cursor-pointer hover:border-accent' : 'cursor-default'}`}
+            />
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        disabled={!canEdit || reactionsDisabled}
+        onClick={onToggleReaction}
+        title={reactionsDisabled
+          ? 'Втома 3: реакція недоступна'
+          : 'Лишити дію на реакцію — тоді ухилення кинеться автоматично при атаці'}
+        className={`rounded border px-1.5 py-0.5 text-[0.65rem] font-semibold transition-colors ${
+          reserved ? 'border-sage bg-sage/15 text-sage' : 'border-border text-text-dim'
+        } ${canEdit && !reactionsDisabled ? 'hover:bg-surface-hover' : 'cursor-default opacity-60'}`}
+      >
+        ↩
+      </button>
+    </div>
+  );
+}
+
+// Комірка «Дії»: трекер трьох дій і кнопки, що з них випливають — атака
+// (витрачає дію) і рятівний кидок від смерті для непритомного персонажа.
+function ActionsCell({ row }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <ActionTracker
+        used={row.used} total={row.total}
+        reserved={row.reserved}
+        reactionsDisabled={row.reactionsDisabled}
+        canEdit={row.canEdit}
+        onSet={row.onSet}
+        onToggleReaction={row.onToggleReaction}
+      />
+      {row.canRoll && !row.isUnconscious && (
+        <button
+          type="button" onClick={row.onAttack}
+          title="Атакувати: обрати зброю й ціль, решту система зробить сама"
+          className="inline-flex items-center justify-center text-accent hover:text-text"
+        >
+          <Swords size={14} />
+        </button>
+      )}
+      {row.canRoll && row.isCharacter && row.isUnconscious && (
+        <button
+          type="button" onClick={row.onDeathSave} disabled={row.rolling}
+          title="Рятівний кидок від смерті (d12, 7+ — успіх)"
+          className="inline-flex items-center justify-center text-danger disabled:opacity-50"
+        >
+          <Skull size={14} />
+        </button>
+      )}
+      {row.attackSheet}
+    </div>
+  );
+}
+
+
+function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, sheet, targets = [] }) {
   const rowRef = useRef(null);
+  const effects = sheet?.effects ?? null;
   const [local, setLocal] = useState(combatant);
+  const [attackOpen, setAttackOpen] = useState(false);
   // null — не в режимі редагування: поле показує реальне поточне ХП з `local`.
   // Рядок (навіть порожній) — чернетка вводу: користувач саме зараз друкує.
   const [hpDraft, setHpDraft] = useState(null);
@@ -507,6 +933,8 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
   const canEditFully = isGm; // усі поля, крім ХП/кидків — лише майстер
   const canEditHp = isGm || isMine; // гравець редагує ХП тільки свого персонажа
   const canRoll = isGm || isMine; // кубики ініціативи/захисту — свій персонаж або GM
+  // Непритомність — з обчислених ефектів листа (шкала смерті −2…+2).
+  const isUnconscious = !!effects?.unconscious;
   const rowClass = `border-b border-border last:border-0 ${dimmed ? 'opacity-60' : ''}`;
   const cellClass = 'px-3 py-2 align-top';
 
@@ -550,25 +978,111 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
   // Кнопки +/- біля ХП: змінюють по одному, не змушуючи перенабирати текст.
   const stepHp = (delta) => applyAndSyncHp(delta > 0 ? '+1' : '-1');
 
-  // Ухилення кидається повною формулою навички: 1d20 + кубик-модифікатор
-  // (якщо значення навички це дає) з урахуванням ефектів станів листа
-  // (перешкода Втоми, кубик Травми). NPC не мають навичок у цій системі —
-  // для них лишається голий 1d20.
+  // Ухилення в бою — це реакція: кидається ЛИШЕ кубик-модифікатор навички,
+  // без d20 (4.5.1), а результат стає активним захистом. Кубик бере або
+  // лист персонажа (roll_profiles, уже з урахуванням станів і дерева), або
+  // стат-блок НІПа. Запис у журнал — щоб ціль бачила, звідки взявся захист.
   const rollEvasion = async () => {
     try {
-      let formula = '1d20';
-      if (combatant.character_id) {
-        const { skills, effects: sheetEffects } = await characterApi.getSheet(combatant.character_id);
-        const evasion = skills.find((s) => s.skill_key === 'evasion');
-        const roll = skillRoll('evasion', evasion?.value ?? 1, sheetEffects);
-        if (roll.disabled) return;
-        formula = roll.d20Formula;
-      }
+      const profile = await combatantProfile(combatant, sheet, 'evasion');
+      if (profile.disabled) return;
+      // Втома 1 робить реакції складнішими (5.2.1) — і ухилення теж.
+      const mode = effects?.reactions === 'dis'
+        ? mergeRollModes([profile.mode ?? 'normal', 'dis'])
+        : (profile.mode ?? 'normal');
+      const formula = buildRollFormula({ ...profile, mode, withD20: false }) ?? '1d20';
       const result = await rollDice(formula);
       await handleDiceResult('active_defense', result);
+      await logEntry('dodge', { formula, total: result.total, active_defense: result.total });
     } catch {
       // помилка кидка або завантаження навички — нічого не зберігаємо
     }
+  };
+
+  // Ініціатива: кубик за рівнем Спритності (4.1), а не заглушка. Втома
+  // зсуває її числом — воно вже всередині профілю.
+  const rollInitiative = async () => {
+    try {
+      const profile = await combatantProfile(combatant, sheet, 'initiative');
+      const formula = buildRollFormula({ ...profile, withD20: profile.die ? false : true }) ?? '1d4';
+      const result = await rollDice(formula);
+      await handleDiceResult('initiative', result);
+      await logEntry('initiative', { formula, total: result.total });
+    } catch {
+      // нічого не зберігаємо — наступне опитування підтягне стан
+    }
+  };
+
+  // Рятівний кидок від смерті (5.3.2): d12 кидає клієнт, зсув маркера
+  // шкали смерті робить лист персонажа.
+  const rollDeathSave = async () => {
+    try {
+      const result = await rollDice('1d12');
+      const { result: saved } = await characterApi.deathSave(combatant.character_id, result.total);
+      await logEntry('death_save', {
+        formula: '1d12', total: result.total, success: saved.success,
+        death_scale: saved.death_scale, awake: saved.awake, dead: saved.dead,
+      });
+      onChanged();
+    } catch (err) {
+      window.alert(err.response?.data?.message || 'Не вдалося кинути рятівний кидок');
+    }
+  };
+
+  // Кидок, що нікого не атакує, але має лишитися видимим іншим гравцям.
+  const logEntry = (kind, payload) => campaignApi
+    .addCombatLogEntry(campaignId, { combatant_id: combatant.id, kind, payload })
+    .catch(() => {});
+
+  // Трекер дій: скільки з трьох дій витрачено. Втома зменшує ліміт
+  // (5.2.1) — беремо його з обчислених ефектів листа.
+  const actionsTotal = effects?.actions_per_turn ?? 3;
+  const actionsUsed = Math.min(local.actions_used ?? 0, actionsTotal);
+
+  const setActions = async (used) => {
+    setLocal((p) => ({ ...p, actions_used: used }));
+    try {
+      await campaignApi.updateCombatant(campaignId, combatant.id, {
+        actions_used: used,
+        // Журнал повторень має сенс лише поки дії рахуються: скидання
+        // лічильника вручну скидає і його.
+        ...(used === 0 ? { actions_log: [] } : {}),
+      });
+      onChanged();
+    } catch { /* наступне опитування підтягне стан */ }
+  };
+
+  // Усе, що потрібно комірці «Дії»: трекер, атака й рятівний кидок.
+  const actionsCell = {
+    used: actionsUsed, total: actionsTotal,
+    reserved: !!local.reaction_reserved,
+    reactionsDisabled: effects?.reactions === 'none',
+    canEdit: canEditHp, canRoll, rolling: diceRolling,
+    isCharacter: !!combatant.character_id, isUnconscious,
+    onSet: setActions, onToggleReaction: () => toggleReaction(),
+    onAttack: () => setAttackOpen(true), onDeathSave: rollDeathSave,
+    // Панель атаки живе в цій же комірці — так вона є в обох варіантах
+    // рядка (ГМ і гравця), не дублюючи розмітку.
+    attackSheet: attackOpen ? (
+      <AttackSheet
+        attacker={local}
+        targets={targets}
+        campaignId={campaignId}
+        sheet={sheet}
+        effects={effects}
+        onClose={() => setAttackOpen(false)}
+        onDone={onChanged}
+      />
+    ) : null,
+  };
+
+  const toggleReaction = async () => {
+    const next = !local.reaction_reserved;
+    setLocal((p) => ({ ...p, reaction_reserved: next }));
+    try {
+      await campaignApi.updateCombatant(campaignId, combatant.id, { reaction_reserved: next });
+      onChanged();
+    } catch { /* наступне опитування підтягне стан */ }
   };
 
   const handleDiceResult = async (field, roll) => {
@@ -603,8 +1117,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
   // Втома знижує ініціативу: трекер сам кидає її — віднімаємо одразу у
   // формулі; при ручному вводі лише підказка.
   const initiativeModifier = effects?.initiative_modifier ?? 0;
-  const initiativeFormula = `1d6${initiativeModifier || ''}`;
-  const initiativeHint = initiativeModifier ? `${initiativeModifier} до ініціативи (Втома) — врахуйте при ручному вводі` : undefined;
+  const initiativeHint = initiativeModifier ? `${initiativeModifier} до ініціативи (Втома) — враховано в кидку` : undefined;
 
   // Гравці ніколи не бачать колонку "Опис" — вона суто для GM. Для NPC
   // (де решта чисел і так затерті на фронті) її текст замість цього
@@ -614,7 +1127,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
       return (
         <tr ref={rowRef} className={rowClass}>
           <td className={cellClass}>{combatant.name}</td>
-          <td className={cellClass} colSpan={5}>{combatant.description || '—'}</td>
+          <td className={cellClass} colSpan={6}>{combatant.description || '—'}</td>
         </tr>
       );
     }
@@ -698,14 +1211,18 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
               <span className="text-text">{combatant.initiative ?? '—'}</span>
             )}
             {canRoll && (
-              <RollButton
-                formula={initiativeFormula}
-                showWidget={false}
-                title={`Кинути кубик спритності (заглушка: ${initiativeFormula} — навички ще не підключені)`}
-                onResult={(roll) => handleDiceResult('initiative', roll)}
-              />
+              <button
+                type="button" onClick={rollInitiative} disabled={diceRolling}
+                title="Кинути ініціативу (кубик за рівнем Спритності)"
+                className="inline-flex items-center justify-center text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Dices size={14} />
+              </button>
             )}
           </div>
+        </td>
+        <td className={cellClass}>
+          <ActionsCell row={actionsCell} />
         </td>
         <td className={cellClass}>
           {isMine ? (
@@ -818,14 +1335,18 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
             <span className="text-text">{combatant.initiative ?? '—'}</span>
           )}
           {canRoll && (
-            <RollButton
-              formula={initiativeFormula}
-              showWidget={false}
-              title={`Кинути кубик спритності (заглушка: ${initiativeFormula} — навички ще не підключені)`}
-              onResult={(roll) => handleDiceResult('initiative', roll)}
-            />
+            <button
+              type="button" onClick={rollInitiative} disabled={diceRolling}
+              title="Кинути ініціативу (кубик за рівнем Спритності)"
+              className="inline-flex items-center justify-center text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Dices size={14} />
+            </button>
           )}
         </div>
+      </td>
+      <td className={cellClass}>
+        <ActionsCell row={actionsCell} />
       </td>
       <td className={cellClass}>
         {canEditFully ? (

@@ -462,6 +462,7 @@ export default function ChronologyView() {
           isCampaignGm={isCampaignGm}
           calendar={calendar}
           locations={locations}
+          moons={moons}
           title={timeline.format(selectedT)}
           baseDate={baseOf(selectedT)}
           calendars={calendars}
@@ -477,7 +478,7 @@ export default function ChronologyView() {
 }
 
 function DayEventsSheet({
-  calendarId, campaignId, canManage, isCampaignGm, calendar, calendars, locations,
+  calendarId, campaignId, canManage, isCampaignGm, calendar, calendars, locations, moons = [],
   title, baseDate, events, equivalents, onClose, onEventsChanged, onCampaignDateSet,
 }) {
   const [settingDate, setSettingDate] = useState(false);

@@ -53,6 +53,10 @@ router.get('/:id/combat', wrap(CombatController.getCurrent));
 router.post('/:id/combat/next-turn', wrap(CombatController.nextTurn));
 router.post('/:id/combat/next-round', wrap(CombatController.nextRound));
 router.post('/:id/combat/end', wrap(CombatController.endCombat));
+// Атака: кидки прийшли з клієнта, порівняння й зношування — тут.
+router.post('/:id/combat/attack', wrap(CombatController.attack));
+// Кидок, що нікого не атакує, але має лишитися видимим у журналі.
+router.post('/:id/combat/log', wrap(CombatController.addLogEntry));
 router.post('/:id/combat/scenes', wrap(CombatController.createScene));
 router.patch('/:id/combat/scenes/:sceneId', wrap(CombatController.updateScene));
 router.delete('/:id/combat/scenes/:sceneId', wrap(CombatController.removeScene));

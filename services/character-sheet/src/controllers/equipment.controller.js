@@ -40,12 +40,12 @@ const EquipmentController = {
 
   async patch(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const { mastery_count, mastered, is_equipped, containers, open_portions } = req.body;
+    const { mastered, is_equipped, containers, open_portions } = req.body;
     if (!isStock(containers) || !isStock(open_portions)) {
       return res.status(400).json({ message: 'containers і open_portions — цілі від 0 до 99' });
     }
     const updated = await EquipmentModel.patch(req.params.id, req.params.equipmentId, {
-      mastery_count, mastered, is_equipped, containers, open_portions,
+      mastered, is_equipped, containers, open_portions,
     });
     if (!updated) return res.status(404).json({ message: 'Предмет не знайдено в листі' });
     res.json({ item: updated });

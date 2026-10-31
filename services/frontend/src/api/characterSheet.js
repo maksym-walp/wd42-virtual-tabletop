@@ -65,7 +65,16 @@ const characterApi = {
     return data;
   },
 
-  // Пакетні ефекти станів для трекера бою: { [id]: { effects, conditions, heroic_left, timer } }.
+  // Рятівний кидок від смерті (5.3.2): кубик d12 кидає клієнт через
+  // dice-roller, щоб гравець бачив результат, а зсув маркера шкали смерті
+  // й пробудження на +3 лишаються правилом сервера.
+  async deathSave(id, rolled) {
+    const { data } = await api.post(`${BASE}/${id}/death-save`, { rolled });
+    return data; // { result, character, effects, timer, roll_profiles }
+  },
+
+  // Пакетні ефекти станів, профілі кидків і зброя для трекера бою:
+  // { [id]: { effects, roll_profiles, weapons, conditions, heroic_left, timer } }.
   async getEffects(ids) {
     if (!ids.length) return {};
     const { data } = await api.get(`${BASE}/effects`, { params: { ids: ids.join(',') } });

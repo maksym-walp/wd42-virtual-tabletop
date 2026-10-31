@@ -50,6 +50,19 @@ const CharacterSheetClient = {
       body: { character_ids: characterIds, hours, ...(sourceKey ? { source_key: sourceKey } : {}) },
     });
   },
+
+  // Шкода по персонажу вже після поглинання пасивним захистом: трекер знає
+  // захист, але поточний максимум здоровʼя, пороги Травми й масивної шкоди
+  // та шкала смерті — правила листа (character-sheet/src/rules/combat.js).
+  // → { result: { hp_after, temp_after, hp_lost, fell, massive, trauma_suggested, death_scale }, character }
+  applyDamage(authorization, characterId, amount) {
+    return request('POST', `/${characterId}/damage`, { authorization, body: { amount } });
+  },
+
+  // → { result: { rolled, success, death_scale, awake, dead }, character }
+  deathSave(authorization, characterId, rolled) {
+    return request('POST', `/${characterId}/death-save`, { authorization, body: { rolled } });
+  },
 };
 
 module.exports = CharacterSheetClient;

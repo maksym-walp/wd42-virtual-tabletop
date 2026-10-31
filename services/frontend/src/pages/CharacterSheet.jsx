@@ -50,7 +50,8 @@ import RestControls, { RestResultModal, LastRestBlock, ActivityTimer } from '../
 import PotionControls, { availablePortions, potionStockLabel } from '../components/character/PotionControls';
 import usePotionOptions, { potionSummary, portionsWord } from '../hooks/usePotionOptions';
 import CampaignEventsListener from '../components/campaign/CampaignEventsListener';
-import { skillRoll } from '../utils/skillRoll';
+import { fallbackProfile, ROLL_MODE_LABELS } from '../utils/rollProfile';
+import { Dices } from 'lucide-react';
 
 // ── debounce ─────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ export default function CharacterSheet({ publicView = false }) {
         ...prev,
         character: { ...prev.character, ...resp.character, ...pendingPatch.current },
         effects: resp.effects,
+        roll_profiles: resp.roll_profiles ?? prev.roll_profiles,
         ...(resp.skills ? { skills: resp.skills } : {}),
       }));
       campaignApi.notifyCharacter(id).catch(() => {});
@@ -230,12 +232,13 @@ export default function CharacterSheet({ publicView = false }) {
   };
 
   // Зілля: сервер уже записав ХП, стани й звикання; порожнє зілля зникає.
-  const handleDrank = ({ character, item, effects, timer, potions }, equipmentId) => {
+  const handleDrank = ({ character, item, effects, timer, potions, roll_profiles }, equipmentId) => {
     for (const key of ['current_hp', 'conditions', 'death_scale']) delete pendingPatch.current[key];
     setData(prev => ({
       ...prev,
       character: { ...prev.character, ...character },
       effects, timer, potions,
+      roll_profiles: roll_profiles ?? prev.roll_profiles,
       equipment: item
         ? prev.equipment.map(e => (e.equipment_id === equipmentId ? { ...e, ...item } : e))
         : prev.equipment.filter(e => e.equipment_id !== equipmentId),
@@ -246,12 +249,15 @@ export default function CharacterSheet({ publicView = false }) {
 
   // Відпочинок уже записав вітали на сервері — незбережені правки тих самих
   // полів застаріли. Синхронізація ХП з боєм заодно розсилає 'characters'.
-  const handleRested = ({ result, character, effects, timer, potions }) => {
+  const handleRested = ({ result, character, effects, timer, potions, roll_profiles }) => {
     lastRestSeen.current = result.at;
     for (const key of ['current_hp', 'current_magic', 'heroic_actions_used', 'conditions', 'death_scale']) {
       delete pendingPatch.current[key];
     }
-    setData(prev => ({ ...prev, character: { ...prev.character, ...character }, effects, timer, potions }));
+    setData(prev => ({
+      ...prev, character: { ...prev.character, ...character }, effects, timer, potions,
+      roll_profiles: roll_profiles ?? prev.roll_profiles,
+    }));
     campaignApi.syncCombatantHp(id, { health: character.current_hp, temp_hp: character.temp_hp })
       .catch(() => campaignApi.notifyCharacter(id).catch(() => {}));
   };
@@ -391,6 +397,9 @@ export default function CharacterSheet({ publicView = false }) {
   if (!data)   return null;
 
   const { character: c, skills, spells, equipment, abilities, rituals, is_owner, is_gm, effects, timer } = data;
+  // Профілі кидків: кубик, режим і бонус кожної перевірки з урахуванням
+  // станів і модифікаторів відкритих вузлів (character-sheet/src/rules/modifiers.js).
+  const rollProfiles = data.roll_profiles;
   const conditionLabels = Object.fromEntries(conditionsConfig.map((cond) => [cond.key, cond.label]));
   const archetype = ARCHETYPES[c.archetype];
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
@@ -622,6 +631,7 @@ export default function CharacterSheet({ publicView = false }) {
             initiativeModifier={effects?.initiative_modifier ?? 0}
             effects={effects}
             conditionLabels={conditionLabels}
+            rollProfiles={rollProfiles}
             heroic={{ total: heroicTotal, left: heroicLeft, disabled: !!effects?.heroic_disabled }}
             onHeroicChange={(left) => patchCharacter({ heroic_actions_used: Math.max(0, Math.min(heroicTotal, heroicTotal - left)) })}
             extras={(
@@ -1036,7 +1046,8 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 
 function SkillsTab({
   characteristics, skillMap, charLevels, is_owner, is_gm, canUseInspiration, onAction, onEditAll,
-  health, extras, initiativeDie, initiativeModifier = 0, effects, conditionLabels, heroic, onHeroicChange,
+  health, extras, initiativeDie, initiativeModifier = 0, effects, conditionLabels, rollProfiles,
+  heroic, onHeroicChange,
 }) {
   // Особливі значення в шапках характеристик: кубик ініціативи кидається
   // прямо звідси, героїчні дії Мудрості — лічильник «залишилось / макс».
@@ -1107,8 +1118,7 @@ function SkillsTab({
                   <SkillRow
                     key={skill.key}
                     skillKey={skill.key}
-                    effects={effects}
-                    conditionLabels={conditionLabels}
+                    rollProfiles={rollProfiles}
                     label={skill.label}
                     value={s.value}
                     progress={s.progress_marks}
@@ -1161,15 +1171,28 @@ const SKILL_ACTIONS = [
   { key: 'narrative',    label: 'Покращити наративно',       hint: 'нічого не витрачає' },
 ];
 
-// Дві кнопки кидка: перевірка з d20 (ефекти станів — перешкода Втоми,
-// знижений кубик чи заборона Травми — уже в effects) і кидок лише
-// кубика-модифікатора без d20 (перешкоди Втоми на нього не діють).
-function SkillRow({ skillKey, effects, conditionLabels, label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
-  const roll = skillRoll(skillKey, value, effects, conditionLabels);
-  const die = roll.die ?? '—';
-  const rollFormula = roll.d20Formula;
+// Одна кнопка кидка: відкриває вікно, де гравець обирає, чи кидати разом
+// з d20, яким режимом і з яким модифікатором. Сам профіль (кубик, режим,
+// бонус, джерела, ситуативні модифікатори вузлів) рахує сервер —
+// character-sheet/src/rules/modifiers.js.
+function SkillRow({ skillKey, rollProfiles, label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
+  const { requestRoll } = useDice();
+  // Публічний лист читають і неавторизовані: кидок їм недоступний (запит до
+  // dice-roller потребує токена), тож кнопка стає звичайним написом — так
+  // само, як це робила спільна RollButton.
+  const { user } = useAuth();
+  // Публічний лист і старі відповіді без roll_profiles — лише кубик навички.
+  const profile = rollProfiles?.[skillKey] ?? fallbackProfile(value);
+  const die = profile.die ?? '—';
   const isPlayerEditable = is_owner && !is_gm;
   const [menuOpen, setMenuOpen] = useState(false);
+  // Коротко — чому кидок не звичайний: «перевага: Шосте чуття»,
+  // «перешкода: Втома 2». Нівельовані фактори режим не змінюють, тож чипа
+  // не буде: повний перелік джерел видно в самому вікні кидка.
+  const modeChip = profile.mode && profile.mode !== 'normal'
+    ? `${ROLL_MODE_LABELS[profile.mode] ?? profile.mode}${profile.sources?.length ? `: ${profile.sources.join('; ')}` : ''}`
+    : null;
+  const hasSituational = (profile.situational?.length ?? 0) > 0;
 
   const runAction = (action) => {
     setMenuOpen(false);
@@ -1206,33 +1229,41 @@ function SkillRow({ skillKey, effects, conditionLabels, label, value, progress, 
               <Pencil size={11} />
             </button>
           )}
-          <RollButton
-            formula={rollFormula}
-            disabled={roll.disabled}
-            title={roll.disabled ? roll.disabledReason : `Кинути ${label}: ${rollFormula}`}
-            size={11}
-            className={`min-w-[28px] rounded border bg-bg px-1.5 py-0.5 text-xs font-semibold ${roll.modeChip ? 'border-danger/50' : 'border-border'}`}
-            onResult={isPlayerEditable ? handleRollResult : undefined}
-          >
-            {die === '—' ? '—' : `+${die}`}
-          </RollButton>
-          <RollButton
-            formula={roll.dieFormula ?? '1d4'}
-            disabled={!roll.dieFormula || roll.disabled}
-            icon={false}
-            title={roll.disabled ? roll.disabledReason
-              : roll.dieFormula ? `Кинути лише кубик-модифікатор ${label}: ${roll.dieFormula}` : 'Навичка 1–3: кубика-модифікатора нема'}
-            className="min-w-[24px] rounded border border-border bg-bg px-1 py-0.5 text-xs font-semibold"
-          >
-            {roll.die ?? '—'}
-          </RollButton>
+          {user ? (
+            <button
+              type="button"
+              disabled={profile.disabled}
+              title={profile.disabled ? profile.disabled_reason : `Кинути ${label}`}
+              onClick={() => requestRoll({
+                title: label,
+                profile,
+                onResult: isPlayerEditable ? handleRollResult : undefined,
+              })}
+              className={`inline-flex min-w-[46px] items-center justify-center gap-1 rounded border bg-bg px-1.5 py-0.5 text-xs font-semibold text-accent transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${
+                modeChip ? 'border-danger/50' : 'border-border'
+              }`}
+            >
+              <Dices size={11} />
+              {die === '—' ? '—' : `+${die}`}
+            </button>
+          ) : (
+            <span className="min-w-[46px] text-center text-xs font-semibold text-text-muted">
+              {die === '—' ? '—' : `+${die}`}
+            </span>
+          )}
         </div>
       </div>
-      {(roll.modeChip || roll.lowered || roll.disabled) && (
+      {(modeChip || profile.disabled || hasSituational) && (
         <div className="flex flex-wrap gap-1 text-[0.65rem] font-semibold">
-          {roll.disabled && <span className="rounded-full bg-danger/10 px-1.5 text-danger">недоступна (Травма)</span>}
-          {!roll.disabled && roll.lowered && <span className="rounded-full bg-gold/10 px-1.5 text-gold">кубик {roll.baseDie ?? '—'} → {roll.die ?? '—'} (Травма)</span>}
-          {!roll.disabled && roll.modeChip && <span className="rounded-full bg-danger/10 px-1.5 text-danger">{roll.modeChip}</span>}
+          {profile.disabled && <span className="rounded-full bg-danger/10 px-1.5 text-danger">недоступна (Травма)</span>}
+          {!profile.disabled && modeChip && (
+            <span className={`rounded-full px-1.5 ${profile.mode === 'adv' || profile.mode === 'wadv' ? 'bg-sage/15 text-sage' : 'bg-danger/10 text-danger'}`}>
+              {modeChip}
+            </span>
+          )}
+          {!profile.disabled && hasSituational && (
+            <span className="rounded-full bg-gold/10 px-1.5 text-gold">ситуативне: {profile.situational.length}</span>
+          )}
         </div>
       )}
       <div className="flex items-center gap-1">

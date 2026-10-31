@@ -2,12 +2,14 @@ jest.mock('../../models/campaign.model');
 jest.mock('../../models/campaign-character.model');
 jest.mock('../../models/combat-scene.model');
 jest.mock('../../models/combatant.model');
+jest.mock('../../models/combat-log.model');
 jest.mock('../../clients/character-sheet.client');
 
 const CampaignModel = require('../../models/campaign.model');
 const CampaignCharacterModel = require('../../models/campaign-character.model');
 const CombatSceneModel = require('../../models/combat-scene.model');
 const CombatantModel = require('../../models/combatant.model');
+const CombatLogModel = require('../../models/combat-log.model');
 const CombatController = require('../combat.controller');
 const bus = require('../../realtime/bus');
 const CharacterSheetClient = require('../../clients/character-sheet.client');
@@ -16,11 +18,14 @@ function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn(), send: jest.fn() };
 }
 
-function mockReq({ body = {}, params = {}, user = { sub: 'user-1' } } = {}) {
-  return { body, params, user };
+function mockReq({ body = {}, params = {}, user = { sub: 'user-1' }, headers = {} } = {}) {
+  return { body, params, user, headers };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  CombatLogModel.listByScene.mockResolvedValue([]);
+});
 
 describe('CombatController.getCurrent', () => {
   it('returns 404 when campaign is missing', async () => {
@@ -50,6 +55,7 @@ describe('CombatController.getCurrent', () => {
 
     expect(res.json).toHaveBeenCalledWith({ scene: null, combatants: [] });
     expect(CombatantModel.listByScene).not.toHaveBeenCalled();
+    expect(CombatLogModel.listByScene).not.toHaveBeenCalled();
   });
 
   it('gives the GM full combatant data, including hidden ones', async () => {
@@ -87,7 +93,10 @@ describe('CombatController.getCurrent', () => {
         { id: 'cb1', name: 'Goblin', description: 'sneaky', is_hidden: true },
         { id: 'cb2', name: 'Hero', health: 20, initiative: 18, is_hidden: false },
       ],
+      log: [],
     });
+    // Гравцеві журнал віддається без записів про прихованих комбатантів.
+    expect(CombatLogModel.listByScene).toHaveBeenCalledWith('s1', { includeGmOnly: false });
   });
 });
 
@@ -798,5 +807,173 @@ describe('CombatController.endCombat', () => {
     const round = mockRes();
     await CombatController.nextRound(req(), round);
     expect(round.status).toHaveBeenCalledWith(409);
+  });
+});
+
+describe('CombatController.attack', () => {
+  const GM = { id: 'c1', gm_id: 'gm-1' };
+  const scene = { id: 's1', round_number: 3, ended_at: null };
+
+  // Ціль: пасивний 12 + активний 4 = 16 (приклад із розділу 4.4.3).
+  const target = {
+    id: 'cb2', name: 'Вовк', combat_scene_id: 's1', passive_defense: 12, active_defense: 4,
+    health: 30, temp_hp: 0, character_id: null, is_hidden: false, reaction_reserved: false,
+  };
+  const attacker = {
+    id: 'cb1', name: 'Арін', combat_scene_id: 's1', character_id: 'ch1', is_hidden: false,
+  };
+
+  const arrange = ({ targetOver = {}, attackerOver = {} } = {}) => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue(scene);
+    const t = { ...target, ...targetOver };
+    const a = { ...attacker, ...attackerOver };
+    CombatantModel.findInCampaign.mockImplementation(async (id) => (id === a.id ? a : id === t.id ? t : null));
+    CombatantModel.update.mockImplementation(async (id, _c, patch) => ({ ...t, ...patch }));
+    CombatantModel.spendAction.mockResolvedValue({ ...a, actions_used: 1, actions_log: ['attack'] });
+    CombatLogModel.add.mockResolvedValue({ id: 'log-1' });
+    return { a, t };
+  };
+
+  const body = (over = {}) => ({
+    attacker_id: 'cb1', target_id: 'cb2',
+    hit: { total: 21, natural: 14 }, damage: { total: 20 }, ...over,
+  });
+
+  it('rejects an attack without both combatants', async () => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: { attacker_id: 'cb1' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('rejects attacking yourself', async () => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    const res = mockRes();
+    await CombatController.attack(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body({ target_id: 'cb1' }),
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('lets a player attack only with their own combatant', async () => {
+    arrange();
+    CombatantModel.isOwnedByUser.mockResolvedValue(false);
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'player-1' }, body: body() }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CombatLogModel.add).not.toHaveBeenCalled();
+  });
+
+  it('refuses to resolve an attack in a finished battle', async () => {
+    arrange();
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue({ ...scene, ended_at: '2026-10-31' });
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+    expect(res.status).toHaveBeenCalledWith(409);
+  });
+
+  it('wears the defense down and takes the leftover damage off an NPC', async () => {
+    arrange();
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+
+    const { outcome } = res.json.mock.calls[0][0];
+    // 21 проти 16 — влучання; зношування 5 (12 → 7); 20 шкоди − 7 = 13.
+    expect(outcome).toMatchObject({ hit: true, wear: 5, passive_after: 7, hp_damage: 13 });
+    expect(CombatantModel.update).toHaveBeenCalledWith('cb2', 'c1', { passive_defense: 7 });
+    expect(CombatantModel.update).toHaveBeenCalledWith('cb2', 'c1', { temp_hp: 0, health: 17 });
+    // НІПу правила листа не потрібні.
+    expect(CharacterSheetClient.applyDamage).not.toHaveBeenCalled();
+  });
+
+  it('sends damage on a player character through character-sheet, not straight to the row', async () => {
+    arrange({ targetOver: { character_id: 'ch2' } });
+    CharacterSheetClient.applyDamage.mockResolvedValue({
+      result: { hp_after: 17, temp_after: 0, hp_lost: 13, trauma_suggested: false, massive: false },
+    });
+    const res = mockRes();
+    await CombatController.attack(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body(), headers: { authorization: 'Bearer t' },
+    }), res);
+
+    expect(CharacterSheetClient.applyDamage).toHaveBeenCalledWith('Bearer t', 'ch2', 13);
+    expect(res.json.mock.calls[0][0].sheet).toMatchObject({ hp_after: 17 });
+  });
+
+  it('notifies the sheet too when the target is a player character', async () => {
+    arrange({ targetOver: { character_id: 'ch2' } });
+    CharacterSheetClient.applyDamage.mockResolvedValue({ result: { hp_after: 17, temp_after: 0 } });
+    const topics = [];
+    const off = bus.subscribe('c1', (topic) => topics.push(topic));
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), mockRes());
+    off();
+    expect(topics).toEqual(expect.arrayContaining(['combat', 'characters']));
+  });
+
+  it('rolls the reserved reaction into the active defense before comparing', async () => {
+    arrange({ targetOver: { reaction_reserved: true, active_defense: 0, passive_defense: 12 } });
+    CombatantModel.applyDodge.mockResolvedValue({});
+    const res = mockRes();
+    await CombatController.attack(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' },
+      body: body({ hit: { total: 18, natural: 11 }, dodge: { total: 5 } }),
+    }), res);
+
+    expect(CombatantModel.applyDodge).toHaveBeenCalledWith('cb2', 5);
+    // Захист став 12 + 5 = 17, тож 18 ледве влучає зі зношуванням 1.
+    expect(res.json.mock.calls[0][0].outcome).toMatchObject({ total_defense: 17, hit: true, wear: 1 });
+  });
+
+  it('ignores a dodge from a target that did not reserve a reaction', async () => {
+    arrange({ targetOver: { reaction_reserved: false, active_defense: 0 } });
+    const res = mockRes();
+    await CombatController.attack(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' },
+      body: body({ hit: { total: 18, natural: 11 }, dodge: { total: 5 } }),
+    }), res);
+
+    expect(CombatantModel.applyDodge).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].outcome).toMatchObject({ total_defense: 12 });
+  });
+
+  it('spends one action and logs the whole breakdown', async () => {
+    arrange();
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+
+    expect(CombatantModel.spendAction).toHaveBeenCalledWith('cb1', 'attack');
+    const [sceneId, entry] = CombatLogModel.add.mock.calls[0];
+    expect(sceneId).toBe('s1');
+    expect(entry).toMatchObject({ kind: 'attack', round_number: 3, is_gm_only: false });
+    expect(entry.payload.hit).toMatchObject({ total: 21, hit: true, wear: 5 });
+  });
+
+  it('publishes the combat topic so every open tracker refreshes', async () => {
+    arrange();
+    const topics = [];
+    const off = bus.subscribe('c1', (topic) => topics.push(topic));
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), mockRes());
+    off();
+    expect(topics).toContain('combat');
+  });
+
+  it('keeps the log entry GM-only when either side is hidden', async () => {
+    arrange({ targetOver: { is_hidden: true } });
+    const res = mockRes();
+    await CombatController.attack(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+    expect(CombatLogModel.add.mock.calls[0][1].is_gm_only).toBe(true);
+  });
+
+  it('does not touch health on a miss, but still applies the tie wear', async () => {
+    arrange();
+    const res = mockRes();
+    await CombatController.attack(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body({ hit: { total: 16, natural: 9 } }),
+    }), res);
+
+    expect(res.json.mock.calls[0][0].outcome).toMatchObject({ hit: false, outcome: 'tie', hp_damage: 0 });
+    expect(CombatantModel.update).toHaveBeenCalledWith('cb2', 'c1', { passive_defense: 11 });
+    expect(CombatantModel.update).toHaveBeenCalledTimes(1);
   });
 });

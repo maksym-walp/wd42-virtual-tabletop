@@ -17,18 +17,20 @@ const CombatantModel = {
   async add(sceneId, {
     character_id, name, passive_defense, active_defense, health,
     initiative, notes, description, is_hidden, max_health, temp_hp,
+    attack_die, damage_die,
   }) {
     const { rows } = await pool.query(
       `INSERT INTO campaigns.combatants (
          combat_scene_id, character_id, name, passive_defense, active_defense,
-         health, initiative, notes, description, is_hidden, max_health, temp_hp
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         health, initiative, notes, description, is_hidden, max_health, temp_hp,
+         attack_die, damage_die
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         sceneId, character_id ?? null, name,
         passive_defense ?? null, active_defense ?? null, health ?? null,
         initiative ?? null, notes ?? null, description ?? null, is_hidden ?? false,
-        max_health ?? null, temp_hp ?? null,
+        max_health ?? null, temp_hp ?? null, attack_die ?? null, damage_die ?? null,
       ]
     );
     return rows[0];
@@ -72,6 +74,7 @@ const CombatantModel = {
   async update(id, campaignId, {
     name, passive_defense, active_defense, health,
     initiative, notes, description, is_hidden, max_health, temp_hp,
+    reaction_reserved, actions_used, actions_log, attack_die, damage_die,
   } = {}) {
     const { rows } = await pool.query(
       `UPDATE campaigns.combatants c
@@ -85,6 +88,11 @@ const CombatantModel = {
            is_hidden       = COALESCE($10, c.is_hidden),
            max_health      = COALESCE($11, c.max_health),
            temp_hp         = COALESCE($12, c.temp_hp),
+           reaction_reserved = COALESCE($13, c.reaction_reserved),
+           actions_used    = COALESCE($14, c.actions_used),
+           actions_log     = COALESCE($15, c.actions_log),
+           attack_die      = COALESCE($16, c.attack_die),
+           damage_die      = COALESCE($17, c.damage_die),
            updated_at      = NOW()
        FROM campaigns.combat_scenes s
        WHERE c.id = $1 AND c.combat_scene_id = s.id AND s.campaign_id = $2
@@ -93,6 +101,8 @@ const CombatantModel = {
         id, campaignId, name ?? null, passive_defense ?? null, active_defense ?? null,
         health ?? null, initiative ?? null, notes ?? null, description ?? null,
         is_hidden ?? null, max_health ?? null, temp_hp ?? null,
+        reaction_reserved ?? null, actions_used ?? null, actions_log ?? null,
+        attack_die ?? null, damage_die ?? null,
       ]
     );
     return rows[0] || null;
@@ -152,12 +162,55 @@ const CombatantModel = {
     return rows[0] || null;
   },
 
+  // З початком ходу комбатанта спливає його активний захист (ухилення діє
+  // лише до початку наступного ходу, 4.5.1), а трекер дій і журнал
+  // повторень починаються з чистого аркуша (4.2, 4.10).
   async markActed(id) {
     const { rows } = await pool.query(
-      `UPDATE campaigns.combatants SET has_acted_this_round = true, updated_at = NOW()
+      `UPDATE campaigns.combatants
+       SET has_acted_this_round = true,
+           active_defense = 0, reaction_reserved = false,
+           actions_used = 0, actions_log = '{}',
+           updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
       [id]
+    );
+    return rows[0] || null;
+  },
+
+  // Витрата дії: лічильник + тип для правила повторення (4.10).
+  async spendAction(id, actionType) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.combatants
+       SET actions_used = actions_used + 1,
+           actions_log = array_append(actions_log, $2),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id, actionType]
+    );
+    return rows[0] || null;
+  },
+
+  // Результат ухилення: записати активний захист і зняти позначку реакції.
+  async applyDodge(id, activeDefense) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.combatants
+       SET active_defense = $2, reaction_reserved = false, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id, Math.max(0, Math.trunc(Number(activeDefense) || 0))]
+    );
+    return rows[0] || null;
+  },
+
+  async findInCampaign(id, campaignId) {
+    const { rows } = await pool.query(
+      `SELECT c.* FROM campaigns.combatants c
+       JOIN campaigns.combat_scenes s ON s.id = c.combat_scene_id
+       WHERE c.id = $1 AND s.campaign_id = $2`,
+      [id, campaignId]
     );
     return rows[0] || null;
   },

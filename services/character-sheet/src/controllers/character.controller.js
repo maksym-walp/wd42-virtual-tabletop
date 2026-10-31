@@ -8,6 +8,7 @@ const RitualTrackerModel = require('../models/ritual-tracker.model');
 const authorizeCharacterWrite = require('./authorize-character-write');
 const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 const { treeSpellAccess } = require('../models/spell-access.model');
+const { treeModifiers } = require('../models/tree-modifiers.model');
 const SiteConfigModel = require('../models/site-config.model');
 const CharacterStateModel = require('../models/character-state.model');
 const { sheetDerived } = require('../rules');
@@ -73,7 +74,7 @@ const CharacterController = {
     // edit menu.
     const isGmViewer = !isOwner && (isCampaignGm || isAdmin);
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, campaignIds] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, campaignIds, modifiers] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -83,6 +84,7 @@ const CharacterController = {
       CharacterModel.findOwnerUsername(char.user_id),
       treeSpellAccess(char.id),
       CharacterStateModel.campaignIdsFor(char.id),
+      treeModifiers(char.id),
     ]);
 
     // is_owner drives all edit UI on the frontend — a campaign GM or an admin
@@ -91,8 +93,9 @@ const CharacterController = {
     res.json({
       character: { ...char, owner_username },
       skills, spells, tree, equipment, abilities, rituals,
-      // Ефекти станів, таймер діяльності (last_rest — у character).
-      ...sheetDerived(char, skills),
+      // Ефекти станів, таймер діяльності (last_rest — у character) і
+      // профілі кидків з урахуванням модифікаторів відкритих вузлів.
+      ...sheetDerived(char, skills, modifiers),
       // Кампанії персонажа — лист слухає їхні real-time події.
       campaign_ids: campaignIds,
       // Що дерево відкрило для заклинань: { traditions, max_complexity }.
@@ -108,7 +111,7 @@ const CharacterController = {
     const char = await CharacterModel.findPublicById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено або він приватний' });
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, modifiers] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -117,11 +120,12 @@ const CharacterController = {
       RitualTrackerModel.findAll(char.id),
       CharacterModel.findOwnerUsername(char.user_id),
       treeSpellAccess(char.id),
+      treeModifiers(char.id),
     ]);
 
     res.json({
       character: { ...char, owner_username }, skills, spells, tree, equipment, abilities, rituals,
-      ...sheetDerived(char, skills),
+      ...sheetDerived(char, skills, modifiers),
       campaign_ids: [],
       spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
       is_owner: false, is_gm: false, is_spell_master: false,

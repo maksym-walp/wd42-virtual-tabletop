@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const NodeGrantModel = require('./node-grant.model');
 const { sanitizeTraditions, sanitizeComplexity } = require('./spell-access');
+const { sanitizeModifiers } = require('./node-modifier');
 
 // Every node carries its linked catalog entries / collections (see
 // node-grant.model.js) as a `grants` array, aggregated in one shot so the
@@ -40,7 +41,7 @@ const NodeModel = {
 
   async create({
     title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root, grants,
-    unlocks_traditions, unlocks_complexity,
+    unlocks_traditions, unlocks_complexity, modifiers,
   }) {
     const client = await pool.connect();
     try {
@@ -48,14 +49,15 @@ const NodeModel = {
       const { rows } = await client.query(
         `INSERT INTO skill_tree.nodes
            (title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root,
-            unlocks_traditions, unlocks_complexity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            unlocks_traditions, unlocks_complexity, modifiers)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING id`,
         [
           title, description ?? null, icon ?? null, cost ?? 0, pos_x ?? 0, pos_y ?? 0,
           narrative_condition ?? [], effect ?? [],
           archetype ?? '', require_both ?? false, is_root ?? false,
           sanitizeTraditions(unlocks_traditions), sanitizeComplexity(unlocks_complexity),
+          JSON.stringify(sanitizeModifiers(modifiers)),
         ]
       );
       await NodeGrantModel.replaceForNode(client, rows[0].id, grants);
@@ -71,7 +73,7 @@ const NodeModel = {
 
   async update(id, {
     title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, require_both, is_root, grants,
-    unlocks_traditions, unlocks_complexity,
+    unlocks_traditions, unlocks_complexity, modifiers,
   }) {
     const client = await pool.connect();
     try {
@@ -84,6 +86,7 @@ const NodeModel = {
              -- like grants: only touched when the caller sent the key
              unlocks_traditions = CASE WHEN $13 THEN $14::uuid[] ELSE unlocks_traditions END,
              unlocks_complexity = CASE WHEN $15 THEN $16 ELSE unlocks_complexity END,
+             modifiers          = CASE WHEN $17 THEN $18::jsonb ELSE modifiers END,
              updated_at=NOW()
          WHERE id=$1
          RETURNING id`,
@@ -93,6 +96,7 @@ const NodeModel = {
           archetype ?? '', require_both ?? false, is_root ?? false,
           unlocks_traditions !== undefined, sanitizeTraditions(unlocks_traditions),
           unlocks_complexity !== undefined, sanitizeComplexity(unlocks_complexity),
+          modifiers !== undefined, JSON.stringify(sanitizeModifiers(modifiers)),
         ]
       );
       if (!rows[0]) {

@@ -191,6 +191,25 @@ const campaignApi = {
     await api.delete(`${BASE}/${id}/combat/combatants/${combatantId}`);
   },
 
+  // Атака: кубики вже кинуто через dice-roller на клієнті (щоб гравець бачив
+  // розбивку), сюди їдуть результати. Бекенд порівнює з захистом, зношує
+  // його, рахує поглинання й пише запис журналу.
+  //   hit    — { total, natural, formula? }
+  //   dodge  — { total, formula? }, якщо ціль тримала реакцію
+  //   damage — { total, formula? }
+  //   weapon — { name, damage_die, skill_key } для підпису в журналі
+  async combatAttack(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/combat/attack`, payload);
+    return data; // { outcome, dodge, log_entry, attacker, target, sheet }
+  },
+
+  // Кидок, що нікого не атакує (ініціатива, рятівний кидок, окреме
+  // ухилення), але який теж має лишитися видимим у журналі бою.
+  async addCombatLogEntry(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/combat/log`, payload);
+    return data.log_entry;
+  },
+
   // Зворотний бік двосторонньої синхронізації ХП: лист персонажа сповіщає
   // сюди, а бекенд сам знаходить усіх комбатантів цього персонажа (в будь-
   // якій кампанії/сцені) й оновлює їхнє health/temp_hp.

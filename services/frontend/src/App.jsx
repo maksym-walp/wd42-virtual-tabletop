@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import DiceWidget from './components/DiceWidget';
+import RollDialog from './components/RollDialog';
 import ScrollToTopButton from './components/ScrollToTopButton';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
@@ -216,6 +217,9 @@ function AppShell() {
       </div>
       <BottomNav />
       <DiceWidget />
+      {/* Вікно кидка перевірки — відкривається з будь-якої сторінки
+          через useDice().requestRoll(). */}
+      <RollDialog />
       <ScrollToTopButton />
     </div>
   );
