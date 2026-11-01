@@ -14,13 +14,13 @@ describe('AbilityModel.add', () => {
     expect(result).toEqual({ id: 'a1', character_id: 'c1', ability_id: 'ab1' });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/ON CONFLICT \(character_id, ability_id\) DO NOTHING/);
-    expect(params).toEqual(['c1', 'ab1', null, 'main', ['main']]);
+    expect(params).toEqual(['c1', 'ab1', null]);
   });
 
   it('stores the given form progress', async () => {
     pool.query.mockResolvedValue({ rows: [] });
-    await AbilityModel.add('c1', 'ab1', { form_tier: 'perfected', primary_form: 'main', mastered_forms: ['main'] });
-    expect(pool.query.mock.calls[0][1]).toEqual(['c1', 'ab1', 'perfected', 'main', ['main']]);
+    await AbilityModel.add('c1', 'ab1', { form_tier: 'perfected' });
+    expect(pool.query.mock.calls[0][1]).toEqual(['c1', 'ab1', 'perfected']);
   });
 
   it('returns null when the character already has the ability (ON CONFLICT DO NOTHING)', async () => {

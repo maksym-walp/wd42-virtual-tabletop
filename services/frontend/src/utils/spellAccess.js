@@ -37,6 +37,19 @@ export function spellAccessFor(spell, access) {
   return { met, allowedForms: met && allowed.length < forms.length ? allowed : (met ? null : []), missing };
 }
 
+// Якою навичкою можна кастувати заклинання: завжди Чарування
+// ('spellcasting') плюс будь-яка альтернативна навичка, яку відкрив вузол
+// дерева для традиції цього заклинання (nodes.cast_skill_options, розділ
+// 2) — гравець сам обирає, якою кидати (battle tracker). Унікальні ключі,
+// Чарування завжди першим.
+export function castSkillOptionsFor(spell, castSkillOptions) {
+  const traditionIds = spellTraditionIds(spell);
+  const alt = (castSkillOptions || [])
+    .filter((o) => traditionIds.includes(o.tradition_id))
+    .map((o) => o.skill_key);
+  return ['spellcasting', ...new Set(alt)];
+}
+
 // «Потрібно: традиція Вогню або Криги · складність «Комплексне»».
 export function missingAccessLabel(missing, traditionNameOf = () => null) {
   const parts = [];

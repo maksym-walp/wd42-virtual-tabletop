@@ -16,8 +16,6 @@ function sanitizeForExport(row) {
   return clean;
 }
 
-const MIXED_FORMS_MESSAGE = 'Заклинання не може мати одночасно рівневі й альтернативні форми';
-
 const SpellController = {
   async list(req, res) {
     const { nature, spell_kind, ritual, complexity, search, sort, scope, limit, tradition } = req.query;
@@ -33,13 +31,11 @@ const SpellController = {
 
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
-    if (SpellModel.hasMixedForms(req.body.forms)) return res.status(400).json({ message: MIXED_FORMS_MESSAGE });
     const spell = await SpellModel.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
     res.status(201).json({ spell });
   },
 
   async update(req, res) {
-    if (SpellModel.hasMixedForms(req.body.forms)) return res.status(400).json({ message: MIXED_FORMS_MESSAGE });
     const spell = await SpellModel.update(req.params.id, req.user.sub, req.body, req.user.role === 'admin');
     if (!spell) return res.status(404).json({ message: 'Заклинання не знайдено або недостатньо прав' });
     res.json({ spell });
@@ -94,6 +90,25 @@ const SpellController = {
 
   async magicForms(req, res) {
     res.json({ magic_forms: await SpellModel.getMagicFormOptions() });
+  },
+
+  async getRelated(req, res) {
+    const related = await SpellModel.getRelated(req.params.id, req.user.sub, req.user.role === 'admin');
+    res.json({ related });
+  },
+
+  async addRelated(req, res) {
+    const { related_id } = req.body;
+    if (!related_id) return res.status(400).json({ message: 'related_id є обовʼязковим' });
+    const link = await SpellModel.addRelated(req.params.id, related_id, req.user.sub, req.user.role === 'admin');
+    if (!link) return res.status(404).json({ message: 'Заклинання не знайдено або недостатньо прав' });
+    res.status(201).json({ link });
+  },
+
+  async removeRelated(req, res) {
+    const removed = await SpellModel.removeRelated(req.params.id, req.params.relatedId, req.user.sub, req.user.role === 'admin');
+    if (!removed) return res.status(404).json({ message: 'Зв\'язок не знайдено або недостатньо прав' });
+    res.json({ message: 'Видалено' });
   },
 
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.

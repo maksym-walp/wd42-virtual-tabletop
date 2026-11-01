@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const pool = require('../config/db');
 const { deleteWithTrash } = require('../utils/trash');
 const { serializeImageCrop } = require('../utils/image-crop');
@@ -39,33 +38,28 @@ const normalizeNature = (nature) => {
 };
 
 const TIER_KINDS = ['primitive', 'perfected'];
-const FORM_KINDS = [...TIER_KINDS, 'alternative'];
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
+const normalizeDamageDie = (value) => (DAMAGE_DICE.includes(value) ? value : null);
 
-// Форми заклинання. Колонки самого рядка spells — основна форма (при
-// рівневих формах — «Повноцінна»); spells.forms (JSONB) — додаткові:
-// рівневі 'primitive'/'perfected' (не більше однієї кожного виду, id = kind)
-// та альтернативні 'alternative' з власною назвою (id — uuid; наявний
-// зберігається, бо на нього посилається лист персонажа). Білий список полів
-// + ті самі дефолти, що й для основної форми у create — щоб у JSONB не
-// потрапляло сміття з тіла запиту чи імпортованого файлу.
+// Форми заклинання. Колонки самого рядка spells — основна (Повноцінна)
+// форма; spells.forms (JSONB) — додаткові рівневі форми: 'primitive'
+// (Обмежена) і/або 'perfected' (Довершена), не більше однієї кожного виду,
+// id = kind. Білий список полів + ті самі дефолти, що й для основної форми
+// у create — щоб у JSONB не потрапляло сміття з тіла запиту чи
+// імпортованого файлу.
 function normalizeForms(forms) {
   if (!Array.isArray(forms)) return [];
   const seenTiers = new Set();
   return forms
-    .filter((form) => form && typeof form === 'object' && FORM_KINDS.includes(form.kind))
+    .filter((form) => form && typeof form === 'object' && TIER_KINDS.includes(form.kind))
     .filter((form) => {
-      if (!TIER_KINDS.includes(form.kind)) return true;
       if (seenTiers.has(form.kind)) return false;
       seenTiers.add(form.kind);
       return true;
     })
     .map((form) => ({
       kind: form.kind,
-      id: form.kind === 'alternative'
-        ? (UUID_RE.test(form.id ?? '') ? form.id : crypto.randomUUID())
-        : form.kind,
-      name: form.kind === 'alternative' ? (String(form.name ?? '').trim() || 'Альтернативна форма') : null,
+      id: form.kind,
       complexity: normalizeComplexity(form.complexity),
       spell_kind: form.spell_kind ?? 'utility',
       energy_cost: Number(form.energy_cost) || 0,
@@ -79,19 +73,9 @@ function normalizeForms(forms) {
       narrative_desc: form.narrative_desc || null,
       lore_creator: form.lore_creator || null,
       lore_creator_npc_id: form.lore_creator_npc_id || null,
+      damage_die: normalizeDamageDie(form.damage_die),
     }));
 }
-
-// Заклинання має або рівневі форми, або альтернативні — не обидва типи
-// разом. Контролер відхиляє такий запит; bulkImport натомість відкидає
-// альтернативні (див. normalizeImportField), щоб не валити весь імпорт.
-function hasMixedForms(forms) {
-  if (!Array.isArray(forms)) return false;
-  const kinds = forms.filter((f) => f && typeof f === 'object').map((f) => f.kind);
-  return kinds.includes('alternative') && kinds.some((k) => TIER_KINDS.includes(k));
-}
-
-const normalizeMainFormName = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
 // Колонки, які пише bulkImport — той самий набір полів, що create/update
 // пишуть сьогодні (плюс lore_creator_npc_id із задачі 1), за винятком
@@ -101,7 +85,7 @@ const IMPORT_COLUMNS = [
   'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
   'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
   'duration_value', 'duration_unit', 'range_desc', 'components', 'is_public',
-  'complexity', 'forms', 'main_form_name', 'is_canonical',
+  'complexity', 'forms', 'damage_die', 'is_canonical',
 ];
 
 const JSONB_IMPORT_COLUMNS = ['components', 'forms'];
@@ -119,11 +103,8 @@ function normalizeImportField(column, record) {
     case 'complexity': return normalizeComplexity(record.complexity);
     // lore_creator_npc_id усередині форм лишається як є — так само, як і
     // в основній формі (IMPORT_COLUMNS його теж переносить).
-    case 'forms': {
-      const forms = normalizeForms(record.forms);
-      return JSON.stringify(hasMixedForms(forms) ? forms.filter((f) => f.kind !== 'alternative') : forms);
-    }
-    case 'main_form_name': return normalizeMainFormName(record.main_form_name);
+    case 'forms': return JSON.stringify(normalizeForms(record.forms));
+    case 'damage_die': return normalizeDamageDie(record.damage_die);
     default: return record[column] ?? null;
   }
 }
@@ -242,7 +223,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public, image_url, image_crop,
-      lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical,
+      lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical,
     } = data;
 
     const { rows } = await pool.query(
@@ -250,7 +231,7 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public,
-          image_url, lore_creator, lore_creator_npc_id, complexity, forms, main_form_name, is_canonical, image_crop)
+          image_url, lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical, image_crop)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19::jsonb,$20,$21,$22::jsonb)
        RETURNING *`,
       [
@@ -261,7 +242,7 @@ const SpellModel = {
         range_desc ?? null, JSON.stringify(components ?? []), is_public ?? false,
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
-        normalizeMainFormName(main_form_name), is_canonical ?? false,
+        normalizeDamageDie(damage_die), is_canonical ?? false,
         serializeImageCrop(image_url ? image_crop : null),
       ]
     );
@@ -274,7 +255,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public, image_url, image_crop,
-      lore_creator, lore_creator_npc_id, complexity, forms, main_form_name,
+      lore_creator, lore_creator_npc_id, complexity, forms, damage_die,
     } = data;
 
     const { rows } = await pool.query(
@@ -285,7 +266,7 @@ const SpellModel = {
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14::jsonb, is_public=$15,
            image_url=$16, lore_creator=$17, lore_creator_npc_id=$18,
-           complexity=$20, forms=$21::jsonb, main_form_name=$22, image_crop=$23::jsonb, updated_at=NOW()
+           complexity=$20, forms=$21::jsonb, damage_die=$22, image_crop=$23::jsonb, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $19 = true)
        RETURNING *`,
       [
@@ -296,7 +277,7 @@ const SpellModel = {
         JSON.stringify(components ?? []), is_public ?? false,
         image_url ?? null, lore_creator ?? null, lore_creator_npc_id ?? null, isAdmin,
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
-        normalizeMainFormName(main_form_name),
+        normalizeDamageDie(damage_die),
         serializeImageCrop(image_url ? image_crop : null),
       ]
     );
@@ -374,8 +355,61 @@ const SpellModel = {
     const { rows } = await pool.query(`SELECT value FROM admin.site_configs WHERE key = 'magic_forms'`);
     return rows[0]?.value || [];
   },
+
+  // Рівноцінні/альтернативні заклинання (міграція 118) — посилання на інший
+  // самостійний запис, не форма. Зв'язок симетричний: зберігається в один
+  // бік, читається з обох (related_spells.spell_id = $1 OR related_spell_id = $1).
+  async getRelated(spellId, userId, isAdmin = false) {
+    const visibility = isAdmin ? 'TRUE' : '(s.user_id = $2 OR s.is_public = true)';
+    const { rows } = await pool.query(
+      `SELECT s.id, s.name FROM spellbook.related_spells r
+       JOIN spellbook.spells s ON s.id = (CASE WHEN r.spell_id = $1 THEN r.related_spell_id ELSE r.spell_id END)
+       WHERE (r.spell_id = $1 OR r.related_spell_id = $1) AND ${visibility}
+       ORDER BY s.name`,
+      [spellId, userId]
+    );
+    return rows;
+  },
+
+  // Власність перевіряється лише на spellId — додавання посилання зі свого
+  // заклинання на чуже (видиме) не змінює те чуже заклинання.
+  async addRelated(spellId, relatedSpellId, userId, isAdmin = false) {
+    const owns = await pool.query(
+      `SELECT 1 FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR $3 = true)`,
+      [spellId, userId, isAdmin]
+    );
+    if (!owns.rows.length) return null;
+    const visible = await pool.query(
+      `SELECT 1 FROM spellbook.spells WHERE id = $1 AND (user_id = $2 OR is_public = true OR $3 = true)`,
+      [relatedSpellId, userId, isAdmin]
+    );
+    if (!visible.rows.length) return null;
+
+    // Зв'язок зберігається лише в один бік — перевірка в обидва боки, щоб
+    // повторне додавання в протилежному напрямку не створило дубль пари.
+    await pool.query(
+      `INSERT INTO spellbook.related_spells (spell_id, related_spell_id)
+       SELECT $1, $2
+       WHERE NOT EXISTS (
+         SELECT 1 FROM spellbook.related_spells
+         WHERE (spell_id = $1 AND related_spell_id = $2) OR (spell_id = $2 AND related_spell_id = $1)
+       )`,
+      [spellId, relatedSpellId]
+    );
+    return { spell_id: spellId, related_spell_id: relatedSpellId };
+  },
+
+  async removeRelated(spellId, relatedSpellId, userId, isAdmin = false) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM spellbook.related_spells r
+       USING spellbook.spells s
+       WHERE s.id = $1 AND (s.user_id = $3 OR $4 = true)
+         AND ((r.spell_id = $1 AND r.related_spell_id = $2) OR (r.spell_id = $2 AND r.related_spell_id = $1))`,
+      [spellId, relatedSpellId, userId, isAdmin]
+    );
+    return rowCount > 0;
+  },
 };
 
 module.exports = SpellModel;
 module.exports.normalizeForms = normalizeForms;
-module.exports.hasMixedForms = hasMixedForms;

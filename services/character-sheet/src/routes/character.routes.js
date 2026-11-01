@@ -42,6 +42,7 @@ router.get('/:id/rest/preview', wrap(RestController.preview));
 router.post('/:id/rest', wrap(RestController.rest));
 // Бойові наслідки: шкода (з поглинанням, порахованим трекером) і рятівні кидки.
 router.post('/:id/damage', wrap(CombatController.damage));
+router.post('/:id/magic/spend', wrap(CombatController.spendMagic));
 router.post('/:id/death-save', wrap(CombatController.deathSave));
 
 // Skills

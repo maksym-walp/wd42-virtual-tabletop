@@ -41,22 +41,20 @@ export function buildSpellbookImportTemplate(spellKinds) {
 //                             quantity — число
 //                             unit     — рядок, напр. одна з: ${unitList} (або довільна своя)
 //   is_public             — true / false
-//   forms                 — масив додаткових форм (поля вище — це основна форма). Кожна форма — об'єкт
-//                           з kind: "primitive" (Примітивна) / "perfected" (Довершена) — рівневі, не більше
-//                           однієї кожного виду (тоді основна вважається Повноцінною) — або "alternative"
-//                           (альтернативна, потрібне ще "name"), та тими самими полями: complexity, spell_kind,
+//   damage_die            — один з: d4, d6, d8, d10, d12, або null (лише для spell_kind "combat";
+//                           кількість кубиків завжди з Майстерності кастера, не зберігається тут)
+//   forms                 — масив додаткових рівневих форм (поля вище — це основна, Повноцінна форма).
+//                           Кожна форма — об'єкт з kind: "primitive" (Обмежена) / "perfected" (Довершена),
+//                           не більше однієї кожного виду, та тими самими полями: complexity, spell_kind,
 //                           energy_cost, action_time, ritual, duration_value, duration_unit, range_desc,
-//                           components, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id.
-//                           Порожній масив — лише основна форма. Рівневі й альтернативні форми в одному
-//                           заклинанні не поєднуються: якщо є обидва типи, альтернативні буде відкинуто.
-//   main_form_name        — рядок або null — назва основної форми (лише для заклинань з альтернативними
-//                           формами; null — «Основна форма»)
+//                           components, damage_die, mechanical_desc, narrative_desc, lore_creator,
+//                           lore_creator_npc_id. Порожній масив — лише основна форма.
 //
 [
   {
     "name": "Приклад: Вогняна стріла",
     "nature": ["elemental"],
-    "spell_kind": "ranged",
+    "spell_kind": "combat",
     "complexity": "simple",
     "mechanical_desc": "Заклинач кидає d8 вогняної шкоди по цілі в межах дальності.",
     "narrative_desc": "Невеличка стріла полум'я зривається з пальців чаклуна.",
@@ -72,11 +70,12 @@ export function buildSpellbookImportTemplate(spellKinds) {
       { "item_id": null, "name": "Дрібка сірки", "quantity": 1, "unit": "щіпки" }
     ],
     "is_public": true,
+    "damage_die": "d8",
     "forms": [
       {
         "kind": "perfected",
         "complexity": "medium",
-        "spell_kind": "ranged",
+        "spell_kind": "combat",
         "energy_cost": 5,
         "action_time": 2,
         "ritual": "impossible",
@@ -84,6 +83,7 @@ export function buildSpellbookImportTemplate(spellKinds) {
         "duration_unit": "instant",
         "range_desc": "20 метрів",
         "components": [],
+        "damage_die": "d10",
         "mechanical_desc": "Заклинач кидає 2d8 вогняної шкоди по цілі в межах дальності.",
         "narrative_desc": "Стріла розгоряється до сліпучо-білого полум'я.",
         "lore_creator": "Архімаг Ельдран Сірий",

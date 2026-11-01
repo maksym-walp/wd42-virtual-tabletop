@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices, Swords, Skull } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Plus, Minus, Upload, User, Heart, Tag, FileText, Footprints, Dices, Swords, Skull, Sparkles } from 'lucide-react';
 import campaignApi from '../api/campaigns';
 import characterApi from '../api/characterSheet';
 import npcsApi from '../api/npcs';
@@ -8,7 +8,9 @@ import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import { computeMaxHp, computePassiveDefense } from '../utils/characterCombatStats';
 import { buildRollFormula, mergeRollModes } from '../utils/rollProfile';
 import { combatantProfile, combatantWeapons } from '../utils/combatantProfile';
+import { repeatAttackDisadvantage } from '../utils/actionRepeat';
 import { SKILL_TARGETS } from '../constants/nodeModifiers';
+import CombatCastSheet from '../components/CombatCastSheet';
 import { effectChips, chipClass } from '../utils/effectChips';
 import { formatCheck } from '../components/character/RestControls';
 import { useDice } from '../context/DiceContext';
@@ -603,18 +605,6 @@ function naturalD20(roll) {
   return d20.type === 'dice' ? d20.rolls?.[0] ?? null : d20.dice?.[0]?.kept ?? null;
 }
 
-// Повторення дій (4.10): друга однакова дія за хід — з перешкодою, третя —
-// з подвійною. Тут ідеться саме про атаку, тож діє лише виняток бійця
-// (чаклунів виняток стосується чарування, а пройдисвіту винятків немає).
-// Архетип приходить у блоці персонажа з GET /api/characters/effects;
-// у НІПа його немає — вони повторень не уникають.
-function repeatAttackDisadvantage(previousAttacks, archetype) {
-  if (archetype === 'fighter') return null;
-  if (previousAttacks >= 2) return 'wdis';
-  if (previousAttacks === 1) return 'dis';
-  return null;
-}
-
 // ================================================================
 // Атака просто з таблиці: обрати зброю й ціль, решту система робить сама.
 //
@@ -896,6 +886,15 @@ function ActionsCell({ row }) {
           <Swords size={14} />
         </button>
       )}
+      {row.canRoll && row.isCharacter && !row.isUnconscious && (
+        <button
+          type="button" onClick={row.onCast}
+          title="Чарувати: обрати бойове заклинання й ціль, решту система зробить сама"
+          className="inline-flex items-center justify-center text-accent hover:text-text"
+        >
+          <Sparkles size={14} />
+        </button>
+      )}
       {row.canRoll && row.isCharacter && row.isUnconscious && (
         <button
           type="button" onClick={row.onDeathSave} disabled={row.rolling}
@@ -906,6 +905,7 @@ function ActionsCell({ row }) {
         </button>
       )}
       {row.attackSheet}
+      {row.castSheet}
     </div>
   );
 }
@@ -916,6 +916,7 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
   const effects = sheet?.effects ?? null;
   const [local, setLocal] = useState(combatant);
   const [attackOpen, setAttackOpen] = useState(false);
+  const [castOpen, setCastOpen] = useState(false);
   // null — не в режимі редагування: поле показує реальне поточне ХП з `local`.
   // Рядок (навіть порожній) — чернетка вводу: користувач саме зараз друкує.
   const [hpDraft, setHpDraft] = useState(null);
@@ -1061,8 +1062,9 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
     isCharacter: !!combatant.character_id, isUnconscious,
     onSet: setActions, onToggleReaction: () => toggleReaction(),
     onAttack: () => setAttackOpen(true), onDeathSave: rollDeathSave,
-    // Панель атаки живе в цій же комірці — так вона є в обох варіантах
-    // рядка (ГМ і гравця), не дублюючи розмітку.
+    onCast: () => setCastOpen(true),
+    // Панелі атаки й каста живуть у цій же комірці — так вони є в обох
+    // варіантах рядка (ГМ і гравця), не дублюючи розмітку.
     attackSheet: attackOpen ? (
       <AttackSheet
         attacker={local}
@@ -1071,6 +1073,16 @@ function CombatantRow({ combatant, isGm, isMine, campaignId, onChanged, dimmed, 
         sheet={sheet}
         effects={effects}
         onClose={() => setAttackOpen(false)}
+        onDone={onChanged}
+      />
+    ) : null,
+    castSheet: castOpen ? (
+      <CombatCastSheet
+        caster={local}
+        targets={targets}
+        campaignId={campaignId}
+        sheet={sheet}
+        onClose={() => setCastOpen(false)}
         onDone={onChanged}
       />
     ) : null,

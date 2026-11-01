@@ -55,6 +55,8 @@ router.post('/:id/combat/next-round', wrap(CombatController.nextRound));
 router.post('/:id/combat/end', wrap(CombatController.endCombat));
 // Атака: кидки прийшли з клієнта, порівняння й зношування — тут.
 router.post('/:id/combat/attack', wrap(CombatController.attack));
+// Каст бойового заклинання: той самий потік, плюс списання магічної енергії.
+router.post('/:id/combat/cast', wrap(CombatController.cast));
 // Кидок, що нікого не атакує, але має лишитися видимим у журналі.
 router.post('/:id/combat/log', wrap(CombatController.addLogEntry));
 router.post('/:id/combat/scenes', wrap(CombatController.createScene));

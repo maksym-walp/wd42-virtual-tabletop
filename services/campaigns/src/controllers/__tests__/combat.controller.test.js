@@ -977,3 +977,154 @@ describe('CombatController.attack', () => {
     expect(CombatantModel.update).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CombatController.cast', () => {
+  const GM = { id: 'c1', gm_id: 'gm-1' };
+  const scene = { id: 's1', round_number: 3, ended_at: null };
+
+  const target1 = {
+    id: 'cb2', name: 'Вовк', combat_scene_id: 's1', passive_defense: 12, active_defense: 4,
+    health: 30, temp_hp: 0, character_id: null, is_hidden: false, reaction_reserved: false,
+  };
+  const target2 = {
+    id: 'cb3', name: 'Гобгрб', combat_scene_id: 's1', passive_defense: 5, active_defense: 0,
+    health: 10, temp_hp: 0, character_id: null, is_hidden: false, reaction_reserved: false,
+  };
+  const caster = {
+    id: 'cb1', name: 'Арін', combat_scene_id: 's1', character_id: 'ch1', is_hidden: false,
+  };
+
+  const spell = { id: 'sp1', name: 'Руки Кайнара', form_key: 'main', energy_cost: 2, damage_die: 'd6' };
+
+  const arrange = ({ casterOver = {}, targets = [target1] } = {}) => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    CombatSceneModel.findCurrentByCampaign.mockResolvedValue(scene);
+    const c = { ...caster, ...casterOver };
+    const byId = { [c.id]: c, [target1.id]: target1, [target2.id]: target2 };
+    CombatantModel.findInCampaign.mockImplementation(async (id) => byId[id] ?? null);
+    CombatantModel.update.mockImplementation(async (id, _c2, patch) => ({ ...byId[id], ...patch }));
+    CombatantModel.spendAction.mockResolvedValue({ ...c, actions_used: 1, actions_log: ['cast'] });
+    CombatLogModel.add.mockResolvedValue({ id: 'log-1' });
+    CharacterSheetClient.spendMagic.mockResolvedValue({ result: { magic_before: 10, magic_after: 8, spent: 2 } });
+    return { c, targets };
+  };
+
+  const body = (over = {}) => ({
+    caster_id: 'cb1', spell,
+    targets: [{ target_id: 'cb2', hit: { total: 21, natural: 14 }, damage: { total: 20 } }],
+    ...over,
+  });
+
+  it('rejects a cast without caster_id/spell/targets', async () => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: { caster_id: 'cb1' } }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterSheetClient.spendMagic).not.toHaveBeenCalled();
+  });
+
+  it('rejects casting on yourself', async () => {
+    CampaignModel.findById.mockResolvedValue(GM);
+    const res = mockRes();
+    await CombatController.cast(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' },
+      body: body({ targets: [{ target_id: 'cb1', hit: { total: 10, natural: 5 } }] }),
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('lets a player cast only with their own combatant', async () => {
+    arrange();
+    CombatantModel.isOwnedByUser.mockResolvedValue(false);
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'player-1' }, body: body() }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CharacterSheetClient.spendMagic).not.toHaveBeenCalled();
+  });
+
+  it('refuses an NPC caster — only player characters know spells', async () => {
+    arrange({ casterOver: { character_id: null } });
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterSheetClient.spendMagic).not.toHaveBeenCalled();
+  });
+
+  it('spends energy before resolving any hit, and aborts with no damage or log on insufficient energy', async () => {
+    arrange();
+    const err = new Error('Недостатньо магічної енергії');
+    err.statusCode = 400;
+    CharacterSheetClient.spendMagic.mockRejectedValue(err);
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Недостатньо магічної енергії' });
+    expect(CombatLogModel.add).not.toHaveBeenCalled();
+    expect(CombatantModel.spendAction).not.toHaveBeenCalled();
+  });
+
+  it('resolves a single target, applying wear and damage like an attack', async () => {
+    arrange();
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+
+    expect(CharacterSheetClient.spendMagic).toHaveBeenCalledWith(undefined, 'ch1', 2);
+    const { per_target: perTarget, energy } = res.json.mock.calls[0][0];
+    expect(energy).toEqual({ magic_before: 10, magic_after: 8, spent: 2 });
+    expect(perTarget).toHaveLength(1);
+    expect(perTarget[0].outcome).toMatchObject({ hit: true, wear: 5, hp_damage: 13 });
+  });
+
+  it('resolves multiple targets independently, each with its own log entry, but spends only one action', async () => {
+    arrange();
+    const res = mockRes();
+    await CombatController.cast(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' },
+      body: body({
+        targets: [
+          { target_id: 'cb2', hit: { total: 21, natural: 14 }, damage: { total: 20 } },
+          { target_id: 'cb3', hit: { total: 2, natural: 2 } },
+        ],
+      }),
+    }), res);
+
+    const { per_target: perTarget } = res.json.mock.calls[0][0];
+    expect(perTarget).toHaveLength(2);
+    expect(perTarget[0].outcome.hit).toBe(true);
+    expect(perTarget[1].outcome.hit).toBe(false);
+    expect(CombatLogModel.add).toHaveBeenCalledTimes(2);
+    expect(CombatantModel.spendAction).toHaveBeenCalledTimes(1);
+    expect(CombatantModel.spendAction).toHaveBeenCalledWith('cb1', 'cast');
+  });
+
+  it('keeps a log entry GM-only when either the caster or that target is hidden', async () => {
+    arrange({ targets: [target1] });
+    CombatantModel.findInCampaign.mockImplementation(async (id) => (
+      { cb1: { ...caster }, cb2: { ...target1, is_hidden: true } }[id] ?? null
+    ));
+    const res = mockRes();
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), res);
+    expect(CombatLogModel.add.mock.calls[0][1].is_gm_only).toBe(true);
+  });
+
+  it('publishes combat and characters topics', async () => {
+    arrange();
+    const topics = [];
+    const off = bus.subscribe('c1', (topic) => topics.push(topic));
+    await CombatController.cast(mockReq({ params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body() }), mockRes());
+    off();
+    expect(topics).toEqual(expect.arrayContaining(['combat', 'characters']));
+  });
+
+  it('rejects more than the per-cast target cap', async () => {
+    arrange();
+    const manyTargets = Array.from({ length: 11 }, (_, i) => ({ target_id: `cb${i}`, hit: { total: 10, natural: 5 } }));
+    const res = mockRes();
+    await CombatController.cast(mockReq({
+      params: { id: 'c1' }, user: { sub: 'gm-1' }, body: body({ targets: manyTargets }),
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(CharacterSheetClient.spendMagic).not.toHaveBeenCalled();
+  });
+});

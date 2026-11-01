@@ -19,8 +19,6 @@ function sanitizeForExport(row) {
   return clean;
 }
 
-const MIXED_FORMS_MESSAGE = 'Вміння не може мати одночасно рівневі й альтернативні форми';
-
 const AbilityController = {
   async list(req, res) {
     const { search, sort, archetype, scope, limit, is_maneuver } = req.query;
@@ -36,13 +34,11 @@ const AbilityController = {
 
   async create(req, res) {
     if (!req.body.name) return res.status(400).json({ message: 'name є обовʼязковим' });
-    if (AbilityModel.hasMixedForms(req.body.forms)) return res.status(400).json({ message: MIXED_FORMS_MESSAGE });
     const ability = await AbilityModel.create(req.user.sub, { ...req.body, is_canonical: canonicalOnCreate(req) });
     res.status(201).json({ ability });
   },
 
   async update(req, res) {
-    if (AbilityModel.hasMixedForms(req.body.forms)) return res.status(400).json({ message: MIXED_FORMS_MESSAGE });
     const ability = await AbilityModel.update(req.params.id, req.user.sub, req.body, req.user.role === 'admin');
     if (!ability) return res.status(404).json({ message: 'Вміння не знайдено або недостатньо прав' });
     res.json({ ability });
@@ -85,6 +81,25 @@ const AbilityController = {
       items = await AbilityModel.findAll(req.user.sub, { search, sort, archetype, scope, limit, is_maneuver }, isAdmin);
     }
     res.json(items.map(sanitizeForExport));
+  },
+
+  async getRelated(req, res) {
+    const related = await AbilityModel.getRelated(req.params.id, req.user.sub, req.user.role === 'admin');
+    res.json({ related });
+  },
+
+  async addRelated(req, res) {
+    const { related_id } = req.body;
+    if (!related_id) return res.status(400).json({ message: 'related_id є обовʼязковим' });
+    const link = await AbilityModel.addRelated(req.params.id, related_id, req.user.sub, req.user.role === 'admin');
+    if (!link) return res.status(404).json({ message: 'Вміння не знайдено або недостатньо прав' });
+    res.status(201).json({ link });
+  },
+
+  async removeRelated(req, res) {
+    const removed = await AbilityModel.removeRelated(req.params.id, req.params.relatedId, req.user.sub, req.user.role === 'admin');
+    if (!removed) return res.status(404).json({ message: 'Зв\'язок не знайдено або недостатньо прав' });
+    res.json({ message: 'Видалено' });
   },
 
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.

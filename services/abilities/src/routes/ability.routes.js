@@ -17,4 +17,8 @@ router.delete('/:id',  requireAuth, wrap(AbilityController.remove));
 router.patch('/:id/canonical', requireCanonicalManager, wrap(AbilityController.setCanonical));
 router.patch('/:id/owner', requireAdminOwner, wrap(AbilityController.setOwner));
 
+router.get('/:id/related',               requireAuth, wrap(AbilityController.getRelated));
+router.post('/:id/related',              requireAuth, wrap(AbilityController.addRelated));
+router.delete('/:id/related/:relatedId', requireAuth, wrap(AbilityController.removeRelated));
+
 module.exports = router;

@@ -256,16 +256,43 @@ describe('SpellController.import', () => {
   });
 });
 
-describe('SpellController mixed form types', () => {
-  it.each(['create', 'update'])('%s 400s when tier and alternative forms are mixed', async (action) => {
-    SpellModel.hasMixedForms.mockReturnValueOnce(true);
-    const req = mockReq({ params: { id: 's1' }, body: { name: 'X', forms: [] } });
+describe('SpellController.getRelated/addRelated/removeRelated', () => {
+  it('getRelated returns the model result', async () => {
+    SpellModel.getRelated.mockResolvedValue([{ id: 's2', name: 'Крижана стріла' }]);
     const res = mockRes();
 
-    await SpellController[action](req, res);
+    await SpellController.getRelated(mockReq({ params: { id: 's1' } }), res);
 
+    expect(SpellModel.getRelated).toHaveBeenCalledWith('s1', 'user-1', false);
+    expect(res.json).toHaveBeenCalledWith({ related: [{ id: 's2', name: 'Крижана стріла' }] });
+  });
+
+  it('addRelated 400s without related_id', async () => {
+    const res = mockRes();
+    await SpellController.addRelated(mockReq({ params: { id: 's1' }, body: {} }), res);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(SpellModel.create).not.toHaveBeenCalled();
-    expect(SpellModel.update).not.toHaveBeenCalled();
+    expect(SpellModel.addRelated).not.toHaveBeenCalled();
+  });
+
+  it('addRelated 404s when the model refuses (ownership/visibility)', async () => {
+    SpellModel.addRelated.mockResolvedValue(null);
+    const res = mockRes();
+    await SpellController.addRelated(mockReq({ params: { id: 's1' }, body: { related_id: 's2' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('addRelated 201s with the link on success', async () => {
+    SpellModel.addRelated.mockResolvedValue({ spell_id: 's1', related_spell_id: 's2' });
+    const res = mockRes();
+    await SpellController.addRelated(mockReq({ params: { id: 's1' }, body: { related_id: 's2' } }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ link: { spell_id: 's1', related_spell_id: 's2' } });
+  });
+
+  it('removeRelated 404s when nothing was removed', async () => {
+    SpellModel.removeRelated.mockResolvedValue(false);
+    const res = mockRes();
+    await SpellController.removeRelated(mockReq({ params: { id: 's1', relatedId: 's2' } }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 });

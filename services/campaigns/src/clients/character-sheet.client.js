@@ -63,6 +63,13 @@ const CharacterSheetClient = {
   deathSave(authorization, characterId, rolled) {
     return request('POST', `/${characterId}/death-save`, { authorization, body: { rolled } });
   },
+
+  // Витрата магічної енергії (розділ 9.1) — каст заклинання з трекера бою
+  // (POST /:id/combat/cast). 400, якщо персонажу не вистачає енергії.
+  // → { result: { magic_before, magic_after, spent }, character }
+  spendMagic(authorization, characterId, amount) {
+    return request('POST', `/${characterId}/magic/spend`, { authorization, body: { amount } });
+  },
 };
 
 module.exports = CharacterSheetClient;

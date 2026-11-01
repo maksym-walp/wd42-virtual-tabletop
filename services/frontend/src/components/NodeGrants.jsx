@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { AbilityPreview, SimplePreview } from './catalog/previews';
 import { abilityWithForm } from '../constants/abilities';
 import { complexityLabel } from '../utils/spellAccess';
+import { TARGET_LABELS } from '../constants/nodeModifiers';
 
 // What a skill-tree node gives — shared by the GM editor (pages/SkillTree.jsx)
 // and the player-facing tree (DevelopmentTree.jsx): node.grants (abilities
@@ -60,6 +61,15 @@ export function nodeSpellAccessLines(node, catalog = {}) {
   return lines;
 }
 
+// Альтернативні навички чарування вузла, як рядки показу: «Пакти — Обман».
+export function nodeCastSkillLines(node, catalog = {}) {
+  return (node.cast_skill_options || []).map((opt) => {
+    const traditionName = (catalog.traditions || []).find((t) => t.id === opt.tradition_id)?.name ?? '?';
+    const skillLabel = TARGET_LABELS[opt.skill_key] ?? opt.skill_key;
+    return `${traditionName} — ${skillLabel}`;
+  });
+}
+
 // Compact read-only summary for the node hover tooltip: effects plus
 // everything the node grants / makes available, names only.
 export function NodeGainsSummary({ node, catalog }) {
@@ -70,6 +80,7 @@ export function NodeGainsSummary({ node, catalog }) {
     { label: 'Додає автоматично', items: grants.filter((g) => g.mode === 'grant').map((g) => ({ text: grantName(g, catalog), kind: g.item_kind })) },
     { label: 'Робить доступним', items: grants.filter((g) => g.mode === 'unlock').map((g) => ({ text: grantName(g, catalog), kind: g.item_kind })) },
     { label: 'Відкриває магію', items: nodeSpellAccessLines(node, catalog).map((text) => ({ text })) },
+    { label: 'Альтернативна навичка чарування', items: nodeCastSkillLines(node, catalog).map((text) => ({ text })) },
   ].filter((s) => s.items.length > 0);
 
   return sections.map((s) => (

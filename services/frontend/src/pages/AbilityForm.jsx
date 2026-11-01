@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../api/client';
+import abilitiesApi from '../api/abilities';
 import skillTreeApi from '../api/skillTree';
 import npcsApi from '../api/npcs';
 import equipmentApi from '../api/equipment';
 import { ARCHETYPES } from '../constants/characterSheet';
-import { DURATION_UNITS, ABILITY_FORM_FIELDS, pickAbilityFormFields, abilityFormMode } from '../constants/abilities';
+import { DURATION_UNITS, ABILITY_FORM_FIELDS, pickAbilityFormFields } from '../constants/abilities';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import Field, { inputClass } from '../components/ui/Field';
 import SmartTextarea from '../components/ui/SmartTextarea';
@@ -18,11 +19,12 @@ import CollectionMembershipPicker from '../components/CollectionMembershipPicker
 import KindSwitch from '../components/KindSwitch';
 import AuthorField from '../components/AuthorField';
 import EntryFormsSection from '../components/EntryFormsSection';
+import RelatedEntryPicker from '../components/RelatedEntryPicker';
 import SpellComponentsField from '../components/SpellComponentsField';
 import {
   componentsToState, cloneComponentRows, createMissingComponentItems, serializeComponentRows,
 } from '../utils/componentRows';
-import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
+import useEntryForms from '../hooks/useEntryForms';
 
 const ARCHETYPE_KEYS = ['fighter', 'spellcaster', 'rogue'];
 const domain = COLLECTION_DOMAINS.abilities;
@@ -35,10 +37,8 @@ const EMPTY = {
   prerequisite_node_ids: [], prerequisite_logic: 'or',
   image_url: '', image_crop: null,
   collectionIds: [],
-  // Додаткові форми — { kind, id, name } + повні знімки ABILITY_FORM_FIELDS;
-  // основна форма — це поля вище (main_form_name — її назва, лише для
-  // вмінь з альтернативними формами).
-  main_form_name: '',
+  // Додаткові рівневі форми — { kind, id } + повні знімки ABILITY_FORM_FIELDS;
+  // основна форма — це поля вище.
   forms: [],
 };
 
@@ -56,15 +56,13 @@ function formToState(src) {
   };
 }
 
-// Нова форма починається як копія основної. Альтернативна отримує uuid
-// одразу: сервер його зберігає, на нього посилаються лист персонажа й
-// вузли дерева розвитку.
+// Нова форма починається як копія основної. kind — завжди 'primitive' чи
+// 'perfected' (id = kind).
 function newForm(kind, source) {
   return {
     ...pickAbilityFormFields(source),
     kind,
-    id: kind === 'alternative' ? newAlternativeFormId() : kind,
-    name: kind === 'alternative' ? 'Нова форма' : null,
+    id: kind,
     components: cloneComponentRows(source.components),
   };
 }
@@ -85,11 +83,13 @@ export default function AbilityForm() {
   const [collectionsLoaded, setCollectionsLoaded] = useState(false);
   const initialCollectionIds = useRef([]);
   const membershipInitialized = useRef(false);
+  const [related, setRelated] = useState([]);
+  const initialRelatedIds = useRef([]);
 
   const [npcs, setNpcs] = useState([]);
   const [equipmentItems, setEquipmentItems] = useState([]);
   const formsEditor = useEntryForms({ form, setForm, fields: ABILITY_FORM_FIELDS, newForm });
-  const { activeEntry, current, patchForm, setFormMode } = formsEditor;
+  const { allForms, activeEntry, current, patchForm, patchFormAt } = formsEditor;
 
   useEffect(() => {
     skillTreeApi.getNodes().then(setNodes).catch(() => {});
@@ -128,13 +128,21 @@ export default function AbilityForm() {
           prerequisite_node_ids: a.prerequisite_node_ids || [],
           prerequisite_logic: a.prerequisite_logic || 'or',
           image_url: a.image_url || '', image_crop: a.image_crop || null,
-          main_form_name: a.main_form_name || '',
           forms: (a.forms || []).map(formToState),
         }));
-        setFormMode(abilityFormMode(a));
       })
       .catch(() => navigate('/abilities'))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    abilitiesApi.getRelated(id)
+      .then((list) => {
+        initialRelatedIds.current = list.map((r) => r.id);
+        setRelated(list);
+      })
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -146,9 +154,6 @@ export default function AbilityForm() {
   }, [isEdit, loading, collectionsLoaded, collections, id]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  // Поля, що відрізняються між формами, читаються й пишуться через активну форму.
-  const setL = (field) => (e) => patchForm({ [field]: e.target.value });
-  const formSuffix = form.forms.length ? ` · ${activeEntry.label}` : '';
 
   const reconcileCollections = async (itemId) => {
     const before = initialCollectionIds.current;
@@ -158,6 +163,17 @@ export default function AbilityForm() {
     await Promise.all([
       ...toAdd.map((cid) => domain.collectionsApi.addItem(cid, domain.itemIdField, itemId)),
       ...toRemove.map((cid) => domain.collectionsApi.removeItem(cid, itemId)),
+    ]);
+  };
+
+  const reconcileRelated = async (abilityId) => {
+    const before = initialRelatedIds.current;
+    const after = related.map((r) => r.id);
+    const toAdd = after.filter((rid) => !before.includes(rid));
+    const toRemove = before.filter((rid) => !after.includes(rid));
+    await Promise.all([
+      ...toAdd.map((rid) => abilitiesApi.addRelated(abilityId, rid)),
+      ...toRemove.map((rid) => abilitiesApi.removeRelated(abilityId, rid)),
     ]);
   };
 
@@ -187,17 +203,19 @@ export default function AbilityForm() {
       const payload = {
         ...rest,
         ...serializeForm(form),
-        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id, name: f.name })),
+        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id })),
         image_url: form.image_url || null,
         image_crop: form.image_url ? (form.image_crop || null) : null,
       };
       if (isEdit) {
         await api.put(`/api/abilities/${id}`, payload);
         await reconcileCollections(id);
+        await reconcileRelated(id);
         navigate(`/abilities/${id}`);
       } else {
         const { data } = await api.post('/api/abilities/', payload);
         await reconcileCollections(data.ability.id);
+        await reconcileRelated(data.ability.id);
         navigate(`/abilities/${data.ability.id}`);
       }
     } catch (err) {
@@ -209,8 +227,57 @@ export default function AbilityForm() {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
+  // Поля "Механіка й описи"+"Автор" для ОДНІЄЇ форми — раз на мобільному
+  // (активна вкладка), раз на колонку в десктопній сітці.
+  const renderFormFields = (entry, patch) => (
+    <>
+      <Field label="Тривалість" className="mb-4">
+        <div className="flex gap-2">
+          {entry.duration_unit !== 'instant' && entry.duration_unit !== 'permanent' && (
+            <input
+              type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={entry.duration_value}
+              onChange={(e) => patch({ duration_value: e.target.value })}
+            />
+          )}
+          <select className={`${inputClass} min-w-0 flex-1`} value={entry.duration_unit} onChange={(e) => patch({ duration_unit: e.target.value })}>
+            {Object.entries(DURATION_UNITS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+      </Field>
+      <Field label="Компоненти" className="mb-4">
+        <SpellComponentsField
+          components={entry.components}
+          onChange={(next) => patch({ components: next })}
+          equipmentItems={equipmentItems}
+        />
+      </Field>
+      <SmartTextarea
+        label="Механічний опис" className="mb-4"
+        value={entry.mechanical_desc} onChange={(e) => patch({ mechanical_desc: e.target.value })}
+        rows={4}
+        placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
+      />
+      <SmartTextarea
+        label="Наративний опис" className="mb-4"
+        value={entry.narrative_desc} onChange={(e) => patch({ narrative_desc: e.target.value })}
+        rows={3}
+        placeholder="Як це виглядає та відчувається у світі гри..."
+      />
+      <AuthorField
+        name={entry.lore_creator}
+        npcId={entry.lore_creator_npc_id}
+        onChange={({ name, npc_id }) => patch({ lore_creator: name, lore_creator_npc_id: npc_id })}
+        npcs={npcs}
+        label="Творець"
+        hint="Необов'язкове лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне"
+      />
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8 lg:max-w-6xl">
       <Link to="/abilities" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Вміння
       </Link>
@@ -264,61 +331,43 @@ export default function AbilityForm() {
         </FormSection>
 
         <FormSection title="Форми">
-          <EntryFormsSection
-            forms={formsEditor}
-            mainFormName={form.main_form_name}
-            onMainFormNameChange={set('main_form_name')}
-            fieldsHint="Тривалість, компоненти, описи й автор нижче"
-            altNamePlaceholder="напр. Шквал ударів"
-          />
+          <EntryFormsSection forms={formsEditor} fieldsHint="Тривалість, компоненти, описи й автор нижче" />
         </FormSection>
 
-        <FormSection title={`Механіка й описи${formSuffix}`}>
-          <Field label="Тривалість" className="mb-4">
-            <div className="flex gap-2">
-              {current.duration_unit !== 'instant' && current.duration_unit !== 'permanent' && (
-                <input
-                  type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={current.duration_value}
-                  onChange={setL('duration_value')}
-                />
-              )}
-              <select className={`${inputClass} min-w-0 flex-1`} value={current.duration_unit} onChange={setL('duration_unit')}>
-                {Object.entries(DURATION_UNITS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+        <FormSection title={allForms.length > 1 ? `Механіка й описи · ${activeEntry.label}` : 'Механіка й описи'}>
+          <div className="lg:hidden">{renderFormFields(current, patchForm)}</div>
+          {allForms.length > 1 ? (
+            <div className={`hidden gap-6 lg:grid ${allForms.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+              {allForms.map((f) => (
+                <div key={f.key} className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+                    <span className="text-sm font-bold text-accent">{f.label}</span>
+                    {f.key !== 'main' && (
+                      <button
+                        type="button"
+                        onClick={() => formsEditor.removeForm(f.key, f.label)}
+                        className="text-xs text-text-dim hover:text-danger"
+                      >
+                        Видалити
+                      </button>
+                    )}
+                  </div>
+                  {renderFormFields(f, (patch) => patchFormAt(f.key, patch))}
+                </div>
+              ))}
             </div>
-          </Field>
-          <Field label="Компоненти" className="mb-4">
-            <SpellComponentsField
-              key={activeEntry.key}
-              components={current.components}
-              onChange={(next) => patchForm({ components: next })}
-              equipmentItems={equipmentItems}
-            />
-          </Field>
-          <SmartTextarea
-            label="Механічний опис" className="mb-4"
-            value={current.mechanical_desc} onChange={setL('mechanical_desc')}
-            rows={4}
-            placeholder="Що відбувається механічно, коли персонаж використовує це вміння..."
-          />
-          <SmartTextarea
-            label="Наративний опис"
-            value={current.narrative_desc} onChange={setL('narrative_desc')}
-            rows={3}
-            placeholder="Як це виглядає та відчувається у світі гри..."
-          />
+          ) : (
+            <div className="hidden lg:block">{renderFormFields(current, patchForm)}</div>
+          )}
         </FormSection>
 
-        <FormSection title={`Автор${formSuffix}`}>
-          <AuthorField
-            name={current.lore_creator}
-            npcId={current.lore_creator_npc_id}
-            onChange={({ name, npc_id }) => patchForm({ lore_creator: name, lore_creator_npc_id: npc_id })}
-            npcs={npcs}
-            label="Творець"
-            hint="Необов'язкове лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне"
+        <FormSection title="Рівноцінні / альтернативні">
+          <RelatedEntryPicker
+            serviceKey="abilities"
+            excludeId={id}
+            value={related}
+            onChange={setRelated}
+            label="Додати вміння"
           />
         </FormSection>
 

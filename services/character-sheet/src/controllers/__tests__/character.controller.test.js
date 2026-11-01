@@ -252,9 +252,20 @@ describe('CharacterController.getSheet', () => {
     expect(payload.timer).toEqual({ hours: 0, next_check_at: 12, checks_done: 0, checks_passed: 0 });
   });
 
-  it('allows a global game_master role even when private and not campaign GM, but keeps is_owner false', async () => {
+  it('denies a global game_master role when private and not campaign GM', async () => {
     CharacterModel.findById.mockResolvedValue({ id: 'c1', user_id: 'owner-1', is_public: false });
     isCampaignGmForCharacter.mockResolvedValue(false);
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'gm-user', role: 'game_master' } });
+    const res = mockRes();
+
+    await CharacterController.getSheet(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('allows a campaign GM for the character even when private, but keeps is_owner/is_spell_master as GM authority', async () => {
+    CharacterModel.findById.mockResolvedValue({ id: 'c1', user_id: 'owner-1', is_public: false });
+    isCampaignGmForCharacter.mockResolvedValue(true);
     mockAggregationModels();
     const req = mockReq({ params: { id: 'c1' }, user: { sub: 'gm-user', role: 'game_master' } });
     const res = mockRes();
@@ -262,7 +273,10 @@ describe('CharacterController.getSheet', () => {
     await CharacterController.getSheet(req, res);
 
     expect(res.status).not.toHaveBeenCalled();
-    expect(res.json.mock.calls[0][0].is_owner).toBe(false);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.is_owner).toBe(true);
+    expect(payload.is_gm).toBe(true);
+    expect(payload.is_spell_master).toBe(true);
   });
 
   it('allows an admin even when private and not campaign GM, and marks is_owner true', async () => {

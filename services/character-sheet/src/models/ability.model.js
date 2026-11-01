@@ -1,5 +1,5 @@
 const pool = require('../config/db');
-const { formKeys } = require('./form-progress');
+const { entryTiers } = require('./form-progress');
 
 const prereqNodesSelect = `COALESCE(
     (SELECT jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title) ORDER BY n.title)
@@ -17,8 +17,7 @@ const abilitySelect = `CASE WHEN ae.id IS NULL THEN NULL ELSE jsonb_build_object
     'duration_value', ae.duration_value,
     'duration_unit', ae.duration_unit,
     'lore_creator', ae.lore_creator,
-    'forms', ae.forms,
-    'main_form_name', ae.main_form_name
+    'forms', ae.forms
   ) END AS ability`;
 
 const AbilityModel = {
@@ -34,9 +33,10 @@ const AbilityModel = {
     return rows;
   },
 
-  // Які форми має вміння — див. form-progress.js. null, якщо його не існує.
-  formKeys(abilityId) {
-    return formKeys('abilities.entries', abilityId);
+  // Рівневі форми вміння по зростанню — див. form-progress.js. null, якщо
+  // його не існує.
+  tiers(abilityId) {
+    return entryTiers('abilities.entries', abilityId);
   },
 
   async findOne(characterId, abilityId) {
@@ -47,36 +47,34 @@ const AbilityModel = {
     return rows[0] || null;
   },
 
-  async add(characterId, abilityId, { form_tier = null, primary_form = 'main', mastered_forms = ['main'] } = {}) {
+  async add(characterId, abilityId, { form_tier = null } = {}) {
     const { rows } = await pool.query(
       `WITH inserted AS (
-         INSERT INTO character_sheet.abilities (character_id, ability_id, form_tier, primary_form, mastered_forms)
-         VALUES ($1, $2, $3, $4, $5)
+         INSERT INTO character_sheet.abilities (character_id, ability_id, form_tier)
+         VALUES ($1, $2, $3)
          ON CONFLICT (character_id, ability_id) DO NOTHING
          RETURNING *
        )
        SELECT ca.*, ${abilitySelect}
        FROM inserted ca
        LEFT JOIN abilities.entries ae ON ae.id = ca.ability_id`,
-      [characterId, abilityId, form_tier, primary_form, mastered_forms]
+      [characterId, abilityId, form_tier]
     );
     return rows[0] || null;
   },
 
-  async patch(characterId, abilityId, { form_tier, primary_form, mastered_forms }) {
+  async patch(characterId, abilityId, { form_tier }) {
     const { rows } = await pool.query(
       `WITH updated AS (
          UPDATE character_sheet.abilities
-         SET form_tier      = COALESCE($3, form_tier),
-             primary_form   = COALESCE($4, primary_form),
-             mastered_forms = COALESCE($5, mastered_forms)
+         SET form_tier = COALESCE($3, form_tier)
          WHERE character_id = $1 AND ability_id = $2
          RETURNING *
        )
        SELECT ca.*, ${abilitySelect}
        FROM updated ca
        LEFT JOIN abilities.entries ae ON ae.id = ca.ability_id`,
-      [characterId, abilityId, form_tier ?? null, primary_form ?? null, mastered_forms ?? null]
+      [characterId, abilityId, form_tier ?? null]
     );
     return rows[0] || null;
   },

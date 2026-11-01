@@ -30,9 +30,6 @@ function validateImportPayload(payload) {
       if (!item || typeof item !== 'object' || !item.name) {
         return `Колекція «${data.name}»: кожен запис у items має мати name`;
       }
-      if (SpellModel.hasMixedForms(item.forms)) {
-        return `Колекція «${data.name}», «${item.name}»: заклинання не може мати одночасно рівневі й альтернативні форми`;
-      }
     }
   }
   return null;

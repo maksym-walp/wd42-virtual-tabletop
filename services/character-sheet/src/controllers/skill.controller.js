@@ -8,9 +8,8 @@ const SkillController = {
     const char = await CharacterModel.findById(req.params.id);
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
     const isOwner = char.user_id === req.user.sub;
-    const isGM = req.user.role === 'game_master';
     const isAdmin = req.user.role === 'admin';
-    if (!isOwner && !isGM && !isAdmin && !char.is_public && !await isCampaignGmForCharacter(char.id, req.user.sub)) {
+    if (!isOwner && !isAdmin && !char.is_public && !await isCampaignGmForCharacter(char.id, req.user.sub)) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 

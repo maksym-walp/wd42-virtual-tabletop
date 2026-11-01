@@ -48,4 +48,47 @@ async function treeModifiersForMany(characterIds, db = pool) {
   return byCharacter;
 }
 
-module.exports = { treeModifiers, treeModifiersForMany };
+// Альтернативні навички чарування відкритих вузлів дерева
+// (skill_tree.nodes.cast_skill_options, міграція 119) — та сама
+// міжсхемна модель, що й вище для modifiers, але це довідкові дані для
+// вибору гравця під час кастування (battle tracker), а не кидкові
+// профілі, тож рахуються окремим шляхом, не всередині rules/modifiers.js.
+// Плоский список { id, tradition_id, skill_key, note, node_title }.
+async function treeCastSkillOptions(characterId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT n.title, n.cast_skill_options
+       FROM character_sheet.tree_progress tp
+       JOIN skill_tree.nodes n ON n.id = tp.node_id
+      WHERE tp.character_id = $1
+        AND jsonb_array_length(COALESCE(n.cast_skill_options, '[]'::jsonb)) > 0
+      ORDER BY tp.unlocked_at ASC`,
+    [characterId]
+  );
+  return rows.flatMap((row) =>
+    (Array.isArray(row.cast_skill_options) ? row.cast_skill_options : []).map((opt) => ({ ...opt, node_title: row.title }))
+  );
+}
+
+// Те саме для кількох персонажів одразу → { [characterId]: [...варіанти] }.
+async function treeCastSkillOptionsForMany(characterIds, db = pool) {
+  if (!characterIds.length) return {};
+  const { rows } = await db.query(
+    `SELECT tp.character_id, n.title, n.cast_skill_options
+       FROM character_sheet.tree_progress tp
+       JOIN skill_tree.nodes n ON n.id = tp.node_id
+      WHERE tp.character_id = ANY($1::uuid[])
+        AND jsonb_array_length(COALESCE(n.cast_skill_options, '[]'::jsonb)) > 0
+      ORDER BY tp.unlocked_at ASC`,
+    [characterIds]
+  );
+  const byCharacter = {};
+  for (const row of rows) {
+    const list = (byCharacter[row.character_id] ||= []);
+    for (const opt of Array.isArray(row.cast_skill_options) ? row.cast_skill_options : []) {
+      list.push({ ...opt, node_title: row.title });
+    }
+  }
+  return byCharacter;
+}
+
+module.exports = { treeModifiers, treeModifiersForMany, treeCastSkillOptions, treeCastSkillOptionsForMany };

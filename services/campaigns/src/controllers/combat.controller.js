@@ -16,6 +16,35 @@ const HIDDEN_COMBATANT_FIELDS = ['id', 'name', 'description', 'is_hidden'];
 // mistyped quantity accidentally flooding the tracker with rows.
 const MAX_COMPENDIUM_QUANTITY = 20;
 
+// Межа кількості цілей одного каста — запобіжник реалізації, не число з
+// книги правил (та дозволяє декілька цілей, розділ 9, але не фіксує межу).
+const MAX_CAST_TARGETS = 10;
+
+// Застосовує вже розвʼязану шкоду (outcome.hp_damage) до цілі атаки чи
+// каста: персонажу гравця — через character-sheet (там поточний максимум
+// здоровʼя, Травма, масивна шкода й шкала смерті — його правила), НІПу —
+// віднімає числа прямо на рядку комбатанта. Спільне для attack і cast.
+async function applyOutcomeToTarget(target, campaign, outcome, authorization) {
+  let sheet = null;
+  let targetRow = await CombatantModel.findInCampaign(target.id, campaign.id);
+  if (outcome.hp_damage > 0) {
+    if (target.character_id) {
+      sheet = await CharacterSheetClient.applyDamage(authorization, target.character_id, outcome.hp_damage);
+      targetRow = await CombatantModel.update(target.id, campaign.id, {
+        health: sheet.result.hp_after, temp_hp: sheet.result.temp_after,
+      });
+    } else {
+      const temp = Number(targetRow.temp_hp) || 0;
+      const fromTemp = Math.min(temp, outcome.hp_damage);
+      targetRow = await CombatantModel.update(target.id, campaign.id, {
+        temp_hp: temp - fromTemp,
+        health: Math.max(0, (Number(targetRow.health) || 0) - (outcome.hp_damage - fromTemp)),
+      });
+    }
+  }
+  return { targetRow, sheet };
+}
+
 // Поля, які гравець (не GM) сміє міняти на СВОЄМУ комбатанті: ХП (розумний
 // парсинг +N/-N/N на фронті вже звівся до цих двох чисел), захисти й
 // ініціативу (або з кидка кубика на сайті, або вручну — за столом гравці
@@ -295,25 +324,7 @@ const CombatController = {
 
     // Шкода. Персонажу — через character-sheet (там максимум здоровʼя й
     // пороги станів); НІПу — просто віднімаємо числа тут.
-    let sheet = null;
-    let targetRow = await CombatantModel.findInCampaign(target.id, campaign.id);
-    if (outcome.hp_damage > 0) {
-      if (target.character_id) {
-        sheet = await CharacterSheetClient.applyDamage(
-          req.headers?.authorization, target.character_id, outcome.hp_damage
-        );
-        targetRow = await CombatantModel.update(target.id, campaign.id, {
-          health: sheet.result.hp_after, temp_hp: sheet.result.temp_after,
-        });
-      } else {
-        const temp = Number(targetRow.temp_hp) || 0;
-        const fromTemp = Math.min(temp, outcome.hp_damage);
-        targetRow = await CombatantModel.update(target.id, campaign.id, {
-          temp_hp: temp - fromTemp,
-          health: Math.max(0, (Number(targetRow.health) || 0) - (outcome.hp_damage - fromTemp)),
-        });
-      }
-    }
+    const { targetRow, sheet } = await applyOutcomeToTarget(target, campaign, outcome, req.headers?.authorization);
 
     // Атака коштує дію — трекер і журнал повторень (4.2, 4.10).
     const attackerRow = await CombatantModel.spendAction(attacker.id, 'attack');
@@ -343,6 +354,139 @@ const CombatController = {
       attacker: attackerRow, target: targetRow,
       sheet: sheet?.result ?? null,
     });
+  },
+
+  // POST /:id/combat/cast — каст бойового заклинання (spell_kind='combat')
+  // одним кроком, той самий потік, що й attack: кубики кидає клієнт, сервер
+  // лише розвʼязує результат. Відмінності від attack:
+  //   • спершу списується магічна енергія через character-sheet (єдине, що
+  //     тут обовʼязково перевіряє сервер — економічний ресурс іншого
+  //     сервісу); провал — жодної шкоди чи запису журналу;
+  //   • цілей може бути декілька, кожна розвʼязується незалежно (без
+  //     спільного пулу шкоди) — магічний снаряд, що потребує влучання,
+  //     резолвиться так само, як атака зброєю (розділ 4.8.3);
+  //   • одна дія витрачається на каст загалом, незалежно від кількості цілей.
+  //
+  // MVP: лише миттєві ефекти. Заклинання з тривалим ефектом (шкода на
+  // початку раунду тощо) тут не автоматизуються — журнал бою й надалі
+  // лишається ручним відстеженням майстра для таких випадків.
+  //
+  // Кастувати можуть лише персонажі гравців (у НІПів немає known_spells);
+  // форма/рівень і вибір навички чарування перевіряє клієнт проти вже
+  // отриманого листа персонажа — так само, як вибір зброї/навички в attack.
+  async cast(req, res) {
+    const campaign = await loadCampaignOr404(req, res);
+    if (!campaign) return;
+
+    const { caster_id, spell, targets } = req.body || {};
+    if (!caster_id || !spell?.id || !Number.isFinite(Number(spell.energy_cost))) {
+      return res.status(400).json({ message: 'caster_id і spell (id, energy_cost) є обовʼязковими' });
+    }
+    if (!Array.isArray(targets) || !targets.length || targets.length > MAX_CAST_TARGETS) {
+      return res.status(400).json({ message: `targets — масив від 1 до ${MAX_CAST_TARGETS} цілей` });
+    }
+    if (targets.some((t) => t?.target_id === caster_id)) {
+      return res.status(400).json({ message: 'Комбатант не може кастувати на себе як на ціль' });
+    }
+    if (targets.some((t) => !t?.hit || !Number.isFinite(Number(t.hit.total)))) {
+      return res.status(400).json({ message: 'hit.total — результат кидка влучання для кожної цілі' });
+    }
+
+    const gm = canManage(campaign, req.user);
+    if (!gm && !await CombatantModel.isOwnedByUser(caster_id, campaign.id, req.user.sub)) {
+      return res.status(403).json({ message: 'Доступ заборонено' });
+    }
+
+    const scene = await CombatSceneModel.findCurrentByCampaign(campaign.id);
+    if (!scene) return res.status(404).json({ message: 'Активної бойової сцени не знайдено' });
+    if (scene.ended_at) return res.status(409).json({ message: 'Бій уже завершено' });
+
+    const caster = await CombatantModel.findInCampaign(caster_id, campaign.id);
+    if (!caster) return res.status(404).json({ message: 'Комбатанта не знайдено' });
+    if (caster.combat_scene_id !== scene.id) return res.status(404).json({ message: 'Комбатант не з цієї сцени' });
+    if (!caster.character_id) return res.status(400).json({ message: 'Кастувати заклинання може лише персонаж гравця' });
+
+    const targetRows = await Promise.all(targets.map((t) => CombatantModel.findInCampaign(t.target_id, campaign.id)));
+    if (targetRows.some((t) => !t || t.combat_scene_id !== scene.id)) {
+      return res.status(404).json({ message: 'Комбатанта не знайдено або він не з цієї сцени' });
+    }
+
+    // Енергія списується одразу й повністю, до будь-якого розвʼязання
+    // кидків — при недостатній енергії жодна шкода чи запис журналу не
+    // створюється (character-sheet сам повертає 400 у цьому разі).
+    let energyResult;
+    try {
+      energyResult = await CharacterSheetClient.spendMagic(
+        req.headers?.authorization, caster.character_id, Number(spell.energy_cost)
+      );
+    } catch (err) {
+      if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+      throw err;
+    }
+
+    const perTarget = [];
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i];
+      const target = targetRows[i];
+
+      let activeDefense = Number(target.active_defense) || 0;
+      let dodged = null;
+      if (t.dodge && target.reaction_reserved) {
+        const rolled = Math.max(0, Math.trunc(Number(t.dodge.total) || 0));
+        activeDefense = Math.max(activeDefense, rolled);
+        await CombatantModel.applyDodge(target.id, activeDefense);
+        dodged = { rolled, formula: t.dodge.formula ?? null, active_defense: activeDefense };
+      }
+
+      const outcome = resolveAttack({
+        total: t.hit.total,
+        natural: t.hit.natural,
+        passive_defense: target.passive_defense,
+        active_defense: activeDefense,
+        damage: t.damage?.total,
+      });
+
+      if (outcome.passive_after !== (Number(target.passive_defense) || 0)) {
+        await CombatantModel.update(target.id, campaign.id, { passive_defense: outcome.passive_after });
+      }
+
+      const { targetRow, sheet } = await applyOutcomeToTarget(target, campaign, outcome, req.headers?.authorization);
+
+      const payload = {
+        spell: {
+          id: spell.id, name: spell.name ?? null, form_key: spell.form_key ?? null,
+          form_label: spell.form_label ?? null, skill_key: spell.skill_key ?? null,
+        },
+        hit: { ...t.hit, ...outcome },
+        dodge: dodged,
+        damage: t.damage ? { ...t.damage, ...outcome } : null,
+        sheet: sheet?.result ?? null,
+      };
+      // Журнал не має розкривати те, що ховає таблиця — лише ця пара.
+      const entry = await CombatLogModel.add(scene.id, {
+        round_number: scene.round_number,
+        actor: caster,
+        target,
+        kind: 'cast',
+        payload,
+        is_gm_only: caster.is_hidden || target.is_hidden,
+      });
+
+      perTarget.push({
+        target_id: target.id, outcome, dodge: dodged, log_entry: entry,
+        target: targetRow, sheet: sheet?.result ?? null,
+      });
+    }
+
+    // Один каст — одна дія, незалежно від кількості цілей.
+    const casterRow = await CombatantModel.spendAction(caster.id, 'cast');
+
+    bus.publish(campaign.id, 'combat');
+    // Кастер сам — персонаж гравця, чия енергія щойно змінилась; будь-яка
+    // уражена ціль-персонаж теж могла змінитись — одне сповіщення покриває обидва.
+    bus.publish(campaign.id, 'characters');
+
+    res.json({ energy: energyResult.result, per_target: perTarget, caster: casterRow });
   },
 
   // POST /:id/combat/log — кидок, що нікого не атакує (ініціатива, рятівний

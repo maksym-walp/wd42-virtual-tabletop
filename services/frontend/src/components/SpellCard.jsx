@@ -29,11 +29,12 @@ export default function SpellCard({ spell, ...rest }) {
 
       <h3 className="px-3.5 pb-1 pt-2.5 font-display text-lg text-accent">{spell.name}</h3>
       <AuthorBadge username={spell.owner_username} variant="inline" className="px-3.5 pb-1" />
-      {(complexity || formCount > 1) && (
+      {(complexity || formCount > 1 || spell.damage_die) && (
         <p className="px-3.5 pb-1 text-xs text-text-dim">
           {[
             complexity?.label,
             formCount > 1 ? `${formCount} ${pluralizeUk(formCount, ['форма', 'форми', 'форм'])}` : null,
+            spell.damage_die ? `шкода ${spell.damage_die}` : null,
           ].filter(Boolean).join(' · ')}
         </p>
       )}

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import api from '../api/client';
+import spellbookApi from '../api/spellbook';
 import equipmentApi from '../api/equipment';
 import traditionsApi from '../api/traditions';
 import npcsApi from '../api/npcs';
 import {
   RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_COMPLEXITIES, FORM_FIELDS, pickFormFields, spellFormMode,
+  ACTION_OPTIONS, SPELL_COMPLEXITIES, DAMAGE_DICE, FORM_FIELDS, pickFormFields,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,7 @@ import Button from '../components/ui/Button';
 import CollectionMembershipPicker from '../components/CollectionMembershipPicker';
 import KindSwitch from '../components/KindSwitch';
 import SpellComponentsField from '../components/SpellComponentsField';
+import RelatedEntryPicker from '../components/RelatedEntryPicker';
 import {
   componentsToState, cloneComponentRows, createMissingComponentItems, serializeComponentRows,
 } from '../utils/componentRows';
@@ -25,7 +27,7 @@ import AuthorField from '../components/AuthorField';
 import useSpellKinds from '../hooks/useSpellKinds';
 import useMagicForms from '../hooks/useMagicForms';
 import Tooltip from '../components/ui/Tooltip';
-import useEntryForms, { newAlternativeFormId } from '../hooks/useEntryForms';
+import useEntryForms from '../hooks/useEntryForms';
 import EntryFormsSection from '../components/EntryFormsSection';
 
 const domain = COLLECTION_DOMAINS.spellbook;
@@ -34,15 +36,13 @@ const EMPTY = {
   name: '', nature: ['arcana'], spell_kind: 'utility', complexity: 'simple',
   mechanical_desc: '', narrative_desc: '', lore_creator: '', lore_creator_npc_id: null,
   energy_cost: 0, action_time: 1, ritual: 'impossible',
-  duration_value: '', duration_unit: 'instant', range_desc: '',
+  duration_value: '', duration_unit: 'instant', range_desc: '', damage_die: '',
   components: [], is_public: true, is_canonical: true,
   image_url: '', image_crop: null,
   collectionIds: [],
   traditionIds: [],
-  // Додаткові форми — { kind, id, name } + повні знімки FORM_FIELDS;
-  // основна форма — це поля вище (main_form_name — її назва, лише для
-  // заклинань з альтернативними формами).
-  main_form_name: '',
+  // Додаткові рівневі форми — { kind, id } + повні знімки FORM_FIELDS;
+  // основна форма — це поля вище.
   forms: [],
 };
 
@@ -58,20 +58,19 @@ function formToState(src) {
     lore_creator_npc_id: src.lore_creator_npc_id ?? null,
     duration_value: src.duration_value ?? '',
     range_desc: src.range_desc || '',
+    damage_die: src.damage_die || '',
     components: componentsToState(src.components),
   };
 }
 
 // Нова форма починається як копія основної — зазвичай форми відрізняються
 // лише кількома полями. Рядки компонентів отримують нові key, щоб форми не
-// ділили стан рядка. Альтернативна отримує uuid одразу: сервер його
-// зберігає, і на нього посилається лист персонажа.
+// ділили стан рядка. kind — завжди 'primitive' чи 'perfected' (id = kind).
 function newForm(kind, source) {
   return {
     ...pickFormFields(source),
     kind,
-    id: kind === 'alternative' ? newAlternativeFormId() : kind,
-    name: kind === 'alternative' ? 'Нова форма' : null,
+    id: kind,
     components: cloneComponentRows(source.components),
   };
 }
@@ -99,9 +98,12 @@ export default function SpellForm() {
   const [traditions, setTraditions] = useState([]);
   const initialTraditionIds = useRef([]);
   const [npcs, setNpcs] = useState([]);
-  // Активна форма й тип форм (основна + альтернативні або рівневі).
+  const [related, setRelated] = useState([]);
+  const initialRelatedIds = useRef([]);
+  // Активна рівнева форма (вкладка на мобільному — на десктопі всі наявні
+  // форми показуються поряд).
   const formsEditor = useEntryForms({ form, setForm, fields: FORM_FIELDS, newForm });
-  const { activeEntry, current, patchForm, setFormMode } = formsEditor;
+  const { allForms, activeEntry, current, patchForm, patchFormAt } = formsEditor;
 
   useEffect(() => {
     npcsApi.list().then(setNpcs).catch(() => {});
@@ -140,17 +142,26 @@ export default function SpellForm() {
           energy_cost: s.energy_cost, action_time: s.action_time,
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
+          damage_die: s.damage_die || '',
           components: componentsToState(s.components),
           is_public: s.is_public,
           image_url: s.image_url || '', image_crop: s.image_crop || null,
           traditionIds,
-          main_form_name: s.main_form_name || '',
           forms: (s.forms || []).map(formToState),
         }));
-        setFormMode(spellFormMode(s));
       })
       .catch(() => navigate('/spellbook'))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    spellbookApi.getRelated(id)
+      .then((list) => {
+        initialRelatedIds.current = list.map((r) => r.id);
+        setRelated(list);
+      })
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -162,10 +173,6 @@ export default function SpellForm() {
   }, [isEdit, loading, collectionsLoaded, collections, id]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-
-  // Поля, що відрізняються між формами, читаються й пишуться через активну форму.
-  const setL = (field) => (e) => patchForm({ [field]: e.target.value });
-  const setLNum = (field) => (e) => patchForm({ [field]: Number(e.target.value) });
 
   const reconcileCollections = async (itemId) => {
     const before = initialCollectionIds.current;
@@ -189,6 +196,17 @@ export default function SpellForm() {
     ]);
   };
 
+  const reconcileRelated = async (spellId) => {
+    const before = initialRelatedIds.current;
+    const after = related.map((r) => r.id);
+    const toAdd = after.filter((rid) => !before.includes(rid));
+    const toRemove = before.filter((rid) => !after.includes(rid));
+    await Promise.all([
+      ...toAdd.map((rid) => spellbookApi.addRelated(spellId, rid)),
+      ...toRemove.map((rid) => spellbookApi.removeRelated(spellId, rid)),
+    ]);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) { setError('Вкажи назву заклинання'); return; }
@@ -204,13 +222,14 @@ export default function SpellForm() {
         duration_value: src.duration_value === '' ? null : Number(src.duration_value),
         energy_cost: Number(src.energy_cost),
         action_time: Number(src.action_time),
+        damage_die: src.damage_die || null,
       });
 
       const { collectionIds, traditionIds, forms, ...rest } = form;
       const payload = {
         ...rest,
         ...serializeForm(form),
-        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id, name: f.name })),
+        forms: forms.map((f) => ({ ...serializeForm(f), kind: f.kind, id: f.id })),
         image_url: form.image_url || null,
         image_crop: form.image_url ? (form.image_crop || null) : null,
       };
@@ -218,11 +237,13 @@ export default function SpellForm() {
         await api.put(`/api/spellbook/${id}`, payload);
         await reconcileCollections(id);
         await reconcileTraditions(id);
+        await reconcileRelated(id);
         navigate(`/spellbook/${id}`);
       } else {
         const { data } = await api.post('/api/spellbook/', payload);
         await reconcileCollections(data.spell.id);
         await reconcileTraditions(data.spell.id);
+        await reconcileRelated(data.spell.id);
         navigate(`/spellbook/${data.spell.id}`);
       }
     } catch (err) {
@@ -243,8 +264,126 @@ export default function SpellForm() {
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
 
+  // Поля "Механіка"+"Описи" для ОДНІЄЇ форми — викликається раз на
+  // мобільному (для активної вкладки) і раз на колонку в десктопній сітці.
+  const renderFormFields = (entry, patch) => (
+    <>
+      <Field label="Складність" className="mb-4">
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(SPELL_COMPLEXITIES).map(([key, { label }]) => (
+            <button
+              key={key} type="button"
+              onClick={() => patch({ complexity: entry.complexity === key ? '' : key })}
+              className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                entry.complexity === key ? 'border-gold bg-gold/10 text-gold' : 'border-border text-text-dim'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Вид заклинання" className="mb-4">
+        <div className="flex flex-wrap gap-1.5">
+          {spellKinds.map(({ key, label }) => (
+            <button
+              key={key} type="button"
+              onClick={() => patch({ spell_kind: key })}
+              className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                entry.spell_kind === key ? 'border-gold bg-gold/10 text-gold' : 'border-border text-text-dim'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="Магічна енергія">
+          <input type="number" min={0} className={inputClass} value={entry.energy_cost} onChange={(e) => patch({ energy_cost: Number(e.target.value) })} />
+        </Field>
+        <Field label="Час виконання">
+          <select className={inputClass} value={entry.action_time} onChange={(e) => patch({ action_time: Number(e.target.value) })}>
+            {ACTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Ритуал">
+          <select className={inputClass} value={entry.ritual} onChange={(e) => patch({ ritual: e.target.value })}>
+            {Object.entries(RITUAL_TYPES).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Тривалість">
+          <div className="flex gap-2">
+            {entry.duration_unit !== 'instant' && entry.duration_unit !== 'permanent' && (
+              <input
+                type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={entry.duration_value}
+                onChange={(e) => patch({ duration_value: e.target.value })}
+              />
+            )}
+            <select className={`${inputClass} min-w-0 flex-1`} value={entry.duration_unit} onChange={(e) => patch({ duration_unit: e.target.value })}>
+              {Object.entries(DURATION_UNITS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+        </Field>
+        <Field label="Дальність">
+          <input
+            type="text" className={inputClass} value={entry.range_desc} onChange={(e) => patch({ range_desc: e.target.value })}
+            placeholder="напр. Дотик, 10 метрів, Себе..." maxLength={200}
+          />
+        </Field>
+      </div>
+
+      {entry.spell_kind === 'combat' && (
+        <Field label="Кубик шкоди" hint="Кількість кубиків — з Майстерності персонажа (не тут)" className="mb-4">
+          <select className={inputClass} value={entry.damage_die} onChange={(e) => patch({ damage_die: e.target.value })}>
+            <option value="">Без шкоди</option>
+            {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </Field>
+      )}
+
+      <Field label="Компоненти" className="mb-4">
+        <SpellComponentsField
+          components={entry.components}
+          onChange={(next) => patch({ components: next })}
+          equipmentItems={equipmentItems}
+        />
+      </Field>
+
+      <SmartTextarea
+        label="Механічний опис" className="mb-4"
+        value={entry.mechanical_desc} onChange={(e) => patch({ mechanical_desc: e.target.value })}
+        rows={4}
+        placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
+      />
+      <SmartTextarea
+        label="Наративний опис" className="mb-4"
+        value={entry.narrative_desc} onChange={(e) => patch({ narrative_desc: e.target.value })}
+        rows={3}
+        placeholder="Як це виглядає та відчувається у світі гри..."
+      />
+      <AuthorField
+        name={entry.lore_creator}
+        npcId={entry.lore_creator_npc_id}
+        onChange={({ name, npc_id }) => patch({ lore_creator: name, lore_creator_npc_id: npc_id })}
+        npcs={npcs}
+        label="Творець"
+        hint="Лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне (напр. ім'я архімага, що винайшов це заклинання)"
+      />
+    </>
+  );
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-3xl px-4 py-8 pb-32 sm:px-6 md:pb-8 lg:max-w-6xl">
       <Link to="/spellbook" className="mb-3 inline-flex items-center gap-1.5 text-sm text-text-dim">
         <ArrowLeft size={15} /> Книга заклинань
       </Link>
@@ -316,129 +455,45 @@ export default function SpellForm() {
 
         {/* — Форми — */}
         <FormSection title="Форми">
-          <EntryFormsSection
-            forms={formsEditor}
-            mainFormName={form.main_form_name}
-            onMainFormNameChange={set('main_form_name')}
-            fieldsHint="Механіка й описи нижче"
-            altNamePlaceholder="напр. Крижана форма"
-          />
+          <EntryFormsSection forms={formsEditor} fieldsHint="Механіка й описи нижче" />
         </FormSection>
 
-        {/* — Механіка — */}
-        <FormSection title={form.forms.length ? `Механіка · ${activeEntry.label}` : 'Механіка'}>
-          <Field label="Складність" className="mb-4">
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(SPELL_COMPLEXITIES).map(([key, { label }]) => (
-                <button
-                  key={key} type="button"
-                  onClick={() => patchForm({ complexity: current.complexity === key ? '' : key })}
-                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    current.complexity === key
-                      ? 'border-gold bg-gold/10 text-gold'
-                      : 'border-border text-text-dim'
-                  }`}
-                >
-                  {label}
-                </button>
+        {/* — Механіка та опис: на мобільному — одна активна форма, на десктопі — усі поряд — */}
+        <FormSection title={allForms.length > 1 ? `Механіка та опис · ${activeEntry.label}` : 'Механіка та опис'}>
+          <div className="lg:hidden">{renderFormFields(current, patchForm)}</div>
+          {allForms.length > 1 ? (
+            <div className={`hidden gap-6 lg:grid ${allForms.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+              {allForms.map((f) => (
+                <div key={f.key} className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+                    <span className="text-sm font-bold text-accent">{f.label}</span>
+                    {f.key !== 'main' && (
+                      <button
+                        type="button"
+                        onClick={() => formsEditor.removeForm(f.key, f.label)}
+                        className="text-xs text-text-dim hover:text-danger"
+                      >
+                        Видалити
+                      </button>
+                    )}
+                  </div>
+                  {renderFormFields(f, (patch) => patchFormAt(f.key, patch))}
+                </div>
               ))}
             </div>
-          </Field>
-
-          <Field label="Вид заклинання" className="mb-4">
-            <div className="flex flex-wrap gap-1.5">
-              {spellKinds.map(({ key, label }) => (
-                <button
-                  key={key} type="button"
-                  onClick={() => patchForm({ spell_kind: key })}
-                  className={`rounded border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    current.spell_kind === key
-                      ? 'border-gold bg-gold/10 text-gold'
-                      : 'border-border text-text-dim'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="Магічна енергія">
-              <input type="number" min={0} className={inputClass} value={current.energy_cost} onChange={setLNum('energy_cost')} />
-            </Field>
-            <Field label="Час виконання">
-              <select className={inputClass} value={current.action_time} onChange={setLNum('action_time')}>
-                {ACTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Ритуал">
-              <select className={inputClass} value={current.ritual} onChange={setL('ritual')}>
-                {Object.entries(RITUAL_TYPES).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Тривалість">
-              <div className="flex gap-2">
-                {current.duration_unit !== 'instant' && current.duration_unit !== 'permanent' && (
-                  <input
-                    type="number" min={1} className={`${inputClass} !w-20 shrink-0`} value={current.duration_value}
-                    onChange={setL('duration_value')}
-                  />
-                )}
-                <select className={`${inputClass} min-w-0 flex-1`} value={current.duration_unit} onChange={setL('duration_unit')}>
-                  {Object.entries(DURATION_UNITS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
-            </Field>
-            <Field label="Дальність">
-              <input
-                type="text" className={inputClass} value={current.range_desc} onChange={setL('range_desc')}
-                placeholder="напр. Дотик, 10 метрів, Себе..." maxLength={200}
-              />
-            </Field>
-          </div>
-
-          <Field label="Компоненти">
-            <SpellComponentsField
-              key={activeEntry.key}
-              components={current.components}
-              onChange={(next) => patchForm({ components: next })}
-              equipmentItems={equipmentItems}
-            />
-          </Field>
+          ) : (
+            <div className="hidden lg:block">{renderFormFields(current, patchForm)}</div>
+          )}
         </FormSection>
 
-        {/* — Описи — */}
-        <FormSection title={form.forms.length ? `Описи · ${activeEntry.label}` : 'Описи'}>
-          <SmartTextarea
-            key={`${activeEntry.key}-mech`}
-            label="Механічний опис" className="mb-4"
-            value={current.mechanical_desc} onChange={setL('mechanical_desc')}
-            rows={4}
-            placeholder="Що відбувається механічно: кидки, шкода, ефекти..."
-          />
-          <SmartTextarea
-            key={`${activeEntry.key}-narr`}
-            label="Наративний опис" className="mb-4"
-            value={current.narrative_desc} onChange={setL('narrative_desc')}
-            rows={3}
-            placeholder="Як це виглядає та відчувається у світі гри..."
-          />
-          <AuthorField
-            key={activeEntry.key}
-            name={current.lore_creator}
-            npcId={current.lore_creator_npc_id}
-            onChange={({ name, npc_id }) => patchForm({ lore_creator: name, lore_creator_npc_id: npc_id })}
-            npcs={npcs}
-            label="Творець"
-            hint="Лорне поле — вкажи ім'я персонажа з бестіарію або впиши довільне (напр. ім'я архімага, що винайшов це заклинання)"
+        {/* — Рівноцінні / альтернативні — */}
+        <FormSection title="Рівноцінні / альтернативні">
+          <RelatedEntryPicker
+            serviceKey="spellbook"
+            excludeId={id}
+            value={related}
+            onChange={setRelated}
+            label="Додати заклинання"
           />
         </FormSection>
 

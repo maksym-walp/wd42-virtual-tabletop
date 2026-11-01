@@ -33,15 +33,11 @@ export function buildAbilitiesImportTemplate() {
 //   lore_creator_npc_id   — uuid або null — id НІПа (сервіс npcs), якщо творець
 //                           прив'язаний до конкретного НІПа. Не обов'язково: якщо такого id немає
 //                           чи він не потрібен, досить самого lore_creator як вільного тексту.
-//   forms                 — масив додаткових форм (поля вище — це основна форма). Кожна форма — об'єкт
-//                           з kind: "primitive" (Примітивна) / "perfected" (Довершена) — рівневі, не більше
-//                           однієї кожного виду (тоді основна вважається Повноцінною) — або "alternative"
-//                           (альтернативна, потрібне ще "name"), та тими самими полями: duration_value,
-//                           duration_unit, components, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id.
-//                           Порожній масив — лише основна форма. Рівневі й альтернативні форми в одному
-//                           вмінні не поєднуються: якщо є обидва типи, альтернативні буде відкинуто.
-//   main_form_name        — рядок або null — назва основної форми (лише для вмінь з альтернативними
-//                           формами; null — «Основна форма»)
+//   forms                 — масив додаткових рівневих форм (поля вище — це основна, Повноцінна форма).
+//                           Кожна форма — об'єкт з kind: "primitive" (Обмежена) / "perfected" (Довершена),
+//                           не більше однієї кожного виду, та тими самими полями: duration_value,
+//                           duration_unit, components, mechanical_desc, narrative_desc, lore_creator,
+//                           lore_creator_npc_id. Порожній масив — лише основна форма.
 //
 [
   {
@@ -58,11 +54,9 @@ export function buildAbilitiesImportTemplate() {
     ],
     "lore_creator": "Майстер клинка Освальд",
     "lore_creator_npc_id": null,
-    "main_form_name": null,
     "forms": [
       {
-        "kind": "alternative",
-        "name": "Подвійний випад",
+        "kind": "perfected",
         "duration_value": 1,
         "duration_unit": "action",
         "components": [],

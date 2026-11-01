@@ -9,11 +9,11 @@ beforeEach(() => {
 });
 
 describe('SpellProgressModel.patch forms', () => {
-  it('passes form_tier/primary_form/mastered_forms as $5-$7 and nulls when omitted', async () => {
-    await SpellProgressModel.patch('c1', 's1', { form_tier: 'full', primary_form: 'alt', mastered_forms: ['alt'] });
-    expect(pool.query.mock.calls[0][1].slice(4)).toEqual(['full', 'alt', ['alt']]);
+  it('passes form_tier as $5 and null when omitted', async () => {
+    await SpellProgressModel.patch('c1', 's1', { form_tier: 'full' });
+    expect(pool.query.mock.calls[0][1].slice(4)).toEqual(['full']);
     await SpellProgressModel.patch('c1', 's1', { mastered: true });
-    expect(pool.query.mock.calls[1][1].slice(4)).toEqual([null, null, null]);
+    expect(pool.query.mock.calls[1][1].slice(4)).toEqual([null]);
   });
 });
 

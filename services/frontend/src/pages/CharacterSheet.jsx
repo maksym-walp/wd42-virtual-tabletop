@@ -13,9 +13,9 @@ import { recordView } from '../utils/recentlyViewed';
 import { spellAccessFor, missingAccessLabel } from '../utils/spellAccess';
 import useMagicForms from '../hooks/useMagicForms';
 import Tooltip from '../components/ui/Tooltip';
-import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellVariantForms, spellForCharacter } from '../constants/spellbook';
+import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellForCharacter } from '../constants/spellbook';
 import { CATALOG_TYPES } from '../constants/artifacts';
-import { abilityTiers, abilityVariantForms, abilityForCharacter } from '../constants/abilities';
+import { abilityTiers, abilityForCharacter } from '../constants/abilities';
 import {
   ARCHETYPES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
@@ -1652,9 +1652,7 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
 
 function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, onRemove }) {
   const [showModal, setShowModal] = useState(false);
-  const [showForms, setShowForms] = useState(false);
   const tiers = baseSpell ? spellTiers(baseSpell) : [];
-  const variants = baseSpell ? spellVariantForms(baseSpell) : [];
   // Показуємо поля форми, якою персонаж користується (див. spellForCharacter).
   const spell = baseSpell && spellForCharacter(baseSpell, entry);
 
@@ -1664,7 +1662,7 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
         <div className="flex flex-1 flex-col gap-0.5">
           <span className="text-sm text-text">{spell?.name ?? '(невідоме)'}</span>
           <span className="text-xs text-text-dim">
-            {[(tiers.length > 0 || variants.length > 1) && spell?.form_label, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
+            {[tiers.length > 0 && spell?.form_label, spell?.nature?.length && natureLabels(spell.nature), spell?.energy_cost && `${spell.energy_cost} ен.`, spell?.action_time && `${spell.action_time} д.`]
               .filter(Boolean).join(' · ')}
           </span>
           {entry.gm_granted && <span className="text-xs text-gold">від майстра</span>}
@@ -1680,13 +1678,6 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
             >
               {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
             </select>
-          )}
-          {variants.length > 1 && (
-            <button
-              className={`min-h-9 rounded border px-2 text-xs ${showForms ? 'border-accent text-accent' : 'border-border text-text-dim'}`}
-              onClick={() => setShowForms(o => !o)}
-              title="Альтернативні форми"
-            >Форми {showForms ? '▴' : '▾'}</button>
           )}
           <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
             <input
@@ -1705,63 +1696,10 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
           {is_owner && <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={onRemove}>✕</button>}
         </div>
       </div>
-      {showForms && variants.length > 1 && (
-        <FormsProgressPanel
-          variants={variants} entry={entry} radioName={`primary-form-${entry.spell_id}`}
-          is_owner={is_owner} onPatch={onPatch}
-        />
-      )}
       {showModal && spell && (
         <SpellDetailModal spell={spell} spellId={entry.spell_id} onClose={() => setShowModal(false)} />
       )}
     </>
-  );
-}
-
-// Альтернативні форми заклинання / вміння в листі: яка основна для персонажа
-// й які освоєні. Форми, яких дерево розвитку персонажу не відкрило, сервер
-// не дає ні обрати, ні позначити.
-function FormsProgressPanel({ variants, entry, radioName, is_owner, onPatch }) {
-  const masteredForms = entry.mastered_forms ?? ['main'];
-  const primaryForm = variants.some(f => f.key === entry.primary_form) ? entry.primary_form : 'main';
-
-  const setPrimary = (key) => onPatch({
-    primary_form: key,
-    // Основною обирають освоєну форму — позначаємо її освоєною разом.
-    mastered_forms: masteredForms.includes(key) ? masteredForms : [...masteredForms, key],
-  });
-  const toggleMastered = (key) => onPatch({
-    mastered_forms: masteredForms.includes(key) ? masteredForms.filter(k => k !== key) : [...masteredForms, key],
-  });
-
-  return (
-    <div className="mb-2 rounded-md border border-border bg-bg px-3 py-2">
-      <div className="mb-1 grid grid-cols-[1fr_auto_auto] gap-x-4 text-[0.65rem] uppercase tracking-wide text-text-dim">
-        <span>Форма</span><span>основна</span><span>освоєно</span>
-      </div>
-      {variants.map(f => (
-        <div key={f.key} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-border/50 py-1.5 text-sm text-text">
-          <span>{f.label}</span>
-          <input
-            type="radio"
-            name={radioName}
-            className="h-5 w-5 justify-self-center accent-accent"
-            checked={primaryForm === f.key}
-            disabled={!is_owner}
-            onChange={() => is_owner && setPrimary(f.key)}
-            aria-label={`Основна форма: ${f.label}`}
-          />
-          <input
-            type="checkbox"
-            className="h-5 w-5 justify-self-center accent-sage"
-            checked={masteredForms.includes(f.key)}
-            disabled={!is_owner}
-            onChange={() => is_owner && toggleMastered(f.key)}
-            aria-label={`Освоєно: ${f.label}`}
-          />
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -2084,14 +2022,12 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onP
 }
 
 // Рядок вміння в листі — з формами так само, як SpellEntry: рівнева форма,
-// до якої дійшов персонаж, і альтернативні (основна / освоєні).
+// до якої дійшов персонаж.
 function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPatch, onRemove }) {
-  const [showForms, setShowForms] = useState(false);
   const tiers = baseAbility ? abilityTiers(baseAbility) : [];
-  const variants = baseAbility ? abilityVariantForms(baseAbility) : [];
   // Поля (описи, тривалість) — з форми, якою персонаж користується.
   const a = baseAbility && abilityForCharacter(baseAbility, entry);
-  const hasForms = tiers.length > 0 || variants.length > 1;
+  const hasForms = tiers.length > 0;
   const href = a ? `/abilities/${a.id}${hasForms ? `?form=${encodeURIComponent(a.form_key)}` : ''}` : '#';
 
   return (
@@ -2118,26 +2054,11 @@ function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPat
               {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
             </select>
           )}
-          {variants.length > 1 && (
-            <button
-              className={`min-h-9 rounded border px-2 text-xs ${showForms ? 'border-accent text-accent' : 'border-border text-text-dim'}`}
-              onClick={() => setShowForms(o => !o)}
-              title="Альтернативні форми"
-            >Форми {showForms ? '▴' : '▾'}</button>
-          )}
           {is_owner && (
             <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={onRemove}>✕</button>
           )}
         </div>
       </div>
-      {showForms && variants.length > 1 && (
-        <div className="mt-2">
-          <FormsProgressPanel
-            variants={variants} entry={entry} radioName={`primary-form-ability-${entry.ability_id}`}
-            is_owner={is_owner} onPatch={onPatch}
-          />
-        </div>
-      )}
     </div>
   );
 }

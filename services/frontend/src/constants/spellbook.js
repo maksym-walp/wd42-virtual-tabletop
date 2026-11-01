@@ -1,6 +1,6 @@
 import {
-  FORM_TIERS, DEFAULT_MAIN_FORM_NAME, pickFields, hasTierForms, formModeOf, mainFormLabel,
-  entryTiers, entryForms, entryVariantForms, entryForCharacter, entryWithForm,
+  FORM_TIERS, pickFields, hasTierForms,
+  entryTiers, entryForms, entryForCharacter, entryWithForm,
 } from './forms';
 import { DURATION_UNITS, formatDuration } from './duration';
 
@@ -61,10 +61,11 @@ export { DURATION_UNITS, formatDuration };
 
 // Початковий набір видів заклинань — актуальний список редагується з
 // адмін-панелі (spell_kinds) і читається через hooks/useSpellKinds.js; ця
-// константа лише показується, доки він не завантажився.
+// константа лише показується, доки він не завантажився. 'combat' — колишні
+// 'ranged'/'melee', злиті в один вид (міграція 116): і дальнобійні, і ближні
+// бойові заклинання кастуються тим самим потоком у трекері бою.
 export const SPELL_KINDS = {
-  ranged:    { label: 'Дальнобійне' },
-  melee:     { label: 'Ближнє'      },
+  combat:    { label: 'Бойове'      },
   defensive: { label: 'Захисне'     },
   healing:   { label: 'Лікуюче'     },
   utility:   { label: 'Небойове'    },
@@ -87,20 +88,22 @@ export const SPELL_COMPLEXITIES = {
 
 // Поля, що можуть відрізнятися між формами заклинання. Основна форма —
 // колонки самого заклинання, додаткові лежать у spell.forms як повні
-// знімки саме цих полів + { kind, id, name } (див. constants/forms.js і
+// знімки саме цих полів + { kind, id } (див. constants/forms.js і
 // normalizeForms у services/spellbook/src/models/spell.model.js).
+// damage_die — кубик шкоди (розділ 4.4.3; кількість завжди з Майстерності
+// кастера, не зберігається тут) — лише для spell_kind='combat'.
 export const FORM_FIELDS = [
   'complexity', 'spell_kind', 'energy_cost', 'action_time', 'ritual',
-  'duration_value', 'duration_unit', 'range_desc', 'components',
+  'duration_value', 'duration_unit', 'range_desc', 'components', 'damage_die',
   'mechanical_desc', 'narrative_desc', 'lore_creator', 'lore_creator_npc_id',
 ];
 
-export { FORM_TIERS, DEFAULT_MAIN_FORM_NAME, hasTierForms, mainFormLabel };
+export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
+
+export { FORM_TIERS, hasTierForms };
 
 export const pickFormFields = (source) => pickFields(FORM_FIELDS, source);
-export const spellFormMode = formModeOf;
 export const spellTiers = entryTiers;
 export const spellForms = (spell) => entryForms(spell, FORM_FIELDS);
-export const spellVariantForms = (spell) => entryVariantForms(spell, FORM_FIELDS);
 export const spellForCharacter = (spell, progress) => entryForCharacter(spell, FORM_FIELDS, progress);
 export const spellWithForm = (spell, key) => entryWithForm(spell, FORM_FIELDS, key);

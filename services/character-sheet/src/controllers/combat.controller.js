@@ -40,6 +40,38 @@ const CombatController = {
     });
   },
 
+  // POST /:id/magic/spend { amount } — витрата магічної енергії (розділ
+  // 9.1): каст заклинання з трекера бою (campaigns -> POST
+  // /:id/combat/cast) чи будь-яке інше списання. Лише перевіряє, що
+  // вистачає, і списує — максимум і відновлення рахує rest.js.
+  async spendMagic(req, res) {
+    if (!await authorizeCharacterWrite(req, res)) return;
+
+    const amount = Number(req.body?.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return res.status(400).json({ message: 'amount — невідʼємне число' });
+    }
+
+    const out = await CharacterStateModel.withCharacterLock(req.params.id, async (client, state) => {
+      const before = Number(state.character.current_magic) || 0;
+      if (amount > before) return { insufficient: true, before, character: state.character, skills: state.skills };
+      const character = await CharacterStateModel.saveState(client, req.params.id, {
+        current_magic: before - amount,
+      });
+      return { insufficient: false, before, after: before - amount, character, skills: state.skills };
+    });
+    if (!out) return res.status(404).json({ message: 'Персонажа не знайдено' });
+    if (out.insufficient) {
+      return res.status(400).json({ message: 'Недостатньо магічної енергії', magic_before: out.before, spent: amount });
+    }
+
+    res.json({
+      result: { magic_before: out.before, magic_after: out.after, spent: amount },
+      character: out.character,
+      ...sheetDerived(out.character, out.skills, await treeModifiers(out.character.id)),
+    });
+  },
+
   // POST /:id/death-save { rolled } — результат кидка d12 приходить з
   // клієнта (кидає dice-roller, щоб гравець бачив кубик), а зсув маркера й
   // пробудження на +3 лишаються тут.

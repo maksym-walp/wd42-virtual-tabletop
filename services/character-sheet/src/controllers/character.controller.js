@@ -8,7 +8,7 @@ const RitualTrackerModel = require('../models/ritual-tracker.model');
 const authorizeCharacterWrite = require('./authorize-character-write');
 const { isCampaignGmForCharacter } = require('../models/campaign-access.model');
 const { treeSpellAccess } = require('../models/spell-access.model');
-const { treeModifiers } = require('../models/tree-modifiers.model');
+const { treeModifiers, treeCastSkillOptions } = require('../models/tree-modifiers.model');
 const SiteConfigModel = require('../models/site-config.model');
 const CharacterStateModel = require('../models/character-state.model');
 const { sheetDerived } = require('../rules');
@@ -60,10 +60,9 @@ const CharacterController = {
     if (!char) return res.status(404).json({ message: 'Персонажа не знайдено' });
 
     const isOwner = char.user_id === req.user.sub;
-    const isGM = req.user.role === 'game_master';
     const isAdmin = req.user.role === 'admin';
     const isCampaignGm = !isOwner && await isCampaignGmForCharacter(char.id, req.user.sub);
-    if (!isOwner && !isGM && !isAdmin && !isCampaignGm && !char.is_public) {
+    if (!isOwner && !isAdmin && !isCampaignGm && !char.is_public) {
       return res.status(403).json({ message: 'Доступ заборонено' });
     }
 
@@ -74,7 +73,7 @@ const CharacterController = {
     // edit menu.
     const isGmViewer = !isOwner && (isCampaignGm || isAdmin);
 
-    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, campaignIds, modifiers] = await Promise.all([
+    const [skills, spells, tree, equipment, abilities, rituals, owner_username, spellAccess, campaignIds, modifiers, castSkillOptions] = await Promise.all([
       SkillModel.findAll(char.id),
       SpellProgressModel.findAll(char.id),
       TreeProgressModel.findAll(char.id),
@@ -85,6 +84,7 @@ const CharacterController = {
       treeSpellAccess(char.id),
       CharacterStateModel.campaignIdsFor(char.id),
       treeModifiers(char.id),
+      treeCastSkillOptions(char.id),
     ]);
 
     // is_owner drives all edit UI on the frontend — a campaign GM or an admin
@@ -100,10 +100,13 @@ const CharacterController = {
       campaign_ids: campaignIds,
       // Що дерево відкрило для заклинань: { traditions, max_complexity }.
       spell_access: { traditions: spellAccess.traditions, max_complexity: spellAccess.maxComplexity },
+      // Альтернативні навички чарування, які відкрили вузли дерева
+      // (розділ 2, cast_skill_options) — гравець сам обирає, якою кастувати.
+      cast_skill_options: castSkillOptions,
       is_owner: isOwner || isCampaignGm || isAdmin,
       is_gm: isGmViewer,
       // Може давати заклинання поза правилами доступності (див. isSpellMaster).
-      is_spell_master: isGM || isAdmin || isCampaignGm,
+      is_spell_master: isAdmin || isCampaignGm,
     });
   },
 

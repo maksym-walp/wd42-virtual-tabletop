@@ -51,10 +51,15 @@ describe('treeSpellAccess', () => {
 });
 
 describe('isSpellMaster', () => {
-  it('is true for a global GM/admin without a campaign lookup', async () => {
-    expect(await isSpellMaster({ user: { sub: 'u', role: 'game_master' } }, 'c1')).toBe(true);
+  it('is true for an admin without a campaign lookup', async () => {
     expect(await isSpellMaster({ user: { sub: 'u', role: 'admin' } }, 'c1')).toBe(true);
     expect(isCampaignGmForCharacter).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the character\'s campaign GM for a global game_master role', async () => {
+    isCampaignGmForCharacter.mockResolvedValue(true);
+    expect(await isSpellMaster({ user: { sub: 'u', role: 'game_master' } }, 'c1')).toBe(true);
+    expect(isCampaignGmForCharacter).toHaveBeenCalledWith('c1', 'u');
   });
 
   it('falls back to the character\'s campaign GM', async () => {

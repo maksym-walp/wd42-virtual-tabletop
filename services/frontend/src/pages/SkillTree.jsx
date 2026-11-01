@@ -9,6 +9,7 @@ import { createCollectionsApi } from '../api/collections';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
 import NodeGrantsPicker from '../components/NodeGrantsPicker';
 import NodeSpellAccessPicker from '../components/NodeSpellAccessPicker';
+import CastSkillOptionsPicker from '../components/CastSkillOptionsPicker';
 import NodeModifiersPicker, { NodeModifierList } from '../components/NodeModifiersPicker';
 import traditionsApi from '../api/traditions';
 import { downloadJsonFile } from '../utils/downloadJson';
@@ -354,7 +355,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
+      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
     });
@@ -369,7 +370,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null,
+      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
@@ -386,6 +387,7 @@ export default function SkillTree() {
       grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode, form_key: g.form_key ?? null })),
       unlocks_traditions: n.unlocks_traditions || [],
       unlocks_complexity: n.unlocks_complexity ?? null,
+      cast_skill_options: n.cast_skill_options || [],
       archetype: n.archetype || activeArchetype,
       require_both: n.require_both || false,
     });
@@ -1319,6 +1321,19 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
             onChange={(next) => onChange((f) => ({
               ...f, unlocks_traditions: next.unlocks_traditions, unlocks_complexity: next.unlocks_complexity,
             }))}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Альтернативна навичка чарування</span>
+          <p className="text-xs text-text-dim">
+            Для заклинань обраної традиції гравець під час кастування може обрати цю навичку
+            замість Чарування — вибір завжди за гравцем.
+          </p>
+          <CastSkillOptionsPicker
+            traditions={grantCatalogs.traditions}
+            value={form.cast_skill_options || []}
+            onChange={(cast_skill_options) => onChange((f) => ({ ...f, cast_skill_options }))}
           />
         </div>
 

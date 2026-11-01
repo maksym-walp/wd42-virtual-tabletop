@@ -19,4 +19,8 @@ router.delete('/:id',  requireAuth, wrap(SpellController.remove));
 router.patch('/:id/canonical', requireCanonicalManager, wrap(SpellController.setCanonical));
 router.patch('/:id/owner', requireAdminOwner, wrap(SpellController.setOwner));
 
+router.get('/:id/related',               requireAuth, wrap(SpellController.getRelated));
+router.post('/:id/related',              requireAuth, wrap(SpellController.addRelated));
+router.delete('/:id/related/:relatedId', requireAuth, wrap(SpellController.removeRelated));
+
 module.exports = router;

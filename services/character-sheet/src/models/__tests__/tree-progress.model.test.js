@@ -74,7 +74,7 @@ describe('TreeProgressModel.unlock', () => {
       if (sql.includes('FROM skill_tree.node_grants')) {
         return Promise.resolve({ rows: [{ item_kind: 'ability', item_id: 'a1', form_key: 'primitive' }] });
       }
-      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: ['primitive', 'perfected'], alt_ids: [] }] });
+      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: ['primitive', 'perfected'] }] });
       if (sql.includes('INSERT INTO character_sheet')) return Promise.resolve({ rows: [{ ok: true }] });
       return Promise.resolve({ rows: [] });
     });
@@ -83,7 +83,7 @@ describe('TreeProgressModel.unlock', () => {
 
     const ability = client.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO character_sheet.abilities'));
     expect(ability[0]).toMatch(/ON CONFLICT \(character_id, ability_id\) DO UPDATE/);
-    expect(ability[1]).toEqual(['c1', 'a1', 'primitive', 'main', ['main']]);
+    expect(ability[1]).toEqual(['c1', 'a1', 'primitive']);
   });
 
   it('grants every form for collection members, and never touches spells', async () => {
@@ -96,7 +96,7 @@ describe('TreeProgressModel.unlock', () => {
         ] });
       }
       if (sql.includes('FROM abilities.collection_items')) return Promise.resolve({ rows: [{ item_id: 'a1' }] });
-      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: [], alt_ids: ['alt-1'] }] });
+      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: [] }] });
       return Promise.resolve({ rows: [] });
     });
 
@@ -104,7 +104,7 @@ describe('TreeProgressModel.unlock', () => {
 
     const inserts = client.query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO character_sheet.abilities'));
     expect(inserts).toHaveLength(1);
-    expect(inserts[0][1]).toEqual(['c1', 'a1', null, 'main', ['main', 'alt-1']]);
+    expect(inserts[0][1]).toEqual(['c1', 'a1', null]);
     expect(client.query.mock.calls.some(([sql]) => sql.includes('known_spells'))).toBe(false);
   });
 

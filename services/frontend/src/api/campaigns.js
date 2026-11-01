@@ -203,6 +203,16 @@ const campaignApi = {
     return data; // { outcome, dodge, log_entry, attacker, target, sheet }
   },
 
+  // Каст бойового заклинання — той самий потік, що й атака, плюс списання
+  // магічної енергії (character-sheet). targets — масив, кожен резолвиться
+  // незалежно (без спільного пулу шкоди, розділ 4.8.3):
+  //   caster_id, spell: { id, name, form_key, form_label, skill_key, energy_cost, damage_die }
+  //   targets: [{ target_id, hit: {total, natural, formula?}, dodge?, damage? }]
+  async combatCast(id, payload) {
+    const { data } = await api.post(`${BASE}/${id}/combat/cast`, payload);
+    return data; // { energy, per_target: [{ target_id, outcome, dodge, log_entry, target, sheet }], caster }
+  },
+
   // Кидок, що нікого не атакує (ініціатива, рятівний кидок, окреме
   // ухилення), але який теж має лишитися видимим у журналі бою.
   async addCombatLogEntry(id, payload) {

@@ -92,21 +92,21 @@ describe('SpellController.add', () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
     isSpellMaster.mockResolvedValue(true);
-    SpellProgressModel.formKeys.mockResolvedValue({ tierKinds: [], altIds: [] });
+    SpellProgressModel.tiers.mockResolvedValue([]);
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1' } });
     const res = mockRes();
 
     await SpellController.add(req, res);
 
     expect(checkSpellAccess).not.toHaveBeenCalled();
-    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', { form_tier: null, primary_form: 'main', mastered_forms: ['main'], gm_granted: true });
+    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', { form_tier: null, gm_granted: true });
   });
 
   it('limits a player to the forms whose complexity the tree opened', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
     checkSpellAccess.mockResolvedValue({ met: true, allowedForms: ['primitive'], missing: {} });
-    SpellProgressModel.formKeys.mockResolvedValue({ tierKinds: ['primitive', 'perfected'], altIds: [] });
+    SpellProgressModel.tiers.mockResolvedValue(['primitive', 'full', 'perfected']);
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', form_tier: 'perfected' } });
 
     await SpellController.add(req, mockRes());
@@ -117,14 +117,14 @@ describe('SpellController.add', () => {
   it('201s and adds the spell when visible and prerequisites are met', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
-    SpellProgressModel.formKeys.mockResolvedValue({ tierKinds: [], altIds: [] });
+    SpellProgressModel.tiers.mockResolvedValue([]);
     SpellProgressModel.add.mockResolvedValue({ id: 'link-1', spell_id: 's1' });
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1' } });
     const res = mockRes();
 
     await SpellController.add(req, res);
 
-    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', { form_tier: null, primary_form: 'main', mastered_forms: ['main'], gm_granted: false });
+    expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', { form_tier: null, gm_granted: false });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ spell: { id: 'link-1', spell_id: 's1' } });
   });
@@ -134,69 +134,62 @@ describe('SpellController.add forms', () => {
   beforeEach(() => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
     isVisibleToUser.mockResolvedValue(true);
-    SpellProgressModel.formKeys.mockResolvedValue({ tierKinds: ['primitive', 'perfected'], altIds: ['alt-1'] });
+    SpellProgressModel.tiers.mockResolvedValue(['primitive', 'full', 'perfected']);
   });
 
   it('adds with the chosen tier', async () => {
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', form_tier: 'perfected' } });
     await SpellController.add(req, mockRes());
     expect(SpellProgressModel.add).toHaveBeenCalledWith('c1', 's1', {
-      form_tier: 'perfected', primary_form: 'main', mastered_forms: ['main'], gm_granted: false,
+      form_tier: 'perfected', gm_granted: false,
     });
   });
 
   it('defaults the tier to the lowest existing one', async () => {
-    SpellProgressModel.formKeys.mockResolvedValueOnce({ tierKinds: ['perfected'], altIds: [] });
+    SpellProgressModel.tiers.mockResolvedValueOnce(['full', 'perfected']);
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1' } });
     await SpellController.add(req, mockRes());
     expect(SpellProgressModel.add.mock.calls[0][2].form_tier).toBe('full');
   });
 
   it('400s for a tier the spell does not have', async () => {
-    SpellProgressModel.formKeys.mockResolvedValueOnce({ tierKinds: [], altIds: [] });
+    SpellProgressModel.tiers.mockResolvedValueOnce([]);
     const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', form_tier: 'full' } });
     const res = mockRes();
     await SpellController.add(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(SpellProgressModel.add).not.toHaveBeenCalled();
   });
-
-  it('400s for an unknown primary form', async () => {
-    const req = mockReq({ params: { id: 'c1' }, body: { spell_id: 's1', primary_form: 'nope' } });
-    const res = mockRes();
-    await SpellController.add(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-  });
 });
 
 describe('SpellController.patch forms', () => {
   beforeEach(() => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    SpellProgressModel.formKeys.mockResolvedValue({ tierKinds: [], altIds: ['alt-1'] });
+    SpellProgressModel.tiers.mockResolvedValue(['primitive', 'full', 'perfected']);
     SpellProgressModel.patch.mockResolvedValue({ spell_id: 's1' });
   });
 
-  it('drops unknown keys from mastered_forms and passes the rest through', async () => {
-    const req = mockReq({ params: { id: 'c1', spellId: 's1' }, body: { primary_form: 'alt-1', mastered_forms: ['alt-1', 'ghost', 'alt-1'] } });
+  it('passes a chosen tier through', async () => {
+    const req = mockReq({ params: { id: 'c1', spellId: 's1' }, body: { form_tier: 'perfected' } });
     await SpellController.patch(req, mockRes());
     expect(SpellProgressModel.patch).toHaveBeenCalledWith('c1', 's1', {
-      mastered: undefined, cast_count: undefined, primary_form: 'alt-1', mastered_forms: ['alt-1'],
+      mastered: undefined, cast_count: undefined, form_tier: 'perfected',
     });
   });
 
   it('ignores the tree for a spell the master gave', async () => {
-    SpellProgressModel.findOne.mockResolvedValue({ gm_granted: true, mastered_forms: ['main'] });
+    SpellProgressModel.findOne.mockResolvedValue({ gm_granted: true, form_tier: 'primitive' });
     checkSpellAccess.mockResolvedValue({ met: false, allowedForms: [], missing: {} });
-    const req = mockReq({ params: { id: 'c1', spellId: 's1' }, body: { primary_form: 'alt-1' } });
+    const req = mockReq({ params: { id: 'c1', spellId: 's1' }, body: { form_tier: 'perfected' } });
     await SpellController.patch(req, mockRes());
     expect(checkSpellAccess).not.toHaveBeenCalled();
-    expect(SpellProgressModel.patch.mock.calls[0][2]).toMatchObject({ primary_form: 'alt-1' });
+    expect(SpellProgressModel.patch.mock.calls[0][2]).toMatchObject({ form_tier: 'perfected' });
   });
 
   it('does not look up forms for a plain mastered/cast_count patch', async () => {
     const req = mockReq({ params: { id: 'c1', spellId: 's1' }, body: { cast_count: 2 } });
     await SpellController.patch(req, mockRes());
-    expect(SpellProgressModel.formKeys).not.toHaveBeenCalled();
+    expect(SpellProgressModel.tiers).not.toHaveBeenCalled();
   });
 });
 

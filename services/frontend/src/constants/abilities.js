@@ -1,6 +1,6 @@
 import { DURATION_UNITS, formatDuration } from './duration';
 import {
-  pickFields, formModeOf, entryTiers, entryForms, entryVariantForms, entryForCharacter, entryWithForm,
+  pickFields, entryTiers, entryForms, entryForCharacter, entryWithForm,
 } from './forms';
 
 export { DURATION_UNITS, formatDuration };
@@ -14,9 +14,7 @@ export const ABILITY_FORM_FIELDS = [
 ];
 
 export const pickAbilityFormFields = (source) => pickFields(ABILITY_FORM_FIELDS, source);
-export const abilityFormMode = formModeOf;
 export const abilityTiers = entryTiers;
 export const abilityForms = (ability) => entryForms(ability, ABILITY_FORM_FIELDS);
-export const abilityVariantForms = (ability) => entryVariantForms(ability, ABILITY_FORM_FIELDS);
 export const abilityForCharacter = (ability, progress) => entryForCharacter(ability, ABILITY_FORM_FIELDS, progress);
 export const abilityWithForm = (ability, key) => entryWithForm(ability, ABILITY_FORM_FIELDS, key);

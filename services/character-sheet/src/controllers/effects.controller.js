@@ -1,8 +1,10 @@
 const CharacterStateModel = require('../models/character-state.model');
 const { sheetDerived } = require('../rules');
 const { heroicTotal } = require('../rules/stats');
-const { treeModifiersForMany } = require('../models/tree-modifiers.model');
+const { treeModifiersForMany, treeCastSkillOptionsForMany } = require('../models/tree-modifiers.model');
+const { treeSpellAccessForMany } = require('../models/spell-access.model');
 const EquipmentModel = require('../models/equipment.model');
+const SpellProgressModel = require('../models/spell.model');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_IDS = 50;
@@ -24,17 +26,30 @@ const EffectsController = {
     const modifiers = (await treeModifiersForMany(ownIds)) ?? {};
     // Зброя потрібна трекеру, щоб запропонувати її у виборі атаки.
     const weapons = (await EquipmentModel.weaponsForMany(ownIds)) ?? {};
+    // Бойові заклинання, доступ до них і альтернативні навички чарування —
+    // для кастування з трекера бою (POST /:id/combat/cast).
+    const spells = (await SpellProgressModel.combatSpellsForMany(ownIds)) ?? {};
+    const spellAccess = (await treeSpellAccessForMany(ownIds)) ?? {};
+    const castSkillOptions = (await treeCastSkillOptionsForMany(ownIds)) ?? {};
 
     const result = {};
     for (const character of characters) {
       const own = skills.filter((s) => s.character_id === character.id);
+      const access = spellAccess[character.id] ?? { traditions: [], maxComplexity: null };
       result[character.id] = {
         ...sheetDerived(character, own, modifiers[character.id] ?? []),
         conditions: character.conditions || [],
         // Архетип потрібен трекеру для правила повторення дій (4.10):
         // бійцю не рахуються атаки, чаклуну — чарування.
         archetype: character.archetype,
+        // Поточна магічна енергія — для перегляду перед кастом (сам каст
+        // списує її через POST /:id/combat/cast -> character-sheet
+        // /:id/magic/spend; максимум — effects.max_magic_effective).
+        current_magic: character.current_magic,
         weapons: weapons[character.id] ?? [],
+        spells: spells[character.id] ?? [],
+        spell_access: { traditions: access.traditions, max_complexity: access.maxComplexity },
+        cast_skill_options: castSkillOptions[character.id] ?? [],
         heroic_left: Math.max(0, heroicTotal(own) - (Number(character.heroic_actions_used) || 0)),
       };
     }
