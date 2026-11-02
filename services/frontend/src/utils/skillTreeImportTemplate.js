@@ -1,6 +1,6 @@
 import { CHARACTERISTICS, ARCHETYPES } from '../constants/characterSheet';
 import { COMBAT_TARGETS, MODIFIER_MODES } from '../constants/nodeModifiers';
-import { SPELL_COMPLEXITIES } from '../constants/spellbook';
+import { SPELL_COMPLEXITIES, NATURE_TYPES } from '../constants/spellbook';
 
 // Шаблон для POST /api/skill-tree/import (повна заміна архетипу) і
 // POST /api/skill-tree/import-nodes (додає підмножину вузлів) — з
@@ -12,6 +12,7 @@ export function buildSkillTreeImportTemplate() {
   const combatTargetList = COMBAT_TARGETS.map((t) => `${t.key} (${t.label})`).join(', ');
   const modeList = MODIFIER_MODES.map((m) => `${m.key} (${m.label})`).join(', ');
   const complexityList = Object.entries(SPELL_COMPLEXITIES).map(([k, v]) => `${k} (${v.label})`).join(', ');
+  const magicFormList = Object.entries(NATURE_TYPES).map(([k, v]) => `${k} (${v.label})`).join(', ');
 
   return `// Шаблон дерева розвитку для POST /api/skill-tree/import (повна заміна
 // вказаного архетипу — старі вузли, звʼязки й прогрес персонажів по них
@@ -51,12 +52,12 @@ export function buildSkillTreeImportTemplate() {
 //   unlocks_complexity  — одне з: ${complexityList}, або null — найвища складність
 //                          форми заклинання, яку вузол відкриває (драбина: відкриває й усі нижчі).
 //                          Традиції вузли не відкривають — гравець позначає їх сам у меню чарів.
-//   cast_skill_options  — масив { id, tradition_id, skill_key, note }: для заклинань
-//                          указаної традиції дозволяє кастувати навичкою skill_key
+//   cast_skill_options  — масив { id, magic_form, skill_key, note }: для заклинань
+//                          указаної форми магії дозволяє кастувати навичкою skill_key
 //                          замість Чарування, а не лише нею
-//                            id           — рядок, стабільний ключ picker'а (можна "")
-//                            tradition_id — uuid традиції (сервіс spellbook, GET /api/spellbook/traditions)
-//                            skill_key    — одне з: ${skillList}
+//                            id          — рядок, стабільний ключ picker'а (можна "")
+//                            magic_form  — одне з: ${magicFormList}
+//                            skill_key   — одне з: ${skillList}
 //                            note         — рядок до 200 символів (напр. "проти звірів"), або ""
 //   modifiers           — масив механічних модифікаторів кидків (міграція 112):
 //                          { id, target, mode, value, situational, note }

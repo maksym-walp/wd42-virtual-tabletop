@@ -45,7 +45,7 @@ const SpellProgressModel = {
     if (!characterIds.length) return {};
     const { rows } = await pool.query(
       `SELECT ks.character_id, ks.spell_id, ks.mastered, ks.cast_count, ks.form_tier, ks.gm_granted,
-              sp.name, sp.forms, sp.damage_die, sp.damage_dice_count, sp.energy_cost, sp.action_time, sp.complexity,
+              sp.name, sp.nature, sp.forms, sp.damage_die, sp.damage_dice_count, sp.energy_cost, sp.action_time, sp.complexity,
               ${traditionIdsSelect} AS tradition_ids
        FROM character_sheet.known_spells ks
        JOIN spellbook.spells sp ON sp.id = ks.spell_id

@@ -53,7 +53,7 @@ async function treeModifiersForMany(characterIds, db = pool) {
 // міжсхемна модель, що й вище для modifiers, але це довідкові дані для
 // вибору гравця під час кастування (battle tracker), а не кидкові
 // профілі, тож рахуються окремим шляхом, не всередині rules/modifiers.js.
-// Плоский список { id, tradition_id, skill_key, note, node_title }.
+// Плоский список { id, magic_form, skill_key, note, node_title }.
 async function treeCastSkillOptions(characterId, db = pool) {
   const { rows } = await db.query(
     `SELECT n.title, n.cast_skill_options

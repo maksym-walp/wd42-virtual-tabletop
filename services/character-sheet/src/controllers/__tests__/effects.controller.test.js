@@ -75,7 +75,7 @@ describe('EffectsController.list', () => {
       [ID1]: [{ spell_id: 's1', name: 'Вогняна куля', mastered: true, gm_granted: false, damage_die: 'd8', energy_cost: 3, forms: [] }],
     });
     treeSpellAccessForMany.mockResolvedValue({ [ID1]: { traditions: ['t1'], maxComplexity: 'simple' } });
-    treeCastSkillOptionsForMany.mockResolvedValue({ [ID1]: [{ id: 'o1', tradition_id: 't1', skill_key: 'will' }] });
+    treeCastSkillOptionsForMany.mockResolvedValue({ [ID1]: [{ id: 'o1', magic_form: 'pact', skill_key: 'will' }] });
 
     const res = mockRes();
     await EffectsController.list({ query: { ids: ID1 }, user: { sub: 'u1' } }, res);
@@ -84,7 +84,7 @@ describe('EffectsController.list', () => {
     expect(entry.current_magic).toBe(7);
     expect(entry.spells).toEqual([{ spell_id: 's1', name: 'Вогняна куля', mastered: true, gm_granted: false, damage_die: 'd8', energy_cost: 3, forms: [] }]);
     expect(entry.spell_access).toEqual({ traditions: ['t1'], max_complexity: 'simple' });
-    expect(entry.cast_skill_options).toEqual([{ id: 'o1', tradition_id: 't1', skill_key: 'will' }]);
+    expect(entry.cast_skill_options).toEqual([{ id: 'o1', magic_form: 'pact', skill_key: 'will' }]);
   });
 
   it('defaults spells/spell_access/cast_skill_options when a character has none', async () => {

@@ -86,6 +86,7 @@ export default function CharacterSheet({ publicView = false }) {
   const { theme } = useTheme();
   const { conditions: conditionsConfig, currencies, races, condition_levels: conditionLevels } = useCharacterConfig();
   const { user } = useAuth();
+  const { magicForms } = useMagicForms();
   // На xl+ праворуч стоїть колонка з нотатками й вбудованими кубиками.
   const wide = useMediaQuery('(min-width: 1280px)');
   const ARCHETYPE_COLORS = theme === 'dark' ? ARCHETYPE_COLORS_DARK : ARCHETYPE_COLORS_LIGHT;
@@ -802,7 +803,7 @@ export default function CharacterSheet({ publicView = false }) {
             catalog={{
               abilities: allAbilities,
               abilityCollections: allAbilityCollections,
-              traditions: allTraditions,
+              magicForms,
             }}
           />
         )}

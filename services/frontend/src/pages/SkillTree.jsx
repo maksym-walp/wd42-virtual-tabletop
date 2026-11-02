@@ -11,7 +11,7 @@ import NodeGrantsPicker from '../components/NodeGrantsPicker';
 import NodeSpellAccessPicker from '../components/NodeSpellAccessPicker';
 import CastSkillOptionsPicker from '../components/CastSkillOptionsPicker';
 import NodeModifiersPicker, { NodeModifierList } from '../components/NodeModifiersPicker';
-import traditionsApi from '../api/traditions';
+import useMagicForms from '../hooks/useMagicForms';
 import { downloadJsonFile } from '../utils/downloadJson';
 import { buildSkillTreeImportTemplate } from '../utils/skillTreeImportTemplate';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
@@ -51,20 +51,22 @@ export default function SkillTree() {
   const [viewSheetOpen, setViewSheetOpen] = useState(false);
 
   // Catalogs offered by the node form's "видає / робить доступним" picker and
-  // its spell-traditions picker — also resolve names/cards for everyone in
-  // view mode.
+  // its alternative-cast-skill picker — also resolve names/cards for
+  // everyone in view mode. magicForms comes from the admin-edited cache
+  // (useMagicForms), the rest from a one-shot fetch.
+  const { magicForms } = useMagicForms();
   const [grantCatalogs, setGrantCatalogs] = useState({
-    abilities: [], abilityCollections: [], traditions: [],
+    abilities: [], abilityCollections: [],
   });
   useEffect(() => {
     Promise.all([
       abilitiesApi.getAll().catch(() => []),
       createCollectionsApi('/api/abilities/collections/').getAll().catch(() => []),
-      traditionsApi.getAll().catch(() => []),
-    ]).then(([abilities, abilityCollections, traditions]) => {
-      setGrantCatalogs({ abilities, abilityCollections, traditions });
+    ]).then(([abilities, abilityCollections]) => {
+      setGrantCatalogs((prev) => ({ ...prev, abilities, abilityCollections }));
     });
   }, []);
+  const catalogs = { ...grantCatalogs, magicForms };
 
   const [activeArchetype, setActiveArchetype] = useState('fighter');
   const [importPrompt, setImportPrompt] = useState(null); // { data } — partial-node import awaiting a parent choice
@@ -744,7 +746,7 @@ export default function SkillTree() {
 
         {/* Hover tooltip — the only place a node's name/details show now */}
         {tooltip && (
-          <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} catalog={grantCatalogs} />
+          <Tooltip tooltip={tooltip} nodes={nodes} edges={edges} catalog={catalogs} />
         )}
 
         {nodes.length === 0 && (
@@ -827,7 +829,7 @@ export default function SkillTree() {
         edges={edges}
         level={selectedNode ? levels[selectedNode.id] : undefined}
         isGM={isGM}
-        grantCatalogs={grantCatalogs}
+        grantCatalogs={catalogs}
         onEdit={openEditNodeForm}
         onDelete={handleDeleteNode}
         onClose={() => setSelectedNode(null)}
@@ -838,7 +840,7 @@ export default function SkillTree() {
         <NodeFormModal
           form={nodeForm}
           error={formError}
-          grantCatalogs={grantCatalogs}
+          grantCatalogs={catalogs}
           onChange={setNodeForm}
           onSave={handleSaveNode}
           onClose={() => { setNodeForm(null); setFormError(''); }}
@@ -1334,11 +1336,11 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Альтернативна навичка чарування</span>
           <p className="text-xs text-text-dim">
-            Для заклинань обраної традиції гравець під час кастування може обрати цю навичку
+            Для заклинань обраної форми магії гравець під час кастування може обрати цю навичку
             замість Чарування — вибір завжди за гравцем.
           </p>
           <CastSkillOptionsPicker
-            traditions={grantCatalogs.traditions}
+            magicForms={grantCatalogs.magicForms}
             value={form.cast_skill_options || []}
             onChange={(cast_skill_options) => onChange((f) => ({ ...f, cast_skill_options }))}
           />

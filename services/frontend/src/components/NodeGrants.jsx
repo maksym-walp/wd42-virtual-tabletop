@@ -5,7 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { AbilityPreview, SimplePreview } from './catalog/previews';
 import { abilityWithForm } from '../constants/abilities';
 import { complexityLabel } from '../utils/spellAccess';
-import { TARGET_LABELS } from '../constants/nodeModifiers';
+import { TARGET_LABELS, modifierLabel } from '../constants/nodeModifiers';
 
 // What a skill-tree node gives — shared by the GM editor (pages/SkillTree.jsx)
 // and the player-facing tree (DevelopmentTree.jsx): node.grants (abilities
@@ -26,7 +26,7 @@ const GRANT_HREF = {
   ability_collection: (id) => `/abilities/collections/${id}`,
 };
 
-// catalog: { abilities, abilityCollections, traditions }
+// catalog: { abilities, abilityCollections, magicForms }
 export function grantItem(grant, catalog = {}) {
   const pools = {
     ability: catalog.abilities,
@@ -57,12 +57,24 @@ export function nodeSpellAccessLines(node) {
   return lines;
 }
 
-// Альтернативні навички чарування вузла, як рядки показу: «Пакти — Обман».
+// Альтернативні навички чарування вузла, як рядки показу: «Пакт — Обман».
+// catalog.magicForms — [{ key, label }], як повертає useMagicForms().
 export function nodeCastSkillLines(node, catalog = {}) {
+  const formsMap = Object.fromEntries((catalog.magicForms || []).map((f) => [f.key, f.label]));
   return (node.cast_skill_options || []).map((opt) => {
-    const traditionName = (catalog.traditions || []).find((t) => t.id === opt.tradition_id)?.name ?? '?';
+    const formLabel = formsMap[opt.magic_form] ?? opt.magic_form ?? '?';
     const skillLabel = TARGET_LABELS[opt.skill_key] ?? opt.skill_key;
-    return `${traditionName} — ${skillLabel}`;
+    return `${formLabel} — ${skillLabel}`;
+  });
+}
+
+// Модифікатори кидків вузла, як рядки показу: «Інтуїція +1».
+export function nodeModifierLines(node) {
+  return (node.modifiers || []).map((mod) => {
+    let line = modifierLabel(mod);
+    if (mod.situational) line += ' · ситуативно';
+    if (mod.note) line += ` — ${mod.note}`;
+    return line;
   });
 }
 
@@ -73,6 +85,7 @@ export function NodeGainsSummary({ node, catalog }) {
   const grants = node.grants || [];
   const sections = [
     { label: 'Ефект', items: effect.map((line) => ({ text: line })) },
+    { label: 'Модифікатори кидків', items: nodeModifierLines(node).map((text) => ({ text })) },
     { label: 'Додає автоматично', items: grants.filter((g) => g.mode === 'grant').map((g) => ({ text: grantName(g, catalog), kind: g.item_kind })) },
     { label: 'Робить доступним', items: grants.filter((g) => g.mode === 'unlock').map((g) => ({ text: grantName(g, catalog), kind: g.item_kind })) },
     { label: 'Відкриває магію', items: nodeSpellAccessLines(node, catalog).map((text) => ({ text })) },

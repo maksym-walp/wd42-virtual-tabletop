@@ -39,13 +39,13 @@ export function spellAccessFor(spell, access) {
 
 // Якою навичкою можна кастувати заклинання: завжди Чарування
 // ('spellcasting') плюс будь-яка альтернативна навичка, яку відкрив вузол
-// дерева для традиції цього заклинання (nodes.cast_skill_options, розділ
-// 2) — гравець сам обирає, якою кидати (battle tracker). Унікальні ключі,
-// Чарування завжди першим.
+// дерева для форми магії цього заклинання (spell.nature, nodes.cast_skill_options,
+// розділ 2) — гравець сам обирає, якою кидати (battle tracker). Унікальні
+// ключі, Чарування завжди першим.
 export function castSkillOptionsFor(spell, castSkillOptions) {
-  const traditionIds = spellTraditionIds(spell);
+  const natures = spell.nature || [];
   const alt = (castSkillOptions || [])
-    .filter((o) => traditionIds.includes(o.tradition_id))
+    .filter((o) => natures.includes(o.magic_form))
     .map((o) => o.skill_key);
   return ['spellcasting', ...new Set(alt)];
 }
