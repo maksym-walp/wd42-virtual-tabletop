@@ -102,27 +102,54 @@ const LocationModel = {
     return rows[0] || null;
   },
 
-  // Bulk import of previously exported locations. Each record becomes a new
-  // location (own id, created_by forced to the importer) plus its versions.
-  // image_url is dropped on every version — images from a foreign export don't
-  // live on this disk (same rule as the equipment importer). A record with no
-  // versions still gets one empty base version so the location isn't broken.
-  // All-or-nothing: the whole batch runs in one transaction.
-  async bulkImport(userId, records, { toBase, toVersion }) {
+  // Bulk import of previously exported locations. image_url is dropped on
+  // every version — images from a foreign export don't live on this disk
+  // (same rule as the equipment importer). A record with no versions still
+  // gets one empty base version so the location isn't broken. All-or-
+  // nothing: the whole batch runs in one transaction.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches a
+  // location this importer may already write to (own, or any if isAdmin)
+  // updates it in place — base fields plus a full replace of its versions
+  // (same "re-export, tweak, re-import" convention as the other catalogs)
+  // — instead of creating a duplicate.
+  async bulkImport(userId, records, { toBase, toVersion, isAdmin = false }) {
     const client = await pool.connect();
-    let imported = 0;
+    let created = 0;
+    let updated = 0;
     try {
       await client.query('BEGIN');
+      const { rows: existingRows } = await client.query(
+        `SELECT id, name FROM maps.locations WHERE ($2::bool OR created_by = $1)`,
+        [userId, isAdmin]
+      );
+      const byId = new Map(existingRows.map((r) => [r.id, r]));
+      const byName = new Map(existingRows.map((r) => [r.name.trim().toLowerCase(), r]));
+
       for (const record of records) {
         if (!record || typeof record !== 'object') continue;
         const base = toBase(record);
         if (!base.name) continue;
-        const { rows } = await client.query(
-          `INSERT INTO maps.locations (created_by, name, types, marker_icon, marker_level)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-          [userId, base.name, base.types, base.markerIcon, base.markerLevel]
-        );
-        const locationId = rows[0].id;
+
+        const match = (record.id && byId.get(record.id)) || byName.get(base.name.trim().toLowerCase());
+        let locationId;
+        if (match) {
+          await client.query(
+            `UPDATE maps.locations SET name=$2, types=$3, marker_icon=$4, marker_level=$5, updated_at=NOW() WHERE id=$1`,
+            [match.id, base.name, base.types, base.markerIcon, base.markerLevel]
+          );
+          await client.query(`DELETE FROM maps.location_versions WHERE location_id = $1`, [match.id]);
+          locationId = match.id;
+          updated += 1;
+        } else {
+          const { rows } = await client.query(
+            `INSERT INTO maps.locations (created_by, name, types, marker_icon, marker_level)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [userId, base.name, base.types, base.markerIcon, base.markerLevel]
+          );
+          locationId = rows[0].id;
+          created += 1;
+        }
 
         const versions = Array.isArray(record.versions) && record.versions.length
           ? record.versions
@@ -136,7 +163,6 @@ const LocationModel = {
             [locationId, v.startYear, v.endYear, v.description, v.gmNote, v.name, v.markerIcon, v.markerLevel, v.types]
           );
         }
-        imported += 1;
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -145,7 +171,7 @@ const LocationModel = {
     } finally {
       client.release();
     }
-    return imported;
+    return { created, updated };
   },
 };
 

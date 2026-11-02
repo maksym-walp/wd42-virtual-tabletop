@@ -41,6 +41,14 @@ const TIER_KINDS = ['primitive', 'perfected'];
 const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
 const normalizeDamageDie = (value) => (DAMAGE_DICE.includes(value) ? value : null);
 
+// Кількість кубиків шкоди (4.4.3) — автора заклинання задає прямо, не з
+// Майстерності (міграція 122). Ціле число 1..20; відсутнє/некоректне -> 1.
+const MAX_DAMAGE_DICE_COUNT = 20;
+const normalizeDamageDiceCount = (value) => {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_DAMAGE_DICE_COUNT ? n : 1;
+};
+
 // Форми заклинання. Колонки самого рядка spells — основна (Повноцінна)
 // форма; spells.forms (JSONB) — додаткові рівневі форми: 'primitive'
 // (Обмежена) і/або 'perfected' (Довершена), не більше однієї кожного виду,
@@ -74,6 +82,7 @@ function normalizeForms(forms) {
       lore_creator: form.lore_creator || null,
       lore_creator_npc_id: form.lore_creator_npc_id || null,
       damage_die: normalizeDamageDie(form.damage_die),
+      damage_dice_count: normalizeDamageDiceCount(form.damage_dice_count),
     }));
 }
 
@@ -85,7 +94,7 @@ const IMPORT_COLUMNS = [
   'user_id', 'name', 'nature', 'spell_kind', 'mechanical_desc', 'narrative_desc',
   'lore_creator', 'lore_creator_npc_id', 'energy_cost', 'action_time', 'ritual',
   'duration_value', 'duration_unit', 'range_desc', 'components', 'is_public',
-  'complexity', 'forms', 'damage_die', 'is_canonical',
+  'complexity', 'forms', 'damage_die', 'damage_dice_count', 'is_canonical',
 ];
 
 const JSONB_IMPORT_COLUMNS = ['components', 'forms'];
@@ -105,6 +114,7 @@ function normalizeImportField(column, record) {
     // в основній формі (IMPORT_COLUMNS його теж переносить).
     case 'forms': return JSON.stringify(normalizeForms(record.forms));
     case 'damage_die': return normalizeDamageDie(record.damage_die);
+    case 'damage_dice_count': return normalizeDamageDiceCount(record.damage_dice_count);
     default: return record[column] ?? null;
   }
 }
@@ -223,7 +233,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public, image_url, image_crop,
-      lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical,
+      lore_creator, lore_creator_npc_id, complexity, forms, damage_die, damage_dice_count, is_canonical,
     } = data;
 
     const { rows } = await pool.query(
@@ -231,8 +241,9 @@ const SpellModel = {
          (user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,
           energy_cost, action_time, ritual, duration_value, duration_unit,
           range_desc, components, is_public,
-          image_url, lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical, image_crop)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19::jsonb,$20,$21,$22::jsonb)
+          image_url, lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical, image_crop,
+          damage_dice_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18,$19::jsonb,$20,$21,$22::jsonb,$23)
        RETURNING *`,
       [
         userId, name, normalizeNature(nature), spell_kind ?? 'utility',
@@ -244,6 +255,7 @@ const SpellModel = {
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeDamageDie(damage_die), is_canonical ?? false,
         serializeImageCrop(image_url ? image_crop : null),
+        normalizeDamageDiceCount(damage_dice_count),
       ]
     );
     return rows[0];
@@ -255,7 +267,7 @@ const SpellModel = {
       energy_cost, action_time, ritual,
       duration_value, duration_unit, range_desc,
       components, is_public, image_url, image_crop,
-      lore_creator, lore_creator_npc_id, complexity, forms, damage_die,
+      lore_creator, lore_creator_npc_id, complexity, forms, damage_die, damage_dice_count,
     } = data;
 
     const { rows } = await pool.query(
@@ -266,7 +278,8 @@ const SpellModel = {
            duration_value=$11, duration_unit=$12, range_desc=$13,
            components=$14::jsonb, is_public=$15,
            image_url=$16, lore_creator=$17, lore_creator_npc_id=$18,
-           complexity=$20, forms=$21::jsonb, damage_die=$22, image_crop=$23::jsonb, updated_at=NOW()
+           complexity=$20, forms=$21::jsonb, damage_die=$22, image_crop=$23::jsonb,
+           damage_dice_count=$24, updated_at=NOW()
        WHERE id=$1 AND (user_id=$2 OR $19 = true)
        RETURNING *`,
       [
@@ -279,6 +292,7 @@ const SpellModel = {
         normalizeComplexity(complexity), JSON.stringify(normalizeForms(forms)),
         normalizeDamageDie(damage_die),
         serializeImageCrop(image_url ? image_crop : null),
+        normalizeDamageDiceCount(damage_dice_count),
       ]
     );
     return rows[0] || null;

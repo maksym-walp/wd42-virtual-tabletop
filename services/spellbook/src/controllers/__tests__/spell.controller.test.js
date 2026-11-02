@@ -240,19 +240,72 @@ describe('SpellController.import', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ message: 'Очікується масив обʼєктів' });
-    expect(SpellModel.bulkImport).not.toHaveBeenCalled();
+    expect(SpellModel.findAll).not.toHaveBeenCalled();
   });
 
-  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
-    SpellModel.bulkImport.mockResolvedValue(2);
+  it('creates new, canonical spells under the current user when nothing matches', async () => {
+    SpellModel.findAll.mockResolvedValue([]);
+    SpellModel.create.mockResolvedValue({ id: 's1' });
     const res = mockRes();
     const body = [{ name: 'A' }, { name: 'B' }];
 
     await SpellController.import(mockReq({ body }), res);
 
-    expect(SpellModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
+    expect(SpellModel.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'A', is_canonical: true }));
+    expect(SpellModel.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'B', is_canonical: true }));
+    expect(SpellModel.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 2, created: 2, updated: 0 });
+  });
+
+  it('updates an owned spell by id, keeping its image_url/image_crop', async () => {
+    const existing = { id: 's1', user_id: 'user-1', name: 'Вогняна куля', image_url: '/uploads/x.png', image_crop: { x: 1 } };
+    SpellModel.findAll.mockResolvedValue([existing]);
+    SpellModel.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await SpellController.import(mockReq({ body: [{ id: 's1', name: 'Вогняна куля ІІ' }] }), res);
+
+    expect(SpellModel.update).toHaveBeenCalledWith('s1', 'user-1', expect.objectContaining({
+      name: 'Вогняна куля ІІ', image_url: '/uploads/x.png', image_crop: { x: 1 },
+    }), false);
+    expect(SpellModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('matches by name case-insensitively among the importer\'s own spells', async () => {
+    const existing = { id: 's1', user_id: 'user-1', name: 'Вогняна куля' };
+    SpellModel.findAll.mockResolvedValue([existing]);
+    SpellModel.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await SpellController.import(mockReq({ body: [{ name: ' вогняна куля ' }] }), res);
+
+    expect(SpellModel.update).toHaveBeenCalledWith('s1', 'user-1', expect.anything(), false);
+  });
+
+  it('does not match (and instead creates) a same-named spell owned by someone else', async () => {
+    const existing = { id: 's1', user_id: 'someone-else', name: 'Вогняна куля' };
+    SpellModel.findAll.mockResolvedValue([existing]);
+    SpellModel.create.mockResolvedValue({ id: 's2' });
+    const res = mockRes();
+
+    await SpellController.import(mockReq({ body: [{ name: 'Вогняна куля' }] }), res);
+
+    expect(SpellModel.update).not.toHaveBeenCalled();
+    expect(SpellModel.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any spell by name', async () => {
+    const existing = { id: 's1', user_id: 'someone-else', name: 'Вогняна куля' };
+    SpellModel.findAll.mockResolvedValue([existing]);
+    SpellModel.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await SpellController.import(mockReq({ body: [{ name: 'Вогняна куля' }], user: { sub: 'admin-1', role: 'admin' } }), res);
+
+    expect(SpellModel.findAll).toHaveBeenCalledWith('admin-1', {}, true);
+    expect(SpellModel.update).toHaveBeenCalledWith('s1', 'admin-1', expect.anything(), true);
   });
 });
 

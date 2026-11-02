@@ -8,7 +8,7 @@ import traditionsApi from '../api/traditions';
 import npcsApi from '../api/npcs';
 import {
   RITUAL_TYPES, DURATION_UNITS,
-  ACTION_OPTIONS, SPELL_COMPLEXITIES, DAMAGE_DICE, FORM_FIELDS, pickFormFields,
+  ACTION_OPTIONS, SPELL_COMPLEXITIES, DAMAGE_DICE, MAX_DAMAGE_DICE_COUNT, FORM_FIELDS, pickFormFields,
 } from '../constants/spellbook';
 import { COLLECTION_DOMAINS } from '../collectionsDomains';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +36,7 @@ const EMPTY = {
   name: '', nature: ['arcana'], spell_kind: 'utility', complexity: 'simple',
   mechanical_desc: '', narrative_desc: '', lore_creator: '', lore_creator_npc_id: null,
   energy_cost: 0, action_time: 1, ritual: 'impossible',
-  duration_value: '', duration_unit: 'instant', range_desc: '', damage_die: '',
+  duration_value: '', duration_unit: 'instant', range_desc: '', damage_die: '', damage_dice_count: 1,
   components: [], is_public: true, is_canonical: true,
   image_url: '', image_crop: null,
   collectionIds: [],
@@ -59,6 +59,7 @@ function formToState(src) {
     duration_value: src.duration_value ?? '',
     range_desc: src.range_desc || '',
     damage_die: src.damage_die || '',
+    damage_dice_count: src.damage_dice_count || 1,
     components: componentsToState(src.components),
   };
 }
@@ -142,7 +143,7 @@ export default function SpellForm() {
           energy_cost: s.energy_cost, action_time: s.action_time,
           ritual: s.ritual, duration_value: s.duration_value ?? '',
           duration_unit: s.duration_unit, range_desc: s.range_desc || '',
-          damage_die: s.damage_die || '',
+          damage_die: s.damage_die || '', damage_dice_count: s.damage_dice_count || 1,
           components: componentsToState(s.components),
           is_public: s.is_public,
           image_url: s.image_url || '', image_crop: s.image_crop || null,
@@ -223,6 +224,7 @@ export default function SpellForm() {
         energy_cost: Number(src.energy_cost),
         action_time: Number(src.action_time),
         damage_die: src.damage_die || null,
+        damage_dice_count: Number(src.damage_dice_count) || 1,
       });
 
       const { collectionIds, traditionIds, forms, ...rest } = form;
@@ -343,12 +345,22 @@ export default function SpellForm() {
       </div>
 
       {entry.spell_kind === 'combat' && (
-        <Field label="Кубик шкоди" hint="Кількість кубиків — з Майстерності персонажа (не тут)" className="mb-4">
-          <select className={inputClass} value={entry.damage_die} onChange={(e) => patch({ damage_die: e.target.value })}>
-            <option value="">Без шкоди</option>
-            {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </Field>
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Кубик шкоди">
+            <select className={inputClass} value={entry.damage_die} onChange={(e) => patch({ damage_die: e.target.value })}>
+              <option value="">Без шкоди</option>
+              {DAMAGE_DICE.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </Field>
+          {entry.damage_die && (
+            <Field label="Кількість кубиків" hint="Задається тут, не з Майстерності персонажа — вона стосується лише атак зброєю">
+              <input
+                type="number" min={1} max={MAX_DAMAGE_DICE_COUNT} className={inputClass}
+                value={entry.damage_dice_count} onChange={(e) => patch({ damage_dice_count: Number(e.target.value) || 1 })}
+              />
+            </Field>
+          )}
+        </div>
       )}
 
       <Field label="Компоненти" className="mb-4">

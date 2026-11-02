@@ -48,15 +48,14 @@ export function buildSkillTreeImportTemplate() {
 //   require_both        — true/false: відкриття потребує і пунктів, і нарративної
 //                          умови (інакше гравець обирає шлях сам: пункти або нарратив)
 //   is_root             — true/false
-//   unlocks_traditions  — масив uuid традицій заклинань (сервіс spellbook,
-//                          GET /api/spellbook/traditions), або [] — які традиції відкриває вузол
 //   unlocks_complexity  — одне з: ${complexityList}, або null — найвища складність
-//                          форми заклинання, яку вузол відкриває (драбина: відкриває й усі нижчі)
+//                          форми заклинання, яку вузол відкриває (драбина: відкриває й усі нижчі).
+//                          Традиції вузли не відкривають — гравець позначає їх сам у меню чарів.
 //   cast_skill_options  — масив { id, tradition_id, skill_key, note }: для заклинань
 //                          указаної традиції дозволяє кастувати навичкою skill_key
 //                          замість Чарування, а не лише нею
 //                            id           — рядок, стабільний ключ picker'а (можна "")
-//                            tradition_id — uuid традиції (та сама, що в unlocks_traditions)
+//                            tradition_id — uuid традиції (сервіс spellbook, GET /api/spellbook/traditions)
 //                            skill_key    — одне з: ${skillList}
 //                            note         — рядок до 200 символів (напр. "проти звірів"), або ""
 //   modifiers           — масив механічних модифікаторів кидків (міграція 112):
@@ -102,7 +101,6 @@ export function buildSkillTreeImportTemplate() {
       "archetypes": [],
       "require_both": false,
       "is_root": true,
-      "unlocks_traditions": [],
       "unlocks_complexity": null,
       "cast_skill_options": [],
       "modifiers": [
@@ -124,7 +122,6 @@ export function buildSkillTreeImportTemplate() {
       "archetypes": [],
       "require_both": false,
       "is_root": false,
-      "unlocks_traditions": [],
       "unlocks_complexity": null,
       "cast_skill_options": [],
       "modifiers": [],

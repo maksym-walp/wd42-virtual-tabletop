@@ -115,6 +115,14 @@ function createDocumentController({
 
     // Приймає один файл експорту або масив. Спершу валідуємо все, тоді
     // вставляємо — щоб кривий запис не лишив половину імпорту.
+    //
+    // Upsert: a record whose "id" (rare — export() never writes one) or
+    // "name" (case-insensitive) matches a document this importer may
+    // already write to (own, or any if admin) updates it in place instead
+    // of creating a duplicate — keeping its existing is_public and private
+    // fields (gm_notes etc.) rather than resetting them. A brand-new
+    // record is still always private on import — the owner decides what
+    // to publish.
     async import(req, res) {
       const body = req.body;
       const entries = Array.isArray(body) ? body : [body];
@@ -129,19 +137,36 @@ function createDocumentController({
           if (source.type != null && source.type !== type) {
             throw new ValidationError(`Запис №${i + 1}: це не ${label.what} (type: ${source.type})`);
           }
-          return buildFields(source);
+          return { source, fields: buildFields(source) };
         });
       } catch (err) {
         if (!(err instanceof ValidationError)) throw err;
         return res.status(400).json({ message: err.message });
       }
 
-      // Імпортоване завжди приватне: власник сам вирішує, що публікувати.
+      const admin = isAdmin(req.user);
+      const existing = await model.findAll(req.user.sub, {}, admin);
+      const writable = admin ? existing : existing.filter((r) => r.created_by === req.user.sub);
+      const byId = new Map(writable.map((r) => [r.id, r]));
+      const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
       const items = [];
-      for (const fields of prepared) {
-        items.push(await model.create(req.user.sub, { ...fields, is_public: false }));
+      let created = 0;
+      let updated = 0;
+      for (const { source, fields } of prepared) {
+        const match = (source.id && byId.get(source.id)) || byName.get(String(fields.name).trim().toLowerCase());
+        if (match) {
+          privateFields.forEach((field) => {
+            if (source[field] === undefined) fields[field] = match[field];
+          });
+          items.push(await model.update(match.id, { ...fields, is_public: match.is_public }));
+          updated += 1;
+        } else {
+          items.push(await model.create(req.user.sub, { ...fields, is_public: false }));
+          created += 1;
+        }
       }
-      res.status(201).json({ imported: items.length, items });
+      res.status(201).json({ imported: items.length, created, updated, items });
     },
   };
 }

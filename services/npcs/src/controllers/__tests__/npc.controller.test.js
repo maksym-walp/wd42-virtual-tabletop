@@ -173,7 +173,7 @@ describe('NpcController.import', () => {
     const res = mockRes();
     await NpcController.import(mockReq({ body: [{ name: 'X', ...ATTRS }], user: PLAYER }), res);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(NpcModel.importMany).not.toHaveBeenCalled();
+    expect(NpcModel.findAll).not.toHaveBeenCalled();
   });
 
   it('400 for a non-array body or an invalid record, before touching the database', async () => {
@@ -184,20 +184,66 @@ describe('NpcController.import', () => {
     const res2 = mockRes();
     await NpcController.import(mockReq({ body: [{ name: 'Ok', ...ATTRS }, { name: 'Bad', ...ATTRS, body: 9 }] }), res2);
     expect(res2.status).toHaveBeenCalledWith(400);
-    expect(NpcModel.importMany).not.toHaveBeenCalled();
+    expect(NpcModel.findAll).not.toHaveBeenCalled();
   });
 
-  it('imports parsed records as the importer, dropping cross-deployment references and images', async () => {
-    NpcModel.importMany.mockResolvedValue(['n1', 'n2']);
+  it('creates new records as the importer, dropping cross-deployment references and images, when nothing matches', async () => {
+    NpcModel.findAll.mockResolvedValue([]);
+    NpcModel.create.mockResolvedValue({ id: 'n1' });
     const res = mockRes();
     const record = { name: ' Старий ', ...ATTRS, species_id: 'sp-1', race_id: 'r-1', image_url: '/x.png', is_public: true };
 
     await NpcController.import(mockReq({ body: [record, { name: 'Другий', ...ATTRS }] }), res);
 
-    const [userId, fieldsList] = NpcModel.importMany.mock.calls[0];
-    expect(userId).toBe('gm-1');
-    expect(fieldsList[0]).toMatchObject({ name: 'Старий', speciesId: null, raceId: null, imageUrl: null, isPublic: true });
+    expect(NpcModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      createdBy: 'gm-1', name: 'Старий', speciesId: null, raceId: null, imageUrl: null, isPublic: true,
+    }));
+    expect(NpcModel.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 2, created: 2, updated: 0 });
+  });
+
+  it('updates an owned NPC by id instead of creating a duplicate', async () => {
+    NpcModel.findAll.mockResolvedValue([tom]);
+    NpcModel.update.mockResolvedValue(tom);
+    const res = mockRes();
+
+    await NpcController.import(mockReq({ body: [{ id: 'n1', name: 'Old Tom Renamed', ...ATTRS }] }), res);
+
+    expect(NpcModel.update).toHaveBeenCalledWith('n1', expect.objectContaining({ name: 'Old Tom Renamed' }));
+    expect(NpcModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('matches by name case-insensitively among the importer\'s own NPCs', async () => {
+    NpcModel.findAll.mockResolvedValue([tom]);
+    NpcModel.update.mockResolvedValue(tom);
+    const res = mockRes();
+
+    await NpcController.import(mockReq({ body: [{ name: ' old tom ', ...ATTRS }] }), res);
+
+    expect(NpcModel.update).toHaveBeenCalledWith('n1', expect.anything());
+  });
+
+  it('does not match (and instead creates) a same-named NPC owned by another GM', async () => {
+    NpcModel.findAll.mockResolvedValue([tom]);
+    NpcModel.create.mockResolvedValue({ id: 'n2' });
+    const res = mockRes();
+
+    await NpcController.import(mockReq({ body: [{ name: 'Old Tom', ...ATTRS }], user: OTHER_GM }), res);
+
+    expect(NpcModel.update).not.toHaveBeenCalled();
+    expect(NpcModel.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any NPC by name', async () => {
+    NpcModel.findAll.mockResolvedValue([tom]);
+    NpcModel.update.mockResolvedValue(tom);
+    const res = mockRes();
+
+    await NpcController.import(mockReq({ body: [{ name: 'Old Tom', ...ATTRS }], user: ADMIN }), res);
+
+    expect(NpcModel.findAll).toHaveBeenCalledWith('a-1', true);
+    expect(NpcModel.update).toHaveBeenCalledWith('n1', expect.anything());
   });
 });

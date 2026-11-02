@@ -119,6 +119,10 @@ const npcsApi = {
     const { data } = await api.patch(`${BASE}/factions/${id}/owner`, { owner_username: ownerUsername });
     return data.faction;
   },
+  async importFactions(records) {
+    const { data } = await api.post(`${BASE}/factions/import`, records);
+    return data;
+  },
 
   async listFactionLeaders(factionId) {
     const { data } = await api.get(`${BASE}/factions/${factionId}/leaders`);

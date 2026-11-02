@@ -51,6 +51,48 @@ const FactionController = {
     res.status(201).json({ faction });
   },
 
+  // GM/admin only — bulk import of a previously exported or hand-written
+  // JSON array of plain faction records. Leaders/members are relations,
+  // not a field of the export, so they're added by hand afterwards (same
+  // convention as abilities/locations import). Records without a usable
+  // name are silently skipped.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches a
+  // faction this importer may already write to updates it in place
+  // (symbol_url is left as the existing record's — the import never
+  // carries one) instead of creating a duplicate.
+  async import(req, res) {
+    if (!canCreate(req.user)) {
+      return res.status(403).json({ message: 'Лише майстер гри або адміністратор може створювати записи' });
+    }
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив записів' });
+    }
+    const admin = isAdmin(req.user);
+    const existing = await FactionModel.findAll(req.user.sub, admin);
+    const writable = admin ? existing : existing.filter((r) => r.created_by === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (const record of req.body) {
+      if (!record || typeof record.name !== 'string' || !record.name.trim()) continue;
+      const name = record.name.trim();
+      const description = typeof record.description === 'string' ? record.description : null;
+      const isPublic = record.is_public ?? false;
+      const match = (record.id && byId.get(record.id)) || byName.get(name.toLowerCase());
+      if (match) {
+        await FactionModel.update(match.id, { name, description, isPublic, symbolUrl: match.symbol_url });
+        updated += 1;
+      } else {
+        await FactionModel.create({ createdBy: req.user.sub, name, description, isPublic, symbolUrl: null });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
+  },
+
   async getOne(req, res) {
     const faction = await loadFaction(req, res, req.params.id);
     if (!faction) return;

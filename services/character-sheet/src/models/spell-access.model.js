@@ -1,9 +1,10 @@
 const pool = require('../config/db');
 const { isCampaignGmForCharacter } = require('./campaign-access.model');
 
-// Доступність заклинань персонажу (міграція 91). Вузли дерева розвитку
-// відкривають традиції (nodes.unlocks_traditions) і складність
-// (nodes.unlocks_complexity — драбиною, разом з усіма нижчими).
+// Доступність заклинань персонажу (міграції 91, 123). Традиції
+// (character_sheet.characters.open_traditions) гравець позначає сам у меню
+// чарів; складність (nodes.unlocks_complexity) і далі відкриває дерево
+// розвитку — драбиною, разом з усіма нижчими.
 // Заклинання доступне, коли:
 //   • відкрито хоч одну з його традицій (заклинання без традицій — завжди);
 //   • І складність форми не вища за найвищу відкриту (форма без
@@ -14,45 +15,55 @@ const { isCampaignGmForCharacter } = require('./campaign-access.model');
 const COMPLEXITIES = ['primitive', 'simple', 'medium', 'complex', 'extreme'];
 const rank = (complexity) => COMPLEXITIES.indexOf(complexity);
 
-// Що персонажу відкрило дерево: { traditions: [uuid], maxComplexity: key | null }.
-async function treeSpellAccess(characterId, db = pool) {
-  const { rows } = await db.query(
-    `SELECT n.unlocks_traditions, n.unlocks_complexity
-       FROM character_sheet.tree_progress tp
-       JOIN skill_tree.nodes n ON n.id = tp.node_id
-      WHERE tp.character_id = $1`,
-    [characterId]
-  );
-  const traditions = [...new Set(rows.flatMap((r) => r.unlocks_traditions || []))];
-  const maxComplexity = rows
+function maxComplexityOf(rows) {
+  return rows
     .map((r) => r.unlocks_complexity)
     .filter((c) => rank(c) >= 0)
     .reduce((best, c) => (best == null || rank(c) > rank(best) ? c : best), null);
-  return { traditions, maxComplexity };
+}
+
+// Що відкрито персонажу: { traditions: [uuid], maxComplexity: key | null }.
+async function treeSpellAccess(characterId, db = pool) {
+  const [{ rows: charRows }, { rows: nodeRows }] = await Promise.all([
+    db.query(`SELECT open_traditions FROM character_sheet.characters WHERE id = $1`, [characterId]),
+    db.query(
+      `SELECT n.unlocks_complexity
+         FROM character_sheet.tree_progress tp
+         JOIN skill_tree.nodes n ON n.id = tp.node_id
+        WHERE tp.character_id = $1`,
+      [characterId]
+    ),
+  ]);
+  return {
+    traditions: charRows[0]?.open_traditions || [],
+    maxComplexity: maxComplexityOf(nodeRows),
+  };
 }
 
 // Те саме для кількох персонажів одразу (battle tracker's GET /effects) →
 // { [characterId]: { traditions, maxComplexity } }.
 async function treeSpellAccessForMany(characterIds, db = pool) {
   if (!characterIds.length) return {};
-  const { rows } = await db.query(
-    `SELECT tp.character_id, n.unlocks_traditions, n.unlocks_complexity
-       FROM character_sheet.tree_progress tp
-       JOIN skill_tree.nodes n ON n.id = tp.node_id
-      WHERE tp.character_id = ANY($1::uuid[])`,
-    [characterIds]
-  );
+  const [{ rows: charRows }, { rows: nodeRows }] = await Promise.all([
+    db.query(
+      `SELECT id, open_traditions FROM character_sheet.characters WHERE id = ANY($1::uuid[])`,
+      [characterIds]
+    ),
+    db.query(
+      `SELECT tp.character_id, n.unlocks_complexity
+         FROM character_sheet.tree_progress tp
+         JOIN skill_tree.nodes n ON n.id = tp.node_id
+        WHERE tp.character_id = ANY($1::uuid[])`,
+      [characterIds]
+    ),
+  ]);
   const byCharacter = {};
   for (const id of characterIds) byCharacter[id] = { traditions: [], maxComplexity: null };
+  for (const row of charRows) byCharacter[row.id].traditions = row.open_traditions || [];
   const grouped = {};
-  for (const row of rows) (grouped[row.character_id] ||= []).push(row);
+  for (const row of nodeRows) (grouped[row.character_id] ||= []).push(row);
   for (const [id, rs] of Object.entries(grouped)) {
-    const traditions = [...new Set(rs.flatMap((r) => r.unlocks_traditions || []))];
-    const maxComplexity = rs
-      .map((r) => r.unlocks_complexity)
-      .filter((c) => rank(c) >= 0)
-      .reduce((best, c) => (best == null || rank(c) > rank(best) ? c : best), null);
-    byCharacter[id] = { traditions, maxComplexity };
+    byCharacter[id].maxComplexity = maxComplexityOf(rs);
   }
   return byCharacter;
 }

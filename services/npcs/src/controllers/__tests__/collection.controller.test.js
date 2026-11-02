@@ -123,6 +123,11 @@ describe('CollectionController.import', () => {
   const ATTRS = { dexterity: 3, body: 4, intelligence: 2, wisdom: 5, charisma: 1 };
   const exported = { name: 'Табір', description: 'опис', is_public: true, items: [{ id: 'old', name: 'Один', ...ATTRS }, { id: 'old2', name: 'Два', ...ATTRS }] };
 
+  beforeEach(() => {
+    CollectionModel.findAll.mockResolvedValue([]);
+    NpcModel.findAll.mockResolvedValue([]);
+  });
+
   it('400 without a collection name', async () => {
     const res = mockRes();
     await CollectionController.import(mockReq({ body: { items: [] } }), res);
@@ -137,17 +142,22 @@ describe('CollectionController.import', () => {
     expect(CollectionModel.create).not.toHaveBeenCalled();
   });
 
-  it('lets a game master import the collection with its nested records', async () => {
+  it('creates a new collection with its nested records when nothing matches', async () => {
     CollectionModel.create.mockResolvedValue({ id: 'c-new' });
-    NpcModel.importMany.mockResolvedValue(['r1', 'r2']);
+    NpcModel.create.mockResolvedValueOnce({ id: 'r1' }).mockResolvedValueOnce({ id: 'r2' });
     const res = mockRes();
 
     await CollectionController.import(mockReq({ body: exported }), res);
 
-    expect(NpcModel.importMany.mock.calls[0][0]).toBe('u1');
-    expect(CollectionModel.addItemsUnchecked).toHaveBeenCalledWith('c-new', ['r1', 'r2']);
+    expect(NpcModel.create).toHaveBeenCalledWith(expect.objectContaining({ createdBy: 'u1', name: 'Один' }));
+    expect(NpcModel.create).toHaveBeenCalledWith(expect.objectContaining({ createdBy: 'u1', name: 'Два' }));
+    expect(CollectionModel.update).not.toHaveBeenCalled();
+    expect(CollectionModel.replaceItems).toHaveBeenCalledWith('c-new', ['r1', 'r2']);
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 2, items_skipped: 0 });
+    expect(res.json).toHaveBeenCalledWith({
+      collections: [{ id: 'c-new' }], imported_items: 2, created_items: 2, updated_items: 0,
+      items_skipped: 0, created_collections: 1, updated_collections: 0,
+    });
   });
 
   it('imports only the shell for a regular user and reports skipped items', async () => {
@@ -156,16 +166,49 @@ describe('CollectionController.import', () => {
 
     await CollectionController.import(mockReq({ body: [exported], user: { sub: 'p1', role: 'user' } }), res);
 
-    expect(NpcModel.importMany).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ collections: [{ id: 'c-new' }], imported_items: 0, items_skipped: 2 });
+    expect(NpcModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      collections: [{ id: 'c-new' }], imported_items: 0, created_items: 0, updated_items: 0,
+      items_skipped: 2, created_collections: 1, updated_collections: 0,
+    });
   });
 
   it('discards the new collection and rethrows when importing records fails', async () => {
     CollectionModel.create.mockResolvedValue({ id: 'c-new' });
     const err = new Error('db down');
-    NpcModel.importMany.mockRejectedValue(err);
+    NpcModel.create.mockRejectedValue(err);
 
     await expect(CollectionController.import(mockReq({ body: exported }), mockRes())).rejects.toBe(err);
     expect(CollectionModel.discard).toHaveBeenCalledWith('c-new');
+  });
+
+  it('updates a matching collection in place instead of creating a duplicate', async () => {
+    const existingColl = { id: 'c1', created_by: 'u1', name: 'Табір' };
+    CollectionModel.findAll.mockResolvedValue([existingColl]);
+    CollectionModel.update.mockResolvedValue(existingColl);
+    NpcModel.create.mockResolvedValueOnce({ id: 'r1' }).mockResolvedValueOnce({ id: 'r2' });
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: exported }), res);
+
+    expect(CollectionModel.update).toHaveBeenCalledWith('c1', 'u1', expect.objectContaining({ name: 'Табір' }), false);
+    expect(CollectionModel.create).not.toHaveBeenCalled();
+    expect(CollectionModel.replaceItems).toHaveBeenCalledWith('c1', ['r1', 'r2']);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ created_collections: 0, updated_collections: 1 }));
+  });
+
+  it('updates a matching NPC inside the collection instead of creating a duplicate', async () => {
+    const existingNpc = { id: 'old', created_by: 'u1', name: 'Один' };
+    CollectionModel.create.mockResolvedValue({ id: 'c-new' });
+    NpcModel.findAll.mockResolvedValue([existingNpc]);
+    NpcModel.update.mockResolvedValue(existingNpc);
+    NpcModel.create.mockResolvedValue({ id: 'r2' });
+    const res = mockRes();
+
+    await CollectionController.import(mockReq({ body: exported }), res);
+
+    expect(NpcModel.update).toHaveBeenCalledWith('old', expect.objectContaining({ name: 'Один' }));
+    expect(CollectionModel.replaceItems).toHaveBeenCalledWith('c-new', ['old', 'r2']);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ created_items: 1, updated_items: 1 }));
   });
 });

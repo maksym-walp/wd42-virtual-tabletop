@@ -356,7 +356,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null, cast_skill_options: [],
+      effect: [], modifiers: [], grants: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
     });
@@ -371,7 +371,7 @@ export default function SkillTree() {
     setNodeForm({
       title: '', description: '', icon: '', cost: 1,
       enableNarrative: false, narrative_condition: [],
-      effect: [], modifiers: [], grants: [], unlocks_traditions: [], unlocks_complexity: null, cast_skill_options: [],
+      effect: [], modifiers: [], grants: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
       _parentId: parent.id,
@@ -386,7 +386,6 @@ export default function SkillTree() {
       effect: n.effect || [],
       modifiers: n.modifiers || [],
       grants: (n.grants || []).map((g) => ({ item_kind: g.item_kind, item_id: g.item_id, mode: g.mode, form_key: g.form_key ?? null })),
-      unlocks_traditions: n.unlocks_traditions || [],
       unlocks_complexity: n.unlocks_complexity ?? null,
       cast_skill_options: n.cast_skill_options || [],
       archetype: n.archetype || activeArchetype,
@@ -1323,15 +1322,12 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Магія</span>
           <p className="text-xs text-text-dim">
-            Окремі заклинання вузли не видають: персонаж може вивчити заклинання, коли на дереві відкрито
-            хоч одну з його традицій і його складність.
+            Окремі заклинання вузли не видають: персонаж може вивчити заклинання, коли його складність
+            відкрито на дереві, а традицію він сам позначив відкритою в меню чарів.
           </p>
           <NodeSpellAccessPicker
-            traditions={grantCatalogs.traditions}
             value={form}
-            onChange={(next) => onChange((f) => ({
-              ...f, unlocks_traditions: next.unlocks_traditions, unlocks_complexity: next.unlocks_complexity,
-            }))}
+            onChange={(next) => onChange((f) => ({ ...f, unlocks_complexity: next.unlocks_complexity }))}
           />
         </div>
 

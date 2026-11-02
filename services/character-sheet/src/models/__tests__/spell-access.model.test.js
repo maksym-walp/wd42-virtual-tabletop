@@ -39,14 +39,24 @@ describe('evaluateSpellAccess', () => {
 });
 
 describe('treeSpellAccess', () => {
-  it('unions traditions and keeps the highest complexity of the unlocked nodes', async () => {
-    pool.query.mockResolvedValue({ rows: [
-      { unlocks_traditions: ['a'], unlocks_complexity: 'simple' },
-      { unlocks_traditions: ['a', 'b'], unlocks_complexity: 'complex' },
-      { unlocks_traditions: [], unlocks_complexity: null },
-    ] });
+  it('reads open traditions off the character and keeps the highest complexity of the unlocked nodes', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ open_traditions: ['a', 'b'] }] })
+      .mockResolvedValueOnce({ rows: [
+        { unlocks_complexity: 'simple' },
+        { unlocks_complexity: 'complex' },
+        { unlocks_complexity: null },
+      ] });
     expect(await treeSpellAccess('c1')).toEqual({ traditions: ['a', 'b'], maxComplexity: 'complex' });
     expect(pool.query.mock.calls[0][1]).toEqual(['c1']);
+    expect(pool.query.mock.calls[1][1]).toEqual(['c1']);
+  });
+
+  it('defaults to no traditions when the character has none set', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ open_traditions: null }] })
+      .mockResolvedValueOnce({ rows: [] });
+    expect(await treeSpellAccess('c1')).toEqual({ traditions: [], maxComplexity: null });
   });
 });
 

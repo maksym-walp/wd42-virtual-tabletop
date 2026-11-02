@@ -137,6 +137,15 @@ function createCollectionModel({ schema, recordTable, itemColumn }) {
       await pool.query(`DELETE FROM ${schema}.collections WHERE id = $1`, [id]);
     },
 
+    // Повна заміна складу колекції (той самий "весь-обʼєкт-перезаписується"
+    // прийом, що й у setParticipants/import локацій) — для імпорту: файл
+    // описує склад колекції цілком, тож записи, яких у ньому більше немає,
+    // прибираються з колекції (самі записи не видаляються).
+    async replaceItems(collectionId, entryIds) {
+      await pool.query(`DELETE FROM ${schema}.collection_items WHERE collection_id = $1`, [collectionId]);
+      await this.addItemsUnchecked(collectionId, entryIds);
+    },
+
     async removeItem(collectionId, userId, entryId, isAdmin = false) {
       const { rowCount } = await pool.query(
         `DELETE FROM ${schema}.collection_items ci

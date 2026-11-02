@@ -332,8 +332,7 @@ export default function DevelopmentTree({
 }
 
 // Name plus what the node gives (effects, granted/unlocked abilities, opened
-// spell traditions/complexity), so the tree can be scanned without opening
-// every node.
+// spell complexity), so the tree can be scanned without opening every node.
 function HoverLabel({ hoverLabel, catalog }) {
   const { node, left, nodeLeft, nodeTop, nodeBottom } = hoverLabel;
   const elRef = useRef(null);

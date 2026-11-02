@@ -120,6 +120,8 @@ describe('update / remove', () => {
 });
 
 describe('export / import', () => {
+  beforeEach(() => ConstellationModel.findAll.mockResolvedValue([]));
+
   it('exports without ids, owner or visibility, tagged with the tool type', async () => {
     DeckModel.findById.mockResolvedValue({
       id: 'd1', created_by: 'u1', is_public: true, name: 'Таро', description: null,
@@ -164,6 +166,47 @@ describe('export / import', () => {
     const res = mockRes();
     await ConstellationController.import(mockReq({ body: [] }), res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('updates an owned document matched by name, keeping its is_public and gm_notes', async () => {
+    const existing = {
+      id: 'c1', created_by: 'u1', name: 'Дракон', is_public: true, gm_notes: 'секрет майстра',
+    };
+    ConstellationModel.findAll.mockResolvedValue([existing]);
+    ConstellationModel.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await ConstellationController.import(mockReq({ body: validConstellation }), res);
+
+    expect(ConstellationModel.update).toHaveBeenCalledWith('c1', expect.objectContaining({
+      name: 'Дракон', is_public: true, gm_notes: 'секрет майстра',
+    }));
+    expect(ConstellationModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ imported: 1, created: 0, updated: 1 }));
+  });
+
+  it('does not match (and instead creates) a same-named document owned by someone else', async () => {
+    const existing = { id: 'c1', created_by: 'someone-else', name: 'Дракон', is_public: true };
+    ConstellationModel.findAll.mockResolvedValue([existing]);
+    ConstellationModel.create.mockResolvedValue({ id: 'c2' });
+    const res = mockRes();
+
+    await ConstellationController.import(mockReq({ body: validConstellation }), res);
+
+    expect(ConstellationModel.update).not.toHaveBeenCalled();
+    expect(ConstellationModel.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any document by name', async () => {
+    const existing = { id: 'c1', created_by: 'someone-else', name: 'Дракон', is_public: false };
+    ConstellationModel.findAll.mockResolvedValue([existing]);
+    ConstellationModel.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await ConstellationController.import(mockReq({ body: validConstellation, user: { sub: 'admin-1', role: 'admin' } }), res);
+
+    expect(ConstellationModel.findAll).toHaveBeenCalledWith('admin-1', {}, true);
+    expect(ConstellationModel.update).toHaveBeenCalledWith('c1', expect.anything());
   });
 });
 

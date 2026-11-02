@@ -9,9 +9,10 @@ import { TARGET_LABELS } from '../constants/nodeModifiers';
 
 // What a skill-tree node gives — shared by the GM editor (pages/SkillTree.jsx)
 // and the player-facing tree (DevelopmentTree.jsx): node.grants (abilities
-// and ability collections) plus what it opens for spells — traditions and
-// complexity (node.unlocks_traditions / unlocks_complexity). Spells
-// themselves are never linked to nodes.
+// and ability collections) plus what it opens for spells — complexity
+// (node.unlocks_complexity). Traditions are no longer opened by the tree —
+// the player marks them open themselves in the character's spell menu.
+// Spells themselves are never linked to nodes.
 
 export const GRANT_KIND_LABEL = {
   ability: 'вміння',
@@ -49,14 +50,9 @@ export function grantName(grant, catalog) {
   return entry.form_label ? `${entry.name} — ${entry.form_label}` : entry.name;
 }
 
-// What the node opens for spells, as display lines (traditions by name,
-// complexity as a ladder).
-export function nodeSpellAccessLines(node, catalog = {}) {
+// What the node opens for spells, as display lines (complexity as a ladder).
+export function nodeSpellAccessLines(node) {
   const lines = [];
-  const names = (node.unlocks_traditions || [])
-    .map((id) => (catalog.traditions || []).find((t) => t.id === id)?.name)
-    .filter(Boolean);
-  if (names.length) lines.push(`${names.length > 1 ? 'Традиції' : 'Традиція'}: ${names.join(', ')}`);
   if (node.unlocks_complexity) lines.push(`Складність заклинань: до «${complexityLabel(node.unlocks_complexity)}» включно`);
   return lines;
 }

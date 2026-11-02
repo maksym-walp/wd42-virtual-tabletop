@@ -9,6 +9,8 @@ router.use(requireAuth);
 
 router.get('/', wrap(RaceController.list));
 router.post('/', wrap(RaceController.create));
+// Перед '/:id' — інакше "import" прочитається як id.
+router.post('/import', wrap(RaceController.import));
 router.get('/:id', wrap(RaceController.getOne));
 router.patch('/:id', wrap(RaceController.update));
 router.patch('/:id/owner', wrap(RaceController.setOwner));

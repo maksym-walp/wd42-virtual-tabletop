@@ -63,6 +63,52 @@ const SpeciesController = {
     res.status(204).send();
   },
 
+  // GM/admin only — bulk import of a previously exported or hand-written
+  // JSON array. Records without a usable name are silently skipped (same
+  // convention as maps/abilities import).
+  //
+  // Upsert: a record whose "id" matches a species this importer may write
+  // to updates it in place; otherwise a record whose "name" matches one
+  // (case-insensitive) does. Only existing records the importer could
+  // already edit are candidates (own records, or any if admin) — a name
+  // collision with someone else's species never overwrites it, a new one
+  // is created instead.
+  async import(req, res) {
+    if (!canCreate(req.user)) {
+      return res.status(403).json({ message: 'Лише майстер гри або адміністратор може створювати записи' });
+    }
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив записів' });
+    }
+    const admin = isAdmin(req.user);
+    const existing = await SpeciesModel.findAll(req.user.sub, admin);
+    const writable = admin ? existing : existing.filter((r) => r.created_by === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (const record of req.body) {
+      if (!record || typeof record.name !== 'string' || !record.name.trim()) continue;
+      const healthDie = HEALTH_DICE.includes(record.health_die) ? record.health_die : 'd6';
+      const fields = {
+        name: record.name.trim(),
+        description: typeof record.description === 'string' ? record.description : null,
+        isPublic: record.is_public ?? false,
+        healthDie,
+      };
+      const match = (record.id && byId.get(record.id)) || byName.get(fields.name.toLowerCase());
+      if (match) {
+        await SpeciesModel.update(match.id, fields);
+        updated += 1;
+      } else {
+        await SpeciesModel.create({ createdBy: req.user.sub, ...fields });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
+  },
+
   async setOwner(req, res) {
     if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 

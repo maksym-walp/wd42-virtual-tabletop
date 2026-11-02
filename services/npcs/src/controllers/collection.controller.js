@@ -48,11 +48,21 @@ const CollectionController = {
   // вкладеними записами (`items`, формат експорту каталогу). Колекцію може
   // імпортувати будь-хто; вкладені записи — лише ГМ/адмін (як і створення
   // записів у каталозі), решті `items` пропускається.
+  //
+  // Upsert: a collection whose "id" or "name" (case-insensitive) matches
+  // one this importer may already write to updates it in place rather
+  // than creating a duplicate; likewise each item inside `items` that
+  // matches one of the importer's own NPCs (own, or any if admin) updates
+  // it instead of creating a duplicate. A matched collection's item set is
+  // fully replaced by this import's `items` (same whole-object-replace
+  // convention as elsewhere) — the matched/created NPCs themselves are
+  // never deleted, only unlinked from the collection.
   async import(req, res) {
     const payload = Array.isArray(req.body) ? req.body : [req.body];
     const problem = validateImportPayload(payload);
     if (problem) return res.status(400).json({ message: problem });
 
+    const admin = isAdmin(req.user);
     const canImportItems = canCreate(req.user);
     const parsed = payload.map((data) => (canImportItems && data.items?.length ? parseImportRecords(data.items) : { fieldsList: [] }));
     const invalid = parsed.findIndex((p) => p.error);
@@ -60,32 +70,78 @@ const CollectionController = {
       return res.status(400).json({ message: `Колекція «${payload[invalid].name}»: ${parsed[invalid].error}` });
     }
 
+    const existingCollections = await CollectionModel.findAll(req.user.sub, {}, admin);
+    const writableCollections = admin ? existingCollections : existingCollections.filter((c) => c.created_by === req.user.sub);
+    const collectionById = new Map(writableCollections.map((c) => [c.id, c]));
+    const collectionByName = new Map(writableCollections.map((c) => [c.name.trim().toLowerCase(), c]));
+
+    const existingNpcs = canImportItems ? await NpcModel.findAll(req.user.sub, admin) : [];
+    const writableNpcs = admin ? existingNpcs : existingNpcs.filter((n) => n.created_by === req.user.sub);
+    const npcById = new Map(writableNpcs.map((n) => [n.id, n]));
+    const npcByName = new Map(writableNpcs.map((n) => [n.name.trim().toLowerCase(), n]));
+
     const collections = [];
-    let importedItems = 0;
+    let createdItems = 0;
+    let updatedItems = 0;
     let itemsSkipped = 0;
+    let createdCollections = 0;
+    let updatedCollections = 0;
 
     for (const [index, data] of payload.entries()) {
-      const collection = await CollectionModel.create(req.user.sub, {
-        name: data.name,
-        description: data.description,
-        is_public: data.is_public,
-      });
+      const matchColl = (data.id && collectionById.get(data.id)) || collectionByName.get(String(data.name).trim().toLowerCase());
+
+      let collection;
+      if (matchColl) {
+        collection = await CollectionModel.update(matchColl.id, req.user.sub, {
+          name: data.name, description: data.description, is_public: data.is_public,
+          image_url: matchColl.image_url, image_crop: matchColl.image_crop,
+        }, admin);
+        updatedCollections += 1;
+      } else {
+        collection = await CollectionModel.create(req.user.sub, {
+          name: data.name, description: data.description, is_public: data.is_public,
+        });
+        createdCollections += 1;
+      }
+
+      const rawItems = data.items ?? [];
       if (!canImportItems) {
-        itemsSkipped += data.items?.length ?? 0;
+        itemsSkipped += rawItems.length;
       } else if (parsed[index].fieldsList.length) {
         try {
-          const ids = await NpcModel.importMany(req.user.sub, parsed[index].fieldsList);
-          await CollectionModel.addItemsUnchecked(collection.id, ids);
-          importedItems += ids.length;
+          const itemIds = [];
+          for (let i = 0; i < parsed[index].fieldsList.length; i += 1) {
+            const fields = parsed[index].fieldsList[i];
+            const rawItem = rawItems[i];
+            const matchItem = (rawItem.id && npcById.get(rawItem.id)) || npcByName.get(fields.name.toLowerCase());
+            if (matchItem) {
+              await NpcModel.update(matchItem.id, fields);
+              itemIds.push(matchItem.id);
+              updatedItems += 1;
+            } else {
+              const createdNpc = await NpcModel.create({ createdBy: req.user.sub, ...fields });
+              itemIds.push(createdNpc.id);
+              createdItems += 1;
+            }
+          }
+          await CollectionModel.replaceItems(collection.id, itemIds);
         } catch (err) {
-          await CollectionModel.discard(collection.id);
+          if (!matchColl) await CollectionModel.discard(collection.id);
           throw err;
         }
       }
       collections.push(collection);
     }
 
-    res.status(201).json({ collections, imported_items: importedItems, items_skipped: itemsSkipped });
+    res.status(201).json({
+      collections,
+      imported_items: createdItems + updatedItems,
+      created_items: createdItems,
+      updated_items: updatedItems,
+      items_skipped: itemsSkipped,
+      created_collections: createdCollections,
+      updated_collections: updatedCollections,
+    });
   },
 
   async getPublic(req, res) {

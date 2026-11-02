@@ -50,6 +50,41 @@ describe('SubspeciesController.create', () => {
   });
 });
 
+describe('SubspeciesController.import', () => {
+  it('400 when species_id query param missing', async () => {
+    const res = mockRes();
+    await SubspeciesController.import(mockReq({ body: [], query: {}, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('creates when nothing matches within this species', async () => {
+    SubspeciesModel.findAll.mockResolvedValue([subspecies]);
+    SubspeciesModel.create.mockResolvedValue({ ...subspecies, id: 'sub2', name: 'High Elf' });
+    const res = mockRes();
+    await SubspeciesController.import(mockReq({ body: [{ name: 'High Elf' }], query: { species_id: 's1' }, user: OWNER }), res);
+    expect(SubspeciesModel.findAll).toHaveBeenCalledWith('gm-1', false, 's1');
+    expect(SubspeciesModel.create).toHaveBeenCalledWith(expect.objectContaining({ speciesId: 's1', name: 'High Elf' }));
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 1, updated: 0 });
+  });
+
+  it('updates an owned subspecies by id', async () => {
+    SubspeciesModel.findAll.mockResolvedValue([subspecies]);
+    const res = mockRes();
+    await SubspeciesController.import(mockReq({ body: [{ id: 'sub1', name: 'Grey Elf' }], query: { species_id: 's1' }, user: OWNER }), res);
+    expect(SubspeciesModel.update).toHaveBeenCalledWith('sub1', expect.objectContaining({ name: 'Grey Elf' }));
+    expect(SubspeciesModel.create).not.toHaveBeenCalled();
+  });
+
+  it('does not match a same-named subspecies owned by another GM', async () => {
+    SubspeciesModel.findAll.mockResolvedValue([subspecies]);
+    SubspeciesModel.create.mockResolvedValue({ ...subspecies, id: 'sub2' });
+    const res = mockRes();
+    await SubspeciesController.import(mockReq({ body: [{ name: 'Wood Elf' }], query: { species_id: 's1' }, user: OTHER_GM }), res);
+    expect(SubspeciesModel.update).not.toHaveBeenCalled();
+    expect(SubspeciesModel.create).toHaveBeenCalled();
+  });
+});
+
 describe('SubspeciesController.update / remove', () => {
   beforeEach(() => SubspeciesModel.findById.mockResolvedValue(subspecies));
 

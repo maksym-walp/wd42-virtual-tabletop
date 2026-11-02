@@ -222,14 +222,15 @@ describe('LocationController.export / import', () => {
   });
 
   it('import maps records through the sanitizers and reports the count', async () => {
-    LocationModel.bulkImport.mockImplementation(async (userId, records, { toBase, toVersion }) => {
+    LocationModel.bulkImport.mockImplementation(async (userId, records, { toBase, toVersion, isAdmin: admin }) => {
       expect(userId).toBe('gm-1');
+      expect(admin).toBe(false);
       expect(toBase(records[0])).toEqual({ name: 'Town', types: ['city', 'capital'], markerIcon: '🏰', markerLevel: 3 });
       expect(toVersion(records[0].versions[0])).toEqual({
         startYear: 600, endYear: 650, description: 'Ruins', gmNote: null,
         name: 'Руїни', markerIcon: '🏚', markerLevel: 1, types: ['ruin'],
       });
-      return 1;
+      return { created: 1, updated: 0 };
     });
     const res = mockRes();
     await LocationController.import(mockReq({
@@ -239,7 +240,7 @@ describe('LocationController.export / import', () => {
       user: OWNER,
     }), res);
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 1 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 1, updated: 0 });
   });
 });
 

@@ -203,6 +203,18 @@ const ChronologyEventModel = {
     return withTypeColors(rows, await getEventTypes());
   },
 
+  // Для імпорту (upsert за id чи назвою, контролер import) — усі події
+  // календаря незалежно від публічності й кампанії: лише те, що потрібно
+  // для зіставлення із записами файлу. Повний запис кожна з них отримує
+  // через звичайний update().
+  async findForImportMatch(calendarId) {
+    const { rows } = await pool.query(
+      `SELECT id, name, campaign_id FROM chronology.calendar_events WHERE calendar_id = $1`,
+      [calendarId]
+    );
+    return rows;
+  },
+
   async findById(id, calendarId) {
     const { rows } = await pool.query(
       `SELECT * FROM chronology.calendar_events WHERE id = $1 AND calendar_id = $2`,

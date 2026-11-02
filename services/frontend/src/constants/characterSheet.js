@@ -1,14 +1,14 @@
 export const ARCHETYPES = {
   fighter: {
-    label: 'Бійці', healthDie: 'd10', magicMult: 2, meditationDie: 'd4',
+    label: 'Бійці', healthDie: 'd10', magicMult: 2,
     description: 'Архетип прямого бою — атаки, ухилення та бойові маневри. Магія доступна, але не така потужна, як у чаклунів чи пройдисвітів.',
   },
   spellcaster: {
-    label: 'Чаклуни', healthDie: 'd6', magicMult: 6, meditationDie: 'd8',
+    label: 'Чаклуни', healthDie: 'd6', magicMult: 6,
     description: 'Архетип, найтісніше пов\'язаний із магією — найбільше магічної енергії та найрізноманітніший арсенал чаротворчих здібностей.',
   },
   rogue: {
-    label: 'Пройдисвіти', healthDie: 'd8', magicMult: 4, meditationDie: 'd6',
+    label: 'Пройдисвіти', healthDie: 'd8', magicMult: 4,
     description: 'Універсал з доступом і до бойових, і до магічних гілок розвитку. Не домінує ніде, зате винагороджується за різноманітність дій.',
   },
 };

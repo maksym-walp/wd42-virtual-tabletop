@@ -9,6 +9,7 @@ import { eventDateRangeLabel, eventPlaceLabel, defaultCalendarId, recurrenceLabe
 import {
   eventInCalendar, eventWorldSortKey, equivalentDatesText, buildEventsExport, monthsOf, calendarOffset,
 } from '../utils/chronologySync';
+import { buildChronologyEventsImportTemplate } from '../utils/chronologyEventsImportTemplate';
 import { layoutTimeline } from '../utils/chronologyTimelineLayout';
 import { makeTimeline } from '../utils/chronologyEras';
 import { totalDaysSinceEpoch, yearLabel, eventHasEnd, eventDayRange } from '../utils/chronologyMath';
@@ -17,6 +18,7 @@ import Tooltip from '../components/ui/Tooltip';
 import ChronologyTabs from '../components/chronology/ChronologyTabs';
 import Button from '../components/ui/Button';
 import PageHeader from '../components/ui/PageHeader';
+import ExportImportActions from '../components/ExportImportActions';
 import { MobileFab } from '../components/catalog/CatalogLayout';
 import useMediaQuery from '../hooks/useMediaQuery';
 import EmptyState from '../components/ui/EmptyState';
@@ -140,6 +142,26 @@ export default function ChronologyEvents() {
     }
   };
 
+  // Імпорт подій — завжди в головну вісь (той самий календар, що й кнопка
+  // «Додати подію»): місяці — з уже завантаженої осі, супутники — з
+  // preview_moons календаря (той самий рядок, що й у списку календарів).
+  const mainAxis = axes.find((a) => a.calendar.id === selectedIds[0]);
+  const handleEventsTemplate = () => buildChronologyEventsImportTemplate({
+    months: mainAxis?.months || [],
+    moons: calendarsById.get(selectedIds[0])?.preview_moons || [],
+    eventTypes,
+  });
+  const handleImportEvents = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив подій'); return; }
+    try {
+      const { imported, skipped } = await chronologyApi.importEvents(selectedIds[0], data);
+      alert(`Імпортовано подій: ${imported}${skipped ? `, пропущено (невалідні): ${skipped}` : ''}`);
+      setReloadTick((t) => t + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати події');
+    }
+  };
+
   // Усе, за чим можна відфільтрувати, беремо з уже завантажених подій — щоб у
   // списках були лише значення, які реально трапляються.
   const allEvents = useMemo(() => axes.flatMap((a) => a.events), [axes]);
@@ -254,9 +276,13 @@ export default function ChronologyEvents() {
               >
                 <ArrowUpDown size={13} /> {sortDir === 'asc' ? 'Давні → нові' : 'Нові → давні'}
               </button>
-              <Button size="sm" variant="ghost" onClick={handleExport} title="Експорт JSON" aria-label="Експорт JSON">
-                <Download size={14} />
-              </Button>
+              {canManage ? (
+                <ExportImportActions onExport={handleExport} onImport={handleImportEvents} onTemplate={handleEventsTemplate} />
+              ) : (
+                <Button size="sm" variant="ghost" onClick={handleExport} title="Експорт JSON" aria-label="Експорт JSON">
+                  <Download size={14} />
+                </Button>
+              )}
             </div>
 
             <input

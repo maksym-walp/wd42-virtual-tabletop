@@ -66,40 +66,96 @@ const CollectionController = {
   // вкладеними записами (`items`, формат експорту каталогу). Колекцію може
   // імпортувати будь-хто; вкладені записи — лише ГМ/адмін (як і каталожний
   // імпорт, вони стають канонічними), решті `items` пропускається.
+  //
+  // Upsert: a collection whose "id" or "name" (case-insensitive) matches
+  // one this importer may already write to updates it in place rather
+  // than creating a duplicate; likewise each item inside `items` that
+  // matches one of the importer's own spells (own, or any if admin)
+  // updates it instead of creating a duplicate. A matched collection's item
+  // set is fully replaced by this import's `items` (same whole-object-
+  // replace convention as elsewhere) — the matched/created spells
+  // themselves are never deleted, only unlinked from the collection.
   async import(req, res) {
     const payload = Array.isArray(req.body) ? req.body : [req.body];
     const problem = validateImportPayload(payload);
     if (problem) return res.status(400).json({ message: problem });
 
+    const isAdmin = req.user.role === 'admin';
     const canImportItems = CANONICAL_ROLES.includes(req.user.role);
+
+    const existingCollections = await CollectionModel.findAll(req.user.sub, {}, isAdmin);
+    const writableCollections = isAdmin ? existingCollections : existingCollections.filter((c) => c.user_id === req.user.sub);
+    const collectionById = new Map(writableCollections.map((c) => [c.id, c]));
+    const collectionByName = new Map(writableCollections.map((c) => [c.name.trim().toLowerCase(), c]));
+
+    const existingSpells = canImportItems ? await SpellModel.findAll(req.user.sub, {}, isAdmin) : [];
+    const writableSpells = isAdmin ? existingSpells : existingSpells.filter((s) => s.user_id === req.user.sub);
+    const spellById = new Map(writableSpells.map((s) => [s.id, s]));
+    const spellByName = new Map(writableSpells.map((s) => [s.name.trim().toLowerCase(), s]));
+
     const collections = [];
-    let importedItems = 0;
+    let createdItems = 0;
+    let updatedItems = 0;
     let itemsSkipped = 0;
+    let createdCollections = 0;
+    let updatedCollections = 0;
 
     for (const data of payload) {
       const items = data.items ?? [];
-      const collection = await CollectionModel.create(req.user.sub, {
-        name: data.name,
-        description: data.description,
-        is_public: data.is_public,
-        is_canonical: canonicalOnCreate(req),
-      });
+      const matchColl = (data.id && collectionById.get(data.id)) || collectionByName.get(String(data.name).trim().toLowerCase());
+
+      let collection;
+      if (matchColl) {
+        collection = await CollectionModel.update(matchColl.id, req.user.sub, {
+          name: data.name, description: data.description, is_public: data.is_public,
+          prerequisite_node_ids: matchColl.prerequisite_node_ids, prerequisite_logic: matchColl.prerequisite_logic,
+          image_url: matchColl.image_url, image_crop: matchColl.image_crop,
+        }, isAdmin);
+        updatedCollections += 1;
+      } else {
+        collection = await CollectionModel.create(req.user.sub, {
+          name: data.name, description: data.description, is_public: data.is_public, is_canonical: canonicalOnCreate(req),
+        });
+        createdCollections += 1;
+      }
+
       if (!canImportItems) {
         itemsSkipped += items.length;
       } else if (items.length) {
         try {
-          const ids = await SpellModel.importMany(req.user.sub, items, true);
-          await CollectionModel.addItemsUnchecked(collection.id, ids);
-          importedItems += ids.length;
+          const itemIds = [];
+          for (const item of items) {
+            const matchItem = (item.id && spellById.get(item.id)) || spellByName.get(String(item.name).trim().toLowerCase());
+            if (matchItem) {
+              await SpellModel.update(matchItem.id, req.user.sub, {
+                ...item, image_url: matchItem.image_url, image_crop: matchItem.image_crop,
+              }, isAdmin);
+              itemIds.push(matchItem.id);
+              updatedItems += 1;
+            } else {
+              const createdSpell = await SpellModel.create(req.user.sub, { ...item, is_canonical: true });
+              itemIds.push(createdSpell.id);
+              createdItems += 1;
+            }
+          }
+          await CollectionModel.replaceItems(collection.id, itemIds);
         } catch (err) {
-          await CollectionModel.discard(collection.id);
+          if (!matchColl) await CollectionModel.discard(collection.id);
           throw err;
         }
       }
       collections.push(collection);
     }
 
-    res.status(201).json({ collections, imported_items: importedItems, items_skipped: itemsSkipped });
+    res.status(201).json({
+      collections,
+      imported_items: createdItems + updatedItems,
+      created_items: createdItems,
+      updated_items: updatedItems,
+      items_skipped: itemsSkipped,
+      created_collections: createdCollections,
+      updated_collections: updatedCollections,
+    });
   },
 
   async getPublic(req, res) {

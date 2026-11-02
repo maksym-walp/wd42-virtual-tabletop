@@ -9,6 +9,9 @@ router.use(requireAuth);
 
 router.get('/', wrap(SubspeciesController.list));
 router.post('/', wrap(SubspeciesController.create));
+// Перед '/:id' — інакше "import" прочитається як id. species_id — query
+// (?species_id=...), той самий спосіб, що й GET-список.
+router.post('/import', wrap(SubspeciesController.import));
 router.get('/:id', wrap(SubspeciesController.getOne));
 router.patch('/:id', wrap(SubspeciesController.update));
 router.patch('/:id/owner', wrap(SubspeciesController.setOwner));

@@ -136,6 +136,10 @@ const LocationController = {
   },
 
   // GM/admin only (route-gated) — bulk import of previously exported JSON.
+  // Upsert: a record whose "id" or "name" matches a location this importer
+  // may already write to (own, or any if admin) updates it in place —
+  // including a full replace of its versions — instead of creating a
+  // duplicate (see LocationModel.bulkImport).
   async import(req, res) {
     if (!canCreate(req.user)) {
       return res.status(403).json({ message: 'Лише майстер гри або адміністратор може створювати локації' });
@@ -148,7 +152,8 @@ const LocationController = {
       return (!c.error && c.value) ? c.value : [];
     };
     const importYear = (raw) => (raw != null && raw !== '' && Number.isInteger(Number(raw)) ? Number(raw) : null);
-    const imported = await LocationModel.bulkImport(req.user.sub, req.body, {
+    const { created, updated } = await LocationModel.bulkImport(req.user.sub, req.body, {
+      isAdmin: isAdmin(req.user),
       toBase: (record) => ({
         name: typeof record.name === 'string' ? record.name.trim() : '',
         types: importTypes(record.types),
@@ -166,7 +171,7 @@ const LocationController = {
         types: Array.isArray(v.types) ? importTypes(v.types) : null,
       }),
     });
-    res.status(201).json({ imported });
+    res.status(201).json({ imported: created + updated, created, updated });
   },
 
   // Creates the location plus its base (undated) version from the flattened body.

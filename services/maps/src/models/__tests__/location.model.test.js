@@ -84,17 +84,28 @@ describe('LocationModel.bulkImport', () => {
     toVersion: (v) => ({ startYear: v.start_year ?? null, endYear: v.end_year ?? null, description: v.description ?? null, gmNote: null, name: null, markerIcon: null, markerLevel: null, types: null }),
   };
 
-  it('inserts each location + its versions inside one transaction', async () => {
+  // No existing rows by default — every test below opts into upsert matches
+  // explicitly via existingRows.
+  function makeClient(existingRows = []) {
     const client = { query: jest.fn(), release: jest.fn() };
-    client.query.mockResolvedValue({ rows: [{ id: 'new-loc' }] });
+    client.query.mockImplementation(async (sql) => {
+      if (/^SELECT id, name FROM maps\.locations/.test(sql)) return { rows: existingRows };
+      return { rows: [{ id: 'new-loc' }] };
+    });
+    return client;
+  }
+
+  it('inserts each new location + its versions inside one transaction', async () => {
+    const client = makeClient();
     pool.connect.mockResolvedValue(client);
 
-    const count = await LocationModel.bulkImport('u1', [
+    const { created, updated } = await LocationModel.bulkImport('u1', [
       { name: 'A', versions: [{ start_year: 500 }, { start_year: 600 }] },
       { name: 'B' },
     ], mappers);
 
-    expect(count).toBe(2);
+    expect(created).toBe(2);
+    expect(updated).toBe(0);
     const sqls = client.query.mock.calls.map((c) => c[0]);
     expect(sqls[0]).toBe('BEGIN');
     expect(sqls.some((s) => /INSERT INTO maps\.locations/.test(s))).toBe(true);
@@ -109,6 +120,7 @@ describe('LocationModel.bulkImport', () => {
     const client = { query: jest.fn(), release: jest.fn() };
     client.query
       .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [] }) // existing-rows lookup
       .mockRejectedValueOnce(new Error('boom'));
     pool.connect.mockResolvedValue(client);
 
@@ -118,10 +130,50 @@ describe('LocationModel.bulkImport', () => {
   });
 
   it('skips records without a name', async () => {
-    const client = { query: jest.fn().mockResolvedValue({ rows: [{ id: 'x' }] }), release: jest.fn() };
+    const client = makeClient();
     pool.connect.mockResolvedValue(client);
-    const count = await LocationModel.bulkImport('u1', [{ types: ['city'] }, null, 'bad'], mappers);
-    expect(count).toBe(0);
+    const { created, updated } = await LocationModel.bulkImport('u1', [{ types: ['city'] }, null, 'bad'], mappers);
+    expect(created).toBe(0);
+    expect(updated).toBe(0);
+  });
+
+  it('updates a matching location by id instead of creating a duplicate, replacing its versions', async () => {
+    const client = makeClient([{ id: 'loc1', name: 'Old Name' }]);
+    pool.connect.mockResolvedValue(client);
+
+    const { created, updated } = await LocationModel.bulkImport('u1', [
+      { id: 'loc1', name: 'New Name', versions: [{ start_year: 500 }] },
+    ], mappers);
+
+    expect(created).toBe(0);
+    expect(updated).toBe(1);
+    const sqls = client.query.mock.calls.map((c) => c[0]);
+    expect(sqls.some((s) => /UPDATE maps\.locations SET/.test(s))).toBe(true);
+    expect(sqls.some((s) => /DELETE FROM maps\.location_versions WHERE location_id = \$1/.test(s))).toBe(true);
+    expect(sqls.some((s) => /INSERT INTO maps\.locations/.test(s))).toBe(false);
+  });
+
+  it('matches by name case-insensitively when no id is given', async () => {
+    const client = makeClient([{ id: 'loc1', name: 'Rivertown' }]);
+    pool.connect.mockResolvedValue(client);
+
+    const { updated } = await LocationModel.bulkImport('u1', [{ name: ' rivertown ' }], mappers);
+
+    expect(updated).toBe(1);
+    const updateCall = client.query.mock.calls.find((c) => /UPDATE maps\.locations SET/.test(c[0]));
+    expect(updateCall[1][0]).toBe('loc1');
+  });
+
+  it('only matches existing rows the importer may write to, scoped by the isAdmin flag of the lookup', async () => {
+    const client = makeClient([]); // scoped lookup returned nothing writable -> no match
+    pool.connect.mockResolvedValue(client);
+
+    const { created, updated } = await LocationModel.bulkImport('u1', [{ name: 'Rivertown' }], { ...mappers, isAdmin: false });
+
+    expect(created).toBe(1);
+    expect(updated).toBe(0);
+    const selectCall = client.query.mock.calls.find((c) => /^SELECT id, name FROM maps\.locations/.test(c[0]));
+    expect(selectCall[1]).toEqual(['u1', false]);
   });
 });
 

@@ -271,19 +271,95 @@ describe('UnionController.import', () => {
     await UnionController.import(mockReq({ body: { not: 'an array' } }), res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(UnionModel.bulkImport).not.toHaveBeenCalled();
+    expect(UnionModel.findAll).not.toHaveBeenCalled();
   });
 
-  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
-    UnionModel.bulkImport.mockResolvedValue(3);
+  it('creates new, canonical items under the current user when nothing matches', async () => {
+    UnionModel.findAll.mockResolvedValue([]);
+    Model.create.mockResolvedValue({ id: 'w1' });
     const res = mockRes();
     const body = [{ type: 'item', name: 'A' }, { type: 'weapon', name: 'B' }];
 
     await UnionController.import(mockReq({ body }), res);
 
-    expect(UnionModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
+    expect(Model.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'A', is_canonical: true }));
+    expect(Model.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'B', is_canonical: true }));
+    expect(Model.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 3 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 2, created: 2, updated: 0 });
+  });
+
+  it('skips a create when the record has no name or an unknown/missing type', async () => {
+    UnionModel.findAll.mockResolvedValue([]);
+    const res = mockRes();
+    await UnionController.import(mockReq({ body: [{ type: 'weapon' }, { name: 'No type' }, { type: 'dragon', name: 'X' }] }), res);
+    expect(Model.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 0, created: 0, updated: 0 });
+  });
+
+  it('updates an owned item by id, keeping its image/thumbnail/crop', async () => {
+    const existing = {
+      id: 'w1', user_id: 'user-1', name: 'Меч', type: 'weapon',
+      image_url: '/x.png', thumbnail_url: '/x-thumb.png', image_crop: { x: 1 },
+    };
+    UnionModel.findAll.mockResolvedValue([existing]);
+    Model.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: [{ id: 'w1', name: 'Меч+1' }] }), res);
+
+    expect(createCatalogModel).toHaveBeenCalledWith('weapon');
+    expect(Model.update).toHaveBeenCalledWith('w1', 'user-1', expect.objectContaining({
+      name: 'Меч+1', image_url: '/x.png', thumbnail_url: '/x-thumb.png', image_crop: { x: 1 },
+    }), false);
+    expect(Model.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('matches by name case-insensitively among the importer\'s own items', async () => {
+    const existing = { id: 'w1', user_id: 'user-1', name: 'Меч', type: 'weapon' };
+    UnionModel.findAll.mockResolvedValue([existing]);
+    Model.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: [{ name: ' меч ' }] }), res);
+
+    expect(Model.update).toHaveBeenCalledWith('w1', 'user-1', expect.anything(), false);
+  });
+
+  it('does not match (and instead creates) a same-named item owned by someone else', async () => {
+    const existing = { id: 'w1', user_id: 'someone-else', name: 'Меч', type: 'weapon' };
+    UnionModel.findAll.mockResolvedValue([existing]);
+    Model.create.mockResolvedValue({ id: 'w2' });
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: [{ type: 'weapon', name: 'Меч' }] }), res);
+
+    expect(Model.update).not.toHaveBeenCalled();
+    expect(Model.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any item by name', async () => {
+    const existing = { id: 'w1', user_id: 'someone-else', name: 'Меч', type: 'weapon' };
+    UnionModel.findAll.mockResolvedValue([existing]);
+    Model.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: [{ name: 'Меч' }], user: { sub: 'admin-1', role: 'admin' } }), res);
+
+    expect(UnionModel.findAll).toHaveBeenCalledWith('admin-1', {}, true);
+    expect(Model.update).toHaveBeenCalledWith('w1', 'admin-1', expect.anything(), true);
+  });
+
+  it('moves a matched item to the declared type\'s table when it differs', async () => {
+    const existing = { id: 'w1', user_id: 'user-1', name: 'Меч', type: 'weapon' };
+    UnionModel.findAll.mockResolvedValue([existing]);
+    Model.update.mockResolvedValue(existing);
+    const res = mockRes();
+
+    await UnionController.import(mockReq({ body: [{ id: 'w1', type: 'artifact', name: 'Меч' }] }), res);
+
+    expect(createCatalogModel).toHaveBeenCalledWith('artifact');
   });
 });
 

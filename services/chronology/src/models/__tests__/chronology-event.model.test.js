@@ -8,6 +8,15 @@ beforeEach(() => {
   pool.query.mockResolvedValue({ rows: [] });
 });
 
+describe('ChronologyEventModel.findForImportMatch', () => {
+  it('selects id/name/campaign_id for every event of the calendar, regardless of visibility', async () => {
+    await ChronologyEventModel.findForImportMatch('cal-1');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SELECT id, name, campaign_id FROM chronology\.calendar_events WHERE calendar_id = \$1/);
+    expect(params).toEqual(['cal-1']);
+  });
+});
+
 describe('ChronologyEventModel.findAllByCalendar', () => {
   it('with no campaignId, only returns global events, and hides private ones by default', async () => {
     await ChronologyEventModel.findAllByCalendar('cal-1');

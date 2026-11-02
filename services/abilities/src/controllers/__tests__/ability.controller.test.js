@@ -232,19 +232,80 @@ describe('AbilityController.import', () => {
     await AbilityController.import(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(AbilityModel.bulkImport).not.toHaveBeenCalled();
+    expect(AbilityModel.findAll).not.toHaveBeenCalled();
   });
 
-  it('passes the body straight to bulkImport under the current user, returning the count', async () => {
-    AbilityModel.bulkImport.mockResolvedValue(2);
+  it('creates new, canonical abilities under the current user when nothing matches', async () => {
+    AbilityModel.findAll.mockResolvedValue([]);
+    AbilityModel.create.mockResolvedValue({ id: 'a1' });
     const body = [{ name: 'A' }, { name: 'B' }];
     const req = mockReq({ body });
     const res = mockRes();
 
     await AbilityController.import(req, res);
 
-    expect(AbilityModel.bulkImport).toHaveBeenCalledWith('user-1', body, true);
+    expect(AbilityModel.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'A', is_canonical: true }));
+    expect(AbilityModel.create).toHaveBeenCalledWith('user-1', expect.objectContaining({ name: 'B', is_canonical: true }));
+    expect(AbilityModel.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 2, created: 2, updated: 0 });
+  });
+
+  it('updates an owned ability by id, keeping its prerequisite/image fields', async () => {
+    const existing = {
+      id: 'a1', user_id: 'user-1', name: 'Стрімкий випад',
+      prerequisite_node_ids: ['n1'], prerequisite_logic: 'and', image_url: '/uploads/x.png', image_crop: { x: 1 },
+    };
+    AbilityModel.findAll.mockResolvedValue([existing]);
+    AbilityModel.update.mockResolvedValue(existing);
+    const req = mockReq({ body: [{ id: 'a1', name: 'Стрімкий випад 2' }] });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(AbilityModel.update).toHaveBeenCalledWith('a1', 'user-1', expect.objectContaining({
+      name: 'Стрімкий випад 2',
+      prerequisite_node_ids: ['n1'], prerequisite_logic: 'and', image_url: '/uploads/x.png', image_crop: { x: 1 },
+    }), false);
+    expect(AbilityModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('matches by name case-insensitively among the importer\'s own abilities', async () => {
+    const existing = { id: 'a1', user_id: 'user-1', name: 'Стрімкий випад' };
+    AbilityModel.findAll.mockResolvedValue([existing]);
+    AbilityModel.update.mockResolvedValue(existing);
+    const req = mockReq({ body: [{ name: ' стрімкий випад ' }] });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(AbilityModel.update).toHaveBeenCalledWith('a1', 'user-1', expect.anything(), false);
+  });
+
+  it('does not match (and instead creates) a same-named ability owned by someone else', async () => {
+    const existing = { id: 'a1', user_id: 'someone-else', name: 'Стрімкий випад' };
+    AbilityModel.findAll.mockResolvedValue([existing]);
+    AbilityModel.create.mockResolvedValue({ id: 'a2' });
+    const req = mockReq({ body: [{ name: 'Стрімкий випад' }] });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(AbilityModel.update).not.toHaveBeenCalled();
+    expect(AbilityModel.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any ability by name', async () => {
+    const existing = { id: 'a1', user_id: 'someone-else', name: 'Стрімкий випад' };
+    AbilityModel.findAll.mockResolvedValue([existing]);
+    AbilityModel.update.mockResolvedValue(existing);
+    const req = mockReq({ body: [{ name: 'Стрімкий випад' }], user: { sub: 'admin-1', role: 'admin' } });
+    const res = mockRes();
+
+    await AbilityController.import(req, res);
+
+    expect(AbilityModel.findAll).toHaveBeenCalledWith('admin-1', {}, true);
+    expect(AbilityModel.update).toHaveBeenCalledWith('a1', 'admin-1', expect.anything(), true);
   });
 });

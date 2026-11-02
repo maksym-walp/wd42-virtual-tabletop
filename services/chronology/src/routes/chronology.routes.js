@@ -58,6 +58,7 @@ router.delete('/:id/eras/:eraId', requireChronologyManager, wrap(ChronologyEraCo
 router.get('/:id/events',           requireAuth, wrap(ChronologyEventController.list));
 router.get('/:id/events/:eventId',  requireAuth, wrap(ChronologyEventController.getOne));
 router.post('/:id/events',          requireChronologyManager, wrap(ChronologyEventController.create));
+router.post('/:id/events/import',   requireChronologyManager, wrap(ChronologyEventController.import));
 router.put('/:id/events/:eventId',  requireChronologyManager, wrap(ChronologyEventController.update));
 router.delete('/:id/events/:eventId', requireChronologyManager, wrap(ChronologyEventController.remove));
 router.post('/:id/events/:eventId/participants', requireChronologyManager, wrap(ChronologyEventController.addParticipant));

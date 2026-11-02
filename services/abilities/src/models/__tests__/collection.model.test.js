@@ -28,6 +28,23 @@ describe('CollectionModel.findAll / findById items', () => {
   });
 });
 
+describe('CollectionModel.replaceItems', () => {
+  it('deletes the current items then inserts the new set', async () => {
+    await CollectionModel.replaceItems('c1', ['a1', 'a2']);
+    const sqls = pool.query.mock.calls.map((c) => c[0]);
+    expect(sqls[0]).toMatch(/DELETE FROM abilities\.collection_items WHERE collection_id = \$1/);
+    expect(pool.query.mock.calls[0][1]).toEqual(['c1']);
+    expect(sqls[1]).toMatch(/INSERT INTO abilities\.collection_items/);
+    expect(pool.query.mock.calls[1][1]).toEqual(['c1', ['a1', 'a2']]);
+  });
+
+  it('still clears existing items when the new set is empty', async () => {
+    await CollectionModel.replaceItems('c1', []);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][0]).toMatch(/DELETE FROM abilities\.collection_items/);
+  });
+});
+
 describe('CollectionModel.addItem', () => {
   it('checks the ability is visible, then inserts by ability_id', async () => {
     pool.query

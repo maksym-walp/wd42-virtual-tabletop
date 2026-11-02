@@ -184,6 +184,16 @@ const CollectionModel = {
     await pool.query(`DELETE FROM equipment.collections WHERE id = $1`, [id]);
   },
 
+  // Повна заміна складу колекції (той самий "весь-обʼєкт-перезаписується"
+  // прийом, що й у setParticipants/import локацій) — для імпорту: файл
+  // описує склад колекції цілком, тож записи, яких у ньому більше немає,
+  // прибираються з колекції (самі предмети не видаляються). items — те саме
+  // [{ id, type }], що й addItemsUnchecked.
+  async replaceItems(collectionId, items) {
+    await pool.query(`DELETE FROM equipment.collection_items WHERE collection_id = $1`, [collectionId]);
+    await CollectionModel.addItemsUnchecked(collectionId, items);
+  },
+
   async removeItem(collectionId, userId, itemId, isAdmin = false) {
     const { rowCount } = await pool.query(
       `DELETE FROM equipment.collection_items ci

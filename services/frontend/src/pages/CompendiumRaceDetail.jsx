@@ -8,6 +8,8 @@ import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import LineageCard from '../components/compendium/LineageCard';
 import ShareButton from '../components/ShareButton';
+import ExportImportActions from '../components/ExportImportActions';
+import { buildPeopleImportTemplate } from '../utils/compendiumImportTemplate';
 
 // Mirrors CompendiumSpeciesDetail.jsx, minus health_die, plus each people's
 // origin field.
@@ -55,6 +57,17 @@ export default function CompendiumRaceDetail() {
   const handleSetPeopleOwner = async (peopleId, ownerUsername) => {
     const updated = await compendiumApi.setPeopleOwner(peopleId, ownerUsername);
     setPeoples((list) => list.map((p) => (p.id === peopleId ? updated : p)));
+  };
+
+  const handleImportPeoples = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив народів'); return; }
+    try {
+      const { imported } = await compendiumApi.importPeoples(id, data);
+      alert(`Імпортовано народів: ${imported}`);
+      setPeoples(await compendiumApi.listPeoples(id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати народи');
+    }
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -111,7 +124,14 @@ export default function CompendiumRaceDetail() {
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Народи</span>
             {canManage && (
-              <Button variant="ghost" size="sm" to={`/compendium/peoples/new?race_id=${id}`}>+ Додати</Button>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" to={`/compendium/peoples/new?race_id=${id}`}>+ Додати</Button>
+                <ExportImportActions
+                  hideExport
+                  onImport={handleImportPeoples}
+                  onTemplate={() => buildPeopleImportTemplate(race)}
+                />
+              </div>
             )}
           </div>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">

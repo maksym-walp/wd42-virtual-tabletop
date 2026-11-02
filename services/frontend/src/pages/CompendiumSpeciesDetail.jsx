@@ -8,6 +8,8 @@ import ChangeOwnerControl from '../components/ChangeOwnerControl';
 import SmartTextReader from '../components/SmartTextReader';
 import LineageCard from '../components/compendium/LineageCard';
 import ShareButton from '../components/ShareButton';
+import ExportImportActions from '../components/ExportImportActions';
+import { buildSubspeciesImportTemplate } from '../utils/compendiumImportTemplate';
 
 export default function CompendiumSpeciesDetail() {
   const { id } = useParams();
@@ -53,6 +55,17 @@ export default function CompendiumSpeciesDetail() {
   const handleSetSubspeciesOwner = async (subId, ownerUsername) => {
     const updated = await compendiumApi.setSubspeciesOwner(subId, ownerUsername);
     setSubspecies((list) => list.map((s) => (s.id === subId ? updated : s)));
+  };
+
+  const handleImportSubspecies = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив підвидів'); return; }
+    try {
+      const { imported } = await compendiumApi.importSubspecies(id, data);
+      alert(`Імпортовано підвидів: ${imported}`);
+      setSubspecies(await compendiumApi.listSubspecies(id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати підвиди');
+    }
   };
 
   if (loading) return <div className="px-4 py-16 text-center text-text-dim">Завантаження...</div>;
@@ -112,7 +125,14 @@ export default function CompendiumSpeciesDetail() {
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Підвиди</span>
             {canManage && (
-              <Button variant="ghost" size="sm" to={`/compendium/subspecies/new?species_id=${id}`}>+ Додати</Button>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" to={`/compendium/subspecies/new?species_id=${id}`}>+ Додати</Button>
+                <ExportImportActions
+                  hideExport
+                  onImport={handleImportSubspecies}
+                  onTemplate={() => buildSubspeciesImportTemplate(species)}
+                />
+              </div>
             )}
           </div>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">

@@ -95,7 +95,10 @@ export default function CombatCastSheet({ caster, targets, campaignId, sheet, on
       const bonus = skillProfile?.bonus ?? 0;
       const hitFormula = buildRollFormula({ die: skillProfile?.die ?? null, mode, bonus, withD20: true });
 
-      const count = sheet?.roll_profiles?.damage_dice?.count ?? 1;
+      // Кількість кубиків шкоди заклинання — власне поле заклинання
+      // (damage_dice_count), не Майстерність кастера: та стосується лише
+      // атак зброєю (розділ 4.4.3, міграція 122).
+      const count = form.damage_dice_count ?? 1;
       const damageFormula = form.damage_die ? `${count}${form.damage_die}` : null;
 
       const targetPayloads = [];
@@ -207,7 +210,7 @@ export default function CombatCastSheet({ caster, targets, campaignId, sheet, on
         {row && (
           <p className="text-xs text-text-dim">
             Енергія: {form.energy_cost}{energyPreview ? ` · ${energyPreview}` : ''}
-            {form.damage_die ? ` · шкода ${form.damage_die}` : ' · без шкоди'}
+            {form.damage_die ? ` · шкода ${form.damage_dice_count > 1 ? form.damage_dice_count : ''}${form.damage_die}` : ' · без шкоди'}
           </p>
         )}
 

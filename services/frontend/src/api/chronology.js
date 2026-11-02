@@ -156,6 +156,13 @@ const chronologyApi = {
   async removeEvent(id, eventId) {
     await api.delete(`${BASE}/${id}/events/${eventId}`);
   },
+  // Масовий імпорт — масив об'єктів у тому ж форматі, що й createEvent,
+  // усі в один календар (id); невалідні записи сервер пропускає й рахує
+  // окремо (imported/skipped).
+  async importEvents(id, records) {
+    const { data } = await api.post(`${BASE}/${id}/events/import`, records);
+    return data;
+  },
 
   // Типи подій (назва + колір) — задаються в адмін-панелі.
   async listEventTypes() {

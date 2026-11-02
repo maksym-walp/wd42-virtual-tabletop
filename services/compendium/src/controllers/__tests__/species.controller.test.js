@@ -132,6 +132,63 @@ describe('SpeciesController.update / remove', () => {
   });
 });
 
+describe('SpeciesController.import', () => {
+  it('403 for a non-GM/non-admin', async () => {
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [], user: PLAYER }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(SpeciesModel.findAll).not.toHaveBeenCalled();
+  });
+
+  it('400 when the body is not an array', async () => {
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: { name: 'X' }, user: OWNER }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('creates a new record when nothing matches', async () => {
+    SpeciesModel.findAll.mockResolvedValue([species]);
+    SpeciesModel.create.mockResolvedValue({ ...species, id: 's2', name: 'Dwarf' });
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [{ name: 'Dwarf' }], user: OWNER }), res);
+    expect(SpeciesModel.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Dwarf' }));
+    expect(SpeciesModel.update).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 1, updated: 0 });
+  });
+
+  it('updates an owned record when the id matches', async () => {
+    SpeciesModel.findAll.mockResolvedValue([species]);
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [{ id: 's1', name: 'Renamed Elf' }], user: OWNER }), res);
+    expect(SpeciesModel.update).toHaveBeenCalledWith('s1', expect.objectContaining({ name: 'Renamed Elf' }));
+    expect(SpeciesModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('updates an owned record when only the name matches, case-insensitively', async () => {
+    SpeciesModel.findAll.mockResolvedValue([species]);
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [{ name: ' ELF ' }], user: OWNER }), res);
+    expect(SpeciesModel.update).toHaveBeenCalledWith('s1', expect.objectContaining({ name: 'ELF' }));
+  });
+
+  it('creates a new record instead of overwriting a same-named record owned by another GM', async () => {
+    SpeciesModel.findAll.mockResolvedValue([species]); // species.created_by = 'gm-1'
+    SpeciesModel.create.mockResolvedValue({ ...species, id: 's2' });
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [{ name: 'Elf' }], user: OTHER_GM }), res);
+    expect(SpeciesModel.update).not.toHaveBeenCalled();
+    expect(SpeciesModel.create).toHaveBeenCalledWith(expect.objectContaining({ createdBy: 'gm-2', name: 'Elf' }));
+  });
+
+  it('lets admin match and update any record by name', async () => {
+    SpeciesModel.findAll.mockResolvedValue([species]); // owned by gm-1, importer is admin
+    const res = mockRes();
+    await SpeciesController.import(mockReq({ body: [{ name: 'Elf' }], user: ADMIN }), res);
+    expect(SpeciesModel.update).toHaveBeenCalledWith('s1', expect.objectContaining({ name: 'Elf' }));
+  });
+});
+
 describe('SpeciesController.setOwner', () => {
   it('403 for a game master (admin-only)', async () => {
     const res = mockRes();

@@ -404,6 +404,16 @@ export default function CharacterSheet({ publicView = false }) {
   const archetype = ARCHETYPES[c.archetype];
   const unlockedNodeIds = new Set((data.tree || []).map(t => t.node_id));
 
+  // Традиції заклинань, які гравець сам позначив відкритими (меню чарів) —
+  // дерево розвитку більше не відкриває традиції, лише складність.
+  const toggleTradition = (traditionId) => {
+    const current = c.open_traditions || [];
+    const next = current.includes(traditionId)
+      ? current.filter(id => id !== traditionId)
+      : [...current, traditionId];
+    patchCharacter({ open_traditions: next });
+  };
+
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
 
   // Free circle bump (critical success/failure, narrative growth): moves
@@ -740,18 +750,23 @@ export default function CharacterSheet({ publicView = false }) {
             spellAccess={data.spell_access}
             isSpellMaster={!!data.is_spell_master}
             traditions={allTraditions}
+            isSpellcaster={c.archetype === 'spellcaster'}
+            rituals={rituals}
+            onAddRitual={addRitual}
+            onUpdateRitual={updateRitual}
+            onRemoveRitual={removeRitual}
           />
         )}
-        {tab === 'magic' && c.archetype === 'spellcaster' && (
+        {tab === 'magic' && (
           <section className="mt-6">
             <div className="mb-3 border-b border-border pb-1.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-gold">Ритуали</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-gold">Традиції</span>
             </div>
-            <RitualsTab
-              trackers={rituals} is_owner={is_owner}
-              onAdd={addRitual}
-              onUpdate={updateRitual}
-              onRemove={removeRitual}
+            <TraditionsPanel
+              traditions={allTraditions}
+              openIds={c.open_traditions || []}
+              is_owner={is_owner}
+              onToggle={toggleTradition}
             />
           </section>
         )}
@@ -1444,10 +1459,14 @@ function HealthCard({
 
 // ── MagicTab ──────────────────────────────────────────────────────────────────
 
-// spellAccess — що дерево відкрило для заклинань (традиції + складність,
-// див. utils/spellAccess.js); isSpellMaster — глядач-майстер дає заклинання
-// поза цими правилами.
-function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter, onAddSpell, onPatchSpell, onRemoveSpell, spellAccess, isSpellMaster, traditions = [] }) {
+// spellAccess — традиції (гравець позначає сам, див. TraditionsPanel) і
+// складність, яку відкрило дерево розвитку (utils/spellAccess.js);
+// isSpellMaster — глядач-майстер дає заклинання поза цими правилами.
+function MagicTab({
+  c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mysticismVal, spells, allSpells, is_owner, patchCharacter,
+  onAddSpell, onPatchSpell, onRemoveSpell, spellAccess, isSpellMaster, traditions = [],
+  isSpellcaster, rituals, onAddRitual, onUpdateRitual, onRemoveRitual,
+}) {
   const [spellSearch, setSpellSearch] = useState('');
   const [spellScope, setSpellScope]   = useState('');
   const [showPicker, setShowPicker]   = useState(false);
@@ -1514,9 +1533,23 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
         </div>
 
         <div className="flex flex-col gap-0.5">
-          <span className="text-[0.73rem] text-text-dim">⏱ Відпочинок (год): +{archetype.magicMult} оч.</span>
-          <span className="text-[0.73rem] text-text-dim">🌙 Сон/медитація: +{archetype.meditationDie}+{archetype.magicMult}</span>
+          <span className="text-[0.73rem] text-text-dim">⏱ Перепочинок: +{archetype.magicMult} оч.</span>
+          <span className="text-[0.73rem] text-text-dim">🌙 Повноцінний відпочинок: +{archetype.magicMult}d4 оч.</span>
         </div>
+
+        {isSpellcaster && (
+          <div className="mt-4 border-t border-border pt-3">
+            <SectionTitle>Ритуали</SectionTitle>
+            <div className="mt-2">
+              <RitualsTab
+                trackers={rituals} is_owner={is_owner}
+                onAdd={onAddRitual}
+                onUpdate={onUpdateRitual}
+                onRemove={onRemoveRitual}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: spells */}
@@ -1646,6 +1679,33 @@ function MagicTab({ c, maxMagic, archetype, maxKnownSpells, baseKnownSpells, mys
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+// ── TraditionsPanel ──────────────────────────────────────────────────────────
+
+// Традиції заклинань, відкриті персонажу — гравець позначає їх сам
+// (дерево розвитку більше не відкриває традиції, лише складність форм).
+function TraditionsPanel({ traditions, openIds, is_owner, onToggle }) {
+  return (
+    <div>
+      {traditions.length === 0 && <p className="text-sm text-text-dim">Традицій ще немає</p>}
+      {traditions.map(t => (
+        <label
+          key={t.id}
+          className={`flex items-center gap-2 border-b border-bg py-2 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          <input
+            type="checkbox"
+            className="h-5 w-5 accent-sage"
+            checked={openIds.includes(t.id)}
+            disabled={!is_owner}
+            onChange={() => is_owner && onToggle(t.id)}
+          />
+          <span className="text-sm text-text">{t.name}</span>
+        </label>
+      ))}
     </div>
   );
 }
@@ -2063,7 +2123,7 @@ function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPat
   );
 }
 
-// ── RitualsTab (spellcaster; секція «Магії та чарів») ───────────────────────
+// ── RitualsTab (spellcaster; у блоці магічної енергії «Магії та чарів») ────
 
 function RitualsTab({ trackers, is_owner, onAdd, onUpdate, onRemove }) {
   const [creating, setCreating] = useState(false);

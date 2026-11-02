@@ -109,8 +109,8 @@ describe('SpellModel.create', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical, image_crop\)/);
-    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19::jsonb,\$20,\$21,\$22::jsonb\)/);
+    expect(sql).toMatch(/INSERT INTO spellbook\.spells\s*\(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc,\s*energy_cost, action_time, ritual, duration_value, duration_unit,\s*range_desc, components, is_public,\s*image_url, lore_creator, lore_creator_npc_id, complexity, forms, damage_die, is_canonical, image_crop,\s*damage_dice_count\)/);
+    expect(sql).toMatch(/VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10,\$11,\$12,\$13::jsonb,\$14,\$15,\$16,\$17,\$18,\$19::jsonb,\$20,\$21,\$22::jsonb,\$23\)/);
     expect(params).toEqual([
       'u1', 'Вогняна куля', [], 'utility',
       undefined, undefined,
@@ -120,6 +120,7 @@ describe('SpellModel.create', () => {
       null, 'Стара Мірна', 'npc-1',
       null, '[]', null, false,
       null,
+      1,
     ]);
   });
 
@@ -148,11 +149,11 @@ describe('SpellModel.update', () => {
       name: 'Вогняна куля', lore_creator: 'Стара Мірна', lore_creator_npc_id: 'npc-1',
     }, true);
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/image_url=\$16, lore_creator=\$17, lore_creator_npc_id=\$18,\s*complexity=\$20, forms=\$21::jsonb, damage_die=\$22, image_crop=\$23::jsonb, updated_at=NOW\(\)/);
+    expect(sql).toMatch(/image_url=\$16, lore_creator=\$17, lore_creator_npc_id=\$18,\s*complexity=\$20, forms=\$21::jsonb, damage_die=\$22, image_crop=\$23::jsonb,\s*damage_dice_count=\$24, updated_at=NOW\(\)/);
     expect(sql).toMatch(/WHERE id=\$1 AND \(user_id=\$2 OR \$19 = true\)/);
     expect(params[17]).toBe('npc-1'); // lore_creator_npc_id ($18)
     expect(params[18]).toBe(true);    // isAdmin ($19)
-    expect(params).toHaveLength(23);
+    expect(params).toHaveLength(24);
   });
 
   it('defaults lore_creator_npc_id to null when omitted', async () => {
@@ -171,12 +172,12 @@ describe('SpellModel.bulkImport', () => {
     ]);
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, forms, damage_die, is_canonical\)/
+      /INSERT INTO spellbook\.spells \(user_id, name, nature, spell_kind, mechanical_desc, narrative_desc, lore_creator, lore_creator_npc_id, energy_cost, action_time, ritual, duration_value, duration_unit, range_desc, components, is_public, complexity, forms, damage_die, damage_dice_count, is_canonical\)/
     );
-    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20\)/);
+    expect(sql).toMatch(/VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20, \$21\)/);
     expect(params).toEqual([
       'importer', 'Вогняна куля', [], 'utility', null, null,
-      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]', null, false,
+      'Стара Мірна', 'npc-1', 0, 1, 'impossible', null, 'instant', null, '[]', false, null, '[]', null, 1, false,
     ]);
     expect(imported).toBe(1);
   });
@@ -207,7 +208,7 @@ describe('SpellModel.bulkImport', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
     const [sql] = pool.query.mock.calls[0];
     expect(sql).toMatch(
-      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20\), \(\$21, \$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33, \$34, \$35::jsonb, \$36, \$37, \$38::jsonb, \$39, \$40\)/
+      /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, \$12, \$13, \$14, \$15::jsonb, \$16, \$17, \$18::jsonb, \$19, \$20, \$21\), \(\$22, \$23, \$24, \$25, \$26, \$27, \$28, \$29, \$30, \$31, \$32, \$33, \$34, \$35, \$36::jsonb, \$37, \$38, \$39::jsonb, \$40, \$41, \$42\)/
     );
     expect(imported).toBe(2);
   });
@@ -245,11 +246,14 @@ describe('SpellModel complexity/forms/damage_die on write', () => {
       forms: [{ kind: 'primitive', energy_cost: '5', complexity: 'bogus', damage_die: 'd4', extra: 'drop me' }],
     });
     const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/\$18,\$19::jsonb,\$20,\$21,\$22::jsonb\)/);
+    expect(sql).toMatch(/\$18,\$19::jsonb,\$20,\$21,\$22::jsonb,\$23\)/);
     expect(params[17]).toBe('complex');
     const forms = JSON.parse(params[18]);
     expect(forms).toHaveLength(1);
-    expect(forms[0]).toMatchObject({ kind: 'primitive', id: 'primitive', energy_cost: 5, complexity: null, action_time: 1, components: [], damage_die: 'd4' });
+    expect(forms[0]).toMatchObject({
+      kind: 'primitive', id: 'primitive', energy_cost: 5, complexity: null, action_time: 1, components: [],
+      damage_die: 'd4', damage_dice_count: 1,
+    });
     expect(forms[0]).not.toHaveProperty('extra');
     expect(params[19]).toBe('d8');
   });
@@ -301,6 +305,15 @@ describe('normalizeForms', () => {
     expect(a.damage_die).toBe('d10');
     expect(b.damage_die).toBeNull();
   });
+
+  it('normalizes damage_dice_count to an integer >= 1, defaulting invalid/missing to 1', () => {
+    const [valid] = SpellModel.normalizeForms([{ kind: 'primitive', damage_dice_count: 3 }]);
+    expect(valid.damage_dice_count).toBe(3);
+    const [zero] = SpellModel.normalizeForms([{ kind: 'primitive', damage_dice_count: 0 }]);
+    expect(zero.damage_dice_count).toBe(1);
+    const [missing] = SpellModel.normalizeForms([{ kind: 'primitive' }]);
+    expect(missing.damage_dice_count).toBe(1);
+  });
 });
 
 describe('SpellModel.importMany', () => {
@@ -330,7 +343,7 @@ describe('magic forms and duration units', () => {
       { name: 'A', duration_unit: 'round' }, { name: 'B', duration_unit: 'action' }, { name: 'C', duration_unit: 'eons' },
     ]);
     const params = pool.query.mock.calls[0][1];
-    const unitAt = (record) => params[record * 20 + 12];
+    const unitAt = (record) => params[record * 21 + 12];
     expect([unitAt(0), unitAt(1), unitAt(2)]).toEqual(['round', 'action', 'instant']);
   });
 

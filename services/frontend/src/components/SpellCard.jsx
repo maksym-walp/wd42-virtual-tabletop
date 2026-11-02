@@ -34,7 +34,7 @@ export default function SpellCard({ spell, ...rest }) {
           {[
             complexity?.label,
             formCount > 1 ? `${formCount} ${pluralizeUk(formCount, ['форма', 'форми', 'форм'])}` : null,
-            spell.damage_die ? `шкода ${spell.damage_die}` : null,
+            spell.damage_die ? `шкода ${spell.damage_dice_count > 1 ? spell.damage_dice_count : ''}${spell.damage_die}` : null,
           ].filter(Boolean).join(' · ')}
         </p>
       )}

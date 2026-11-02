@@ -5,6 +5,8 @@ import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
+import ExportImportActions from '../components/ExportImportActions';
+import { buildFactionsImportTemplate } from '../utils/factionsImportTemplate';
 import { htmlToPreviewText } from '../utils/richText';
 import useHoverPreview from '../hooks/useHoverPreview';
 import CatalogLayout, {
@@ -18,20 +20,35 @@ export default function FactionList() {
   const [search, setSearch] = useState('');
   const [hovered, bindPreview] = useHoverPreview();
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
-    npcsApi.listFactions()
+    return npcsApi.listFactions()
       .then(setFactions)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleImport = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив фракцій'); return; }
+    try {
+      const { imported } = await npcsApi.importFactions(data);
+      alert(`Імпортовано фракцій: ${imported}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати фракції');
+    }
+  };
 
   const filtered = factions.filter((f) => f.name?.toLowerCase().includes(search.toLowerCase()));
 
   const sidebar = (
     <>
       <CatalogTabs sidebar tabs={getDomainTabs('npcs')} />
-      <SidebarActions newHref="/npcs/factions/new" newLabel="Нова фракція" />
+      <SidebarActions newHref="/npcs/factions/new" newLabel="Нова фракція">
+        <ExportImportActions hideExport onImport={handleImport} onTemplate={buildFactionsImportTemplate} />
+      </SidebarActions>
       <SidebarSearch value={search} onChange={setSearch} />
       <SidebarViewCount count={filtered.length} forms={['фракція', 'фракції', 'фракцій']} />
     </>

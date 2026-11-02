@@ -90,15 +90,18 @@ export const SPELL_COMPLEXITIES = {
 // колонки самого заклинання, додаткові лежать у spell.forms як повні
 // знімки саме цих полів + { kind, id } (див. constants/forms.js і
 // normalizeForms у services/spellbook/src/models/spell.model.js).
-// damage_die — кубик шкоди (розділ 4.4.3; кількість завжди з Майстерності
-// кастера, не зберігається тут) — лише для spell_kind='combat'.
+// damage_die/damage_dice_count — кубик шкоди й кількість кубиків (розділ
+// 4.4.3) — лише для spell_kind='combat'. На відміну від зброї, кількість
+// тут задає автор заклинання прямо: Майстерність кастера (вузли дерева,
+// target='damage_dice') стосується тільки атак зброєю, не магії (міграція 122).
 export const FORM_FIELDS = [
   'complexity', 'spell_kind', 'energy_cost', 'action_time', 'ritual',
-  'duration_value', 'duration_unit', 'range_desc', 'components', 'damage_die',
+  'duration_value', 'duration_unit', 'range_desc', 'components', 'damage_die', 'damage_dice_count',
   'mechanical_desc', 'narrative_desc', 'lore_creator', 'lore_creator_npc_id',
 ];
 
 export const DAMAGE_DICE = ['d4', 'd6', 'd8', 'd10', 'd12'];
+export const MAX_DAMAGE_DICE_COUNT = 20;
 
 export { FORM_TIERS, hasTierForms };
 

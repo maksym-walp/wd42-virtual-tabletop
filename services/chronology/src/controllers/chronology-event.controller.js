@@ -99,6 +99,54 @@ const ChronologyEventController = {
     res.status(201).json({ event });
   },
 
+  // GM/admin only — bulk import of a previously exported or hand-written
+  // JSON array, into this calendar. Each record is the same shape as
+  // POST create (ids like month_id/location_id/participant_ids are passed
+  // through as-is — same convention as abilities/spellbook import, no
+  // cross-environment name lookup). Invalid records (missing name/color, bad
+  // month_id, etc.) are skipped and counted separately instead of failing
+  // the whole batch.
+  //
+  // Upsert: a record whose "id" matches an existing event in this calendar
+  // updates it in place; otherwise a record whose "name" matches an
+  // existing event (same campaign_id — global vs that campaign's own,
+  // never across the two) updates that one instead. Only when neither
+  // matches is a new event created — the common "re-export, tweak, re-
+  // import" loop then edits in place rather than piling up duplicates.
+  async import(req, res) {
+    const calendar = await loadChronologyForManageOr404(req, res);
+    if (!calendar) return;
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив подій' });
+    }
+    const existing = await ChronologyEventModel.findForImportMatch(calendar.id);
+    const byId = new Map(existing.map((e) => [e.id, e]));
+    const nameKey = (name, campaignId) => `${campaignId || ''}::${String(name).trim().toLowerCase()}`;
+    const byName = new Map(existing.map((e) => [nameKey(e.name, e.campaign_id), e]));
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const record of req.body) {
+      if (!record || typeof record !== 'object') { skipped += 1; continue; }
+      const validationError = await validateBody(record);
+      if (validationError) { skipped += 1; continue; }
+      const monthError = await validateMonthRefs(record, calendar.id);
+      if (monthError) { skipped += 1; continue; }
+
+      const match = (record.id && byId.get(record.id))
+        || (record.name && byName.get(nameKey(record.name, record.campaign_id)));
+      if (match) {
+        await ChronologyEventModel.update(match.id, calendar.id, record);
+        updated += 1;
+      } else {
+        await ChronologyEventModel.create(calendar.id, record);
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated, skipped });
+  },
+
   async update(req, res) {
     const calendar = await loadChronologyForManageOr404(req, res);
     if (!calendar) return;

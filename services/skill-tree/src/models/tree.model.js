@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 const NodeGrantModel = require('./node-grant.model');
-const { sanitizeTraditions, sanitizeComplexity } = require('./spell-access');
+const { sanitizeComplexity } = require('./spell-access');
 const { sanitizeModifiers } = require('./node-modifier');
 const { sanitizeCastSkillOptions } = require('./node-cast-skill');
 
@@ -20,8 +20,8 @@ const TreeModel = {
         const { rows } = await client.query(
           `INSERT INTO skill_tree.nodes
              (id, title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, archetypes, require_both, is_root,
-              unlocks_traditions, unlocks_complexity, modifiers, cast_skill_options)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+              unlocks_complexity, modifiers, cast_skill_options)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
            RETURNING id`,
           [
             node.id, node.title, node.description ?? null, node.icon ?? null,
@@ -29,7 +29,7 @@ const TreeModel = {
             node.narrative_condition ?? [], node.effect ?? [],
             node.archetype ?? archetype, node.archetypes ?? [],
             node.require_both ?? false, node.is_root ?? false,
-            sanitizeTraditions(node.unlocks_traditions), sanitizeComplexity(node.unlocks_complexity),
+            sanitizeComplexity(node.unlocks_complexity),
             JSON.stringify(sanitizeModifiers(node.modifiers)),
             JSON.stringify(sanitizeCastSkillOptions(node.cast_skill_options)),
           ]
@@ -73,8 +73,8 @@ const TreeModel = {
         const { rows } = await client.query(
           `INSERT INTO skill_tree.nodes
              (title, description, icon, cost, pos_x, pos_y, narrative_condition, effect, archetype, archetypes, require_both, is_root,
-              unlocks_traditions, unlocks_complexity, modifiers, cast_skill_options)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14, $15)
+              unlocks_complexity, modifiers, cast_skill_options)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, $14)
            RETURNING id`,
           [
             node.title, node.description ?? null, node.icon ?? null,
@@ -82,7 +82,7 @@ const TreeModel = {
             node.narrative_condition ?? [], node.effect ?? [],
             archetype, node.archetypes?.length ? node.archetypes : [archetype],
             node.require_both ?? false,
-            sanitizeTraditions(node.unlocks_traditions), sanitizeComplexity(node.unlocks_complexity),
+            sanitizeComplexity(node.unlocks_complexity),
             JSON.stringify(sanitizeModifiers(node.modifiers)),
             JSON.stringify(sanitizeCastSkillOptions(node.cast_skill_options)),
           ]

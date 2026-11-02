@@ -120,12 +120,44 @@ const UnionController = {
   },
 
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches an
+  // item this importer may already write to (own, or any if admin)
+  // updates it in place instead of creating a duplicate — keeping that
+  // item's image_url/thumbnail_url/image_crop, which the import never
+  // carries. The update goes through the matched item's own kind's model
+  // (falling back to the record's own `type` only when nothing matched),
+  // which already knows how to move a row to another kind's table when
+  // `type` changed (see createCatalogModel(kind).update -> moveKind).
   async import(req, res) {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив обʼєктів' });
     }
-    const imported = await UnionModel.bulkImport(req.user.sub, req.body, true);
-    res.status(201).json({ imported });
+    const isAdmin = req.user.role === 'admin';
+    const existing = await UnionModel.findAll(req.user.sub, {}, isAdmin);
+    const writable = isAdmin ? existing : existing.filter((r) => r.user_id === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (const record of req.body) {
+      if (!record || !record.name) continue;
+      const declaredKind = KINDS[record.type] ? record.type : null;
+      const match = (record.id && byId.get(record.id)) || byName.get(String(record.name).trim().toLowerCase());
+      if (match) {
+        const Model = createCatalogModel(declaredKind || match.type);
+        await Model.update(match.id, req.user.sub, {
+          ...record, image_url: match.image_url, thumbnail_url: match.thumbnail_url, image_crop: match.image_crop,
+        }, isAdmin);
+        updated += 1;
+      } else if (declaredKind) {
+        const Model = createCatalogModel(declaredKind);
+        await Model.create(req.user.sub, { ...record, is_canonical: true });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
   },
 };
 

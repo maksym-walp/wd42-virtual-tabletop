@@ -155,7 +155,7 @@ describe('CreatureController.import', () => {
     const res = mockRes();
     await CreatureController.import(mockReq({ body: [{ name: 'X', ...ATTRS }], user: PLAYER }), res);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(CreatureModel.importMany).not.toHaveBeenCalled();
+    expect(CreatureModel.findAll).not.toHaveBeenCalled();
   });
 
   it('400 for a non-array body or an invalid record, before touching the database', async () => {
@@ -166,20 +166,66 @@ describe('CreatureController.import', () => {
     const res2 = mockRes();
     await CreatureController.import(mockReq({ body: [{ name: 'Ok', ...ATTRS }, { name: 'Bad', ...ATTRS, body: 9 }] }), res2);
     expect(res2.status).toHaveBeenCalledWith(400);
-    expect(CreatureModel.importMany).not.toHaveBeenCalled();
+    expect(CreatureModel.findAll).not.toHaveBeenCalled();
   });
 
-  it('imports parsed records as the importer, dropping cross-deployment references and images', async () => {
-    CreatureModel.importMany.mockResolvedValue(['n1', 'n2']);
+  it('creates new records as the importer, dropping cross-deployment references and images, when nothing matches', async () => {
+    CreatureModel.findAll.mockResolvedValue([]);
+    CreatureModel.create.mockResolvedValue({ id: 'c1' });
     const res = mockRes();
     const record = { name: ' Старий ', ...ATTRS, species_id: 'sp-1', race_id: 'r-1', image_url: '/x.png', is_public: true };
 
     await CreatureController.import(mockReq({ body: [record, { name: 'Другий', ...ATTRS }] }), res);
 
-    const [userId, fieldsList] = CreatureModel.importMany.mock.calls[0];
-    expect(userId).toBe('gm-1');
-    expect(fieldsList[0]).toMatchObject({ name: 'Старий', speciesId: null, raceId: null, imageUrl: null, isPublic: true });
+    expect(CreatureModel.create).toHaveBeenCalledWith(expect.objectContaining({
+      createdBy: 'gm-1', name: 'Старий', speciesId: null, raceId: null, imageUrl: null, isPublic: true,
+    }));
+    expect(CreatureModel.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ imported: 2 });
+    expect(res.json).toHaveBeenCalledWith({ imported: 2, created: 2, updated: 0 });
+  });
+
+  it('updates an owned creature by id instead of creating a duplicate', async () => {
+    CreatureModel.findAll.mockResolvedValue([wolf]);
+    CreatureModel.update.mockResolvedValue(wolf);
+    const res = mockRes();
+
+    await CreatureController.import(mockReq({ body: [{ id: 'c1', name: 'Wolf Renamed', ...ATTRS }] }), res);
+
+    expect(CreatureModel.update).toHaveBeenCalledWith('c1', expect.objectContaining({ name: 'Wolf Renamed' }));
+    expect(CreatureModel.create).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 0, updated: 1 });
+  });
+
+  it('matches by name case-insensitively among the importer\'s own creatures', async () => {
+    CreatureModel.findAll.mockResolvedValue([wolf]);
+    CreatureModel.update.mockResolvedValue(wolf);
+    const res = mockRes();
+
+    await CreatureController.import(mockReq({ body: [{ name: ' wolf ', ...ATTRS }] }), res);
+
+    expect(CreatureModel.update).toHaveBeenCalledWith('c1', expect.anything());
+  });
+
+  it('does not match (and instead creates) a same-named creature owned by another GM', async () => {
+    CreatureModel.findAll.mockResolvedValue([wolf]);
+    CreatureModel.create.mockResolvedValue({ id: 'c2' });
+    const res = mockRes();
+
+    await CreatureController.import(mockReq({ body: [{ name: 'Wolf', ...ATTRS }], user: OTHER_GM }), res);
+
+    expect(CreatureModel.update).not.toHaveBeenCalled();
+    expect(CreatureModel.create).toHaveBeenCalled();
+  });
+
+  it('lets an admin match and update any creature by name', async () => {
+    CreatureModel.findAll.mockResolvedValue([wolf]);
+    CreatureModel.update.mockResolvedValue(wolf);
+    const res = mockRes();
+
+    await CreatureController.import(mockReq({ body: [{ name: 'Wolf', ...ATTRS }], user: ADMIN }), res);
+
+    expect(CreatureModel.findAll).toHaveBeenCalledWith('a-1', true);
+    expect(CreatureModel.update).toHaveBeenCalledWith('c1', expect.anything());
   });
 });

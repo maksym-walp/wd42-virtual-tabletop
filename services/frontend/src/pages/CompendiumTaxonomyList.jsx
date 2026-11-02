@@ -4,6 +4,8 @@ import compendiumApi from '../api/compendium';
 import CatalogTabs from '../components/CatalogTabs';
 import { getDomainTabs } from '../collectionsDomains';
 import Button from '../components/ui/Button';
+import ExportImportActions from '../components/ExportImportActions';
+import { buildSpeciesImportTemplate, buildRaceImportTemplate } from '../utils/compendiumImportTemplate';
 import EmptyState from '../components/ui/EmptyState';
 import { htmlToPreviewText } from '../utils/richText';
 import DataTable from '../components/ui/DataTable';
@@ -44,13 +46,37 @@ export default function CompendiumTaxonomyList() {
   const [view, setView] = useViewMode('compendium-taxonomy');
   const [hovered, bindPreview, setHovered] = useHoverPreview();
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
-    Promise.all([compendiumApi.listSpecies(), compendiumApi.listRaces()])
+    return Promise.all([compendiumApi.listSpecies(), compendiumApi.listRaces()])
       .then(([sp, rc]) => { setSpecies(sp); setRaces(rc); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleImportSpecies = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив видів'); return; }
+    try {
+      const { imported } = await compendiumApi.importSpecies(data);
+      alert(`Імпортовано видів: ${imported}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати види');
+    }
+  };
+
+  const handleImportRaces = async (data) => {
+    if (!Array.isArray(data)) { alert('Файл має містити масив рас'); return; }
+    try {
+      const { imported } = await compendiumApi.importRaces(data);
+      alert(`Імпортовано рас: ${imported}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Не вдалося імпортувати раси');
+    }
+  };
 
   const merged = [
     ...species.map((s) => ({ ...s, kind: 'species', href: `/compendium/species/${s.id}` })),
@@ -69,7 +95,9 @@ export default function CompendiumTaxonomyList() {
 
       <SidebarActions>
         <Button to="/compendium/species/new" variant="ghost" className="flex-1 whitespace-nowrap">+ Вид</Button>
+        <ExportImportActions hideExport onImport={handleImportSpecies} onTemplate={buildSpeciesImportTemplate} />
         <Button to="/compendium/races/new" className="flex-1 whitespace-nowrap">+ Раса</Button>
+        <ExportImportActions hideExport onImport={handleImportRaces} onTemplate={buildRaceImportTemplate} />
       </SidebarActions>
 
       <SidebarSearch value={search} onChange={setSearch} />

@@ -103,12 +103,43 @@ const AbilityController = {
   },
 
   // GM/admin only (route-gated) — масовий імпорт раніше експортованого JSON.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches an
+  // ability this importer may already write to (own, or any if admin)
+  // updates it in place instead of creating a duplicate. The update keeps
+  // that record's prerequisite_node_ids/prerequisite_logic/image_url/
+  // image_crop — fields the import never carries (see EXPORT_OMIT_FIELDS) —
+  // rather than wiping them.
   async import(req, res) {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ message: 'Очікується масив обʼєктів' });
     }
-    const imported = await AbilityModel.bulkImport(req.user.sub, req.body, true);
-    res.status(201).json({ imported });
+    const isAdmin = req.user.role === 'admin';
+    const existing = await AbilityModel.findAll(req.user.sub, {}, isAdmin);
+    const writable = isAdmin ? existing : existing.filter((r) => r.user_id === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (const record of req.body) {
+      if (!record || !record.name) continue;
+      const match = (record.id && byId.get(record.id)) || byName.get(String(record.name).trim().toLowerCase());
+      if (match) {
+        await AbilityModel.update(match.id, req.user.sub, {
+          ...record,
+          prerequisite_node_ids: match.prerequisite_node_ids,
+          prerequisite_logic: match.prerequisite_logic,
+          image_url: match.image_url,
+          image_crop: match.image_crop,
+        }, isAdmin);
+        updated += 1;
+      } else {
+        await AbilityModel.create(req.user.sub, { ...record, is_canonical: true });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
   },
 };
 

@@ -16,6 +16,7 @@ const SpellProgressModel = {
               CASE WHEN sp.id IS NULL THEN NULL ELSE jsonb_build_object(
                 'id', sp.id, 'name', sp.name, 'nature', sp.nature,
                 'spell_kind', sp.spell_kind, 'complexity', sp.complexity, 'forms', sp.forms, 'damage_die', sp.damage_die,
+                'damage_dice_count', sp.damage_dice_count,
                 'mechanical_desc', sp.mechanical_desc, 'narrative_desc', sp.narrative_desc,
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,
                 'duration_value', sp.duration_value, 'duration_unit', sp.duration_unit,
@@ -44,7 +45,7 @@ const SpellProgressModel = {
     if (!characterIds.length) return {};
     const { rows } = await pool.query(
       `SELECT ks.character_id, ks.spell_id, ks.mastered, ks.cast_count, ks.form_tier, ks.gm_granted,
-              sp.name, sp.forms, sp.damage_die, sp.energy_cost, sp.action_time, sp.complexity,
+              sp.name, sp.forms, sp.damage_die, sp.damage_dice_count, sp.energy_cost, sp.action_time, sp.complexity,
               ${traditionIdsSelect} AS tradition_ids
        FROM character_sheet.known_spells ks
        JOIN spellbook.spells sp ON sp.id = ks.spell_id
@@ -97,6 +98,7 @@ const SpellProgressModel = {
               CASE WHEN sp.id IS NULL THEN NULL ELSE jsonb_build_object(
                 'id', sp.id, 'name', sp.name, 'nature', sp.nature,
                 'spell_kind', sp.spell_kind, 'complexity', sp.complexity, 'forms', sp.forms, 'damage_die', sp.damage_die,
+                'damage_dice_count', sp.damage_dice_count,
                 'mechanical_desc', sp.mechanical_desc, 'narrative_desc', sp.narrative_desc,
                 'energy_cost', sp.energy_cost, 'action_time', sp.action_time, 'ritual', sp.ritual,
                 'duration_value', sp.duration_value, 'duration_unit', sp.duration_unit,

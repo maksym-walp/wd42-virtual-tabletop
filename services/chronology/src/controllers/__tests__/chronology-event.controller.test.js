@@ -423,3 +423,66 @@ describe('ChronologyEventController list scope and calendar move', () => {
     expect(ChronologyEventModel.update).not.toHaveBeenCalled();
   });
 });
+
+describe('ChronologyEventController.import', () => {
+  beforeEach(() => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.findForImportMatch.mockResolvedValue([
+      { id: 'e1', name: 'Битва', campaign_id: null },
+    ]);
+  });
+
+  it('400 when the body is not an array', async () => {
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({ params: { id: 'c1' }, body: {} }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('creates a new event when nothing matches', async () => {
+    ChronologyEventModel.create.mockResolvedValue({ id: 'e2' });
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({
+      params: { id: 'c1' }, body: [{ name: 'Свято', color: '#ff0000' }],
+    }), res);
+    expect(ChronologyEventModel.create).toHaveBeenCalledWith('c1', expect.objectContaining({ name: 'Свято' }));
+    expect(ChronologyEventModel.update).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ imported: 1, created: 1, updated: 0, skipped: 0 });
+  });
+
+  it('updates an existing event when the id matches', async () => {
+    ChronologyEventModel.update.mockResolvedValue({ id: 'e1' });
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({
+      params: { id: 'c1' }, body: [{ id: 'e1', name: 'Битва за місто', color: '#ff0000' }],
+    }), res);
+    expect(ChronologyEventModel.update).toHaveBeenCalledWith('e1', 'c1', expect.objectContaining({ name: 'Битва за місто' }));
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('updates an existing event when only the name matches (same campaign scope)', async () => {
+    ChronologyEventModel.update.mockResolvedValue({ id: 'e1' });
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({
+      params: { id: 'c1' }, body: [{ name: ' Битва ', color: '#ff0000' }],
+    }), res);
+    expect(ChronologyEventModel.update).toHaveBeenCalledWith('e1', 'c1', expect.anything());
+  });
+
+  it('does not match a same-named event from a different campaign', async () => {
+    ChronologyEventModel.create.mockResolvedValue({ id: 'e2' });
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({
+      params: { id: 'c1' }, body: [{ name: 'Битва', color: '#ff0000', campaign_id: 'camp-1' }],
+    }), res);
+    expect(ChronologyEventModel.update).not.toHaveBeenCalled();
+    expect(ChronologyEventModel.create).toHaveBeenCalled();
+  });
+
+  it('counts an invalid record as skipped', async () => {
+    const res = mockRes();
+    await ChronologyEventController.import(mockReq({
+      params: { id: 'c1' }, body: [{ name: 'Без кольору' }],
+    }), res);
+    expect(res.json).toHaveBeenCalledWith({ imported: 0, created: 0, updated: 0, skipped: 1 });
+  });
+});

@@ -56,6 +56,45 @@ const RaceController = {
     res.status(204).send();
   },
 
+  // GM/admin only — bulk import of a previously exported or hand-written
+  // JSON array. Records without a usable name are silently skipped.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches a
+  // race this importer may already write to updates it in place instead
+  // of creating a duplicate — image_url is left as the existing record's
+  // (the import never carries one) rather than wiped to null.
+  async import(req, res) {
+    if (!canCreate(req.user)) {
+      return res.status(403).json({ message: 'Лише майстер гри або адміністратор може створювати записи' });
+    }
+    if (!Array.isArray(req.body)) {
+      return res.status(400).json({ message: 'Очікується масив записів' });
+    }
+    const admin = isAdmin(req.user);
+    const existing = await RaceModel.findAll(req.user.sub, admin);
+    const writable = admin ? existing : existing.filter((r) => r.created_by === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (const record of req.body) {
+      if (!record || typeof record.name !== 'string' || !record.name.trim()) continue;
+      const name = record.name.trim();
+      const description = typeof record.description === 'string' ? record.description : null;
+      const isPublic = record.is_public ?? false;
+      const match = (record.id && byId.get(record.id)) || byName.get(name.toLowerCase());
+      if (match) {
+        await RaceModel.update(match.id, { name, description, isPublic, imageUrl: match.image_url });
+        updated += 1;
+      } else {
+        await RaceModel.create({ createdBy: req.user.sub, name, description, isPublic, imageUrl: null });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
+  },
+
   async setOwner(req, res) {
     if (!isAdmin(req.user)) return res.status(403).json({ message: 'Доступ заборонено' });
 

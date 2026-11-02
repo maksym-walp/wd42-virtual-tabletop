@@ -195,7 +195,7 @@ const CharacterModel = {
       death_scale, health_dice_values, conditions, experience_points, money,
       spell_bonus, temp_hp, defense_bonus, inspiration_used, narrative_inspiration_die,
       luck_current, luck_max, rogue_inspiration_die, rogue_inspiration_given_to,
-      image_url, image_crop,
+      image_url, image_crop, open_traditions,
     } = data;
 
     // death_scale/narrative_inspiration_die/rogue_inspiration_* use a
@@ -238,6 +238,7 @@ const CharacterModel = {
            rogue_inspiration_given_to = CASE WHEN $25 THEN $26 ELSE rogue_inspiration_given_to END,
            image_url           = CASE WHEN $27 THEN $28 ELSE image_url END,
            image_crop          = CASE WHEN $29 THEN $30::jsonb ELSE image_crop END,
+           open_traditions     = COALESCE($31::uuid[], open_traditions),
            updated_at          = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -261,6 +262,7 @@ const CharacterModel = {
         setRogueGivenTo, setRogueGivenTo ? (rogue_inspiration_given_to ?? null) : null,
         setImageUrl, setImageUrl ? (image_url ?? null) : null,
         setImageCrop, setImageCrop && !(setImageUrl && !image_url) ? serializeImageCrop(image_crop) : null,
+        open_traditions ?? null,
       ]
     );
     return rows[0] || null;

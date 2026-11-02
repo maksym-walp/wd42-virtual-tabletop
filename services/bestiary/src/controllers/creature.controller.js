@@ -87,6 +87,10 @@ const CreatureController = {
 
   // GM/адмін: масовий імпорт раніше експортованих записів. Лоудаут, стосунки
   // та фракції не імпортуються — лише власні поля запису.
+  //
+  // Upsert: a record whose "id" or "name" (case-insensitive) matches a
+  // creature this importer may already write to (own, or any if admin)
+  // updates it in place instead of creating a duplicate.
   async import(req, res) {
     if (!canCreate(req.user)) {
       return res.status(403).json({ message: 'Лише майстер гри або адміністратор може імпортувати записи' });
@@ -94,8 +98,27 @@ const CreatureController = {
     const { fieldsList, error } = parseImportRecords(req.body);
     if (error) return res.status(400).json({ message: error });
 
-    const ids = await CreatureModel.importMany(req.user.sub, fieldsList);
-    res.status(201).json({ imported: ids.length });
+    const admin = isAdmin(req.user);
+    const existing = await CreatureModel.findAll(req.user.sub, admin);
+    const writable = admin ? existing : existing.filter((r) => r.created_by === req.user.sub);
+    const byId = new Map(writable.map((r) => [r.id, r]));
+    const byName = new Map(writable.map((r) => [r.name.trim().toLowerCase(), r]));
+
+    let created = 0;
+    let updated = 0;
+    for (let i = 0; i < fieldsList.length; i += 1) {
+      const record = req.body[i];
+      const fields = fieldsList[i];
+      const match = (record.id && byId.get(record.id)) || byName.get(fields.name.toLowerCase());
+      if (match) {
+        await CreatureModel.update(match.id, fields);
+        updated += 1;
+      } else {
+        await CreatureModel.create({ createdBy: req.user.sub, ...fields });
+        created += 1;
+      }
+    }
+    res.status(201).json({ imported: created + updated, created, updated });
   },
 
   // Один запис у форматі POST /import (масив з одного елемента) — той самий,

@@ -30,6 +30,10 @@ const compendiumApi = {
     const { data } = await api.patch(`${BASE}/species/${id}/owner`, { owner_username: ownerUsername });
     return data.species;
   },
+  async importSpecies(records) {
+    const { data } = await api.post(`${BASE}/species/import`, records);
+    return data;
+  },
 
   // Subspecies
   async listSubspecies(speciesId) {
@@ -56,6 +60,10 @@ const compendiumApi = {
     const { data } = await api.patch(`${BASE}/subspecies/${id}/owner`, { owner_username: ownerUsername });
     return data.subspecies;
   },
+  async importSubspecies(speciesId, records) {
+    const { data } = await api.post(`${BASE}/subspecies/import?species_id=${speciesId}`, records);
+    return data;
+  },
 
   // Races
   async listRaces() {
@@ -80,6 +88,10 @@ const compendiumApi = {
   async setRaceOwner(id, ownerUsername) {
     const { data } = await api.patch(`${BASE}/races/${id}/owner`, { owner_username: ownerUsername });
     return data.race;
+  },
+  async importRaces(records) {
+    const { data } = await api.post(`${BASE}/races/import`, records);
+    return data;
   },
 
   // Peoples
@@ -106,6 +118,10 @@ const compendiumApi = {
   async setPeopleOwner(id, ownerUsername) {
     const { data } = await api.patch(`${BASE}/peoples/${id}/owner`, { owner_username: ownerUsername });
     return data.people;
+  },
+  async importPeoples(raceId, records) {
+    const { data } = await api.post(`${BASE}/peoples/import?race_id=${raceId}`, records);
+    return data;
   },
 };
 
