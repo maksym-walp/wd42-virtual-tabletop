@@ -16,13 +16,16 @@
 | GET | `/export` | так | ті самі фільтри, що й `GET /`, або `?id=` для рівно одного запису | `200 [ ...записи ]` — масив у форматі імпорту |
 | POST | `/import` | `admin` / `game_master` | масив записів у форматі експорту | `201 { imported }` / `400` (не масив) / `403` |
 | GET | `/:id` | так | — | `200 { ability }` / `404` |
-| POST | `/` | так | поля запису (див. нижче) | `201 { ability }` / `400` (без `name` або змішані форми) |
+| POST | `/` | так | поля запису (див. нижче) | `201 { ability }` / `400` (без `name`) |
 | PUT | `/:id` | так | ті самі поля | `200 { ability }` / `400` / `404` (не існує або чужий — адмін може все) |
 | DELETE | `/:id` | так | — | `200 { message }` / `404` |
 | PATCH | `/:id/canonical` | `admin` / `game_master` | `{ is_canonical? }` (за замовчуванням `true`) | `200 { ability }` / `404` |
 | PATCH | `/:id/owner` | лише `admin` | `{ owner_username }` | `200 { ability }` / `400` / `404` (запису чи користувача нема) |
+| GET | `/:id/related` | так | — | `200 { related: [{ id, name }] }` — вміння, повʼязані як рівноцінні/альтернативні |
+| POST | `/:id/related` | так | `{ related_id }` | `201 { link }` / `400` (без `related_id`) / `404` (запис не видимий чи недостатньо прав) |
+| DELETE | `/:id/related/:relatedId` | так | — | `200 { message }` / `404` |
 
-Поля запису (`POST`/`PUT`): `name` (обовʼязкове), `archetypes[]`, `mechanical_desc`, `narrative_desc` (rich-text HTML), `is_public`, `prerequisite_node_ids[]`, `prerequisite_logic` (`or`/`and`), `image_url`, `image_crop`, `is_maneuver`, `duration_value` + `duration_unit` (`instant`/`action`/`round`/`seconds`/`minutes`/`hours`/`days`/`permanent`), `lore_creator` (вільний текст) і `lore_creator_npc_id` (НІП з [npcs](npcs.md), голий UUID), `components[]` (`{ item_id, name, quantity, unit }` — як у заклинань; вміст не перевіряється, лише що це масив), `forms[]` та `main_form_name` (див. нижче). `PUT` перезаписує всі поля — відсутні скидаються до значень за замовчуванням.
+Поля запису (`POST`/`PUT`): `name` (обовʼязкове), `archetypes[]`, `mechanical_desc`, `narrative_desc` (rich-text HTML), `is_public`, `prerequisite_node_ids[]`, `prerequisite_logic` (`or`/`and`), `image_url`, `image_crop`, `is_maneuver`, `duration_value` + `duration_unit` (`instant`/`action`/`round`/`seconds`/`minutes`/`hours`/`days`/`permanent`), `lore_creator` (вільний текст) і `lore_creator_npc_id` (НІП з [npcs](npcs.md), голий UUID), `components[]` (`{ item_id, name, quantity, unit }` — як у заклинань; вміст не перевіряється, лише що це масив), `forms[]` (див. нижче). `PUT` перезаписує всі поля — відсутні скидаються до значень за замовчуванням.
 
 Примітки:
 - Видимість: `GET /` повертає власні записи плюс усі публічні (`is_public`); адмін бачить усе.
@@ -34,16 +37,17 @@
 
 ### Форми вмінь
 
-Та сама модель, що й у заклинань ([spellbook](spellbook.md)): колонки самого запису — **основна форма** (при рівневих формах — «Повноцінна»), `forms` (JSONB) — додаткові, `main_form_name` — назва основної форми. Види форм (`kind`):
+Та сама модель, що й у заклинань ([spellbook](spellbook.md)): колонки самого запису — **основна форма** (Повноцінна), `forms` (JSONB) — додаткові. Лише **рівневі** форми (`kind`): `primitive` (Обмежена) / `perfected` (Довершена) — не більше однієї кожного виду, `id = kind`. Кожна форма має власні `duration_*`, `mechanical_desc`, `narrative_desc`, `lore_creator*`, `components`.
 
-- **рівневі** `primitive` / `perfected` — не більше однієї кожного виду, `id = kind`;
-- **альтернативні** `alternative` — власна назва, `id` — UUID (наявний зберігається, бо на нього посилаються лист персонажа та вузли дерева).
+Міграція 117 прибрала **альтернативні** форми (`kind = 'alternative'`, власна назва, `id` — UUID) і разом з ними колонку `main_form_name`: лишилась лише рівнева структура. `normalizeForms()` тепер мовчки відкидає будь-яку форму з `kind`, відмінним від `primitive`/`perfected` — зіпсований чи застарілий імпорт не валить запит. Освоєння форм персонажем — `character_sheet.abilities.form_tier` (саме лише воно: `primary_form`/`mastered_forms`, що відстежували вибір альтернативної форми, та ж міграція прибрала), вибір форми у вузлі дерева — `skill_tree.node_grants.form_key` (міграція 90) — тепер лише `NULL`/`main`/`primitive`/`perfected`.
 
-Одне вміння має або рівневі, або альтернативні форми — не обидва типи. `POST`/`PUT` з обома відповідають `400` («Вміння не може мати одночасно рівневі й альтернативні форми»); імпорт натомість мовчки відкидає альтернативні. Кожна форма має власні `duration_*`, `mechanical_desc`, `narrative_desc`, `lore_creator*`, `components`. Освоєння форм персонажем — `character_sheet.abilities.form_tier / primary_form / mastered_forms`, вибір форми у вузлі дерева — `skill_tree.node_grants.form_key` (міграція 90).
+Замість альтернативних форм — **рівноцінні/альтернативні вміння** (`/:id/related`, міграція 118): посилання на інший, самостійно заповнений запис того самого каталогу (`abilities.related_entries`, справжній FK з `ON DELETE CASCADE` — на відміну від голих cross-service UUID деінде в проєкті, обидві сторони тут один каталог). Зв'язок симетричний і зберігається в один бік, але читається з обох (`GET /:id/related` показує його для кожного з двох записів); доступ на запис — лише власник чи бачене (`is_public`); посилання не надає доступу одне до одного.
 
 ### Імпорт / експорт
 
-Експорт прибирає все, що прив'язане до конкретного деплою чи користувача: `image_url`, `image_crop`, `created_at`, `updated_at`, `is_owner`, `owner_username`, `is_canonical`, `prerequisite_node_ids`, `prerequisite_logic`, `prerequisite_nodes` (вузли дерева в іншому місці не мають сенсу). Імпорт ігнорує `user_id`: власник — той, хто імпортує; `is_canonical = true` (імпортувати можуть лише `admin`/`game_master`); записи без `name` пропускаються; усі записи вставляються одним `INSERT`.
+Експорт прибирає все, що прив'язане до конкретного деплою чи користувача: `image_url`, `image_crop`, `created_at`, `updated_at`, `is_owner`, `owner_username`, `is_canonical`, `prerequisite_node_ids`, `prerequisite_logic`, `prerequisite_nodes` (вузли дерева в іншому місці не мають сенсу). Імпорт ігнорує `user_id`: власник — той, хто імпортує; `is_canonical = true` (імпортувати можуть лише `admin`/`game_master`); записи без `name` пропускаються; усі записи вставляються одним `INSERT`. Рівноцінні/альтернативні вміння (`/:id/related`) посилаються на конкретні `id` цього деплою, тож не входять ні в експорт, ні в імпорт — їх налаштовують вже після імпорту.
+
+Готовий шаблон для ручного заповнення (з коментарями-підказками по кожному полю) — `buildAbilitiesImportTemplate` у [frontend](frontend.md).
 
 ### Колекції (`/collections`)
 
@@ -75,9 +79,10 @@
 
 Сервіс володіє схемою `abilities`:
 
-- `abilities.entries` — вміння/маневри: `user_id`, `name`, `archetypes TEXT[]`, `mechanical_desc`, `narrative_desc` (міграція 77 розділила колишній `description`), `is_public`, `prerequisite_node_ids`, `prerequisite_logic`, `image_url`, `image_crop`, `is_maneuver`, `duration_value`, `duration_unit`, `lore_creator`, `lore_creator_npc_id`, `is_canonical`, `forms JSONB`, `main_form_name`, `components JSONB`, `created_at`, `updated_at`.
+- `abilities.entries` — вміння/маневри: `user_id`, `name`, `archetypes TEXT[]`, `mechanical_desc`, `narrative_desc` (міграція 77 розділила колишній `description`), `is_public`, `prerequisite_node_ids`, `prerequisite_logic`, `image_url`, `image_crop`, `is_maneuver`, `duration_value`, `duration_unit`, `lore_creator`, `lore_creator_npc_id`, `is_canonical`, `forms JSONB`, `components JSONB`, `created_at`, `updated_at`.
 - `abilities.collections` — колекції: `user_id`, `name`, `description`, `is_public`, `prerequisite_node_ids`, `prerequisite_logic`, `image_url`, `image_crop`, `is_canonical`.
 - `abilities.collection_items` — `collection_id` ↔ `ability_id` (FK на `abilities.entries`).
+- `abilities.related_entries` — рівноцінні/альтернативні вміння (міграція 118): `entry_id` ↔ `related_entry_id` (обидва FK на `abilities.entries`, `ON DELETE CASCADE`), один рядок на пару.
 
 На `id` вмінь ззовні посилаються голими UUID `character_sheet.abilities.ability_id`, `character_sheet.maneuvers.maneuver_id`, `skill_tree.node_grants` та `compendium`.
 
@@ -85,7 +90,7 @@
 - `skill_tree.nodes` — назви вузлів-передумов (`prerequisite_nodes`);
 - `auth.users` — `owner_username`, перепризначення власника.
 
-Міграції: 18 (створення), 52/72 (злиття маневрів), 73 (автор-НІП), 77 (розділення опису), 83 (канонічність), 85 (`image_crop`), 90 (форми), 92 (компоненти, одиниці `round`/`action`).
+Міграції: 18 (створення), 52/72 (злиття маневрів), 73 (автор-НІП), 77 (розділення опису), 83 (канонічність), 85 (`image_crop`), 90 (форми), 92 (компоненти, одиниці `round`/`action`), 117 (лише рівневі форми, прибрано `main_form_name`), 118 (`related_entries`).
 
 ## Змінні оточення
 

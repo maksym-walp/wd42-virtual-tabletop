@@ -124,7 +124,7 @@ const characterApi = {
     return data.spells;
   },
 
-  // progress — { form_tier?, primary_form?, mastered_forms? } (див. docs/services/character-sheet.md).
+  // progress — { form_tier? } (див. docs/services/character-sheet.md).
   async addSpell(characterId, spellId, progress = {}) {
     const { data } = await api.post(`${BASE}/${characterId}/spells`, { spell_id: spellId, ...progress });
     return data.spell;
@@ -183,7 +183,7 @@ const characterApi = {
     return data.abilities;
   },
 
-  // progress — { form_tier?, primary_form?, mastered_forms? }, як у addSpell.
+  // progress — { form_tier? }, як у addSpell.
   async addAbility(characterId, abilityId, progress = {}) {
     const { data } = await api.post(`${BASE}/${characterId}/abilities`, { ability_id: abilityId, ...progress });
     return data.ability;

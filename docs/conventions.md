@@ -48,6 +48,20 @@ services/<name>/
 
 Базові таблиці листа (кубики здоровʼя за Тілобудовою, мінімуми рівнів, героїчні дії за Мудрістю, множник архетипу) є і на frontend (`constants/characterSheet.js`), і в character-sheet (`src/rules/stats.js`) — серверу вони потрібні для відпочинку. Таблиці **станів** — лише в `character-sheet/src/rules/conditions.js`; клієнти отримують обчислений блок `effects`, профілі кидків `roll_profiles` (`src/rules/modifiers.js` — стани разом із модифікаторами відкритих вузлів дерева) і тексти `condition_levels`.
 
+### 20 навичок персонажа
+
+Пʼять характеристик по чотири навички — однакові ключі (`skill_key`) й порядок на frontend (`constants/characterSheet.js`, `CHARACTERISTICS`), у `character_sheet.skills` та в обчислених стат-блоках істот/НІПів (`bestiary`/`npcs`, `src/dto/stat-block.dto.js`, `SKILLS` — там замість власного значення навичка показує кубик керуючого атрибута, `{1: 'd4', 2: 'd6', 3: 'd8', 4: 'd10', 5: 'd12', 6: 'd20'}`).
+
+| Характеристика | Навички (`skill_key` — назва) |
+|---|---|
+| Спритність (`agility`) | `evasion` — Ухилення, `acrobatics` — Акробатика, `stealth` — Непомітність, `sleight_of_hand` — Вправність рук |
+| Тілобудова (`physique`) | `strength` — Сила, `immunity` — Імунітет, `magic_sense` — Чуття магії, `endurance` — Витривалість |
+| Інтелект (`intellect`) | `history` — Історія, `nature` — Природа, `erudition` — Ерудиція, `mysticism` — Містицизм |
+| Мудрість (`wisdom`) | `intuition` — Інтуїція, `spellcasting` — Чарування, `cleverness` — Кмітливість, `perception` — Спостережливість |
+| Харизма (`charisma`) | `will` — Воля, `deception` — Обман, `artistry` — Артистизм, `persuasion` — Переконливість |
+
+Ці самі 20 ключів — цілі модифікаторів дерева розвитку (`skill_tree.nodes.modifiers.target` і `cast_skill_options.skill_key`, [skill-tree](services/skill-tree.md)) та профілів кидків листа (`roll_profiles`, [character-sheet](services/character-sheet.md)); там до навичок додаються 6 бойових цілей, що навичками не є: `initiative`, `attack`, `damage_dice`, `death_save`, `endurance_timer`, `immunity_check`.
+
 ## Каталоги з власниками (вміння, заклинання, спорядження, колекції…)
 
 Повторюваний набір можливостей у [abilities](services/abilities.md), [spellbook](services/spellbook.md), [equipment](services/equipment.md) та їхніх колекціях:

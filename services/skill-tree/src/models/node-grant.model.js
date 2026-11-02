@@ -8,9 +8,10 @@ const pool = require('../config/db');
 // item_id is a bare cross-service UUID (abilities.*), no FK —
 // same convention as nodes.effect / entries.prerequisite_node_ids.
 // `form_key` (abilities only): null — every form of the entry; else
-// the key of one form ('main', 'primitive', 'perfected' or an alternative
-// form's id). Not validated against the entry here (cross-service) — a key
-// that no longer exists falls back to the main form when applied.
+// the key of one form ('main', 'primitive' or 'perfected' — migration 117
+// dropped alternative forms, so no other key shape exists anymore). Not
+// validated against the entry here (cross-service) — a key that no longer
+// exists falls back to the main form when applied.
 const VALID_KINDS = ['ability', 'ability_collection'];
 const FORM_KINDS = ['ability'];
 const VALID_MODES = ['grant', 'unlock'];

@@ -21,10 +21,10 @@
 | GET | `/` | лише логін | query: `include=campaigns` | `{ characters: [...] }` — свої (адмін: усі); з `include=campaigns` ще й персонажі кампаній, де користувач — ГМ, з `gm_campaigns` |
 | GET | `/community` | лише логін | query: `limit` (15) | `{ characters }` — публічні персонажі інших не-адмінів (рейл «Творіння спільноти») |
 | GET | `/config` | лише логін | — | довідники листа: `{ conditions, currencies, races, condition_levels }` (перші три — з `admin.site_configs`; `condition_levels` — тексти ефектів станів по рівнях з `rules/conditions.js`) |
-| GET | `/effects` | лише логін; віддає лише видимих персонажів (власник, ГМ кампанії, учасник тієї ж кампанії, адмін) | query: `ids=a,b` (до 50 UUID) | `{ characters: { [id]: { effects, timer, roll_profiles, weapons, conditions, heroic_left } } }` — невидимі id мовчки пропускаються (трекер бою). `weapons` — `[{ equipment_id, name, damage_die, modifier, mastered }]`, щоб трекер міг запропонувати зброю у виборі атаки; модифікатори дерева й зброю читають пакетними запитами (`treeModifiersForMany`, `EquipmentModel.weaponsForMany`), інакше вийшов би N+1 на кожного комбатанта |
+| GET | `/effects` | лише логін; віддає лише видимих персонажів (власник, ГМ кампанії, учасник тієї ж кампанії, адмін) | query: `ids=a,b` (до 50 UUID) | `{ characters: { [id]: { effects, timer, roll_profiles, cast_skill_options, weapons, spells, spell_access, conditions, archetype, current_magic, heroic_left } } }` — невидимі id мовчки пропускаються (трекер бою). `weapons` — `[{ equipment_id, name, damage_die, modifier, mastered }]`; `spells` — лише бойові заклинання персонажа (для кастування з трекера, `POST /:id/combat/cast`); усе читається пакетними запитами на весь список id (`treeModifiersForMany`, `treeCastSkillOptionsForMany`, `EquipmentModel.weaponsForMany`, `combatSpellsForMany`, `treeSpellAccessForMany`), інакше вийшов би N+1 на кожного комбатанта |
 | POST | `/timer/advance` | **лише ГМ кампанії кожного з персонажів** або `admin` (власник — ні) | `{ character_ids: [uuid], hours (0 < h ≤ 1000), source_key? }` | `{ results: [{ character_id, name, skipped, reason?, hours_added, timer_speed, checks, fatigue_before, fatigue_after, death_scale, timer }] }` / `400` / `403` на весь запит. Повторний `source_key` для персонажа → `skipped: true, reason: 'already_applied'` |
 | POST | `/` | лише логін | `{ name, archetype, race_id, people_id?, skills? }` | `201 { character }` / `400` (бракує поля, раса чи підвид недоступні) |
-| GET | `/:id` | читання листа | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, effects, timer, roll_profiles, potions, campaign_ids, is_owner, is_gm, is_spell_master }` (`character.last_rest` — останній відпочинок; `potions` — звикання до зілля: `{ habit_rank, habituated, next_die, excess_portions }`) |
+| GET | `/:id` | читання листа | — | `{ character, skills, spells, tree, equipment, abilities, rituals, spell_access, cast_skill_options, effects, timer, roll_profiles, potions, campaign_ids, is_owner, is_gm, is_spell_master }` (`character.last_rest` — останній відпочинок; `potions` — звикання до зілля: `{ habit_rank, habituated, next_die, excess_portions }`; `cast_skill_options` — альтернативні навички чарування, відкриті деревом, нема в публічному листі) |
 | PUT | `/:id` | автор запису | поля `characters` (див. модель); поля таймера (`rest_timer_hours`, `timer_checks_*`) і `last_rest` → `400` | `{ character }`; якщо є `conditions` — нормалізація (див. нижче), відповідь `{ character, effects, skills? }` (`skills` — коли Травма 5 щойно знизила Тілобудову); `400` — некоректні стани, блок Втоми 5, `death_scale` поза −3…3 |
 | PUT | `/:id/people` | автор запису | `{ people_id: uuid \| null }` | зміна/зняття підвиду; бонуси до навичок застосовуються дельтою; `400` якщо підвид не відкрито для раси |
 | POST | `/:id/duplicate` | автор запису | `{ name?, archetype?, race_id? }` | `201 { character }` — копія, опційно з іншою расою/архетипом |
@@ -38,8 +38,8 @@
 | PUT | `/:id/skills` | автор запису | `{ updates: [{ skill_key, value?, progress_marks?, base_value? }] }` | `{ skills }` |
 | PATCH | `/:id/skills/:key` | автор запису | `{ value?, progress_marks?, base_value? }` — клампуються (`value`/`base_value` 0–12, `progress_marks` 0–4) | `{ skill }` |
 | GET | `/:id/spells` | лише логін | — | `{ spells }` |
-| POST | `/:id/spells` | автор запису | `{ spell_id, form_tier?, primary_form?, mastered_forms? }` | `201 { spell }` / `400` (некоректні форми) / `403` (дерево не відкрило традицію чи складність; `missing`) / `404` (заклинання невидиме) |
-| PATCH | `/:id/spells/:spellId` | автор запису | `{ mastered?, cast_count?, form_tier?, primary_form?, mastered_forms? }` | `{ spell }` / `400` / `404` |
+| POST | `/:id/spells` | автор запису | `{ spell_id, form_tier? }` | `201 { spell }` / `400` (некоректна форма) / `403` (дерево не відкрило традицію чи складність; `missing`) / `404` (заклинання невидиме) |
+| PATCH | `/:id/spells/:spellId` | автор запису | `{ mastered?, cast_count?, form_tier? }` | `{ spell }` / `400` / `404` |
 | DELETE | `/:id/spells/:spellId` | автор запису | — | `{ message }` |
 | GET | `/:id/tree` | лише логін | — | `{ progress }` |
 | POST | `/:id/tree/:nodeId` | автор запису | `{ via?: 'points' \| 'narrative' }` | `201 { progress, granted: { abilities, spells } }` / `200` якщо вже відкрито / `403` (передумови ребер чи пункти досвіду) / `404` |
@@ -50,8 +50,8 @@
 | DELETE | `/:id/equipment/:equipmentId` | автор запису | — | `{ message }` |
 | POST | `/:id/equipment/:equipmentId/drink` | автор запису | `{ portions }` (1–50) | `{ result, character, item, effects, timer, potions }` — випити порції зілля з запасу (див. «Зілля»); `item: null` — зілля скінчилось і зникло з листа; `400` — більше порцій, ніж є, або зілля без ефекту зцілення; `404` — зілля нема в листі |
 | GET | `/:id/abilities` | лише логін | — | `{ abilities }` |
-| POST | `/:id/abilities` | автор запису | `{ ability_id, form_tier?, primary_form?, mastered_forms? }` | `201 { ability }` / `400` / `403` (вимоги дерева; `missing_node_ids`) / `404` |
-| PATCH | `/:id/abilities/:abilityId` | автор запису | `{ form_tier?, primary_form?, mastered_forms? }` | `{ ability }` / `400` / `404` |
+| POST | `/:id/abilities` | автор запису | `{ ability_id, form_tier? }` | `201 { ability }` / `400` / `403` (вимоги дерева; `missing_node_ids`) / `404` |
+| PATCH | `/:id/abilities/:abilityId` | автор запису | `{ form_tier? }` | `{ ability }` / `400` / `404` |
 | DELETE | `/:id/abilities/:abilityId` | автор запису | — | `{ message }` |
 | GET | `/:id/rituals` | лише логін | — | `{ trackers }` |
 | POST | `/:id/rituals` | автор запису | `{ name, rounds?, participants? }` | `201 { tracker }` |
@@ -149,18 +149,18 @@
 
 ### Освоєння форм (`form-progress.js`)
 
-`form_tier` (`primitive`/`full`/`perfected`, `NULL` без рівневих форм), `primary_form` (`main` або UUID альтернативної) і `mastered_forms` — однакові колонки в `known_spells` і `abilities`. Ключ форми: `main` (↔ `full`), `primitive`, `perfected` або UUID альтернативної. Межі перевіряє `resolveFormProgress` проти форм запису й дозволених дерев (`allowed`).
+`form_tier` (`primitive`/`full`/`perfected`, `NULL` без рівневих форм) — та сама колонка в `known_spells` і `abilities`; ключ форми в дереві — `main` (↔ `full`), `primitive` або `perfected`. Межі перевіряє `resolveFormProgress` проти форм запису й дозволених дерев (`allowed`). До міграції 117 тут ще були `primary_form`/`mastered_forms` — відстежували, яку з **альтернативних** форм гравець обрав і які освоїв; відколи альтернативні форми прибрано (замінені посиланнями `/:id/related` на окремі записи, [abilities](abilities.md)/[spellbook](spellbook.md)), цей вибір більше не існує, лишився лише рівневий `form_tier`.
 
 ## Схема БД (`character_sheet`)
 
-Створюється в `database/init/04-character-sheet.sql`, далі міграції (зокрема 5, 7, 10, 12, 16, 27, 69–70, 81, 85, 88–91, 95–96, 107, 109 — три стани й міграція даних старих ключів, 111 — зілля). Усі дочірні таблиці мають `character_id UUID REFERENCES character_sheet.characters(id) ON DELETE CASCADE`. Каталожні id (`spell_id`, `equipment_id`, `ability_id`, `node_id`, `race_id`, `people_id`) — голі UUID без FK; моделі з'єднують чужі схеми `LEFT JOIN` під час читання.
+Створюється в `database/init/04-character-sheet.sql`, далі міграції (зокрема 5, 7, 10, 12, 16, 27, 69–70, 81, 85, 88–91, 95–96, 107, 109 — три стани й міграція даних старих ключів, 111 — зілля, 117 — прибрала `primary_form`/`mastered_forms`). Усі дочірні таблиці мають `character_id UUID REFERENCES character_sheet.characters(id) ON DELETE CASCADE`. Каталожні id (`spell_id`, `equipment_id`, `ability_id`, `node_id`, `race_id`, `people_id`) — голі UUID без FK; моделі з'єднують чужі схеми `LEFT JOIN` під час читання.
 
 | Таблиця | Призначення |
 |---|---|
 | `characters` | `user_id`, `name`, `archetype` (fighter/spellcaster/rogue), `race` (застаріле) + `race_id`, `people_id`, `people_bonus JSONB`, `is_public`, `backstory`, `notes`, вітали (`current_hp`, `current_magic`, `temp_hp`, `death_scale` −3…3 або `NULL`, `heroic_actions_used`, `health_dice_values[]`), `conditions JSONB` (`[{ type, level, skill_keys? }]`), таймер діяльності (`rest_timer_hours`, `timer_checks_done`, `timer_checks_passed`), `last_rest JSONB`, звикання до зілля (`potion_habit_rank`, `potion_habituated`, `potion_excess_portions`, міграція 111), `experience_points` (баланс), `money JSONB`, `spell_bonus`, `defense_bonus`, натхнення (`inspiration_used`, `narrative_inspiration_die`, `rogue_inspiration_die`, `rogue_inspiration_given_to`), `luck_current`/`luck_max`, `image_url`, `image_crop` |
-| `skills` | 20 фіксованих навичок на персонажа: `value` 0–12, `base_value` 0–12 (знімок після створення), `progress_marks` 0–4; унікальні за `(character_id, skill_key)` |
-| `known_spells` | прогрес по заклинанню: `mastered`, `cast_count`, `form_tier`, `primary_form`, `mastered_forms`, `gm_granted` |
-| `abilities` | вміння (і маневри) листа: `ability_id`, `form_tier`, `primary_form`, `mastered_forms` |
+| `skills` | 20 фіксованих навичок на персонажа (повний перелік ключів і назв — [conventions](../conventions.md#20-навичок-персонажа)): `value` 0–12, `base_value` 0–12 (знімок після створення), `progress_marks` 0–4; унікальні за `(character_id, skill_key)` |
+| `known_spells` | прогрес по заклинанню: `mastered`, `cast_count`, `form_tier`, `gm_granted` |
+| `abilities` | вміння (і маневри) листа: `ability_id`, `form_tier` |
 | `tree_progress` | відкриті вузли (`node_id` → `skill_tree.nodes`), `unlocked_at`; унікальні за `(character_id, node_id)` |
 | `equipment` | прив'язане спорядження (`equipment_id` → одна з пʼяти таблиць [equipment](equipment.md)): `mastered`, `is_equipped` (захист = **одна** екіпірована броня + `defense_bonus`); для зіль — `containers`, `open_portions` (міграція 111). Лічильник `mastery_count` (0–3) прибрала міграція 115: книга правил (4.2) вважає зброю освоєною після першого успішного використання, тож лишився один прапорець — його й так єдиний показував фронтенд |
 | `ritual_trackers` | трекери ритуалів: `name`, `rounds`, `participants` (JSONB `[{name, successes: [bool,...]}]`) |

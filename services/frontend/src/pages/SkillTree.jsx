@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch, Palette,
+  X, Link2, Plus, Download, Upload, Pencil, Trash2, Maximize2, GitBranch, Palette, Copy,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import skillTreeApi from '../api/skillTree';
@@ -13,6 +13,7 @@ import CastSkillOptionsPicker from '../components/CastSkillOptionsPicker';
 import NodeModifiersPicker, { NodeModifierList } from '../components/NodeModifiersPicker';
 import traditionsApi from '../api/traditions';
 import { downloadJsonFile } from '../utils/downloadJson';
+import { buildSkillTreeImportTemplate } from '../utils/skillTreeImportTemplate';
 import { ARCHETYPES, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK } from '../constants/characterSheet';
 import { isIconUrl } from '../constants/maps';
 import { useTheme } from '../context/ThemeContext';
@@ -449,6 +450,15 @@ export default function SkillTree() {
     );
   };
 
+  const handleCopyTemplate = async () => {
+    try {
+      await navigator.clipboard.writeText(buildSkillTreeImportTemplate());
+      showToast('success', 'Шаблон скопійовано');
+    } catch {
+      showToast('error', 'Не вдалось скопіювати шаблон');
+    }
+  };
+
   // Export one node — optionally with every node reachable from it (its
   // branches). Client-side: we already hold the whole graph.
   const handleExportNode = (node) => {
@@ -577,6 +587,7 @@ export default function SkillTree() {
               <IconBtn icon={Palette} label="Вигляд" onClick={() => setViewSheetOpen(true)} title="Розкладка та фонове зображення" />
               <IconBtn icon={Plus} label="Вузол" onClick={openNewNodeForm} primary />
               <IconBtn icon={Download} label="Експорт" onClick={handleExport} title="Експорт у JSON" />
+              <IconBtn icon={Copy} label="Шаблон" onClick={handleCopyTemplate} title="Скопіювати шаблон імпорту" />
               <label
                 className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-dim"
                 title="Імпорт з JSON"
