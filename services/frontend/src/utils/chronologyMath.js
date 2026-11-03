@@ -125,6 +125,13 @@ export function eventOccursOnDay(event, cell, months, firstDayOffset, weekdayCou
   const hasEnd = eventHasEnd(event);
   if (mode === 'none' && hasEnd) return false;
 
+  // Межі повторюваності (рік від/по, міграція 126) — за межами них подія не
+  // повторюється взагалі, незалежно від виду повторення.
+  if (event.recurrence !== 'none') {
+    if (event.recurrence_start_year != null && cell.year < Number(event.recurrence_start_year)) return false;
+    if (event.recurrence_end_year != null && cell.year > Number(event.recurrence_end_year)) return false;
+  }
+
   switch (event.recurrence) {
     case 'yearly':
       return event.month_id === cell.monthId && Number(event.day) === cell.day;

@@ -159,8 +159,18 @@ export function eventOccurrenceDates(event, calendarsById, worldMin, worldMax) {
   if (!Number.isFinite(worldMin) || !Number.isFinite(worldMax)) return [];
   const tl = makeTimeline(owner);
   const offset = calendarOffset(owner);
-  const fromT = Math.floor(worldMin) + offset;
-  const toT = Math.min(Math.ceil(worldMax) + offset, fromT + MAX_SCAN_DAYS);
+  let fromT = Math.floor(worldMin) + offset;
+  let toT = Math.ceil(worldMax) + offset;
+  // Межі повторюваності (рік від/по) звужують діапазон скану ще до
+  // MAX_SCAN_DAYS — eventOccursOnDay однаково відхилить дні поза ними, але
+  // звужений діапазон рахується швидше й не з'їдає MAX_SCAN_DAYS даремно.
+  if (event.recurrence_start_year != null) {
+    fromT = Math.max(fromT, totalDaysSinceEpoch(tl.months, Number(event.recurrence_start_year), 0, 1));
+  }
+  if (event.recurrence_end_year != null) {
+    toT = Math.min(toT, totalDaysSinceEpoch(tl.months, Number(event.recurrence_end_year) + 1, 0, 1) - 1);
+  }
+  toT = Math.min(toT, fromT + MAX_SCAN_DAYS);
   const moons = owner.moons || owner.preview_moons || [];
   const results = [];
   for (let T = fromT; T <= toT && results.length < MAX_OCCURRENCES; T++) {
@@ -238,6 +248,8 @@ export function buildEventsExport({ calendars, events, locationsById, characters
       recurrence: e.recurrence,
       recurrence_period_days: period,
       recurrence_interval: interval,
+      recurrence_start_year: e.recurrence !== 'none' && e.recurrence_start_year != null ? Number(e.recurrence_start_year) : null,
+      recurrence_end_year: e.recurrence !== 'none' && e.recurrence_end_year != null ? Number(e.recurrence_end_year) : null,
       moon: moon ? moon.name : null,
       moon_phase: moon && e.moon_phase != null ? Number(e.moon_phase) : null,
       duration_display: hasEnd ? e.duration_display : null,

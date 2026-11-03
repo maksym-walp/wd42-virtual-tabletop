@@ -121,6 +121,7 @@ const ChronologyEventModel = {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
       location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids, event_type,
+      recurrence_start_year, recurrence_end_year,
     } = data;
     const rec = recurrenceFields(data);
 
@@ -128,13 +129,15 @@ const ChronologyEventModel = {
       `INSERT INTO chronology.calendar_events
          (calendar_id, campaign_id, name, description, color, is_public, year, month_id, day, recurrence,
           location_id, region, end_year, end_month_id, end_day, duration_display, event_type,
-          recurrence_interval, moon_id, moon_phase)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          recurrence_interval, moon_id, moon_phase, recurrence_start_year, recurrence_end_year)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING *`,
       [calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
         year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
         location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
-        duration_display ?? 'start', event_type || null, ...rec]
+        duration_display ?? 'start', event_type || null, ...rec,
+        (recurrence ?? 'none') === 'none' ? null : recurrence_start_year ?? null,
+        (recurrence ?? 'none') === 'none' ? null : recurrence_end_year ?? null]
     );
     const event = rows[0];
     await setParticipants(event.id, participant_ids);
@@ -149,8 +152,10 @@ const ChronologyEventModel = {
       campaign_id, name, description, color, is_public,
       year, month_id, day, recurrence,
       location_id, region, end_year, end_month_id, end_day, duration_display, participant_ids, event_type,
+      recurrence_start_year, recurrence_end_year,
     } = data;
     const rec = recurrenceFields(data);
+    const recValue = recurrence ?? 'none';
 
     const { rows } = await pool.query(
       `UPDATE chronology.calendar_events
@@ -158,13 +163,16 @@ const ChronologyEventModel = {
            year=$8, month_id=$9, day=$10, recurrence=$11,
            location_id=$12, region=$13, end_year=$14, end_month_id=$15, end_day=$16,
            duration_display=$17, event_type=$19,
-           recurrence_interval=$20, moon_id=$21, moon_phase=$22, updated_at=NOW()
+           recurrence_interval=$20, moon_id=$21, moon_phase=$22,
+           recurrence_start_year=$23, recurrence_end_year=$24, updated_at=NOW()
        WHERE id=$1 AND calendar_id=$2
        RETURNING *`,
       [id, calendarId, campaign_id ?? null, name, description ?? null, color, is_public ?? true,
-        year ?? null, month_id ?? null, day ?? null, recurrence ?? 'none',
+        year ?? null, month_id ?? null, day ?? null, recValue,
         location_id ?? null, region ?? null, end_year ?? null, end_month_id ?? null, end_day ?? null,
-        duration_display ?? 'start', newCalendarId, event_type || null, ...rec]
+        duration_display ?? 'start', newCalendarId, event_type || null, ...rec,
+        recValue === 'none' ? null : recurrence_start_year ?? null,
+        recValue === 'none' ? null : recurrence_end_year ?? null]
     );
     if (!rows[0]) return null;
     await setParticipants(id, participant_ids);

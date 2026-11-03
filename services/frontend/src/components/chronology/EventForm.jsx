@@ -51,6 +51,10 @@ export default function EventForm({
   const [moonId, setMoonId] = useState(event?.moon_id || '');
   const [moonPhase, setMoonPhase] = useState(String(event?.moon_phase ?? '50'));
   const ownerMoons = owner?.preview_moons || [];
+  // Межі повторюваності (рік від/по, обидва незалежно необов'язкові) — лише рік,
+  // без місяця/дня: за межами них подія не повторюється взагалі.
+  const [recurrenceStartYear, setRecurrenceStartYear] = useState(String(event?.recurrence_start_year ?? ''));
+  const [recurrenceEndYear, setRecurrenceEndYear] = useState(String(event?.recurrence_end_year ?? ''));
 
   const [year, setYear] = useState(String(event?.year ?? initialDate?.year ?? ''));
   const [monthId, setMonthId] = useState(event?.month_id || initialDate?.monthId || '');
@@ -128,6 +132,11 @@ export default function EventForm({
         return;
       }
     }
+    if (recurrence !== 'none' && recurrenceStartYear !== '' && recurrenceEndYear !== ''
+      && Number(recurrenceEndYear) < Number(recurrenceStartYear)) {
+      setError('Рік завершення повторюваності не може бути раніше року початку');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -146,6 +155,8 @@ export default function EventForm({
         recurrence_interval: stepped ? Number(stepCount) : null,
         moon_id: recurrence === 'lunar' ? moonId : null,
         moon_phase: recurrence === 'lunar' ? Number(moonPhase) : null,
+        recurrence_start_year: recurrence !== 'none' && recurrenceStartYear !== '' ? Number(recurrenceStartYear) : null,
+        recurrence_end_year: recurrence !== 'none' && recurrenceEndYear !== '' ? Number(recurrenceEndYear) : null,
         location_id: placeMode === 'location' ? (locationId || null) : null,
         region: placeMode === 'region' ? (region.trim() || null) : null,
         end_year: isDuration && endYear !== '' ? Number(endYear) : null,
@@ -314,6 +325,16 @@ export default function EventForm({
           </Field>
           <Field label="Кожні, циклів" hint="Відлік — від циклу дати події">
             <input type="number" min={1} step={1} className={inputClass} value={stepCount} onChange={(e) => setStepCount(e.target.value)} />
+          </Field>
+        </div>
+      )}
+      {recurrence !== 'none' && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Повторюється з року" hint="Не вказано — від завжди">
+            <input type="number" step={1} className={inputClass} value={recurrenceStartYear} onChange={(e) => setRecurrenceStartYear(e.target.value)} />
+          </Field>
+          <Field label="Повторюється по рік" hint="Не вказано — назавжди">
+            <input type="number" step={1} className={inputClass} value={recurrenceEndYear} onChange={(e) => setRecurrenceEndYear(e.target.value)} />
           </Field>
         </div>
       )}

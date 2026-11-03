@@ -37,6 +37,9 @@ ${monthList}
 //   moon_id            — id супутника ЦЬОГО календаря — обов'язково для recurrence "lunar":
 ${moonList}
 //   moon_phase         — число від 0 до 100 (не включно) — відсоток циклу супутника, лише для "lunar"
+//   recurrence_start_year/recurrence_end_year — лише рік, обидва незалежно необов'язкові —
+//                          межі повторюваності (за ними подія не повторюється); сенс лише
+//                          якщо recurrence не "none"
 //   end_year/end_month_id/end_day — те саме, що year/month_id/day, для кінця тривалої події
 //   duration_display   — один з: start, start_end, every_day, none
 //   location_id        — uuid локації (сервіс maps) або null — взаємовиключне з region
@@ -57,6 +60,8 @@ ${moonList}
     "recurrence_interval": null,
     "moon_id": null,
     "moon_phase": null,
+    "recurrence_start_year": null,
+    "recurrence_end_year": null,
     "end_year": null,
     "end_month_id": null,
     "end_day": null,

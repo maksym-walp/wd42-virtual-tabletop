@@ -37,6 +37,21 @@ async function validateBody(body) {
   if (!VALID_DURATION_DISPLAY.includes(duration_display)) {
     return `duration_display має бути одним з: ${VALID_DURATION_DISPLAY.join(', ')}`;
   }
+  // Межі повторюваності (рік від/по, міграція 126) — лише для повторюваної
+  // події; обидва незалежно необов'язкові.
+  const { recurrence_start_year, recurrence_end_year } = body;
+  if (recurrence === 'none' && (recurrence_start_year != null || recurrence_end_year != null)) {
+    return 'recurrence_start_year/recurrence_end_year мають сенс лише для повторюваної події';
+  }
+  if (recurrence_start_year != null && !Number.isInteger(recurrence_start_year)) {
+    return 'recurrence_start_year має бути цілим числом';
+  }
+  if (recurrence_end_year != null && !Number.isInteger(recurrence_end_year)) {
+    return 'recurrence_end_year має бути цілим числом';
+  }
+  if (recurrence_start_year != null && recurrence_end_year != null && recurrence_end_year < recurrence_start_year) {
+    return 'recurrence_end_year має бути не меншим за recurrence_start_year';
+  }
   if (day !== undefined && day !== null && !(day > 0)) {
     return 'day має бути додатним числом';
   }

@@ -169,6 +169,48 @@ describe('ChronologyEventController.create', () => {
     expect(ChronologyEventModel.create).not.toHaveBeenCalled();
   });
 
+  it('returns 400 when recurrence_start_year/end_year are set on a non-recurring event', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    const req = mockReq({
+      params: { id: 'c1' },
+      body: { name: 'Битва', color: '#ff0000', recurrence_start_year: 100 },
+    });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when recurrence_end_year is before recurrence_start_year', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    const req = mockReq({
+      params: { id: 'c1' },
+      body: { name: 'Фестиваль', color: '#ff0000', recurrence: 'yearly', recurrence_start_year: 200, recurrence_end_year: 100 },
+    });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ChronologyEventModel.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a recurring event with recurrence_start_year/end_year bounds', async () => {
+    ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
+    ChronologyEventModel.create.mockResolvedValue({ id: 'e1' });
+    const req = mockReq({
+      params: { id: 'c1' },
+      body: { name: 'Фестиваль', color: '#ff0000', recurrence: 'yearly', recurrence_start_year: 100, recurrence_end_year: 200 },
+    });
+    const res = mockRes();
+
+    await ChronologyEventController.create(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
   it('returns 400 when both location_id and region are set', async () => {
     ChronologyModel.findByIdRaw.mockResolvedValue({ id: 'c1' });
     const req = mockReq({

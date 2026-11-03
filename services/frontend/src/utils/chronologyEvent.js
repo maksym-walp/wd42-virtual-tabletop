@@ -12,20 +12,31 @@ export const RECURRENCE_LABELS = {
   interval_days: 'Кожні N днів', lunar: 'За фазою супутника',
 };
 
+// Підпис меж повторюваності (рік від/по, міграція 126) — порожній рядок, якщо
+// жодної межі не задано.
+function recurrenceYearBoundsLabel(event) {
+  const { recurrence_start_year: from, recurrence_end_year: to } = event;
+  if (from == null && to == null) return '';
+  if (from != null && to != null) return `, ${from}–${to}`;
+  if (from != null) return `, з ${from}`;
+  return `, по ${to}`;
+}
+
 // Підпис повторюваності конкретної події; moons — супутники її календаря
 // (для назви супутника).
 export function recurrenceLabel(event, moons = []) {
   const n = Number(event.recurrence_interval) || 1;
+  const bounds = recurrenceYearBoundsLabel(event);
   if (event.recurrence === 'interval_days') {
-    return n === 1 ? 'Щодня' : `Кожні ${n} ${pluralizeUk(n, ['день', 'дні', 'днів'])}`;
+    return (n === 1 ? 'Щодня' : `Кожні ${n} ${pluralizeUk(n, ['день', 'дні', 'днів'])}`) + bounds;
   }
   if (event.recurrence === 'lunar') {
     const moon = moons.find((m) => m.id === event.moon_id);
     const phase = event.moon_phase == null ? '' : `, фаза ${Number(event.moon_phase)}%`;
     const every = n === 1 ? 'щоцикла' : `кожні ${n} ${pluralizeUk(n, ['цикл', 'цикли', 'циклів'])}`;
-    return `${moon ? moon.name : 'Супутник видалено'}${phase}, ${every}`;
+    return `${moon ? moon.name : 'Супутник видалено'}${phase}, ${every}${bounds}`;
   }
-  return RECURRENCE_LABELS[event.recurrence] || event.recurrence;
+  return (RECURRENCE_LABELS[event.recurrence] || event.recurrence) + bounds;
 }
 
 // One side of an event's date (start or end): "day month, year era", falling
