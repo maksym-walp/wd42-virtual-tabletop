@@ -24,6 +24,12 @@ const campaignApi = {
     return data.campaign;
   },
 
+  // Звукова панель Ширми: [{ label, url }], поки лише посилання на плейлисти.
+  async updateSoundLinks(id, sound_links) {
+    const { data } = await api.patch(`${BASE}/${id}/sound-links`, { sound_links });
+    return data.campaign;
+  },
+
   async updateDescription(id, description) {
     const { data } = await api.patch(`${BASE}/${id}/description`, { description });
     return data.campaign;

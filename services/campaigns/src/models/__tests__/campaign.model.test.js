@@ -123,6 +123,15 @@ describe('CampaignModel notes updates', () => {
     expect(params).toEqual(['c1', 'secret']);
   });
 
+  it('updateSoundLinks updates sound_links only', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', sound_links: [{ label: 'Бій', url: 'https://x' }] }] });
+    const updated = await CampaignModel.updateSoundLinks('c1', [{ label: 'Бій', url: 'https://x' }]);
+    expect(updated).toEqual({ id: 'c1', sound_links: [{ label: 'Бій', url: 'https://x' }] });
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SET sound_links = \$2::jsonb/);
+    expect(params).toEqual(['c1', JSON.stringify([{ label: 'Бій', url: 'https://x' }])]);
+  });
+
   it('updateDescription updates description only', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'c1', description: 'A tale of...' }] });
     const updated = await CampaignModel.updateDescription('c1', 'A tale of...');

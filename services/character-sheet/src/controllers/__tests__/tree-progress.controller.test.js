@@ -106,7 +106,7 @@ describe('TreeProgressController.lock', () => {
 
   it('404s when the node was not unlocked', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    TreeProgressModel.lock.mockResolvedValue(false);
+    TreeProgressModel.lock.mockResolvedValue({ ok: false, status: 404, message: 'Вузол не був відкритий' });
     const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
     const res = mockRes();
 
@@ -115,15 +115,31 @@ describe('TreeProgressController.lock', () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it('confirms lock on success', async () => {
+  it('409s with dependent node names when something else still requires it', async () => {
     authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
-    TreeProgressModel.lock.mockResolvedValue(true);
+    TreeProgressModel.lock.mockResolvedValue({ ok: false, status: 409, message: 'Спочатку скасуйте залежні вузли: Child' });
+    const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
+    const res = mockRes();
+
+    await TreeProgressController.lock(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Спочатку скасуйте залежні вузли: Child' });
+  });
+
+  it('confirms lock on success and reports removed/downgraded abilities', async () => {
+    authorizeCharacterWrite.mockResolvedValue({ id: 'c1' });
+    TreeProgressModel.lock.mockResolvedValue({ ok: true, removedAbilities: ['a1'], downgradedAbilities: [] });
     const req = mockReq({ params: { id: 'c1', nodeId: 'n1' } });
     const res = mockRes();
 
     await TreeProgressController.lock(req, res);
 
     expect(TreeProgressModel.lock).toHaveBeenCalledWith('c1', 'n1');
-    expect(res.json).toHaveBeenCalledWith({ message: 'Скасовано' });
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Скасовано',
+      removedAbilities: ['a1'],
+      downgradedAbilities: [],
+    });
   });
 });

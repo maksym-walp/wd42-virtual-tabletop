@@ -21,6 +21,7 @@ router.get('/:id', wrap(CampaignController.getOne));
 router.patch('/:id', wrap(CampaignController.rename));
 router.delete('/:id', wrap(CampaignController.remove));
 router.patch('/:id/gm-notes', wrap(CampaignController.updateGmNotes));
+router.patch('/:id/sound-links', wrap(CampaignController.updateSoundLinks));
 router.patch('/:id/description', wrap(CampaignController.updateDescription));
 router.patch('/:id/date', wrap(CampaignController.updateCurrentDate));
 router.post('/:id/invite-code/regenerate', wrap(CampaignController.regenerateInviteCode));

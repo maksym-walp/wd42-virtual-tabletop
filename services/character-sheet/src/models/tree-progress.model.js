@@ -11,29 +11,28 @@ const higherTierSql = (table) => `CASE
     ELSE COALESCE(${table}.form_tier, 'full')
   END`;
 
-// Expand a node's grant links (mode='grant') into concrete abilities and
-// insert them into the character's sheet. Collections are resolved to their
-// members (every form). Spells are never granted by nodes — a node opens
-// spell traditions / complexity instead (spell-access.model.js). A link's
-// form_key (null = every form) decides which tier the character gets — see
-// tierForKeys; an entry already on the sheet keeps its tier and only rises
-// to a higher one. Runs on the caller's open transaction client. Visibility
-// and the entries' own prerequisites are intentionally NOT checked — the GM
-// wired the link on purpose.
-async function applyGrants(client, characterId, nodeId) {
-  const { rows: grants } = await client.query(
-    `SELECT item_kind, item_id, form_key FROM skill_tree.node_grants
-     WHERE node_id = $1 AND mode = 'grant'`,
-    [nodeId]
-  );
-
-  // ability id -> null (every form) | Set of form keys
+// Expand a set of nodes' grant links (mode='grant') into the abilities/form
+// keys they collectively want. Collections are resolved to their members
+// (every form). Spells are never granted by nodes — a node opens spell
+// traditions / complexity instead (spell-access.model.js). Runs on the
+// caller's open transaction client. Visibility and the entries' own
+// prerequisites are intentionally NOT checked — the GM wired the link on
+// purpose. Returns Map<ability_id, null (every form) | Set<form_key>>.
+async function grantWantsFor(client, nodeIds) {
   const wanted = new Map();
+  if (!nodeIds.length) return wanted;
+
   const want = (id, formKey) => {
     if (wanted.has(id) && wanted.get(id) === null) return;
     if (formKey == null) { wanted.set(id, null); return; }
     wanted.set(id, (wanted.get(id) || new Set()).add(formKey));
   };
+
+  const { rows: grants } = await client.query(
+    `SELECT item_kind, item_id, form_key FROM skill_tree.node_grants
+     WHERE node_id = ANY($1::uuid[]) AND mode = 'grant'`,
+    [nodeIds]
+  );
 
   for (const g of grants) {
     if (g.item_kind === 'ability') want(g.item_id, g.form_key);
@@ -46,6 +45,14 @@ async function applyGrants(client, characterId, nodeId) {
     }
   }
 
+  return wanted;
+}
+
+// A link's form_key (null = every form) decides which tier the character
+// gets — see tierForKeys; an entry already on the sheet keeps its tier and
+// only rises to a higher one.
+async function applyGrants(client, characterId, nodeId) {
+  const wanted = await grantWantsFor(client, [nodeId]);
   const granted = { abilities: [], spells: [] };
 
   for (const [id, keys] of wanted) {
@@ -161,13 +168,83 @@ const TreeProgressModel = {
     }
   },
 
+  // Undo an unlock (GM rollback). Also strips any character_sheet.abilities
+  // rows this node's grant-mode links put there — unless another still-
+  // unlocked node grants the same ability, in which case its form_tier is
+  // recomputed down to what the remaining nodes actually grant. Blocks when
+  // another unlocked node still requires this one as a (non-optional)
+  // prerequisite, so the tree never ends up pointing at a locked ancestor.
+  // No experience refund — the amount actually spent isn't tracked per node.
   async lock(characterId, nodeId) {
-    const { rowCount } = await pool.query(
-      `DELETE FROM character_sheet.tree_progress
-       WHERE character_id = $1 AND node_id = $2`,
-      [characterId, nodeId]
-    );
-    return rowCount > 0;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: dependents } = await client.query(
+        `SELECT n.title FROM skill_tree.edges e
+         JOIN character_sheet.tree_progress tp ON tp.node_id = e.target_id AND tp.character_id = $2
+         JOIN skill_tree.nodes n ON n.id = e.target_id
+         WHERE e.source_id = $1 AND e.edge_type != 'optional'`,
+        [nodeId, characterId]
+      );
+      if (dependents.length > 0) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          status: 409,
+          message: `Спочатку скасуйте залежні вузли: ${dependents.map((d) => d.title).join(', ')}`,
+        };
+      }
+
+      const { rowCount } = await client.query(
+        `DELETE FROM character_sheet.tree_progress WHERE character_id = $1 AND node_id = $2`,
+        [characterId, nodeId]
+      );
+      if (rowCount === 0) {
+        await client.query('ROLLBACK');
+        return { ok: false, status: 404, message: 'Вузол не був відкритий' };
+      }
+
+      const removedWants = await grantWantsFor(client, [nodeId]);
+
+      const removedAbilities = [];
+      const downgradedAbilities = [];
+
+      if (removedWants.size > 0) {
+        const { rows: remainingNodes } = await client.query(
+          `SELECT node_id FROM character_sheet.tree_progress WHERE character_id = $1`,
+          [characterId]
+        );
+        const stillWanted = await grantWantsFor(client, remainingNodes.map((r) => r.node_id));
+
+        for (const [id, keys] of removedWants) {
+          if (stillWanted.has(id)) {
+            const otherKeys = stillWanted.get(id);
+            const tiers = (await entryTiers('abilities.entries', id, client)) ?? [];
+            const form_tier = tierForKeys(otherKeys ? [...otherKeys] : null, tiers);
+            await client.query(
+              `UPDATE character_sheet.abilities SET form_tier = $3 WHERE character_id = $1 AND ability_id = $2`,
+              [characterId, id, form_tier]
+            );
+            downgradedAbilities.push(id);
+          } else {
+            const { rowCount: removed } = await client.query(
+              `DELETE FROM character_sheet.abilities WHERE character_id = $1 AND ability_id = $2`,
+              [characterId, id]
+            );
+            if (removed > 0) removedAbilities.push(id);
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+      return { ok: true, removedAbilities, downgradedAbilities };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 };
 

@@ -236,22 +236,103 @@ describe('TreeProgressModel.canUnlock', () => {
 });
 
 describe('TreeProgressModel.lock', () => {
-  it('returns true when a row was deleted', async () => {
-    pool.query.mockResolvedValue({ rowCount: 1 });
+  it('deletes the progress row and commits when nothing else depends on it or was granted', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('JOIN character_sheet.tree_progress')) return Promise.resolve({ rows: [] }); // no dependents
+      if (sql.includes('DELETE FROM character_sheet.tree_progress')) return Promise.resolve({ rowCount: 1 });
+      if (sql.includes('FROM skill_tree.node_grants')) return Promise.resolve({ rows: [] }); // no grants
+      return Promise.resolve({ rows: [] });
+    });
 
     const result = await TreeProgressModel.lock('c1', 'n1');
 
-    expect(result).toBe(true);
-    const [sql, params] = pool.query.mock.calls[0];
-    expect(sql).toMatch(/DELETE FROM character_sheet\.tree_progress/);
-    expect(params).toEqual(['c1', 'n1']);
+    expect(result).toEqual({ ok: true, removedAbilities: [], downgradedAbilities: [] });
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq[0]).toBe('BEGIN');
+    expect(seq[seq.length - 1]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalled();
   });
 
-  it('returns false when the node was not unlocked', async () => {
-    pool.query.mockResolvedValue({ rowCount: 0 });
+  it('blocks and rolls back when another unlocked node still requires it', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('JOIN character_sheet.tree_progress')) return Promise.resolve({ rows: [{ title: 'Child node' }] });
+      return Promise.resolve({ rows: [] });
+    });
 
     const result = await TreeProgressModel.lock('c1', 'n1');
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ ok: false, status: 409, message: 'Спочатку скасуйте залежні вузли: Child node' });
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq).toContain('ROLLBACK');
+    expect(seq).not.toContain('COMMIT');
+    expect(seq.some((s) => s.includes('DELETE FROM character_sheet.tree_progress'))).toBe(false);
+  });
+
+  it('404s and rolls back when the node was not unlocked', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('JOIN character_sheet.tree_progress')) return Promise.resolve({ rows: [] });
+      if (sql.includes('DELETE FROM character_sheet.tree_progress')) return Promise.resolve({ rowCount: 0 });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await TreeProgressModel.lock('c1', 'n1');
+
+    expect(result).toEqual({ ok: false, status: 404, message: 'Вузол не був відкритий' });
+    const seq = client.query.mock.calls.map(([sql]) => sql);
+    expect(seq).toContain('ROLLBACK');
+  });
+
+  it('removes an ability the locked node granted when no other unlocked node grants it', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('JOIN character_sheet.tree_progress')) return Promise.resolve({ rows: [] });
+      if (sql.includes('DELETE FROM character_sheet.tree_progress')) return Promise.resolve({ rowCount: 1 });
+      if (sql.includes('FROM skill_tree.node_grants')) return Promise.resolve({ rows: [{ item_kind: 'ability', item_id: 'a1', form_key: null }] });
+      if (sql.includes('SELECT node_id FROM character_sheet.tree_progress')) return Promise.resolve({ rows: [] }); // nothing else left unlocked
+      if (sql.includes('DELETE FROM character_sheet.abilities')) return Promise.resolve({ rowCount: 1 });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await TreeProgressModel.lock('c1', 'n1');
+
+    expect(result).toEqual({ ok: true, removedAbilities: ['a1'], downgradedAbilities: [] });
+    const del = client.query.mock.calls.find(([sql]) => sql.includes('DELETE FROM character_sheet.abilities'));
+    expect(del[1]).toEqual(['c1', 'a1']);
+  });
+
+  it('downgrades instead of removing when another still-unlocked node also grants the ability', async () => {
+    let grantsCall = 0;
+    client.query.mockImplementation((sql) => {
+      if (sql.includes('JOIN character_sheet.tree_progress')) return Promise.resolve({ rows: [] });
+      if (sql.includes('DELETE FROM character_sheet.tree_progress')) return Promise.resolve({ rowCount: 1 });
+      if (sql.includes('FROM skill_tree.node_grants')) {
+        grantsCall += 1;
+        // First call: the locked node's own wants. Second call: the remaining nodes' wants.
+        return grantsCall === 1
+          ? Promise.resolve({ rows: [{ item_kind: 'ability', item_id: 'a1', form_key: 'perfected' }] })
+          : Promise.resolve({ rows: [{ item_kind: 'ability', item_id: 'a1', form_key: null }] });
+      }
+      if (sql.includes('SELECT node_id FROM character_sheet.tree_progress')) return Promise.resolve({ rows: [{ node_id: 'n2' }] });
+      if (sql.includes('FROM abilities.entries')) return Promise.resolve({ rows: [{ tier_kinds: ['primitive', 'perfected'] }] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await TreeProgressModel.lock('c1', 'n1');
+
+    expect(result).toEqual({ ok: true, removedAbilities: [], downgradedAbilities: ['a1'] });
+    const upd = client.query.mock.calls.find(([sql]) => sql.includes('UPDATE character_sheet.abilities'));
+    // form_key: null on the remaining node's link means "every form" — the
+    // highest tier the entry has, 'perfected' here, not just 'full'.
+    expect(upd[1]).toEqual(['c1', 'a1', 'perfected']);
+  });
+
+  it('rolls back and rethrows on failure', async () => {
+    client.query.mockImplementation((sql) => {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return Promise.resolve();
+      return Promise.reject(new Error('boom'));
+    });
+
+    await expect(TreeProgressModel.lock('c1', 'n1')).rejects.toThrow('boom');
+    expect(client.query.mock.calls.map(([s]) => s)).toContain('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
   });
 });

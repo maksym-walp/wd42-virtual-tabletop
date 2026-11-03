@@ -109,6 +109,16 @@ const CampaignModel = {
     return rows[0] || null;
   },
 
+  // Звукова панель (Ширма, майстер-only): список { label, url }, поки без
+  // відтворення — просто посилання на плейлисти.
+  async updateSoundLinks(id, soundLinks) {
+    const { rows } = await pool.query(
+      `UPDATE campaigns.campaigns SET sound_links = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, JSON.stringify(soundLinks)]
+    );
+    return rows[0] || null;
+  },
+
   async rename(id, name) {
     const { rows } = await pool.query(
       `UPDATE campaigns.campaigns SET name = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,

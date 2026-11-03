@@ -83,21 +83,7 @@ export default function CampaignDetail() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 pb-24 sm:px-6 md:pb-8">
-      <CampaignHeader campaign={campaign} />
-
-      <div className="-mx-4 mb-5 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <div className="flex min-w-max gap-2 border-b border-border">
-          {tabs.map((t) => (
-            <button key={t.key}
-              className={`whitespace-nowrap rounded-t-lg border border-b-0 px-4 py-2 text-sm font-semibold transition-colors ${
-                tab === t.key ? 'border-gold/60 bg-gold/10 text-gold' : 'border-transparent text-text-dim'
-              }`}
-              onClick={() => selectTab(t.key)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CampaignHeader campaign={campaign} tabs={tabs} tab={tab} onSelectTab={selectTab} />
 
       {tab === 'table' && (
         <TableTab

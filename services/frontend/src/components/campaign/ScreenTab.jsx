@@ -3,12 +3,11 @@ import { Link } from 'react-router-dom';
 import { Heart, Sparkles, Shield, Skull, Lock, Dices, Plus } from 'lucide-react';
 import campaignApi from '../../api/campaigns';
 import characterApi from '../../api/characterSheet';
-import useDebounce from '../../hooks/useDebounce';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import SmartTextarea from '../ui/SmartTextarea';
 import useBoard from './useBoard';
 import BoardGrid from './BoardGrid';
+import SoundPanel from './SoundPanel';
 import useCharacterConfig from '../../hooks/useCharacterConfig';
 import {
   computeMaxHp, computeMaxMagic, computePassiveDefense,
@@ -63,40 +62,10 @@ export default function ScreenTab({ campaign, characters, onChange, screenVersio
       </section>
       <section className="min-w-0 lg:col-span-2 xl:col-span-1">
         <div className="xl:sticky xl:top-4">
-          <GmNotes campaign={campaign} onChange={onChange} />
+          <SoundPanel campaign={campaign} onChange={onChange} />
         </div>
       </section>
     </div>
-  );
-}
-
-function GmNotes({ campaign, onChange }) {
-  const [notes, setNotes] = useState(campaign.gm_notes ?? '');
-  const [saving, setSaving] = useState(false);
-
-  const save = useDebounce(async (value) => {
-    setSaving(true);
-    try {
-      const updated = await campaignApi.updateGmNotes(campaign.id, value);
-      onChange((prev) => ({ ...prev, gm_notes: updated.gm_notes }));
-    } finally {
-      setSaving(false);
-    }
-  });
-
-  return (
-    <Card>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="m-0 font-display text-lg text-text">Нотатки майстра</h3>
-        {saving && <span className="text-xs text-text-dim">• Збереження...</span>}
-      </div>
-      <SmartTextarea
-        rows={14}
-        value={notes}
-        onChange={(e) => { setNotes(e.target.value); save(e.target.value); }}
-        placeholder="Сюжетні лінії, таємниці, плани на наступну сесію..."
-      />
-    </Card>
   );
 }
 

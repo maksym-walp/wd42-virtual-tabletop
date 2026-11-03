@@ -21,9 +21,13 @@ const TreeProgressController = {
 
   async lock(req, res) {
     if (!await authorizeCharacterWrite(req, res)) return;
-    const deleted = await TreeProgressModel.lock(req.params.id, req.params.nodeId);
-    if (!deleted) return res.status(404).json({ message: 'Вузол не був відкритий' });
-    res.json({ message: 'Скасовано' });
+    const result = await TreeProgressModel.lock(req.params.id, req.params.nodeId);
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    res.json({
+      message: 'Скасовано',
+      removedAbilities: result.removedAbilities,
+      downgradedAbilities: result.downgradedAbilities,
+    });
   },
 };
 

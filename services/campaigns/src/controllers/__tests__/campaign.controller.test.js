@@ -44,10 +44,10 @@ describe('CampaignController.create', () => {
 });
 
 describe('CampaignController.listMine', () => {
-  it('strips gm_notes from campaigns the user is not GM of, keeps them where they are', async () => {
+  it('strips gm_notes/sound_links from campaigns the user is not GM of, keeps them where they are', async () => {
     CampaignModel.findAllForUser.mockResolvedValue([
-      { id: 'c1', gm_id: 'user-1', gm_notes: 'secret GM stuff', is_gm: true },
-      { id: 'c2', gm_id: 'gm-2', gm_notes: 'other GM secret', is_gm: false },
+      { id: 'c1', gm_id: 'user-1', gm_notes: 'secret GM stuff', sound_links: [{ label: 'x', url: 'y' }], is_gm: true },
+      { id: 'c2', gm_id: 'gm-2', gm_notes: 'other GM secret', sound_links: [{ label: 'x', url: 'y' }], is_gm: false },
     ]);
     const req = mockReq();
     const res = mockRes();
@@ -61,6 +61,7 @@ describe('CampaignController.listMine', () => {
     expect(mine.gm_notes).toBe('secret GM stuff');
     expect(notMine.gm_notes).toBeUndefined();
     expect('gm_notes' in notMine).toBe(false);
+    expect('sound_links' in notMine).toBe(false);
   });
 
   it('returns every campaign with GM access for an admin asking for scope=all', async () => {
@@ -176,6 +177,30 @@ describe('CampaignController.updateGmNotes', () => {
 
     expect(CampaignModel.updateGmNotes).toHaveBeenCalledWith('c1', 'plotting');
     expect(res.json).toHaveBeenCalledWith({ campaign: { id: 'c1', gm_notes: 'plotting' } });
+  });
+});
+
+describe('CampaignController.updateSoundLinks', () => {
+  it('returns 403 when requester is not GM', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    const req = mockReq({ params: { id: 'c1' }, user: { sub: 'not-gm' } });
+    const res = mockRes();
+    await CampaignController.updateSoundLinks(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(CampaignModel.updateSoundLinks).not.toHaveBeenCalled();
+  });
+
+  it('updates sound links for the GM', async () => {
+    CampaignModel.findById.mockResolvedValue({ id: 'c1', gm_id: 'gm-1' });
+    const links = [{ label: 'Бій', url: 'https://x' }];
+    CampaignModel.updateSoundLinks.mockResolvedValue({ id: 'c1', sound_links: links });
+    const req = mockReq({ params: { id: 'c1' }, body: { sound_links: links }, user: { sub: 'gm-1' } });
+    const res = mockRes();
+
+    await CampaignController.updateSoundLinks(req, res);
+
+    expect(CampaignModel.updateSoundLinks).toHaveBeenCalledWith('c1', links);
+    expect(res.json).toHaveBeenCalledWith({ campaign: { id: 'c1', sound_links: links } });
   });
 });
 

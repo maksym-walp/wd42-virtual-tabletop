@@ -332,6 +332,20 @@ export default function CharacterSheet({ publicView = false }) {
     }
   };
 
+  // GM rollback of an already-learned node — the backend also strips any
+  // abilities that node granted and nothing else still grants, so always
+  // pull a fresh sheet rather than patching state optimistically.
+  const lockTreeNode = async (nodeId) => {
+    await characterApi.lockNode(id, nodeId);
+    const fresh = await characterApi.getSheet(id);
+    setData(prev => (prev ? {
+      ...prev,
+      tree: fresh.tree,
+      abilities: fresh.abilities,
+      spells: fresh.spells,
+    } : prev));
+  };
+
   const addSpell    = async (spellId, progress = {}) => {
     if (spells.length >= maxKnownSpells) return;
     const entry = await characterApi.addSpell(id, spellId, progress);
@@ -798,7 +812,9 @@ export default function CharacterSheet({ publicView = false }) {
             tree={data.tree || []}
             experiencePoints={c.experience_points || 0}
             is_owner={is_owner}
+            is_gm={is_gm}
             onUnlock={unlockTreeNode}
+            onLock={lockTreeNode}
             onExperienceChange={(v) => patchCharacter({ experience_points: v })}
             catalog={{
               abilities: allAbilities,

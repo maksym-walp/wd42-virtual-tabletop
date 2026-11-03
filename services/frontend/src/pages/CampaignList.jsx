@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';
 import Field, { inputClass } from '../components/ui/Field';
 import Sheet from '../components/ui/Sheet';
+import CampaignDescription from '../components/campaign/CampaignDescription';
 import { useAuth } from '../context/AuthContext';
 
 const GRID = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
@@ -111,6 +112,7 @@ function CampaignCard({ campaign: c, onClick }) {
           Код запрошення: <span className="font-mono text-gold">{c.invite_code}</span>
         </p>
       )}
+      {c.description && <CampaignDescription text={c.description} />}
     </Card>
   );
 }

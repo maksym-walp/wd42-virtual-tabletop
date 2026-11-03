@@ -27,7 +27,9 @@ export default function DevelopmentTree({
   tree = [],
   experiencePoints = 0,
   is_owner = false,
+  is_gm = false,
   onUnlock,
+  onLock,
   onExperienceChange,
   catalog = {},
 }) {
@@ -136,6 +138,12 @@ export default function DevelopmentTree({
 
   const handleUnlock = async (nodeId, via) => {
     await onUnlock?.(nodeId, via);
+    setSelectedNode(null);
+  };
+
+  const handleLock = async (nodeId, nodeTitle) => {
+    if (!confirm(`Скасувати вузол «${nodeTitle}»? Похідні вміння, яких більше ніхто не дає, буде прибрано.`)) return;
+    await onLock?.(nodeId);
     setSelectedNode(null);
   };
 
@@ -321,7 +329,9 @@ export default function DevelopmentTree({
           unlocked={unlockedIds.has(selectedNode.id)}
           canUnlock={checkCanUnlock(selectedNode)}
           is_owner={is_owner}
+          is_gm={is_gm}
           onUnlock={(via) => handleUnlock(selectedNode.id, via)}
+          onLock={() => handleLock(selectedNode.id, selectedNode.title)}
           onClose={() => setSelectedNode(null)}
           catalog={catalog}
         />
@@ -368,7 +378,7 @@ function HoverLabel({ hoverLabel, catalog }) {
   );
 }
 
-function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUnlock, onClose, catalog }) {
+function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, is_gm, onUnlock, onLock, onClose, catalog }) {
   const prereqs = edges
     .filter((e) => e.target_id === node.id)
     .map((e) => ({ node: nodes.find((n) => n.id === e.source_id), type: e.edge_type }))
@@ -503,6 +513,17 @@ function TreeNodePanel({ node, nodes, edges, unlocked, canUnlock, is_owner, onUn
               {!canUnlock.prereqsMet ? 'Вимоги не виконані' : 'Недостатньо пунктів досвіду'}
             </span>
           )}
+        </div>
+      )}
+
+      {unlocked && is_gm && (
+        <div className="mt-1 flex flex-wrap gap-2">
+          <button
+            className="min-h-9 rounded border border-danger/40 bg-danger/10 px-3 py-1.5 text-sm font-semibold text-danger"
+            onClick={onLock}
+          >
+            Скасувати вузол
+          </button>
         </div>
       )}
     </SidePanel>

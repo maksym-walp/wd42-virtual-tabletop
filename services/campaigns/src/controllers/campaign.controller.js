@@ -2,11 +2,11 @@ const CampaignModel = require('../models/campaign.model');
 const bus = require('../realtime/bus');
 const { loadCampaignOr404, canManage, canView, accessOf, isAdmin } = require('./load-campaign');
 
-// gm_notes — лише для майстра/адміна; is_gm означає «має майстерські права».
+// gm_notes/sound_links — лише для майстра/адміна; is_gm означає «має майстерські права».
 function present(campaign, user) {
   const access = accessOf(campaign, user);
   if (access !== 'player') return { ...campaign, is_gm: true, access };
-  const { gm_notes, ...visible } = campaign;
+  const { gm_notes, sound_links, ...visible } = campaign;
   return { ...visible, is_gm: false, access };
 }
 
@@ -55,6 +55,14 @@ const CampaignController = {
     if (!campaign) return;
 
     const updated = await CampaignModel.updateGmNotes(campaign.id, req.body.gm_notes ?? '');
+    res.json({ campaign: updated });
+  },
+
+  async updateSoundLinks(req, res) {
+    const campaign = await loadManagedOr403(req, res);
+    if (!campaign) return;
+
+    const updated = await CampaignModel.updateSoundLinks(campaign.id, req.body.sound_links ?? []);
     res.json({ campaign: updated });
   },
 
