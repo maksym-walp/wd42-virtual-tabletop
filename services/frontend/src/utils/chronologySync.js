@@ -128,14 +128,50 @@ export function eventInCalendar(event, ownerCal, targetCal) {
 }
 
 // Ключ хронологічного сортування події на світовій осі (початок); без дати —
-// Infinity (в кінець за будь-якого напрямку), як eventSortKey.
+// Infinity (в кінець за будь-якого напрямку), як eventSortKey. Місяць/день —
+// необов'язкові (відома лише частина дати): без місяця подія ставиться на
+// початок свого року, а не серед «без дати».
 export function eventWorldSortKey(event, calendarsById) {
   const owner = calendarsById.get(event.calendar_id);
   if (!owner || event.year == null) return Infinity;
   const months = monthsOf(owner);
-  const mi = months.findIndex((m) => m.id === event.month_id);
+  const mi = event.month_id ? months.findIndex((m) => m.id === event.month_id) : 0;
   if (mi === -1) return Infinity;
-  return totalDaysSinceEpoch(months, Number(event.year), mi, Number(event.day) || 1) - calendarOffset(owner);
+  return totalDaysSinceEpoch(months, Number(event.year), mi, event.month_id ? Number(event.day) || 1 : 1) - calendarOffset(owner);
+}
+
+// Дні (world-незалежні { year, month_id, day }), у які повторювана подія
+// реально стається в межах [worldMin, worldMax] (ключі eventWorldSortKey) —
+// переносить логіку сітки (eventOccursOnDay) на пряму стрічку часу, де немає
+// видимого «окна» днів, тож межі задає викликач (зазвичай діапазон інших
+// датованих подій). 'none' — сама подія (якщо є дата) або []. Повторення без
+// прив'язки до конкретного року (щорічне/щотижневе й т.д.) тягнуться в обидва
+// боки необмежено, тож діапазон скану обмежено MAX_SCAN_DAYS, а кількість
+// знайдених повторів — MAX_OCCURRENCES.
+const MAX_SCAN_DAYS = 200000;
+const MAX_OCCURRENCES = 500;
+export function eventOccurrenceDates(event, calendarsById, worldMin, worldMax) {
+  const owner = calendarsById.get(event.calendar_id);
+  if (!owner) return [];
+  if (!event.recurrence || event.recurrence === 'none') {
+    return event.year == null ? [] : [{ year: Number(event.year), month_id: event.month_id, day: event.day }];
+  }
+  if (!Number.isFinite(worldMin) || !Number.isFinite(worldMax)) return [];
+  const tl = makeTimeline(owner);
+  const offset = calendarOffset(owner);
+  const fromT = Math.floor(worldMin) + offset;
+  const toT = Math.min(Math.ceil(worldMax) + offset, fromT + MAX_SCAN_DAYS);
+  const moons = owner.moons || owner.preview_moons || [];
+  const results = [];
+  for (let T = fromT; T <= toT && results.length < MAX_OCCURRENCES; T++) {
+    const d = dateFromTotalDays(tl.months, T);
+    if (!d) continue;
+    const cell = { year: d.year, monthId: d.monthId, day: d.day, weekdayIndex: tl.weekdayAt(T), total: T, moons };
+    if (eventOccursOnDay(event, cell, tl.months, 0, tl.weekdayCount, tl.weekdayAt)) {
+      results.push({ year: d.year, month_id: d.monthId, day: d.day });
+    }
+  }
+  return results;
 }
 
 // Однакові назви розрізняються суфіксом « (2)» — так само, як у структурному

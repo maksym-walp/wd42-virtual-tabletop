@@ -121,3 +121,56 @@ export function resolvePinTypeKeys(pin, year) {
   const types = (v && v.types != null) ? v.types : pin.location_types;
   return typeKeysOf(types);
 }
+
+// ---- Ruler: distance and area measurement -------------------------------
+//
+// Lenses may share a normalized (0..1) coordinate space while differing in
+// native pixel resolution (same aspect ratio). To stay valid across lens
+// switches, a map's scale is calibrated against — and always converted
+// through — the pixel dimensions of whichever image was active at
+// calibration time (`referenceWidth`/`referenceHeight`), never the
+// currently displayed lens's own natural size.
+
+// A map's scale fields as `{ kmPerPixel, referenceWidth, referenceHeight }`,
+// or null when the map has none calibrated yet.
+export function mapScale(map) {
+  if (!map?.scale_km_per_pixel || !map.scale_reference_width || !map.scale_reference_height) return null;
+  return {
+    kmPerPixel: map.scale_km_per_pixel,
+    referenceWidth: map.scale_reference_width,
+    referenceHeight: map.scale_reference_height,
+  };
+}
+
+// Real-world km between two normalized (0..1) points, via the scale's
+// reference pixel dimensions.
+export function segmentKm(a, b, scale) {
+  const dxPx = (b.x - a.x) * scale.referenceWidth;
+  const dyPx = (b.y - a.y) * scale.referenceHeight;
+  return Math.sqrt(dxPx * dxPx + dyPx * dyPx) * scale.kmPerPixel;
+}
+
+// Total length of the point-to-point path, plus (when `closed`) the segment
+// back to the first point — i.e. the perimeter of a closed shape.
+export function pathLengthKm(points, scale, closed) {
+  if (points.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) total += segmentKm(points[i], points[i + 1], scale);
+  if (closed) total += segmentKm(points[points.length - 1], points[0], scale);
+  return total;
+}
+
+// Enclosed area in km² of a closed polygon (shoelace formula in the scale's
+// reference pixel space, then converted by kmPerPixel²).
+export function polygonAreaKm2(points, scale) {
+  if (points.length < 3) return 0;
+  const px = points.map((p) => ({ x: p.x * scale.referenceWidth, y: p.y * scale.referenceHeight }));
+  let sum = 0;
+  for (let i = 0; i < px.length; i++) {
+    const a = px[i];
+    const b = px[(i + 1) % px.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  const areaPx2 = Math.abs(sum) / 2;
+  return areaPx2 * scale.kmPerPixel * scale.kmPerPixel;
+}

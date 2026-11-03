@@ -34,13 +34,18 @@ const MapModel = {
     return rows;
   },
 
-  async update(id, { name, isPublic, previewImageUrl, previewThumbnailUrl }) {
+  async update(id, {
+    name, isPublic, previewImageUrl, previewThumbnailUrl,
+    scaleKmPerPixel, scaleReferenceWidth, scaleReferenceHeight,
+  }) {
     const { rows } = await pool.query(
       `UPDATE maps.maps
-       SET name = $2, is_public = $3, preview_image_url = $4, preview_thumbnail_url = $5, updated_at = NOW()
+       SET name = $2, is_public = $3, preview_image_url = $4, preview_thumbnail_url = $5,
+           scale_km_per_pixel = $6, scale_reference_width = $7, scale_reference_height = $8,
+           updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [id, name, isPublic, previewImageUrl, previewThumbnailUrl]
+      [id, name, isPublic, previewImageUrl, previewThumbnailUrl, scaleKmPerPixel, scaleReferenceWidth, scaleReferenceHeight]
     );
     return rows[0] || null;
   },

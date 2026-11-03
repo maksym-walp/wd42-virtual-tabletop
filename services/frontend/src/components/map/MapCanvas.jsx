@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, ImageOverlay, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, ImageOverlay, Marker, Polyline, Polygon, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { levelThreshold, isIconUrl, DEFAULT_MARKER_LEVEL, resolvePinMarker } from '../../constants/maps';
@@ -8,6 +8,12 @@ import { levelThreshold, isIconUrl, DEFAULT_MARKER_LEVEL, resolvePinMarker } fro
 // Pins are stored normalized (0..1), y measured from the TOP, so we flip y.
 function toLatLng(pin, dims) {
   return [dims.h * (1 - pin.y_coordinate), dims.w * pin.x_coordinate];
+}
+
+// Same conversion for a plain { x, y } normalized point (ruler/calibration
+// picks), rather than a pin row.
+function normToLatLng(pt, dims) {
+  return [dims.h * (1 - pt.y), dims.w * pt.x];
 }
 
 // The marker icon is either an uploaded image URL or an emoji. Both are
@@ -119,7 +125,58 @@ function ClickToPlace({ enabled, dims, onPick }) {
   return null;
 }
 
-export default function MapCanvas({ imageUrl, pins, year = null, focusLocationId, onSelect, placing = false, onMapClick }) {
+// Screen-pixel (not world) radius within which a ruler click on the first
+// point closes the shape — fixed regardless of zoom, the usual UX for this.
+const RULER_CLOSE_SNAP_PX = 14;
+
+// Ruler click capture: accumulates normalized points. Once there are at
+// least 3, a click landing within the snap radius of the FIRST point closes
+// the shape instead of appending a new one.
+function RulerClickCapture({ enabled, dims, points, onPick, onCloseLoop }) {
+  const map = useMap();
+  useMapEvents({
+    click(e) {
+      if (!enabled) return;
+      if (points.length >= 3) {
+        const firstScreen = map.latLngToContainerPoint(normToLatLng(points[0], dims));
+        const clickScreen = map.latLngToContainerPoint(e.latlng);
+        if (firstScreen.distanceTo(clickScreen) <= RULER_CLOSE_SNAP_PX) {
+          onCloseLoop();
+          return;
+        }
+      }
+      const x = Math.min(1, Math.max(0, e.latlng.lng / dims.w));
+      const y = Math.min(1, Math.max(0, 1 - e.latlng.lat / dims.h));
+      onPick({ x, y });
+    },
+  });
+  return null;
+}
+
+// Renders the in-progress/finished ruler path: a polyline while open, a
+// polygon once the user has explicitly closed it, plus a dot per point.
+function RulerPath({ points, closed, dims }) {
+  if (!points.length) return null;
+  const latlngs = points.map((p) => normToLatLng(p, dims));
+  return (
+    <>
+      {closed
+        ? <Polygon positions={latlngs} pathOptions={{ color: '#d4af37', weight: 2, fillOpacity: 0.12 }} />
+        : <Polyline positions={latlngs} pathOptions={{ color: '#d4af37', weight: 2 }} />}
+      {points.map((p, i) => (
+        <CircleMarker key={i} center={normToLatLng(p, dims)} radius={4}
+          pathOptions={{ color: '#d4af37', fillColor: '#d4af37', fillOpacity: 1 }} />
+      ))}
+    </>
+  );
+}
+
+export default function MapCanvas({
+  imageUrl, pins, year = null, focusLocationId, onSelect, placing = false, onMapClick,
+  calibrating = false, calibPoints = [], onCalibPick,
+  measuring = false, rulerPoints = [], rulerClosed = false, onRulerPick, onRulerCloseLoop,
+  onDimsChange,
+}) {
   // url + pixel size are committed together, on load — never a render where the
   // overlay URL and the bounds belong to different images (that mismatch was
   // what left a freshly-scrubbed timeline image drawn inside the previous
@@ -142,6 +199,12 @@ export default function MapCanvas({ imageUrl, pins, year = null, focusLocationId
   // same-size timeline versions keeps the current pan/zoom instead of
   // re-fitting on every drag step.
   const bounds = useMemo(() => (img ? [[0, 0], [img.h, img.w]] : null), [img?.w, img?.h]);
+
+  // Lets the owner's scale calibration record the pixel size of whichever
+  // image is on screen when they pick the reference points.
+  useEffect(() => {
+    if (img && onDimsChange) onDimsChange({ w: img.w, h: img.h });
+  }, [img?.w, img?.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (imgError) {
     return <div className="grid h-full place-items-center px-6 text-center text-sm text-danger">Не вдалось завантажити зображення мапи</div>;
@@ -177,6 +240,18 @@ export default function MapCanvas({ imageUrl, pins, year = null, focusLocationId
       <PinMarkers pins={pins} dims={img} year={year} onSelect={onSelect} />
       <FocusController focusLocationId={focusLocationId} pins={pins} dims={img} year={year} />
       {onMapClick && <ClickToPlace enabled={placing} dims={img} onPick={onMapClick} />}
+      {onCalibPick && <ClickToPlace enabled={calibrating && calibPoints.length < 2} dims={img} onPick={onCalibPick} />}
+      {calibrating && <RulerPath points={calibPoints} closed={false} dims={img} />}
+      {onRulerPick && (
+        <RulerClickCapture
+          enabled={measuring && !rulerClosed}
+          dims={img}
+          points={rulerPoints}
+          onPick={onRulerPick}
+          onCloseLoop={onRulerCloseLoop}
+        />
+      )}
+      {measuring && <RulerPath points={rulerPoints} closed={rulerClosed} dims={img} />}
     </MapContainer>
   );
 }

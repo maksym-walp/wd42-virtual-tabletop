@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus, Clock, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Layers, SlidersHorizontal, Eye, EyeOff, Upload, Trash2, Globe, Lock, Pencil, Check, X as XIcon, MapPin, Plus, Clock, ImageIcon, Ruler } from 'lucide-react';
 import mapsApi from '../api/maps';
 import campaignApi from '../api/campaigns';
 import mediaApi, { MAX_UPLOAD_BYTES, ACCEPTED_IMAGE_TYPES } from '../api/media';
-import { datedYears, resolveLensImage, pinVisibleInYear, pinExistsInYear, resolvePinTypeKeys } from '../constants/maps';
+import {
+  datedYears, resolveLensImage, pinVisibleInYear, pinExistsInYear, resolvePinTypeKeys,
+  mapScale, pathLengthKm, polygonAreaKm2,
+} from '../constants/maps';
 import useMediaQuery from '../hooks/useMediaQuery';
 import MapCanvas from '../components/map/MapCanvas';
 import LensSwitcher from '../components/map/LensSwitcher';
@@ -59,6 +62,21 @@ export default function MapView() {
   const [editingPin, setEditingPin] = useState(null);
   const [myLocations, setMyLocations] = useState([]);
   const [myCampaigns, setMyCampaigns] = useState([]);
+
+  // Scale calibration (owner only) — click two reference points on the
+  // currently displayed image, then enter the real distance between them.
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibPoints, setCalibPoints] = useState([]);
+  const [calibDims, setCalibDims] = useState(null); // pixel size of the image currently on screen
+  const [calibKm, setCalibKm] = useState('');
+  const [calibSaving, setCalibSaving] = useState(false);
+  const [calibError, setCalibError] = useState('');
+
+  // Ruler (all participants) — ephemeral, local-only polyline/polygon
+  // measurement. Never persisted or synced.
+  const [measuring, setMeasuring] = useState(false);
+  const [rulerPoints, setRulerPoints] = useState([]);
+  const [rulerClosed, setRulerClosed] = useState(false);
 
   const isOwner = Boolean(map?.is_owner);
   // Wide layout: lens switcher goes in the header, timeline is a vertical rail
@@ -270,6 +288,81 @@ export default function MapView() {
     }
   };
 
+  // Only one map input mode (place pin / calibrate / ruler) is active at a
+  // time — each entry point switches the others off first.
+  const startPlacing = () => { setCalibrating(false); setMeasuring(false); setPlacing(true); };
+
+  const cancelCalibration = () => {
+    setCalibrating(false);
+    setCalibPoints([]);
+    setCalibKm('');
+    setCalibError('');
+  };
+  const startCalibrating = () => {
+    setPlacing(false); setMeasuring(false);
+    setCalibPoints([]); setCalibKm(''); setCalibError('');
+    setCalibrating(true);
+  };
+  const handleCalibPick = (pt) => setCalibPoints((prev) => (prev.length < 2 ? [...prev, pt] : prev));
+  const calibPixelDistance = useMemo(() => {
+    if (calibPoints.length !== 2 || !calibDims) return null;
+    const dx = (calibPoints[1].x - calibPoints[0].x) * calibDims.w;
+    const dy = (calibPoints[1].y - calibPoints[0].y) * calibDims.h;
+    return Math.sqrt(dx * dx + dy * dy);
+  }, [calibPoints, calibDims]);
+  const submitCalibration = async () => {
+    const km = Number(calibKm);
+    if (!Number.isFinite(km) || km <= 0) { setCalibError('Вкажіть додатну відстань у км'); return; }
+    if (!calibPixelDistance || calibPixelDistance < 5) {
+      setCalibError('Точки занадто близько — оберіть точки, що більш віддалені одна від одної');
+      return;
+    }
+    setCalibSaving(true);
+    setCalibError('');
+    try {
+      const updated = await mapsApi.updateMap(id, {
+        scale_km_per_pixel: km / calibPixelDistance,
+        scale_reference_width: calibDims.w,
+        scale_reference_height: calibDims.h,
+      });
+      setMap(updated);
+      cancelCalibration();
+    } catch (err) {
+      setCalibError(err.response?.data?.message || 'Не вдалось зберегти масштаб');
+    } finally {
+      setCalibSaving(false);
+    }
+  };
+
+  const clearRuler = () => { setRulerPoints([]); setRulerClosed(false); };
+  const startMeasuring = () => { setPlacing(false); setCalibrating(false); clearRuler(); setMeasuring(true); };
+  const toggleMeasuring = () => { if (measuring) { setMeasuring(false); clearRuler(); } else startMeasuring(); };
+  const handleRulerPick = (pt) => setRulerPoints((prev) => [...prev, pt]);
+  const handleRulerCloseLoop = () => setRulerClosed(true);
+
+  const scale = useMemo(() => mapScale(map), [map]);
+  const rulerTotalKm = useMemo(
+    () => (scale && rulerPoints.length >= 2 ? pathLengthKm(rulerPoints, scale, rulerClosed) : 0),
+    [scale, rulerPoints, rulerClosed],
+  );
+  const rulerAreaKm2 = useMemo(
+    () => (scale && rulerClosed ? polygonAreaKm2(rulerPoints, scale) : null),
+    [scale, rulerPoints, rulerClosed],
+  );
+
+  // Escape cancels whichever map input mode is currently active.
+  useEffect(() => {
+    if (!placing && !calibrating && !measuring) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (calibrating) cancelCalibration();
+      else if (measuring) { setMeasuring(false); clearRuler(); }
+      else if (placing) setPlacing(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [placing, calibrating, measuring]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Click on the map (in placement mode) → open the pin form at those coords.
   const handleMapClick = (coords) => {
     setPlacing(false);
@@ -394,10 +487,29 @@ export default function MapView() {
           )}
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {activeLens && !measuring && (
+              <button
+                onClick={toggleMeasuring}
+                disabled={!scale}
+                title={scale ? 'Рулетка: вимірювання відстані й площі' : 'Власник ще не встановив масштаб мапи'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Ruler size={13} /> Рулетка
+              </button>
+            )}
             {isOwner && activeLens && !placing && (
-              <Button size="sm" onClick={() => setPlacing(true)}>
+              <Button size="sm" onClick={startPlacing}>
                 <Plus size={15} /> Додати мітку
               </Button>
+            )}
+            {isOwner && activeLens && !calibrating && (
+              <button
+                onClick={startCalibrating}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted hover:bg-surface-hover"
+                title="Визначити масштаб мапи для рулетки"
+              >
+                <Ruler size={13} /> {map.scale_km_per_pixel ? 'Масштаб' : 'Встановити масштаб'}
+              </button>
             )}
             {isOwner ? (
               <button
@@ -439,7 +551,7 @@ export default function MapView() {
       </div>
 
       {/* Map area */}
-      <div className={`relative isolate flex-1 min-h-0 ${placing ? 'map-placing' : ''}`}>
+      <div className={`relative isolate flex-1 min-h-0 ${placing || calibrating || (measuring && !rulerClosed) ? 'map-placing' : ''}`}>
         {!activeLens ? (
           <div className="grid h-full place-items-center p-6">
             <EmptyState icon="🖼" title="У цієї мапи немає шарів-зображень"
@@ -462,6 +574,15 @@ export default function MapView() {
               onSelect={selectLocation}
               placing={placing}
               onMapClick={isOwner ? handleMapClick : undefined}
+              calibrating={calibrating}
+              calibPoints={calibPoints}
+              onCalibPick={isOwner ? handleCalibPick : undefined}
+              measuring={measuring}
+              rulerPoints={rulerPoints}
+              rulerClosed={rulerClosed}
+              onRulerPick={handleRulerPick}
+              onRulerCloseLoop={handleRulerCloseLoop}
+              onDimsChange={setCalibDims}
             />
 
             {/* Placement hint — floating, centred at the top */}
@@ -471,6 +592,70 @@ export default function MapView() {
                 Клікніть на мапі…
                 <button onClick={() => setPlacing(false)} className="ml-1 text-text-dim hover:text-danger" aria-label="Скасувати">
                   <XIcon size={15} />
+                </button>
+              </div>
+            )}
+
+            {/* Calibration hint — floating, centred at the top */}
+            {isOwner && calibrating && (
+              <div className="pointer-events-auto absolute left-1/2 top-3 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2 rounded-lg border border-gold/60 bg-surface/95 px-3 py-2 text-sm text-text shadow-lg backdrop-blur">
+                {calibPoints.length < 2 ? (
+                  <div className="flex items-center gap-2">
+                    <Ruler size={15} className="text-gold" />
+                    {calibPoints.length === 0 ? 'Клікніть першу точку еталонного відрізка…' : 'Клікніть другу точку…'}
+                    <button onClick={cancelCalibration} className="ml-1 text-text-dim hover:text-danger" aria-label="Скасувати">
+                      <XIcon size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs text-text-dim">
+                      Відстань на зображенні: {calibPixelDistance != null ? Math.round(calibPixelDistance) : '?'} px
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="Реальна відстань, км"
+                        value={calibKm}
+                        onChange={(e) => setCalibKm(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') submitCalibration(); }}
+                        className={`${inputClass} w-40`}
+                      />
+                      <Button size="sm" onClick={submitCalibration} disabled={calibSaving}>
+                        {calibSaving ? 'Збереження…' : 'Калібрувати'}
+                      </Button>
+                      <button onClick={cancelCalibration} className="text-text-dim hover:text-danger" aria-label="Скасувати">
+                        <XIcon size={15} />
+                      </button>
+                    </div>
+                    {calibError && <p className="text-xs text-danger">{calibError}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Ruler readout — floating, centred at the top. Local/ephemeral only. */}
+            {measuring && (
+              <div className="pointer-events-auto absolute left-1/2 top-3 z-[1000] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-gold/60 bg-surface/95 px-3 py-2 text-sm text-text shadow-lg backdrop-blur">
+                <Ruler size={15} className="text-gold" />
+                {rulerPoints.length === 0 ? (
+                  <span className="text-text-dim">Клікніть на мапі, щоб почати вимірювання…</span>
+                ) : (
+                  <span className="tabular-nums">
+                    {rulerTotalKm.toFixed(2)} км{rulerClosed ? ' (периметр)' : ''}
+                    {rulerAreaKm2 != null && <> · площа {rulerAreaKm2.toFixed(2)} км²</>}
+                  </span>
+                )}
+                {rulerPoints.length > 0 && (
+                  <button onClick={clearRuler} className="text-text-dim hover:text-danger" title="Очистити вимірювання">
+                    <XIcon size={15} />
+                  </button>
+                )}
+                <button onClick={toggleMeasuring} className="text-xs font-semibold text-accent hover:underline">
+                  Готово
                 </button>
               </div>
             )}

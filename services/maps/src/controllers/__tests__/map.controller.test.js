@@ -97,6 +97,7 @@ describe('MapController.update / remove', () => {
     await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'New', is_public: true }, user: GM }), res);
     expect(MapModel.update).toHaveBeenCalledWith('m1', {
       name: 'New', isPublic: true, previewImageUrl: null, previewThumbnailUrl: null,
+      scaleKmPerPixel: null, scaleReferenceWidth: null, scaleReferenceHeight: null,
     });
     expect(res.json).toHaveBeenCalledWith({ map: expect.objectContaining({ is_owner: true, is_public: true }) });
   });
@@ -128,6 +129,54 @@ describe('MapController.update / remove', () => {
   it('update 400 for a javascript: preview url', async () => {
     const res = mockRes();
     await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'Мапа', preview_image_url: 'javascript:alert(1)' }, user: GM }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(MapModel.update).not.toHaveBeenCalled();
+  });
+
+  it('update sets and clears the scale', async () => {
+    MapModel.update.mockResolvedValue(ownPrivate);
+    await MapController.update(mockReq({
+      params: { id: 'm1' },
+      body: { name: 'Мапа', scale_km_per_pixel: 0.25, scale_reference_width: 2000, scale_reference_height: 1500 },
+      user: GM,
+    }), mockRes());
+    expect(MapModel.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({
+      scaleKmPerPixel: 0.25, scaleReferenceWidth: 2000, scaleReferenceHeight: 1500,
+    }));
+
+    await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'Мапа', scale_km_per_pixel: null }, user: GM }), mockRes());
+    expect(MapModel.update).toHaveBeenLastCalledWith('m1', expect.objectContaining({
+      scaleKmPerPixel: null, scaleReferenceWidth: null, scaleReferenceHeight: null,
+    }));
+  });
+
+  it('update keeps the existing scale when the body omits it', async () => {
+    MapModel.findById.mockResolvedValue({ ...ownPrivate, scale_km_per_pixel: 0.25, scale_reference_width: 2000, scale_reference_height: 1500 });
+    MapModel.update.mockResolvedValue(ownPrivate);
+    await MapController.update(mockReq({ params: { id: 'm1' }, body: { name: 'New' }, user: GM }), mockRes());
+    expect(MapModel.update).toHaveBeenCalledWith('m1', expect.objectContaining({
+      scaleKmPerPixel: 0.25, scaleReferenceWidth: 2000, scaleReferenceHeight: 1500,
+    }));
+  });
+
+  it('update 400 for a non-positive scale_km_per_pixel', async () => {
+    const res = mockRes();
+    await MapController.update(mockReq({
+      params: { id: 'm1' },
+      body: { name: 'Мапа', scale_km_per_pixel: -1, scale_reference_width: 100, scale_reference_height: 100 },
+      user: GM,
+    }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(MapModel.update).not.toHaveBeenCalled();
+  });
+
+  it('update 400 for non-integer reference dimensions', async () => {
+    const res = mockRes();
+    await MapController.update(mockReq({
+      params: { id: 'm1' },
+      body: { name: 'Мапа', scale_km_per_pixel: 0.25, scale_reference_width: 100.5, scale_reference_height: 100 },
+      user: GM,
+    }), res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(MapModel.update).not.toHaveBeenCalled();
   });

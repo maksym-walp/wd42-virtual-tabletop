@@ -20,7 +20,7 @@
 | GET | `/` | авторизований | — | `200 { maps }` — власні + публічні (адмін: усі) |
 | POST | `/` | `game_master` / `admin` | `{ name*, is_public? }` | `201 { map }` / `400` / `403` |
 | GET | `/:id` | читання мапи | — | `200 { map }` (з `is_owner`) / `403` / `404` |
-| PATCH | `/:id` | власник / `admin` | `{ name?, is_public?, preview_image_url?, preview_thumbnail_url? }` — `preview_*`: `undefined` — не чіпати, `null`/`''` — прибрати; лише `/uploads/…` або `https://`; мініатюра йде в парі з оригіналом | `200 { map }` / `400` / `403` / `404` |
+| PATCH | `/:id` | власник / `admin` | `{ name?, is_public?, preview_image_url?, preview_thumbnail_url?, scale_km_per_pixel?, scale_reference_width?, scale_reference_height? }` — `preview_*`: `undefined` — не чіпати, `null`/`''` — прибрати; лише `/uploads/…` або `https://`; мініатюра йде в парі з оригіналом. `scale_*`: `undefined` — не чіпати, `null` — скинути калібрування масштабу, інакше всі три поля разом (`scale_km_per_pixel` — додатне число, `scale_reference_width`/`scale_reference_height` — додатні цілі) | `200 { map }` / `400` / `403` / `404` |
 | PATCH | `/:id/owner` | лише `admin` | `{ owner_username }` | `200 { map }` / `400` / `404` |
 | DELETE | `/:id` | власник / `admin` | — | `204` (каскадно шари, версії, мітки) |
 
@@ -73,11 +73,19 @@
 
 Експорт/імпорт: файл несе `gm_note` і версії без `id`; прибираються `id`, `created_by`, `created_at`, `updated_at`. Імпорт прибирає некоректні іконки, рівні й типи (порожнє замість помилки), власник — імпортер.
 
+### Масштаб і рулетка
+
+Мапа може мати **масштаб**: власник клікає дві точки на зображенні активного шару та вказує реальну відстань між ними в км (фронтенд: `pages/MapView.jsx`, режим калібрування); сервер зберігає виведене `scale_km_per_pixel` разом із пікс. розмірами зображення, яке було активним під час калібрування (`scale_reference_width`/`scale_reference_height`).
+
+Шари можуть мати різну роздільність зображення, але спільне співвідношення сторін (мітки рендеряться консистентно в нормалізованих координатах на будь-якому шарі), тож один масштаб лишається коректним при перемиканні шарів: клієнт завжди множить нормалізовані координати на ЗБЕРЕЖЕНІ `scale_reference_width`/`scale_reference_height`, а не на натуральні піксельні розміри поточного зображення (`constants/maps.js`: `mapScale`, `segmentKm`, `pathLengthKm`, `polygonAreaKm2`).
+
+Сам інструмент рулетки (вимірювання відстані по складній ламаній і, за явним замиканням фігури, площі) доступний усім учасникам столу, які можуть читати мапу — не лише власнику; неактивний, якщо масштаб не задано. Його стан (точки, відстань/площа) не зберігається на сервері й не синхронізується між гравцями: це локальний ефемерний оверлей (`components/map/MapCanvas.jsx`), що зникає при вимкненні інструмента, початку нового вимірювання або переході з мапи.
+
 ## Схема БД
 
-Сервіс володіє схемою `maps` (міграції 35–38 — створення, 61, 64–66, `67-location-multi-type-version-range`, 84):
+Сервіс володіє схемою `maps` (міграції 35–38 — створення, 61, 64–66, `67-location-multi-type-version-range`, 84, `125-maps-scale`):
 
-- `maps.maps` — `created_by`, `name`, `is_public`, `preview_image_url`, `preview_thumbnail_url`, часові мітки.
+- `maps.maps` — `created_by`, `name`, `is_public`, `preview_image_url`, `preview_thumbnail_url`, `scale_km_per_pixel`, `scale_reference_width`, `scale_reference_height`, часові мітки.
 - `maps.map_lenses` — `map_id` (FK `CASCADE`), `name`.
 - `maps.map_lens_versions` — `map_lens_id` (FK `CASCADE`), `year` (nullable), `image_url`; унікальність пари (шар, рік).
 - `maps.map_pins` — `map_id` (FK `CASCADE`), `location_id` (FK), `x_coordinate`, `y_coordinate` (0..1), `min_zoom`, `max_zoom`, `lens_ids UUID[]`, `visible_campaign_ids UUID[]` (голі UUID кампаній), `start_year`, `end_year`.

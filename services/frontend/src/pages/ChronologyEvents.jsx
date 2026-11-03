@@ -7,7 +7,7 @@ import useEventLookups from '../hooks/useEventLookups';
 import useEventTypes from '../hooks/useEventTypes';
 import { eventDateRangeLabel, eventPlaceLabel, defaultCalendarId, recurrenceLabel } from '../utils/chronologyEvent';
 import {
-  eventInCalendar, eventWorldSortKey, equivalentDatesText, buildEventsExport, monthsOf, calendarOffset,
+  eventInCalendar, eventWorldSortKey, eventOccurrenceDates, equivalentDatesText, buildEventsExport, monthsOf, calendarOffset,
 } from '../utils/chronologySync';
 import { buildChronologyEventsImportTemplate } from '../utils/chronologyEventsImportTemplate';
 import { layoutTimeline } from '../utils/chronologyTimelineLayout';
@@ -52,7 +52,7 @@ export default function ChronologyEvents() {
   const [reloadTick, setReloadTick] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false); // лише для вузьких екранів
 
-  const [sortDir, setSortDir] = useState('asc');
+  const [sortDir, setSortDir] = useState('desc');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState([]); // ключі типів (NO_TYPE — події без типу); порожньо — усі
   const [placeFilter, setPlaceFilter] = useState(''); // 'loc:<id>' | 'reg:<назва>'
@@ -397,9 +397,30 @@ function Timeline({
   };
 
   const visible = merged.filter(({ event }) => matches(event));
+
+  // Світовий діапазон для розгортання повторюваних подій — від найранішої до
+  // найпізнішої датованої події серед видимих (охоплює й прив'язки самих
+  // повторюваних подій), щоб не малювати їх до нескінченності в обидва боки.
+  const anchorKeys = visible.map(({ event }) => eventWorldSortKey(event, calendarsById)).filter(Number.isFinite);
+  const worldMin = anchorKeys.length ? Math.min(...anchorKeys) : 0;
+  const worldMax = anchorKeys.length ? Math.max(...anchorKeys) : 0;
+
+  // Кожен повтор повторюваної події — окрема картка на стрічці (а не лише
+  // перша); одноразові події лишаються одним пунктом.
+  const occurrences = visible.flatMap(({ event, axis }) => {
+    if (event.recurrence === 'none') return [{ event, axis, occId: event.id }];
+    const dates = eventOccurrenceDates(event, calendarsById, worldMin, worldMax);
+    if (!dates.length) return [{ event, axis, occId: event.id }];
+    return dates.map((d, i) => ({
+      event: { ...event, year: d.year, month_id: d.month_id, day: d.day },
+      axis,
+      occId: `${event.id}:${i}`,
+    }));
+  });
+
   // Сортування на світовій осі, а не за датою власного календаря. Без дати —
   // завжди в кінець.
-  const sorted = [...visible].sort((x, y) => {
+  const sorted = [...occurrences].sort((x, y) => {
     const ka = eventWorldSortKey(x.event, calendarsById);
     const kb = eventWorldSortKey(y.event, calendarsById);
     if (ka === kb) return 0; // Infinity - Infinity = NaN
@@ -431,7 +452,7 @@ function Timeline({
     const end = Number.isFinite(start) ? endKeyOf(item.event) : null;
     const labelStart = yearLabelOf(item);
     return {
-      id: item.event.id, start, end, labelStart,
+      id: item.occId, start, end, labelStart,
       labelEnd: end != null ? endLabelOf(end, labelStart) : null,
       recurring: item.event.recurrence !== 'none',
       foreign: item.event.calendar_id !== mainCalendar.id,
@@ -518,9 +539,9 @@ function Timeline({
                 </span>
               </li>
             ))}
-            {sorted.map(({ event: e, axis }) => (
+            {sorted.map(({ event: e, axis, occId }) => (
               <TimelineItem
-                key={e.id} event={e} slot={layout.placements.get(e.id)} wide={wide}
+                key={occId} event={e} slot={layout.placements.get(occId)} wide={wide}
                 axisIn={pad + axis * AXIS_GAP} axesW={axesW}
                 calendar={mainCalendar} months={main.months} calendarTimeline={mainTimeline}
                 calendars={calendars} viewOf={viewOf} multi={n > 1}

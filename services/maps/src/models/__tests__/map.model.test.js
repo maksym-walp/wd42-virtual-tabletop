@@ -39,16 +39,28 @@ describe('MapModel.listVisible', () => {
 });
 
 describe('MapModel.update', () => {
-  it('sets name, is_public, preview urls and updated_at', async () => {
+  it('sets name, is_public, preview urls, scale and updated_at', async () => {
     pool.query.mockResolvedValueOnce({ rows: [{ id: 'm1' }] });
     await MapModel.update('m1', {
       name: 'New', isPublic: false, previewImageUrl: '/uploads/a.png', previewThumbnailUrl: '/uploads/a.webp',
+      scaleKmPerPixel: 0.5, scaleReferenceWidth: 2000, scaleReferenceHeight: 1500,
     });
     const [sql, params] = pool.query.mock.calls[0];
     expect(sql).toMatch(/UPDATE maps\.maps/);
     expect(sql).toMatch(/preview_image_url = \$4, preview_thumbnail_url = \$5/);
+    expect(sql).toMatch(/scale_km_per_pixel = \$6, scale_reference_width = \$7, scale_reference_height = \$8/);
     expect(sql).toMatch(/updated_at = NOW\(\)/);
-    expect(params).toEqual(['m1', 'New', false, '/uploads/a.png', '/uploads/a.webp']);
+    expect(params).toEqual(['m1', 'New', false, '/uploads/a.png', '/uploads/a.webp', 0.5, 2000, 1500]);
+  });
+
+  it('clears the scale with nulls', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ id: 'm1' }] });
+    await MapModel.update('m1', {
+      name: 'New', isPublic: false, previewImageUrl: null, previewThumbnailUrl: null,
+      scaleKmPerPixel: null, scaleReferenceWidth: null, scaleReferenceHeight: null,
+    });
+    const [, params] = pool.query.mock.calls[0];
+    expect(params).toEqual(['m1', 'New', false, null, null, null, null, null]);
   });
 });
 

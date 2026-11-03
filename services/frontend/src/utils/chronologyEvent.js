@@ -78,13 +78,14 @@ export function eventPlaceLabel(event, locationsById) {
 }
 
 // Chronological sort key (day count since epoch) for an event's start date;
-// undated/unpinned events (no year, or a month_id that isn't in this
-// calendar's own months) sort last regardless of direction.
+// undated events (no year, or a month_id that isn't in this calendar's own
+// months) sort last regardless of direction. Month/day are optional — a
+// year-only event sorts at the start of its year rather than as undated.
 export function eventSortKey(event, months) {
   if (event.year == null) return Infinity;
-  const monthIndex = months.findIndex((m) => m.id === event.month_id);
+  const monthIndex = event.month_id ? months.findIndex((m) => m.id === event.month_id) : 0;
   if (monthIndex === -1) return Infinity;
-  return totalDaysSinceEpoch(months, Number(event.year), monthIndex, Number(event.day) || 1);
+  return totalDaysSinceEpoch(months, Number(event.year), monthIndex, event.month_id ? Number(event.day) || 1 : 1);
 }
 
 // Календар за замовчуванням (позначений адміном) серед переданих — id або ''.

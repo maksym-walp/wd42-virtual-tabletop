@@ -55,8 +55,37 @@ const MapController = {
       previewThumbnailUrl = image ? thumb : null;
     }
 
+    // Масштаб: undefined — не чіпати; null — скинути калібрування; інакше
+    // всі три поля разом (km-per-pixel + референсні пікс. розміри
+    // зображення, активного під час калібрування). Сервер отримує вже
+    // обчислене клієнтом співвідношення, а не сирі точки.
+    let scaleKmPerPixel = map.scale_km_per_pixel ?? null;
+    let scaleReferenceWidth = map.scale_reference_width ?? null;
+    let scaleReferenceHeight = map.scale_reference_height ?? null;
+    if (req.body.scale_km_per_pixel !== undefined) {
+      if (req.body.scale_km_per_pixel === null) {
+        scaleKmPerPixel = null;
+        scaleReferenceWidth = null;
+        scaleReferenceHeight = null;
+      } else {
+        const km = Number(req.body.scale_km_per_pixel);
+        const w = Number(req.body.scale_reference_width);
+        const h = Number(req.body.scale_reference_height);
+        if (!Number.isFinite(km) || km <= 0) {
+          return res.status(400).json({ message: 'scale_km_per_pixel має бути додатним числом' });
+        }
+        if (!Number.isInteger(w) || w <= 0 || !Number.isInteger(h) || h <= 0) {
+          return res.status(400).json({ message: 'Некоректні референсні розміри зображення' });
+        }
+        scaleKmPerPixel = km;
+        scaleReferenceWidth = w;
+        scaleReferenceHeight = h;
+      }
+    }
+
     const updated = await MapModel.update(map.id, {
       name: name.trim(), isPublic, previewImageUrl, previewThumbnailUrl,
+      scaleKmPerPixel, scaleReferenceWidth, scaleReferenceHeight,
     });
     res.json({ map: withOwner(updated, req.user) });
   },
