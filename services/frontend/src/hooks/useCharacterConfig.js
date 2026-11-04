@@ -20,7 +20,7 @@ function fetchConfig() {
           conditions: data.conditions?.length ? data.conditions : CONDITIONS,
           currencies: data.currencies?.length ? data.currencies : CURRENCIES,
           // Раси, відкриті адміном для персонажів: [{ id, name, description,
-          // image_url, bonus_characteristic, bonus_budget, peoples: [{ id,
+          // image_url, characteristic_bonuses, bonus_budget, peoples: [{ id,
           // name, description, skill_bonuses }] }]. Констант-запасного варіанту
           // нема — раси живуть у компендіумі.
           races: data.races ?? [],

@@ -293,9 +293,16 @@ const MAX_SKILL_BONUS = 10;
 const MAX_RACE_BUDGET = 20;
 
 const isSkillBonus = (n) => Number.isInteger(n) && n !== 0 && Math.abs(n) <= MAX_SKILL_BONUS;
-// Старі записи без bonus_value означають +1; null — admin стер поле.
-const raceBonusValue = (race) => (race.bonus_value === undefined ? 1 : race.bonus_value);
 const BONUS_RANGE_HINT = `ненульове ціле від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
+// Старі раси зберігали одну характеристику в bonus_characteristic/bonus_value;
+// переводимо їх у новий масив characteristic_bonuses при відкритті редактора.
+function characteristicBonusesOf(race) {
+  if (Array.isArray(race.characteristic_bonuses)) return race.characteristic_bonuses;
+  if (race.bonus_characteristic) {
+    return [{ characteristic: race.bonus_characteristic, value_bonus: race.bonus_value ?? 1, max_bonus: null }];
+  }
+  return [];
+}
 
 function validateRaces(value) {
   const seenRaces = new Set();
@@ -303,8 +310,20 @@ function validateRaces(value) {
     if (!race.race_id) return 'Оберіть расу у кожному блоці';
     if (seenRaces.has(race.race_id)) return 'Та сама раса додана двічі';
     seenRaces.add(race.race_id);
-    if (race.bonus_characteristic && !isSkillBonus(raceBonusValue(race))) {
-      return `Бонус раси до навичок — ${BONUS_RANGE_HINT}`;
+    const seenChars = new Set();
+    for (const cb of characteristicBonusesOf(race)) {
+      if (!cb.characteristic) return 'Оберіть характеристику у кожному бонусі раси';
+      if (seenChars.has(cb.characteristic)) return 'Характеристика повторюється в одної раси';
+      seenChars.add(cb.characteristic);
+      if (cb.value_bonus == null && cb.max_bonus == null) {
+        return 'Бонус раси до характеристики має містити значення й/або стелю';
+      }
+      if (cb.value_bonus != null && !isSkillBonus(cb.value_bonus)) {
+        return `Бонус раси до значення навичок — ${BONUS_RANGE_HINT}`;
+      }
+      if (cb.max_bonus != null && !isSkillBonus(cb.max_bonus)) {
+        return `Бонус раси до стелі навичок — ${BONUS_RANGE_HINT}`;
+      }
     }
     if (!Number.isInteger(race.bonus_budget) || race.bonus_budget < 0 || race.bonus_budget > MAX_RACE_BUDGET) {
       return `Додаткові очки раси — ціле від 0 до ${MAX_RACE_BUDGET}`;
@@ -351,17 +370,23 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
     skill_bonuses: race.peoples[pIndex].skill_bonuses.map((b, i) => (i === bIndex ? { ...b, ...patch } : b)),
   });
   const removeAt = (list, index) => list.filter((_, i) => i !== index);
+  const updateCharBonus = (race, cbIndex, patch) => update(race._rowId, {
+    characteristic_bonuses: characteristicBonusesOf(race).map((cb, i) => (i === cbIndex ? { ...cb, ...patch } : cb)),
+  });
+  const removeCharBonus = (race, cbIndex) => update(race._rowId, {
+    characteristic_bonuses: removeAt(characteristicBonusesOf(race), cbIndex),
+  });
 
   return (
     <ConfigShell
       title="Раси та підвиди персонажа"
-      hint="Раси, які гравець може обрати при створенні персонажа, — публічні раси компендіуму (назва, опис і зображення беруться звідти). Для кожної налаштуйте механіку (бонус або штраф до 4 навичок однієї характеристики — число зі знаком — та/або додаткові очки пулу), чи вона основна (неосновні гравець бачить лише після натискання «Інші народи») і підвиди — народи цієї раси з компендіуму з бонусами до навичок. Бонуси безкоштовні: додаються до значення навички й не віднімаються з пулу очок."
+      hint="Раси, які гравець може обрати при створенні персонажа, — публічні раси компендіуму (назва, опис і зображення беруться звідти). Для кожної налаштуйте механіку (бонус або штраф — до 4 навичок однієї характеристики: до їхнього значення й/або до стелі (типово 12), можна для кількох характеристик одночасно — та/або додаткові очки пулу), чи вона основна (неосновні гравець бачить лише після натискання «Інші народи») і підвиди — народи цієї раси з компендіуму з бонусами до навичок. Бонуси безкоштовні: додаються до значення навички й не віднімаються з пулу очок."
       saving={saving}
       error={error}
       onSave={save}
       addLabel="Додати расу"
       onAdd={() => onChange([...value, {
-        race_id: '', is_main: true, bonus_characteristic: null, bonus_value: 1, bonus_budget: 0, peoples: [], _rowId: newRowId(),
+        race_id: '', is_main: true, characteristic_bonuses: [], bonus_budget: 0, peoples: [], _rowId: newRowId(),
       }])}
     >
       {!value.length && <p className="text-sm text-text-dim">Жодної раси не відкрито — гравці не зможуть створити персонажа.</p>}
@@ -392,26 +417,52 @@ export function RacesConfigCard({ config, onChange, onSaved }) {
                 Основна (інакше — під «Інші народи»)
               </label>
               <label className="inline-flex items-center gap-2">
-                До навичок
-                <select className={`${inputClass} w-auto`} value={race.bonus_characteristic ?? ''} aria-label="Характеристика з бонусом"
-                  onChange={(e) => update(race._rowId, { bonus_characteristic: e.target.value || null })}>
-                  <option value="">— немає —</option>
-                  {CHARACTERISTICS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
-              </label>
-              {race.bonus_characteristic && (
-                <label className="inline-flex items-center gap-2">
-                  Значення (з мінусом — штраф)
-                  <input type="number" min={-MAX_SKILL_BONUS} max={MAX_SKILL_BONUS} className={`${inputClass} w-20`}
-                    value={raceBonusValue(race) ?? ''} aria-label="Бонус раси до навичок"
-                    onChange={(e) => update(race._rowId, { bonus_value: e.target.value === '' ? null : Number(e.target.value) })} />
-                </label>
-              )}
-              <label className="inline-flex items-center gap-2">
                 Додаткові очки пулу
                 <input type="number" min="0" max={MAX_RACE_BUDGET} className={`${inputClass} w-20`} value={race.bonus_budget ?? 0}
                   onChange={(e) => update(race._rowId, { bonus_budget: e.target.value === '' ? null : Number(e.target.value) })} />
               </label>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-text-dim">Бонуси до характеристик</span>
+              {characteristicBonusesOf(race).map((cb, cbIndex) => {
+                const usedChars = new Set(
+                  characteristicBonusesOf(race).filter((_, i) => i !== cbIndex).map((o) => o.characteristic)
+                );
+                return (
+                  <div key={cbIndex} className="flex flex-wrap items-center gap-2 rounded-lg bg-bg p-2">
+                    <select className={`${inputClass} w-auto`} value={cb.characteristic ?? ''} aria-label="Характеристика"
+                      onChange={(e) => updateCharBonus(race, cbIndex, { characteristic: e.target.value || null })}>
+                      <option value="">Характеристика…</option>
+                      {CHARACTERISTICS.filter((c) => !usedChars.has(c.key) || c.key === cb.characteristic)
+                        .map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    </select>
+                    <label className="inline-flex items-center gap-1.5 text-sm text-text-dim">
+                      Значення (мінус — штраф)
+                      <input type="number" min={-MAX_SKILL_BONUS} max={MAX_SKILL_BONUS} className={`${inputClass} w-16`}
+                        value={cb.value_bonus ?? ''} aria-label="Бонус до значення навичок"
+                        onChange={(e) => updateCharBonus(race, cbIndex, { value_bonus: e.target.value === '' ? null : Number(e.target.value) })} />
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-sm text-text-dim">
+                      Стеля (мінус — знижує максимум)
+                      <input type="number" min={-MAX_SKILL_BONUS} max={MAX_SKILL_BONUS} className={`${inputClass} w-16`}
+                        value={cb.max_bonus ?? ''} aria-label="Бонус до стелі навичок"
+                        onChange={(e) => updateCharBonus(race, cbIndex, { max_bonus: e.target.value === '' ? null : Number(e.target.value) })} />
+                    </label>
+                    <button type="button" aria-label="Прибрати бонус характеристики" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger"
+                      onClick={() => removeCharBonus(race, cbIndex)}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+              {characteristicBonusesOf(race).length < CHARACTERISTICS.length && (
+                <div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => update(race._rowId, {
+                    characteristic_bonuses: [...characteristicBonusesOf(race), { characteristic: '', value_bonus: 1, max_bonus: null }],
+                  })}><Plus size={14} /> Бонус до характеристики</Button>
+                </div>
+              )}
             </div>
 
             {race.race_id && (

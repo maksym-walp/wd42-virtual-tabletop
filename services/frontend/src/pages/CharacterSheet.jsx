@@ -19,7 +19,7 @@ import { abilityTiers, abilityForCharacter } from '../constants/abilities';
 import {
   ARCHETYPES, CHARACTERISTICS,
   DAMAGE_DICE, PHYSIQUE_HEALTH, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  valueToLevel, skillsToCharLevel, SKILL_PROGRESS_MARKS,
+  valueToLevel, skillsToCharLevel, SKILL_PROGRESS_MARKS, raceSkillAdjustments, BASE_SKILL_MAX,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import DevelopmentTree from '../components/DevelopmentTree';
@@ -430,6 +430,11 @@ export default function CharacterSheet({ publicView = false }) {
   };
 
   const skillMap = Object.fromEntries(skills.map(s => [s.skill_key, s]));
+  // Раса персонажа може зсувати стелю окремих навичок (characteristic_bonuses
+  // → max_bonus) — звідти ж, звідки й расовий бонус до значення.
+  const race = races.find((r) => r.id === c.race_id) ?? null;
+  const { maxBonus: raceMaxBonus } = raceSkillAdjustments(race);
+  const maxFor = (skillKey) => Math.max(1, BASE_SKILL_MAX + (raceMaxBonus[skillKey] || 0));
 
   // Free circle bump (critical success/failure, narrative growth): moves
   // one progress mark, costs nothing.
@@ -448,7 +453,7 @@ export default function CharacterSheet({ publicView = false }) {
     if (!s || c.inspiration_used) return;
     const marks = s.progress_marks || 0;
     if (marks < SKILL_PROGRESS_MARKS) patchSkill(skillKey, { progress_marks: marks + 1 });
-    else if (s.value < 12) patchSkill(skillKey, { value: s.value + 1, progress_marks: 0 });
+    else if (s.value < maxFor(skillKey)) patchSkill(skillKey, { value: s.value + 1, progress_marks: 0 });
     else return;
     patchCharacter({ inspiration_used: true });
   };
@@ -650,6 +655,7 @@ export default function CharacterSheet({ publicView = false }) {
             is_owner={is_owner}
             is_gm={is_gm}
             canUseInspiration={!c.inspiration_used}
+            maxFor={maxFor}
             onAction={handleSkillAction}
             onEditAll={() => setEditingAllSkills(true)}
             initiativeDie={INITIATIVE_DIE[charLevels.agility]}
@@ -1077,7 +1083,7 @@ function BannerBox({ label, sub, accent, wide, onClick, corner }) {
 // ── SkillsTab ─────────────────────────────────────────────────────────────────
 
 function SkillsTab({
-  characteristics, skillMap, charLevels, is_owner, is_gm, canUseInspiration, onAction, onEditAll,
+  characteristics, skillMap, charLevels, is_owner, is_gm, canUseInspiration, maxFor, onAction, onEditAll,
   health, extras, initiativeDie, initiativeModifier = 0, effects, conditionLabels, rollProfiles,
   heroic, onHeroicChange,
 }) {
@@ -1153,6 +1159,7 @@ function SkillsTab({
                     rollProfiles={rollProfiles}
                     label={skill.label}
                     value={s.value}
+                    max={maxFor ? maxFor(skill.key) : BASE_SKILL_MAX}
                     progress={s.progress_marks}
                     is_owner={is_owner}
                     is_gm={is_gm}
@@ -1207,7 +1214,7 @@ const SKILL_ACTIONS = [
 // з d20, яким режимом і з яким модифікатором. Сам профіль (кубик, режим,
 // бонус, джерела, ситуативні модифікатори вузлів) рахує сервер —
 // character-sheet/src/rules/modifiers.js.
-function SkillRow({ skillKey, rollProfiles, label, value, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
+function SkillRow({ skillKey, rollProfiles, label, value, max = BASE_SKILL_MAX, progress, is_owner, is_gm, canUseInspiration = true, onAction }) {
   const { requestRoll } = useDice();
   // Публічний лист читають і неавторизовані: кидок їм недоступний (запит до
   // dice-roller потребує токена), тож кнопка стає звичайним написом — так
@@ -1314,7 +1321,7 @@ function SkillRow({ skillKey, rollProfiles, label, value, progress, is_owner, is
                 (a.key === 'crit_success' && progress >= SKILL_PROGRESS_MARKS) ||
                 (a.key === 'crit_failure' && progress <= 0) ||
                 (a.key === 'narrative' && progress >= SKILL_PROGRESS_MARKS) ||
-                (a.key === 'inspiration' && (!canUseInspiration || (progress >= SKILL_PROGRESS_MARKS && value >= 12)));
+                (a.key === 'inspiration' && (!canUseInspiration || (progress >= SKILL_PROGRESS_MARKS && value >= max)));
               const hint = a.key === 'inspiration'
                 ? (progress >= SKILL_PROGRESS_MARKS ? 'усі кола заповнені — підвищує навичку на 1' : 'позначає одне коло')
                   + (canUseInspiration ? '' : ' · натхнення вже використано')

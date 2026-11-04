@@ -116,13 +116,17 @@ function validateMagicForms(value) {
 }
 
 // Раси персонажа: які публічні раси компендіуму (race_id) гравець може обрати,
-// їхня механіка (±N до 4 навичок однієї характеристики — bonus_value, типово 1,
-// може бути від'ємним — та/або додаткові очки пулу), чи вона основна (is_main,
-// типово true; неосновні гравець бачить лише після «Інші народи») і підвиди — народи компендіуму (people_id) з бонусами до навичок
-// (skill → value). На відміну від решти конфігів, порожній список коректний
-// (рас ще не відкрито). Ключі характеристик і навичок фіксовані (CHECK у
-// character_sheet.skills). Існування й публічність записів компендіуму тут не
-// перевіряємо — character-sheet відсіює недоступні при читанні.
+// їхня механіка (characteristic_bonuses: [{ characteristic, value_bonus?,
+// max_bonus? }] — ±N до значення й/або до стелі (типово 12) усіх 4 навичок
+// однієї характеристики; кожна характеристика — не більше одного запису,
+// value_bonus/max_bonus — ненульові й хоч одне з двох задане — та/або
+// додаткові очки пулу), чи вона основна (is_main, типово true; неосновні
+// гравець бачить лише після «Інші народи») і підвиди — народи компендіуму
+// (people_id) з бонусами до навичок (skill → value). На відміну від решти
+// конфігів, порожній список коректний (рас ще не відкрито). Ключі
+// характеристик і навичок фіксовані (CHECK у character_sheet.skills).
+// Існування й публічність записів компендіуму тут не перевіряємо —
+// character-sheet відсіює недоступні при читанні.
 const CHARACTERISTIC_KEYS = ['agility', 'physique', 'intellect', 'wisdom', 'charisma'];
 const SKILL_KEYS = [
   'evasion', 'acrobatics', 'stealth', 'sleight_of_hand',
@@ -137,6 +141,25 @@ const MAX_RACE_BUDGET = 20;
 
 // Бонус до навички — ціле число зі знаком: від -MAX до -1 або від 1 до MAX.
 const isSkillBonus = (n) => Number.isInteger(n) && n !== 0 && Math.abs(n) <= MAX_SKILL_BONUS;
+
+// Бонус раси до характеристики — value_bonus і/або max_bonus, обидва
+// ненульові цілі в тих самих межах, що й бонус до навички; хоч одне з двох
+// має бути задане.
+function validateCharacteristicBonus(entry) {
+  if (!entry || !CHARACTERISTIC_KEYS.includes(entry.characteristic)) {
+    return `невідома характеристика: ${entry?.characteristic}`;
+  }
+  if (entry.value_bonus != null && !isSkillBonus(entry.value_bonus)) {
+    return `бонус до значення навичок (${entry.characteristic}) має бути ненульовим цілим від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
+  }
+  if (entry.max_bonus != null && !isSkillBonus(entry.max_bonus)) {
+    return `бонус до стелі навичок (${entry.characteristic}) має бути ненульовим цілим від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
+  }
+  if (entry.value_bonus == null && entry.max_bonus == null) {
+    return `бонус до характеристики (${entry.characteristic}) має задавати value_bonus і/або max_bonus`;
+  }
+  return null;
+}
 
 function validatePeopleEntry(entry, seenPeoples) {
   if (!entry || typeof entry.people_id !== 'string' || !UUID_PATTERN.test(entry.people_id)) {
@@ -169,11 +192,14 @@ function validateCharacterRaces(value) {
     if (seenRaces.has(entry.race_id)) return `раса ${entry.race_id} додана двічі`;
     seenRaces.add(entry.race_id);
 
-    if (entry.bonus_characteristic != null && !CHARACTERISTIC_KEYS.includes(entry.bonus_characteristic)) {
-      return `невідома характеристика: ${entry.bonus_characteristic}`;
-    }
-    if (entry.bonus_value != null && !isSkillBonus(entry.bonus_value)) {
-      return `бонус раси до навичок має бути ненульовим цілим від -${MAX_SKILL_BONUS} до ${MAX_SKILL_BONUS}`;
+    const charBonuses = entry.characteristic_bonuses ?? [];
+    if (!Array.isArray(charBonuses)) return 'characteristic_bonuses має бути масивом';
+    const seenChars = new Set();
+    for (const cb of charBonuses) {
+      if (seenChars.has(cb?.characteristic)) return `характеристика ${cb.characteristic} додана двічі до однієї раси`;
+      seenChars.add(cb?.characteristic);
+      const cbError = validateCharacteristicBonus(cb);
+      if (cbError) return cbError;
     }
     if (entry.is_main != null && typeof entry.is_main !== 'boolean') {
       return 'is_main має бути true або false';

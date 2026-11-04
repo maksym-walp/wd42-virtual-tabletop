@@ -129,6 +129,35 @@ export const CHARACTERISTICS = [
   },
 ];
 
+// Найвище можливе значення навички без бонусів раси.
+export const BASE_SKILL_MAX = 12;
+
+// Раса (з конфігу адміна) може давати кожній характеристиці бонус/штраф до
+// значення навичок (value_bonus) і/або до їхньої стелі (max_bonus) —
+// characteristic_bonuses: [{ characteristic, value_bonus?, max_bonus? }].
+// Повертає { valueBonus, maxBonus } — по { skill_key: n } кожне, суму
+// бонусів усіх характеристик раси (на навичку впливає лише одна
+// характеристика, тож по суті завжди один доданок).
+export function raceSkillAdjustments(race) {
+  const valueBonus = {};
+  const maxBonus = {};
+  for (const cb of race?.characteristic_bonuses ?? []) {
+    const char = CHARACTERISTICS.find((c) => c.key === cb.characteristic);
+    if (!char) continue;
+    for (const sk of char.skills) {
+      if (cb.value_bonus) valueBonus[sk.key] = (valueBonus[sk.key] || 0) + cb.value_bonus;
+      if (cb.max_bonus) maxBonus[sk.key] = (maxBonus[sk.key] || 0) + cb.max_bonus;
+    }
+  }
+  return { valueBonus, maxBonus };
+}
+
+// Ефективна стеля навички skillKey для цієї раси (типово 12).
+export function skillMaxFor(race, skillKey) {
+  const { maxBonus } = raceSkillAdjustments(race);
+  return Math.max(1, BASE_SKILL_MAX + (maxBonus[skillKey] || 0));
+}
+
 // minimum skill value required to keep characteristic at a given level
 export const LEVEL_MIN_VALUE = { 1: 1, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12 };
 

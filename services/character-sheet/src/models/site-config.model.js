@@ -4,12 +4,24 @@ const pool = require('../config/db');
 // admin.site_configs — той самий Postgres, що й campaigns.* у
 // campaign-access.model.js, тож звичайний cross-schema SELECT.
 //
-// character_races — [{ race_id, is_main?, bonus_characteristic,
-// bonus_value? (±N до 4 навичок, типово 1), bonus_budget,
+// character_races — [{ race_id, is_main?, characteristic_bonuses: [{
+// characteristic, value_bonus? (±N до 4 навичок), max_bonus? (±N до їхньої
+// стелі, типово 12) }], bonus_budget,
 // peoples: [{ people_id, skill_bonuses: [{ skill, value }] }] }]: які раси
 // компендіуму (compendium.races) гравець може обрати, що вони дають механічно
 // і які народи (compendium.peoples) доступні як підвид. Назви, описи й
 // зображення беремо з компендіуму; приватні записи гравцям не показуємо.
+//
+// normalizeCharacteristicBonuses — старі записи зберігали одну характеристику
+// в bonus_characteristic/bonus_value (типово 1); нові адмін-збереження пишуть
+// масив characteristic_bonuses, старі лишаються без нього.
+function normalizeCharacteristicBonuses(entry) {
+  if (Array.isArray(entry.characteristic_bonuses)) return entry.characteristic_bonuses;
+  if (entry.bonus_characteristic) {
+    return [{ characteristic: entry.bonus_characteristic, value_bonus: entry.bonus_value ?? 1, max_bonus: null }];
+  }
+  return [];
+}
 async function loadPublic(table, ids, columns) {
   if (!ids.length) return new Map();
   const { rows } = await pool.query(
@@ -59,8 +71,7 @@ const SiteConfigModel = {
           description: race.description,
           image_url: race.image_url,
           is_main: e.is_main !== false,
-          bonus_characteristic: e.bonus_characteristic ?? null,
-          bonus_value: e.bonus_value ?? 1,
+          characteristic_bonuses: normalizeCharacteristicBonuses(e),
           bonus_budget: e.bonus_budget ?? 0,
           peoples: (e.peoples || [])
             .filter((p) => peopleMap.has(p.people_id))

@@ -10,7 +10,7 @@ import DevelopmentTree from '../components/DevelopmentTree';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import {
   ARCHETYPES, CHARACTERISTICS, ARCHETYPE_COLORS as ARCHETYPE_COLORS_LIGHT, ARCHETYPE_COLORS_DARK,
-  PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES,
+  PHYSIQUE_HEALTH, skillsToCharLevel, rollHealthDice, CURRENCIES, raceSkillAdjustments, BASE_SKILL_MAX,
 } from '../constants/characterSheet';
 import { useTheme } from '../context/ThemeContext';
 import Card from '../components/ui/Card';
@@ -27,14 +27,6 @@ const INITIAL_MONEY = Object.fromEntries(
   CURRENCIES.flatMap((c) => [[c.high.key, 0], [c.low.key, 0]])
 );
 
-// Раса (з конфігу адміна) може давати бонус або штраф (bonus_value зі знаком, типово +1)
-// до 4 навичок однієї характеристики (bonus_characteristic) і/або додаткові очки
-// пулу (bonus_budget).
-function raceSkillBonusFor(race) {
-  const char = CHARACTERISTICS.find((c) => c.key === race?.bonus_characteristic);
-  const value = race?.bonus_value ?? 1;
-  return Object.fromEntries((char?.skills ?? []).map((s) => [s.key, value]));
-}
 const signed = (n) => (n < 0 ? `−${-n}` : `+${n}`);
 // Підвид додає свій бонус до навичок зверху на расовий — теж безкоштовно.
 function peopleBonusFor(people) {
@@ -42,12 +34,18 @@ function peopleBonusFor(people) {
   for (const { skill, value } of people?.skill_bonuses ?? []) bonus[skill] = (bonus[skill] || 0) + value;
   return bonus;
 }
+// Стеля кожної навички: 12 + расовий max_bonus (щонайменше 1).
+function skillCapsFor(race) {
+  const { maxBonus } = raceSkillAdjustments(race);
+  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.max(1, BASE_SKILL_MAX + (maxBonus[k] || 0))]));
+}
 // Стартове (і мінімальне) значення кожної навички: 1 + расовий бонус + бонус підвиду,
-// але не нижче 1 і не вище 12 (штраф не опускає навичку під одиницю).
+// але не нижче 1 і не вище стелі навички (штраф не опускає навичку під одиницю).
 function skillFloorsFor(race, people) {
-  const raceBonus = raceSkillBonusFor(race);
+  const { valueBonus: raceBonus } = raceSkillAdjustments(race);
   const bonus = peopleBonusFor(people);
-  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.max(1, Math.min(12, 1 + (raceBonus[k] || 0) + (bonus[k] || 0)))]));
+  const caps = skillCapsFor(race);
+  return Object.fromEntries(ALL_SKILL_KEYS.map((k) => [k, Math.max(1, Math.min(caps[k], 1 + (raceBonus[k] || 0) + (bonus[k] || 0)))]));
 }
 function budgetFor(race) {
   return BASE_BUDGET + (race?.bonus_budget ?? 0);
@@ -56,8 +54,12 @@ function budgetFor(race) {
 // Що раса дає механічно — підпис на її картці.
 function raceBonusLabel(race) {
   const parts = [];
-  const char = CHARACTERISTICS.find((c) => c.key === race.bonus_characteristic);
-  if (char) parts.push(`${signed(race.bonus_value ?? 1)} до навичок: ${char.label}`);
+  for (const cb of race.characteristic_bonuses ?? []) {
+    const char = CHARACTERISTICS.find((c) => c.key === cb.characteristic);
+    if (!char) continue;
+    if (cb.value_bonus) parts.push(`${signed(cb.value_bonus)} до навичок: ${char.label}`);
+    if (cb.max_bonus) parts.push(`${signed(cb.max_bonus)} до стелі: ${char.label}`);
+  }
   if (race.bonus_budget) parts.push(`+${race.bonus_budget} очок до пулу`);
   return parts.join(' · ');
 }
@@ -496,19 +498,27 @@ function ChoicePlaceholder({ letter, color }) {
 
 function Step2Skills({ skills, setSkills, remaining, budget, setBudget, race, floors, people }) {
   const floorFor = (key) => floors[key] ?? 1;
+  const caps = skillCapsFor(race);
+  const capFor = (key) => caps[key] ?? BASE_SKILL_MAX;
 
   const setSkill = (key, delta) => {
     setSkills((prev) => {
       const next = prev[key] + delta;
-      if (next < floorFor(key) || next > 12) return prev;
+      if (next < floorFor(key) || next > capFor(key)) return prev;
       if (delta > 0 && remaining <= 0) return prev;
       return { ...prev, [key]: next };
     });
   };
 
-  const raceChar = CHARACTERISTICS.find((c) => c.key === race?.bonus_characteristic);
-  const raceBonus = race?.bonus_value ?? 1;
   const skillLabels = Object.fromEntries(CHARACTERISTICS.flatMap((c) => c.skills.map((s) => [s.key, s.label])));
+  const raceBonuses = (race?.characteristic_bonuses ?? []).flatMap((cb) => {
+    const char = CHARACTERISTICS.find((c) => c.key === cb.characteristic);
+    if (!char) return [];
+    const parts = [];
+    if (cb.value_bonus) parts.push(`${signed(cb.value_bonus)} до навичок «${char.label}»`);
+    if (cb.max_bonus) parts.push(`${signed(cb.max_bonus)} до стелі навичок «${char.label}»`);
+    return parts;
+  });
   const peopleBonuses = (people?.skill_bonuses ?? []).map((b) => `${signed(b.value)} ${skillLabels[b.skill]}`);
 
   return (
@@ -520,10 +530,10 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, race, fl
         </div>
       </div>
       <p className="mb-2 text-sm text-text-dim">
-        {raceChar
-          ? `Раса ${signed(raceBonus)} до навичок характеристики «${raceChar.label}», решта починаються з 1 (нижче 1 навичка не опускається). `
+        {raceBonuses.length
+          ? `Раса: ${raceBonuses.join(', ')}, решта навичок починаються з 1 (нижче 1 навичка не опускається). `
           : 'Усі навички починаються з 1. '}
-        Розподіліть очки між навичками (від стартового значення до 12).
+        Розподіліть очки між навичками (від стартового значення до стелі навички).
       </p>
       {peopleBonuses.length > 0 && (
         <p className="mb-2 text-sm text-text-dim">
@@ -559,7 +569,7 @@ function Step2Skills({ skills, setSkills, remaining, budget, setBudget, race, fl
                     type="button"
                     className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-text disabled:opacity-40"
                     onClick={() => setSkill(skill.key, 1)}
-                    disabled={skills[skill.key] >= 12 || remaining <= 0}
+                    disabled={skills[skill.key] >= capFor(skill.key) || remaining <= 0}
                   >+</button>
                 </div>
               </div>
