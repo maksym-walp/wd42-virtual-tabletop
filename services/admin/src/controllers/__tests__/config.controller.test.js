@@ -207,7 +207,7 @@ describe('ConfigController.update — character_races', () => {
   const P1 = '0b8a4a1e-3c1d-4d49-9a4e-1f1b7c2d3e41';
   const P2 = '5c6d7e8f-1a2b-4c3d-8e9f-a0b1c2d3e4f5';
   const race = {
-    race_id: R1, bonus_characteristic: 'agility', bonus_budget: 0,
+    race_id: R1, characteristic_bonuses: [{ characteristic: 'agility', value_bonus: 1 }], bonus_budget: 0,
     peoples: [{ people_id: P1, skill_bonuses: [{ skill: 'strength', value: 1 }] }],
   };
   const put = async (value) => {
@@ -232,7 +232,7 @@ describe('ConfigController.update — character_races', () => {
   it('200 for a race without mechanics or peoples, and the same people under two races', async () => {
     ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
     const res = await put([
-      { race_id: R1, bonus_characteristic: null, bonus_budget: 4 },
+      { race_id: R1, characteristic_bonuses: [], bonus_budget: 4 },
       { race_id: R2, peoples: [{ people_id: P1 }, { people_id: P2, skill_bonuses: [] }] },
     ]);
     expect(res.status).not.toHaveBeenCalled();
@@ -251,7 +251,46 @@ describe('ConfigController.update — character_races', () => {
   });
 
   it('400 for an unknown bonus characteristic', async () => {
-    expect((await put([{ ...race, bonus_characteristic: 'luck' }])).status).toHaveBeenCalledWith(400);
+    const res = await put([{ ...race, characteristic_bonuses: [{ characteristic: 'luck', value_bonus: 1 }] }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when the same characteristic is bonused twice', async () => {
+    const res = await put([{
+      ...race,
+      characteristic_bonuses: [
+        { characteristic: 'agility', value_bonus: 1 },
+        { characteristic: 'agility', max_bonus: -1 },
+      ],
+    }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('400 when a characteristic bonus has neither value_bonus nor max_bonus', async () => {
+    const res = await put([{ ...race, characteristic_bonuses: [{ characteristic: 'physique' }] }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it.each([0, 11, -11, 1.5, '2'])('400 for characteristic value_bonus %p', async (value_bonus) => {
+    const res = await put([{ ...race, characteristic_bonuses: [{ characteristic: 'agility', value_bonus }] }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it.each([0, 11, -11, 1.5, '2'])('400 for characteristic max_bonus %p', async (max_bonus) => {
+    const res = await put([{ ...race, characteristic_bonuses: [{ characteristic: 'agility', max_bonus }] }]);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('200 for a race with value_bonus and max_bonus on different characteristics', async () => {
+    ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
+    const res = await put([{
+      ...race,
+      characteristic_bonuses: [
+        { characteristic: 'physique', value_bonus: 2 },
+        { characteristic: 'charisma', max_bonus: -1 },
+      ],
+    }]);
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it.each([-1, 21, 1.5, '4'])('400 for bonus_budget %p', async (bonus_budget) => {
@@ -285,14 +324,10 @@ describe('ConfigController.update — character_races', () => {
   it('200 for negative people bonuses and a signed race bonus with is_main', async () => {
     ConfigModel.upsert.mockResolvedValue({ key: 'character_races', value: [] });
     const res = await put([{
-      ...race, bonus_value: -2, is_main: false,
+      ...race, characteristic_bonuses: [{ characteristic: 'agility', value_bonus: -2 }], is_main: false,
       peoples: [{ people_id: P1, skill_bonuses: [{ skill: 'strength', value: -3 }, { skill: 'will', value: 4 }] }],
     }]);
     expect(res.status).not.toHaveBeenCalled();
-  });
-
-  it.each([0, 11, -11, 1.5, '2'])('400 for race bonus_value %p', async (bonus_value) => {
-    expect((await put([{ ...race, bonus_value }])).status).toHaveBeenCalledWith(400);
   });
 
   it.each(['yes', 1])('400 for is_main %p', async (is_main) => {

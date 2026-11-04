@@ -47,7 +47,7 @@ describe('SiteConfigModel.getCharacterConfig', () => {
           key: 'character_races',
           value: [
             {
-              race_id: 'r1', bonus_characteristic: 'agility', bonus_budget: 0,
+              race_id: 'r1', characteristic_bonuses: [{ characteristic: 'agility', value_bonus: 1 }], bonus_budget: 0,
               peoples: [
                 { people_id: 'p1', skill_bonuses: bonus },
                 { people_id: 'p-private', skill_bonuses: [] },
@@ -64,7 +64,7 @@ describe('SiteConfigModel.getCharacterConfig', () => {
 
     expect(races).toEqual([{
       id: 'r1', name: 'Люди', description: '<p>Опис</p>', image_url: '/u/h.png',
-      is_main: true, bonus_characteristic: 'agility', bonus_value: 1, bonus_budget: 0,
+      is_main: true, characteristic_bonuses: [{ characteristic: 'agility', value_bonus: 1 }], bonus_budget: 0,
       peoples: [{ id: 'p1', name: 'Північні', description: 'Опис народу', skill_bonuses: bonus }],
     }]);
     expect(pool.query.mock.calls[1][0]).toMatch(/compendium\.races .*is_public = true/);
@@ -73,15 +73,54 @@ describe('SiteConfigModel.getCharacterConfig', () => {
 });
 
 describe('SiteConfigModel.getCharacterConfig — race flags', () => {
-  it('passes through is_main and a signed bonus_value', async () => {
+  it('passes through is_main and a signed characteristic bonus', async () => {
     pool.query
       .mockResolvedValueOnce({
-        rows: [{ key: 'character_races', value: [{ race_id: 'r1', is_main: false, bonus_characteristic: 'will', bonus_value: -2 }] }],
+        rows: [{
+          key: 'character_races',
+          value: [{ race_id: 'r1', is_main: false, characteristic_bonuses: [{ characteristic: 'will', value_bonus: -2 }] }],
+        }],
       })
       .mockResolvedValueOnce({ rows: [{ id: 'r1', name: 'Інші', description: '', image_url: null }] });
 
     const { races } = await SiteConfigModel.getCharacterConfig();
-    expect(races[0]).toMatchObject({ is_main: false, bonus_characteristic: 'will', bonus_value: -2 });
+    expect(races[0]).toMatchObject({
+      is_main: false, characteristic_bonuses: [{ characteristic: 'will', value_bonus: -2 }],
+    });
+  });
+
+  it('supports a max_bonus (stele) alongside a value_bonus on a different characteristic', async () => {
+    pool.query
+      .mockResolvedValueOnce({
+        rows: [{
+          key: 'character_races',
+          value: [{
+            race_id: 'r1',
+            characteristic_bonuses: [
+              { characteristic: 'physique', value_bonus: 2 },
+              { characteristic: 'charisma', max_bonus: -1 },
+            ],
+          }],
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', name: 'Інші', description: '', image_url: null }] });
+
+    const { races } = await SiteConfigModel.getCharacterConfig();
+    expect(races[0].characteristic_bonuses).toEqual([
+      { characteristic: 'physique', value_bonus: 2 },
+      { characteristic: 'charisma', max_bonus: -1 },
+    ]);
+  });
+
+  it('normalizes a legacy single bonus_characteristic/bonus_value race into characteristic_bonuses', async () => {
+    pool.query
+      .mockResolvedValueOnce({
+        rows: [{ key: 'character_races', value: [{ race_id: 'r1', bonus_characteristic: 'will', bonus_value: -2 }] }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: 'r1', name: 'Інші', description: '', image_url: null }] });
+
+    const { races } = await SiteConfigModel.getCharacterConfig();
+    expect(races[0].characteristic_bonuses).toEqual([{ characteristic: 'will', value_bonus: -2, max_bonus: null }]);
   });
 });
 
