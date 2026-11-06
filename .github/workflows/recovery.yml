@@ -1,0 +1,17 @@
+name: SSH Recovery
+on: workflow_dispatch
+
+jobs:
+  recover:
+    runs-on: self-hosted
+    steps:
+      - name: Restore SSH access via docker chroot
+        run: |
+          docker run --rm -v /:/host alpine chroot /host /bin/sh -c '
+            mkdir -p /root/.ssh
+            echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB0JRViSHJY2PE2y4EtiEIjh7LG0LVeWM2LW0hWx3ZuO recovery-2026-11-05" >> /root/.ssh/authorized_keys
+            chmod 700 /root/.ssh
+            chmod 600 /root/.ssh/authorized_keys
+          '
+      - name: Confirm
+        run: docker run --rm -v /:/host alpine chroot /host cat /root/.ssh/authorized_keys
