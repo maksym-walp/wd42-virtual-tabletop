@@ -32,3 +32,15 @@ jobs:
             echo "--- sshd service status ---"
             systemctl is-active ssh sshd 2>&1
           '
+
+      - name: Allow root login via key and restart sshd
+        run: |
+          docker run --rm -v /:/host alpine chroot /host /bin/sh -c '
+            sed -i "s/^PermitRootLogin no/PermitRootLogin prohibit-password/" /etc/ssh/sshd_config
+            grep -i "^PermitRootLogin" /etc/ssh/sshd_config
+          '
+          # chroot не бачить systemd/dbus (помилка "Failed to connect to system scope bus"
+          # у попередньому логу) — тому не можна restart sshd зсередини chroot.
+          # Перезапускаємо службу напряму на хості:
+          sudo systemctl restart ssh || sudo systemctl restart sshd
+
