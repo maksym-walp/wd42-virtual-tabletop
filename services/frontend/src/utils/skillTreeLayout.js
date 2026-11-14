@@ -284,20 +284,6 @@ export function computeStarLayout(nodes, edges) {
   const orphans = nodes.filter((n) => !n.is_root && !hasParent.has(n.id)).map((n) => n.id).sort(byRank);
   const topLevel = [...(centerId ? primaryKids.get(centerId) || [] : roots), ...orphans];
 
-  // Sector width follows the number of leaves in a subtree, so a bushy branch
-  // gets proportionally more room than a single chain.
-  const weightMemo = new Map();
-  const weightOf = (id, visiting = new Set()) => {
-    if (weightMemo.has(id)) return weightMemo.get(id);
-    if (visiting.has(id)) return 1; // cycle guard
-    visiting.add(id);
-    const kids = primaryKids.get(id) || [];
-    const w = kids.length === 0 ? 1 : kids.reduce((s, k) => s + weightOf(k, visiting), 0);
-    visiting.delete(id);
-    weightMemo.set(id, w);
-    return w;
-  };
-
   // `sweep` = clockwise angle, in [0, 2π), measured from the start of the
   // first top-level sector. Rays sit in the middle of their sector, so the
   // whole picture is rotated back by half a sector to put the first ray
@@ -306,17 +292,15 @@ export function computeStarLayout(nodes, edges) {
   const topSpan = TWO_PI / Math.max(1, topLevel.length);
   const offset = topSpan / 2;
 
+  // Each child gets an equal slice of its parent's sector, regardless of how
+  // bushy its own subtree is — this keeps the whole fan evenly spaced instead
+  // of skewing toward whichever branch happens to have more descendants.
   const assign = (id, a0, a1) => {
     if (sweep.has(id)) return; // cycle guard
     sweep.set(id, (a0 + a1) / 2);
     const kids = (primaryKids.get(id) || []).filter((k) => !sweep.has(k));
-    const total = kids.reduce((s, k) => s + weightOf(k), 0);
-    let cursor = a0;
-    kids.forEach((k) => {
-      const span = ((a1 - a0) * weightOf(k)) / total;
-      assign(k, cursor, cursor + span);
-      cursor += span;
-    });
+    const span = (a1 - a0) / Math.max(1, kids.length);
+    kids.forEach((k, i) => assign(k, a0 + i * span, a0 + (i + 1) * span));
   };
   topLevel.forEach((id, i) => assign(id, i * topSpan, (i + 1) * topSpan));
   if (centerId) sweep.set(centerId, 0);
