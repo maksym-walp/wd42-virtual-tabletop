@@ -1,6 +1,8 @@
 jest.mock('../../models/npc.model');
+jest.mock('../../models/faction.model');
 
 const NpcModel = require('../../models/npc.model');
+const FactionModel = require('../../models/faction.model');
 const NpcController = require('../npc.controller');
 
 function mockRes() {
@@ -75,6 +77,7 @@ describe('NpcController private notes', () => {
 
   it('strips them in the list too', async () => {
     NpcModel.findAll.mockResolvedValue([tom]);
+    FactionModel.findMembershipsByNpcIds.mockResolvedValue({});
     const res = mockRes();
     await NpcController.list(mockReq({ user: PLAYER }), res);
     expect(res.json.mock.calls[0][0].npcs[0]).not.toHaveProperty('private_notes');
