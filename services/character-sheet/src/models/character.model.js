@@ -196,12 +196,14 @@ const CharacterModel = {
       spell_bonus, temp_hp, defense_bonus, inspiration_used, narrative_inspiration_die,
       luck_current, luck_max, rogue_inspiration_die, rogue_inspiration_given_to,
       image_url, image_crop, open_traditions,
+      magic_defense_bonus, special_defense_bonus, armor_defense_override,
     } = data;
 
-    // death_scale/narrative_inspiration_die/rogue_inspiration_* use a
-    // CASE/flag because NULL is itself a valid target value (no stage
-    // selected / no die granted / not yet given to anyone)
+    // death_scale/narrative_inspiration_die/rogue_inspiration_*/armor_defense_override
+    // use a CASE/flag because NULL is itself a valid target value (no stage
+    // selected / no die granted / not yet given to anyone / back to auto-armor)
     const setDeathScale = 'death_scale' in data;
+    const setArmorOverride = 'armor_defense_override' in data;
     const setNarrativeDie = 'narrative_inspiration_die' in data;
     const setRogueDie = 'rogue_inspiration_die' in data;
     const setRogueGivenTo = 'rogue_inspiration_given_to' in data;
@@ -239,6 +241,9 @@ const CharacterModel = {
            image_url           = CASE WHEN $27 THEN $28 ELSE image_url END,
            image_crop          = CASE WHEN $29 THEN $30::jsonb ELSE image_crop END,
            open_traditions     = COALESCE($31::uuid[], open_traditions),
+           magic_defense_bonus   = COALESCE($32, magic_defense_bonus),
+           special_defense_bonus = COALESCE($33, special_defense_bonus),
+           armor_defense_override = CASE WHEN $34 THEN $35::smallint ELSE armor_defense_override END,
            updated_at          = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -263,6 +268,9 @@ const CharacterModel = {
         setImageUrl, setImageUrl ? (image_url ?? null) : null,
         setImageCrop, setImageCrop && !(setImageUrl && !image_url) ? serializeImageCrop(image_crop) : null,
         open_traditions ?? null,
+        magic_defense_bonus ?? null,
+        special_defense_bonus ?? null,
+        setArmorOverride, setArmorOverride ? (armor_defense_override ?? null) : null,
       ]
     );
     return rows[0] || null;
@@ -336,14 +344,14 @@ const CharacterModel = {
             spell_bonus, temp_hp, defense_bonus, inspiration_used,
             narrative_inspiration_die, luck_current, luck_max,
             rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop,
-            people_id, people_bonus)
+            people_id, people_bonus, magic_defense_bonus, special_defense_bonus)
          SELECT user_id, $2, $3, CASE WHEN $5::boolean THEN NULL ELSE race END, $4::uuid, is_public, backstory, notes,
                 current_hp, current_magic, heroic_actions_used, death_scale,
                 health_dice_values, conditions, experience_points, money,
                 spell_bonus, temp_hp, defense_bonus, inspiration_used,
                 narrative_inspiration_die, luck_current, luck_max,
                 rogue_inspiration_die, rogue_inspiration_given_to, image_url, image_crop,
-                people_id, people_bonus
+                people_id, people_bonus, magic_defense_bonus, special_defense_bonus
          FROM character_sheet.characters WHERE id = $1
          RETURNING *`,
         [sourceId, name ?? source.name, newArchetype, newRaceId, raceChanged]

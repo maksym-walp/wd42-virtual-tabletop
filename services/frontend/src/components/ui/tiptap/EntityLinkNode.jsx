@@ -16,6 +16,14 @@ function EntityLinkView({ node, editor, selected, updateAttributes }) {
     setTimeout(() => updateAttributes({ label: name }), 0);
   }, [editor, label, updateAttributes]);
 
+  // Автор вручну задає свій текст (напр. відмінену форму імені) → live:false,
+  // щоб актуальна назва запису більше його не перезаписувала. Порожнє
+  // значення (ліпший вибір — скасувати) повертає live:true.
+  const handleEditLabel = useCallback((newLabel, resetLive) => {
+    if (!editor.isEditable) return;
+    setTimeout(() => updateAttributes(resetLive ? { live: true } : { label: newLabel, live: false }), 0);
+  }, [editor, updateAttributes]);
+
   return (
     <NodeViewWrapper as="span" contentEditable={false} className="inline">
       <EntityLinkChip
@@ -27,6 +35,7 @@ function EntityLinkView({ node, editor, selected, updateAttributes }) {
         editable={editor.isEditable}
         selected={selected}
         onResolvedName={syncLabel}
+        onEditLabel={handleEditLabel}
       />
     </NodeViewWrapper>
   );

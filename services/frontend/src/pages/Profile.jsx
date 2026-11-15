@@ -72,19 +72,20 @@ export default function Profile() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8 pb-24 sm:px-6 md:pb-8">
+    <div className="mx-auto max-w-xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:max-w-4xl">
       <PageHeader
         title="Налаштування"
         action={<Button variant="ghost" size="sm" to={`/profile/${user.username}`}>Мій публічний профіль</Button>}
       />
 
-      <Card className="mb-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card>
         <h2 className="mb-4 font-display text-lg text-text">Вигляд</h2>
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">Акцентний колір</div>
         <AccentPicker />
       </Card>
 
-      <Card className="mb-4">
+      <Card>
         <h2 className="mb-4 font-display text-lg text-text">Обліковий запис</h2>
         <form onSubmit={handleAccountSubmit} className="flex flex-col gap-4">
           <Field label="Нікнейм">
@@ -125,7 +126,7 @@ export default function Profile() {
         </form>
       </Card>
 
-      <Card className="mb-4">
+      <Card>
         <h2 className="mb-4 font-display text-lg text-text">Зміна паролю</h2>
         <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
           <input type="text" name="username" value={user.username} readOnly hidden autoComplete="username" tabIndex={-1} aria-hidden="true" />
@@ -174,7 +175,7 @@ export default function Profile() {
       </Card>
 
       {diceStats && diceStats.total_rolls > 0 && (
-        <Card className="mt-4">
+        <Card className="lg:col-span-2">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="font-display text-lg text-text">Статистика кидків</h2>
             <Button variant="ghost" size="sm" onClick={handleResetDiceStats}>Скинути статистику</Button>
@@ -182,6 +183,7 @@ export default function Profile() {
           <DiceStatsGrid diceStats={diceStats} />
         </Card>
       )}
+      </div>
 
       <Button variant="ghost" onClick={handleLogout} className="mt-4 w-full">
         <LogOut size={16} /> Вийти

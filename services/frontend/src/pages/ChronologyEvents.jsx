@@ -454,7 +454,9 @@ function Timeline({
     return {
       id: item.occId, start, end, labelStart,
       labelEnd: end != null ? endLabelOf(end, labelStart) : null,
-      recurring: item.event.recurrence !== 'none',
+      // Колонка 1–3 задається типом події в адмінці (пріоритет); 4 — завжди
+      // для подій не з основного календаря, незалежно від типу.
+      priorityColumn: eventTypesMap[item.event.event_type]?.priority_column,
       foreign: item.event.calendar_id !== mainCalendar.id,
     };
   }), { desc: sortDir === 'desc', wide });

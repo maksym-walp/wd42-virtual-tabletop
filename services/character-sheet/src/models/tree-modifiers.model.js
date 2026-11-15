@@ -91,4 +91,40 @@ async function treeCastSkillOptionsForMany(characterIds, db = pool) {
   return byCharacter;
 }
 
-module.exports = { treeModifiers, treeModifiersForMany, treeCastSkillOptions, treeCastSkillOptionsForMany };
+// Плоскі числові бонуси відкритих вузлів (luck_max_bonus, defense_bonus,
+// міграція 127) — на відміну від modifiers вище, тут не потрібен ситуативний
+// adv/dis розбір, лише сума по всіх відкритих вузлах. { luck_max_bonus, defense_bonus }
+async function treeFlatBonuses(characterId, db = pool) {
+  const { rows: [row] } = await db.query(
+    `SELECT COALESCE(SUM(n.luck_max_bonus), 0)::int AS luck_max_bonus,
+            COALESCE(SUM(n.defense_bonus), 0)::int  AS defense_bonus
+       FROM character_sheet.tree_progress tp
+       JOIN skill_tree.nodes n ON n.id = tp.node_id
+      WHERE tp.character_id = $1`,
+    [characterId]
+  );
+  return row;
+}
+
+// Те саме для кількох персонажів одразу → { [characterId]: { luck_max_bonus, defense_bonus } }.
+async function treeFlatBonusesForMany(characterIds, db = pool) {
+  if (!characterIds.length) return {};
+  const { rows } = await db.query(
+    `SELECT tp.character_id,
+            COALESCE(SUM(n.luck_max_bonus), 0)::int AS luck_max_bonus,
+            COALESCE(SUM(n.defense_bonus), 0)::int  AS defense_bonus
+       FROM character_sheet.tree_progress tp
+       JOIN skill_tree.nodes n ON n.id = tp.node_id
+      WHERE tp.character_id = ANY($1::uuid[])
+      GROUP BY tp.character_id`,
+    [characterIds]
+  );
+  const byCharacter = {};
+  for (const row of rows) byCharacter[row.character_id] = row;
+  return byCharacter;
+}
+
+module.exports = {
+  treeModifiers, treeModifiersForMany, treeCastSkillOptions, treeCastSkillOptionsForMany,
+  treeFlatBonuses, treeFlatBonusesForMany,
+};

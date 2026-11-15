@@ -16,9 +16,15 @@ const newModifier = () => ({
   target: 'evasion', mode: 'adv', value: 1, situational: false, note: '',
 });
 
-export default function NodeModifiersPicker({ value = [], onChange }) {
+export default function NodeModifiersPicker({ value = [], onChange, archetype }) {
   const update = (id, patch) => onChange(value.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   const remove = (id) => onChange(value.filter((m) => m.id !== id));
+  // Кубики шкоди (Майстерність M, 4.4.3) — лише бійці ростуть нею по дереву;
+  // вже обраний на вузлі іншого архетипу (зміна дерева заднім числом) — не
+  // ховаємо, інакше рядок стає нередагованим.
+  const combatTargets = (currentTarget) => (archetype === 'fighter' || currentTarget === 'damage_dice'
+    ? COMBAT_TARGETS
+    : COMBAT_TARGETS.filter((t) => t.key !== 'damage_dice'));
 
   // Кубики шкоди режиму не мають — при зміні цілі режим доводиться
   // привести до дозволеного, інакше сервер мовчки відкине рядок.
@@ -44,7 +50,7 @@ export default function NodeModifiersPicker({ value = [], onChange }) {
               onChange={(e) => changeTarget(mod, e.target.value)}
             >
               <optgroup label="Бойові кидки">
-                {COMBAT_TARGETS.map((t) => (
+                {combatTargets(mod.target).map((t) => (
                   <option key={t.key} value={t.key}>{t.label}</option>
                 ))}
               </optgroup>

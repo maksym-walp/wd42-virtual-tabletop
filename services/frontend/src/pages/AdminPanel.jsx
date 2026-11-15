@@ -103,15 +103,15 @@ export default function AdminPanel() {
         onRoleChanged={(saved) => setUsers((us) => us.map((u) => (u.id === saved.id ? saved : u)))}
       />
 
-      <BackupCard />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <BackupCard />
 
-      {loading ? (
-        <p className="py-12 text-center text-text-dim">Завантаження...</p>
-      ) : error ? (
-        <p className="text-sm text-danger">{error}</p>
-      ) : (
-        <div className="flex flex-col gap-5">
-          {configs.map((config) => {
+        {loading ? (
+          <p className="py-12 text-center text-text-dim lg:col-span-2">Завантаження...</p>
+        ) : error ? (
+          <p className="text-sm text-danger lg:col-span-2">{error}</p>
+        ) : (
+          configs.map((config) => {
             const Editor = CONFIG_EDITORS[config.key] ?? ConfigCard;
             return (
               <Editor
@@ -121,9 +121,9 @@ export default function AdminPanel() {
                 onSaved={(saved) => handleSaved(config.key, saved)}
               />
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -276,7 +276,7 @@ function BackupCard() {
   const restoredRows = result?.restored.reduce((sum, t) => sum + t.rows, 0);
 
   return (
-    <div className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface lg:col-span-2">
       <div className="border-b border-border bg-bg px-4 py-2">
         <span className="text-xs font-bold uppercase tracking-wide text-text-dim">Резервна копія</span>
       </div>

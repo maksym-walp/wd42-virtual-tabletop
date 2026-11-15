@@ -361,6 +361,7 @@ export default function SkillTree() {
       effect: [], modifiers: [], grants: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
+      luck_max_bonus: 0, defense_bonus: 0,
     });
   };
 
@@ -376,6 +377,7 @@ export default function SkillTree() {
       effect: [], modifiers: [], grants: [], unlocks_complexity: null, cast_skill_options: [],
       archetype: activeArchetype, require_both: false,
       pos_x: nextPosX, pos_y: 0,
+      luck_max_bonus: 0, defense_bonus: 0,
       _parentId: parent.id,
     });
   };
@@ -392,6 +394,8 @@ export default function SkillTree() {
       cast_skill_options: n.cast_skill_options || [],
       archetype: n.archetype || activeArchetype,
       require_both: n.require_both || false,
+      luck_max_bonus: n.luck_max_bonus ?? 0,
+      defense_bonus: n.defense_bonus ?? 0,
     });
   };
 
@@ -1032,7 +1036,7 @@ function NodePanel({ open, node, nodes, edges, level, isGM, grantCatalogs, onEdi
       {node.effect?.length > 0 && (
         <InfoBlock label="Ефект">
           <ul className="list-disc space-y-1 pl-4">
-            {node.effect.map((item, i) => <li key={i}>{item}</li>)}
+            {node.effect.map((item, i) => <li key={i}><SmartTextReader text={item} /></li>)}
           </ul>
         </InfoBlock>
       )}
@@ -1040,6 +1044,15 @@ function NodePanel({ open, node, nodes, edges, level, isGM, grantCatalogs, onEdi
       {node.modifiers?.length > 0 && (
         <InfoBlock label="Модифікатори кидків">
           <NodeModifierList modifiers={node.modifiers} />
+        </InfoBlock>
+      )}
+
+      {(node.luck_max_bonus > 0 || node.defense_bonus > 0) && (
+        <InfoBlock label="Пасивні бонуси">
+          <ul className="list-disc space-y-1 pl-4">
+            {node.luck_max_bonus > 0 && <li>+{node.luck_max_bonus} максимум вдачі</li>}
+            {node.defense_bonus > 0 && <li>+{node.defense_bonus} захист (особливі умови)</li>}
+          </ul>
         </InfoBlock>
       )}
 
@@ -1210,20 +1223,32 @@ function EdgeSettingsModal({ edge, sourceTitle, targetTitle, onToggle, onDelete,
 }
 
 // ── Repeatable text-item list (mirrors SpellForm's components editor) ─────
-function ArrayListField({ label, items, placeholder, onAdd, onRemove, onChangeItem, className = '' }) {
+// `rich`: кожен пункт — SmartTextarea (жирний/курсив/кидки/згадки) замість
+// звичайного textarea; значення лишаються HTML-рядками в тому самому TEXT[].
+function ArrayListField({ label, items, placeholder, onAdd, onRemove, onChangeItem, className = '', rich = false }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">{label}</span>}
       <div className="flex flex-col gap-2">
         {items.map((val, i) => (
           <div key={i} className="flex items-start gap-2">
-            <textarea
-              rows={3}
-              className={`${inputClass} flex-1 resize-y`}
-              value={val}
-              onChange={(e) => onChangeItem(i, e.target.value)}
-              placeholder={placeholder ? `${placeholder} ${i + 1}` : undefined}
-            />
+            {rich ? (
+              <SmartTextarea
+                className="flex-1"
+                rows={3}
+                value={val}
+                onChange={(e) => onChangeItem(i, e.target.value)}
+                placeholder={placeholder ? `${placeholder} ${i + 1}` : undefined}
+              />
+            ) : (
+              <textarea
+                rows={3}
+                className={`${inputClass} flex-1 resize-y`}
+                value={val}
+                onChange={(e) => onChangeItem(i, e.target.value)}
+                placeholder={placeholder ? `${placeholder} ${i + 1}` : undefined}
+              />
+            )}
             <button
               type="button"
               onClick={() => onRemove(i)}
@@ -1273,141 +1298,16 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
   };
 
   return (
-    <Sheet open onClose={onClose} title={form.id ? 'Редагувати вузол' : 'Новий вузол'}>
+    <Sheet open onClose={onClose} size="xl" title={form.id ? 'Редагувати вузол' : 'Новий вузол'}>
       <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Назва *</span>
-          <input
-            autoFocus className={inputClass} value={form.title} onChange={set('title')}
-            onKeyDown={(e) => e.key === 'Enter' && onSave()}
-          />
-        </label>
-
-        <SmartTextarea label="Опис" rows={2} value={form.description || ''} onChange={set('description')} />
-
-        <ArrayListField
-          label="Ефект (текстовий опис)"
-          items={form.effect || []}
-          placeholder="Ефект"
-          onAdd={() => onChange((f) => ({ ...f, effect: [...(f.effect || []), ''] }))}
-          onRemove={(i) => onChange((f) => ({ ...f, effect: f.effect.filter((_, idx) => idx !== i) }))}
-          onChangeItem={(i, val) => onChange((f) => ({
-            ...f, effect: f.effect.map((v, idx) => (idx === i ? val : v)),
-          }))}
-        />
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Модифікатори кидків</span>
-          <p className="text-xs text-text-dim">
-            Те, що система застосує сама: перевага, перешкода чи бонус до названої перевірки.
-            Збігаються з ефектами станів за правилом 1.1.4 — перевага й перешкода нівелюють одне одного.
-          </p>
-          <NodeModifiersPicker
-            value={form.modifiers || []}
-            onChange={(modifiers) => onChange((f) => ({ ...f, modifiers }))}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння</span>
-          <p className="text-xs text-text-dim">
-            «🎁 Видавати» — відкриття вузла одразу додає запис у лист персонажа.
-            «🔓 Доступним» — лише дозволяє додати його вручну.
-          </p>
-          <NodeGrantsPicker
-            catalogs={grantCatalogs}
-            value={form.grants || []}
-            onChange={(grants) => onChange((f) => ({ ...f, grants }))}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Магія</span>
-          <p className="text-xs text-text-dim">
-            Окремі заклинання вузли не видають: персонаж може вивчити заклинання, коли його складність
-            відкрито на дереві, а традицію він сам позначив відкритою в меню чарів.
-          </p>
-          <NodeSpellAccessPicker
-            value={form}
-            onChange={(next) => onChange((f) => ({ ...f, unlocks_complexity: next.unlocks_complexity }))}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Альтернативна навичка чарування</span>
-          <p className="text-xs text-text-dim">
-            Для заклинань обраної форми магії гравець під час кастування може обрати цю навичку
-            замість Чарування — вибір завжди за гравцем.
-          </p>
-          <CastSkillOptionsPicker
-            magicForms={grantCatalogs.magicForms}
-            value={form.cast_skill_options || []}
-            onChange={(cast_skill_options) => onChange((f) => ({ ...f, cast_skill_options }))}
-          />
-        </div>
-
-        <div className="rounded-lg border border-border bg-bg p-3">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-dim">Способи відкриття</p>
-
-          <div className="mb-3 flex items-center gap-3">
-            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
-              <input
-                type="checkbox"
-                checked={hasPoints}
-                onChange={(e) => onChange((f) => ({ ...f, cost: e.target.checked ? (f._lastCost || 1) : 0, _lastCost: f.cost || f._lastCost, require_both: e.target.checked ? f.require_both : false }))}
-              />
-              💰 За пункти досвіду
-            </label>
-            {hasPoints && (
-              <input
-                type="number" min={1}
-                value={form.cost}
-                onChange={(e) => onChange((f) => ({ ...f, cost: Math.max(1, parseInt(e.target.value) || 1) }))}
-                className={`${inputClass} w-20 min-h-9 py-1.5`}
-              />
-            )}
-          </div>
-
-          <div className="flex flex-col items-start gap-2">
-            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
-              <input
-                type="checkbox"
-                checked={hasNarrative}
-                onChange={(e) => onChange((f) => ({ ...f, enableNarrative: e.target.checked, require_both: e.target.checked ? f.require_both : false }))}
-              />
-              📖 Наративне
-            </label>
-            {hasNarrative && (
-              <ArrayListField
-                items={form.narrative_condition || []}
-                placeholder="Умова"
-                onAdd={() => onChange((f) => ({ ...f, narrative_condition: [...(f.narrative_condition || []), ''] }))}
-                onRemove={(i) => onChange((f) => ({
-                  ...f, narrative_condition: f.narrative_condition.filter((_, idx) => idx !== i),
-                }))}
-                onChangeItem={(i, val) => onChange((f) => ({
-                  ...f, narrative_condition: f.narrative_condition.map((v, idx) => (idx === i ? val : v)),
-                }))}
-                className="w-full"
-              />
-            )}
-          </div>
-
-          {hasPoints && hasNarrative && (
-            <div className="mt-3 flex gap-4">
-              <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
-                <input type="radio" name="unlock_mode" checked={!form.require_both} onChange={() => onChange((f) => ({ ...f, require_both: false }))} />
-                🔀 На вибір
-              </label>
-              <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
-                <input type="radio" name="unlock_mode" checked={!!form.require_both} onChange={() => onChange((f) => ({ ...f, require_both: true }))} />
-                🔒 Обидва необхідні
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Назва *</span>
+            <input
+              autoFocus className={inputClass} value={form.title} onChange={set('title')}
+              onKeyDown={(e) => e.key === 'Enter' && onSave()}
+            />
+          </label>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Іконка</span>
             <div className="flex flex-wrap items-center gap-2">
@@ -1415,10 +1315,10 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
                 {isIconUrl(form.icon) ? <img src={form.icon} alt="" className="h-7 w-7 object-contain" /> : (form.icon || '—')}
               </span>
               <Button type="button" variant="ghost" size="sm" onClick={() => iconRef.current?.click()} disabled={iconUploading}>
-                <Upload size={14} /> {iconUploading ? 'Завантаження…' : 'Своя іконка'}
+                <Upload size={14} /> {iconUploading ? '…' : 'Своя'}
               </Button>
               <input
-                className={`${inputClass} w-20 text-center`}
+                className={`${inputClass} w-16 text-center`}
                 placeholder="😀"
                 value={isIconUrl(form.icon) ? '' : (form.icon || '')}
                 onChange={set('icon')}
@@ -1426,18 +1326,175 @@ function NodeFormModal({ form, error, grantCatalogs, onChange, onSave, onClose }
               />
               {form.icon && (
                 <button type="button" onClick={() => onChange((f) => ({ ...f, icon: '' }))} className="text-xs text-text-dim hover:text-danger">
-                  Очистити
+                  ✕
                 </button>
               )}
               <input ref={iconRef} type="file" accept={ACCEPTED_IMAGE_TYPES} className="hidden" onChange={handleIconFile} />
             </div>
             {iconError && <p className="text-xs text-danger">{iconError}</p>}
-            <p className="text-xs text-text-dim">Своє зображення (PNG, WebP, GIF) або emoji.</p>
           </div>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Дерево</span>
-            <span className="py-2 text-sm text-accent">{ARCHETYPES[form.archetype]?.label ?? form.archetype}</span>
-          </label>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SmartTextarea label="Опис" rows={2} value={form.description || ''} onChange={set('description')} />
+          <ArrayListField
+            label="Ефект (текстовий опис)"
+            items={form.effect || []}
+            placeholder="Ефект"
+            rich
+            onAdd={() => onChange((f) => ({ ...f, effect: [...(f.effect || []), ''] }))}
+            onRemove={(i) => onChange((f) => ({ ...f, effect: f.effect.filter((_, idx) => idx !== i) }))}
+            onChangeItem={(i, val) => onChange((f) => ({
+              ...f, effect: f.effect.map((v, idx) => (idx === i ? val : v)),
+            }))}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Модифікатори кидків</span>
+            <p className="text-xs text-text-dim">
+              Те, що система застосує сама: перевага, перешкода чи бонус до названої перевірки.
+              Збігаються з ефектами станів за правилом 1.1.4.
+            </p>
+            <NodeModifiersPicker
+              value={form.modifiers || []}
+              archetype={form.archetype}
+              onChange={(modifiers) => onChange((f) => ({ ...f, modifiers }))}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Вміння</span>
+            <p className="text-xs text-text-dim">
+              «🎁 Видавати» — відкриття вузла одразу додає запис у лист персонажа.
+              «🔓 Доступним» — лише дозволяє додати його вручну.
+            </p>
+            <NodeGrantsPicker
+              catalogs={grantCatalogs}
+              value={form.grants || []}
+              onChange={(grants) => onChange((f) => ({ ...f, grants }))}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Магія</span>
+            <p className="text-xs text-text-dim">
+              Складність заклинань, відкрита на дереві — традицію гравець позначає сам у меню чарів.
+            </p>
+            <NodeSpellAccessPicker
+              value={form}
+              onChange={(next) => onChange((f) => ({ ...f, unlocks_complexity: next.unlocks_complexity }))}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Альтернативна навичка чарування</span>
+            <p className="text-xs text-text-dim">
+              Для заклинань обраної форми магії гравець може обрати цю навичку замість Чарування.
+            </p>
+            <CastSkillOptionsPicker
+              magicForms={grantCatalogs.magicForms}
+              value={form.cast_skill_options || []}
+              onChange={(cast_skill_options) => onChange((f) => ({ ...f, cast_skill_options }))}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.3fr]">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Пасивні бонуси</span>
+            <p className="text-xs text-text-dim">
+              Додаються автоматично при відкритті вузла — без ситуативного вибору гравця.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              {form.archetype === 'rogue' && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-text-dim">Максимум вдачі (пройдисвіт)</span>
+                  <input
+                    type="number"
+                    value={form.luck_max_bonus ?? 0}
+                    onChange={(e) => onChange((f) => ({ ...f, luck_max_bonus: parseInt(e.target.value, 10) || 0 }))}
+                    className={`${inputClass} w-24 min-h-9 py-1.5`}
+                  />
+                </label>
+              )}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-text-dim">Захист (особливі умови)</span>
+                <input
+                  type="number"
+                  value={form.defense_bonus ?? 0}
+                  onChange={(e) => onChange((f) => ({ ...f, defense_bonus: parseInt(e.target.value, 10) || 0 }))}
+                  className={`${inputClass} w-24 min-h-9 py-1.5`}
+                />
+              </label>
+            </div>
+            <label className="mt-1 flex flex-col gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Дерево</span>
+              <span className="text-sm text-accent">{ARCHETYPES[form.archetype]?.label ?? form.archetype}</span>
+            </label>
+          </div>
+
+          <div className="rounded-lg border border-border bg-bg p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-dim">Способи відкриття</p>
+
+            <div className="mb-3 flex items-center gap-3">
+              <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={hasPoints}
+                  onChange={(e) => onChange((f) => ({ ...f, cost: e.target.checked ? (f._lastCost || 1) : 0, _lastCost: f.cost || f._lastCost, require_both: e.target.checked ? f.require_both : false }))}
+                />
+                💰 За пункти досвіду
+              </label>
+              {hasPoints && (
+                <input
+                  type="number" min={1}
+                  value={form.cost}
+                  onChange={(e) => onChange((f) => ({ ...f, cost: Math.max(1, parseInt(e.target.value) || 1) }))}
+                  className={`${inputClass} w-20 min-h-9 py-1.5`}
+                />
+              )}
+            </div>
+
+            <div className="flex flex-col items-start gap-2">
+              <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={hasNarrative}
+                  onChange={(e) => onChange((f) => ({ ...f, enableNarrative: e.target.checked, require_both: e.target.checked ? f.require_both : false }))}
+                />
+                📖 Наративне
+              </label>
+              {hasNarrative && (
+                <ArrayListField
+                  items={form.narrative_condition || []}
+                  placeholder="Умова"
+                  onAdd={() => onChange((f) => ({ ...f, narrative_condition: [...(f.narrative_condition || []), ''] }))}
+                  onRemove={(i) => onChange((f) => ({
+                    ...f, narrative_condition: f.narrative_condition.filter((_, idx) => idx !== i),
+                  }))}
+                  onChangeItem={(i, val) => onChange((f) => ({
+                    ...f, narrative_condition: f.narrative_condition.map((v, idx) => (idx === i ? val : v)),
+                  }))}
+                  className="w-full"
+                />
+              )}
+            </div>
+
+            {hasPoints && hasNarrative && (
+              <div className="mt-3 flex gap-4">
+                <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
+                  <input type="radio" name="unlock_mode" checked={!form.require_both} onChange={() => onChange((f) => ({ ...f, require_both: false }))} />
+                  🔀 На вибір
+                </label>
+                <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
+                  <input type="radio" name="unlock_mode" checked={!!form.require_both} onChange={() => onChange((f) => ({ ...f, require_both: true }))} />
+                  🔒 Обидва необхідні
+                </label>
+              </div>
+            )}
+          </div>
         </div>
 
         {error && <p className="text-sm text-danger">{error}</p>}

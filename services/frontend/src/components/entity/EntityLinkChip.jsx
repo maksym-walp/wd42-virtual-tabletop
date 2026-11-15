@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { ENTITY_KINDS, entityHref } from './entityRegistry';
 import useEntity from './useEntity';
 import EntityHoverCard from './EntityHoverCard';
@@ -17,18 +18,22 @@ function chipText({ def, entry, live, label }) {
 // вкладці. В редакторі (editable) це не <a>, щоб клік лише виділяв вузол;
 // відкрити можна Ctrl/⌘+клік. onResolvedName — повідомити вузол про актуальну назву.
 export default function EntityLinkChip({
-  kind, id, form, label, live, editable = false, selected = false, onResolvedName,
+  kind, id, form, label, live, editable = false, selected = false, onResolvedName, onEditLabel,
 }) {
   const def = ENTITY_KINDS[kind];
   const ref = useRef(null);
   const timer = useRef(null);
+  const inputRef = useRef(null);
   const [active, setActive] = useState(false);
   const [anchor, setAnchor] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   const { status, data } = useEntity(kind, id, live || active);
   const entry = data && form && def?.withForm ? def.withForm(data, form) : data;
 
   useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
   useEffect(() => {
     if (live && status === 'ok' && entry?.name) onResolvedName?.(entry.name);
@@ -57,10 +62,57 @@ export default function EntityLinkChip({
     status === 'missing' && 'entity-link--missing',
     selected && 'entity-link--selected',
   ].filter(Boolean).join(' ');
+  const currentText = chipText({ def, entry, live, label });
+
+  const startEditing = () => {
+    setDraft(currentText);
+    setEditing(true);
+  };
+  const commitEdit = () => {
+    const next = draft.trim();
+    setEditing(false);
+    // Порожній рядок — повернутися до живої назви замість зберігати "нічого".
+    if (!next || next === entry?.name) onEditLabel?.('', true);
+    else onEditLabel?.(next, false);
+  };
+  const cancelEdit = () => setEditing(false);
+
+  if (editable && editing) {
+    return (
+      <span ref={ref} className={className}>
+        <Icon size={12} className="entity-link__icon" aria-hidden="true" />
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+          }}
+          onBlur={commitEdit}
+          className="min-w-0 bg-transparent outline-none"
+          style={{ width: `${Math.max(2, draft.length)}ch` }}
+        />
+      </span>
+    );
+  }
+
   const body = (
     <>
       <Icon size={12} className="entity-link__icon" aria-hidden="true" />
-      <span>{chipText({ def, entry, live, label })}</span>
+      <span>{currentText}</span>
+      {editable && selected && (
+        <button
+          type="button"
+          title="Змінити текст згадки (наприклад, відмінити ім'я)"
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(); }}
+          className="entity-link__edit"
+        >
+          <Pencil size={10} />
+        </button>
+      )}
     </>
   );
   const shared = {

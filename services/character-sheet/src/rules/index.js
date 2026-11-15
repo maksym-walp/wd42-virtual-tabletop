@@ -9,8 +9,16 @@ const { rollProfiles } = require('./modifiers');
 // (models/tree-modifiers.model.js). Правила лишаються чистими: читає БД
 // контролер, сюди список приходить уже готовим. Без нього профілі кидків
 // усе одно рахуються — просто без внеску дерева.
-function sheetDerived(character, skills, treeModifiers = []) {
+//
+// treeFlatBonuses — плоскі числові бонуси відкритих вузлів (luck_max_bonus,
+// defense_bonus, міграція 127; models/tree-modifiers.model.js#treeFlatBonuses).
+// На відміну від modifiers вище, одразу складаються в effects під ключами
+// luck_max_node_bonus/defense_node_bonus — фронт (CharacterSheet.jsx) додає
+// їх до власних полів персонажа (luck_max, magic+special_defense_bonus).
+function sheetDerived(character, skills, treeModifiers = [], treeFlatBonuses = {}) {
   const effects = computeEffects(character.conditions, skills, character.archetype, character);
+  effects.luck_max_node_bonus = treeFlatBonuses.luck_max_bonus ?? 0;
+  effects.defense_node_bonus = treeFlatBonuses.defense_bonus ?? 0;
   return {
     effects,
     timer: timerView(character),

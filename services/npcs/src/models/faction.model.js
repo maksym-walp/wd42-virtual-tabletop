@@ -179,6 +179,33 @@ const FactionModel = {
     );
     return rowCount > 0;
   },
+
+  // Те саме, що findMembershipsByNpc, але пачкою для списку НІПів (таблиця
+  // StatBlockList) — один запит замість N+1. { [npcId]: [{ id, name }] }.
+  async findMembershipsByNpcIds(npcIds, userId, isAdmin) {
+    if (!npcIds.length) return {};
+    const { rows } = await pool.query(
+      `SELECT rel.npc_id, f.id, f.name
+         FROM (
+           SELECT fm.member_id AS npc_id, fm.faction_id
+             FROM npcs.faction_members fm
+            WHERE fm.member_type = 'npc' AND fm.member_id = ANY($1::uuid[])
+           UNION
+           SELECT fl.npc_entry_id AS npc_id, fl.faction_id
+             FROM npcs.faction_leaders fl
+            WHERE fl.npc_entry_id = ANY($1::uuid[])
+         ) rel
+         JOIN npcs.factions f ON f.id = rel.faction_id
+        WHERE ($3::bool OR f.created_by = $2 OR f.is_public = true)
+        ORDER BY f.name ASC`,
+      [npcIds, userId, isAdmin]
+    );
+    const byNpc = {};
+    for (const row of rows) {
+      (byNpc[row.npc_id] ||= []).push({ id: row.id, name: row.name });
+    }
+    return byNpc;
+  },
 };
 
 module.exports = FactionModel;

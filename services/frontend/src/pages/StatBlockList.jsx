@@ -31,6 +31,7 @@ export default function StatBlockList({ kind: kindKey }) {
   const [entries, setEntries] = useState([]);
   const [species, setSpecies] = useState([]);
   const [subspecies, setSubspecies] = useState([]);
+  const [races, setRaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [speciesId, setSpeciesId] = useState('');
@@ -41,7 +42,9 @@ export default function StatBlockList({ kind: kindKey }) {
 
   useEffect(() => {
     compendiumApi.listSpecies().then(setSpecies).catch(() => {});
-  }, []);
+    // Раса — лише для таблиці НІПів (колонка замість "Вид"); бестіарій рас не має.
+    if (kindKey === 'npc') compendiumApi.listRaces().then(setRaces).catch(() => {});
+  }, [kindKey]);
 
   // All subspecies when no species is picked, so the filter is still usable
   // directly without first narrowing by species — same cascade as the entry form.
@@ -58,6 +61,7 @@ export default function StatBlockList({ kind: kindKey }) {
   }, [kindKey, reloadKey]);
 
   const speciesNameById = Object.fromEntries(species.map((s) => [s.id, s.name]));
+  const raceNameById = Object.fromEntries(races.map((r) => [r.id, r.name]));
 
   const handleSpeciesFilter = (value) => {
     setSpeciesId(value);
@@ -87,7 +91,12 @@ export default function StatBlockList({ kind: kindKey }) {
   const activeFilterCount = (speciesId ? 1 : 0) + (subspeciesId ? 1 : 0);
   const showCards = view === 'cards';
 
-  const columns = [
+  // НІПи показують расу й фракції замість виду та здоров'я; бестіарій — як раніше.
+  const columns = kindKey === 'npc' ? [
+    { key: 'name', label: 'Назва', render: (entry) => entry.name },
+    { key: 'race', label: 'Раса', render: (entry) => raceNameById[entry.race_id] ?? '—' },
+    { key: 'factions', label: 'Фракції', render: (entry) => (entry.factions?.length ? entry.factions.map((f) => f.name).join(', ') : '—') },
+  ] : [
     { key: 'name', label: 'Назва', render: (entry) => entry.name },
     { key: 'species', label: 'Вид', render: (entry) => speciesNameById[entry.species_id] ?? '—' },
     { key: 'health', label: "Здоров'я", render: (entry) => entry.health?.formula ?? '—' },

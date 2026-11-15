@@ -5,7 +5,8 @@ import { lockPageScroll } from '../../utils/scrollLock';
 // Bottom sheet on mobile, centered dialog on wider screens. Shared by
 // Spellbook's mobile filter panel and SkillTree's node-detail panel.
 // size='lg' — ширший діалог на десктопі (картка запису зі Столу кампанії).
-const SIZES = { md: 'sm:max-w-md', lg: 'sm:max-w-2xl' };
+// size='xl' — для форм із багатьма полями поряд (редактор вузла дерева).
+const SIZES = { md: 'sm:max-w-md', lg: 'sm:max-w-2xl', xl: 'sm:max-w-4xl' };
 
 export default function Sheet({ open, onClose, title, size = 'md', children }) {
   // Fixed overlay — without this, iOS Safari lets the background scroll

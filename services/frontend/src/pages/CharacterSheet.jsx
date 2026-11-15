@@ -13,7 +13,9 @@ import { recordView } from '../utils/recentlyViewed';
 import { spellAccessFor, missingAccessLabel } from '../utils/spellAccess';
 import useMagicForms from '../hooks/useMagicForms';
 import Tooltip from '../components/ui/Tooltip';
-import { RITUAL_TYPES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellForCharacter } from '../constants/spellbook';
+import { RITUAL_TYPES, SPELL_COMPLEXITIES, formatDuration, primaryNature, natureLabels, FORM_TIERS, spellTiers, spellForCharacter } from '../constants/spellbook';
+import useSpellKinds from '../hooks/useSpellKinds';
+import ComponentsList from '../components/ComponentsList';
 import { CATALOG_TYPES } from '../constants/artifacts';
 import { abilityTiers, abilityForCharacter } from '../constants/abilities';
 import {
@@ -104,8 +106,13 @@ export default function CharacterSheet({ publicView = false }) {
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName]     = useState('');
   const [editingDefense, setEditingDefense]         = useState(false);
-  const [defenseBonusDraft, setDefenseBonusDraft]   = useState(0);
+  const [magicDefenseDraft, setMagicDefenseDraft]   = useState(0);
+  const [specialDefenseDraft, setSpecialDefenseDraft] = useState(0);
+  const [armorOverrideOn, setArmorOverrideOn]       = useState(false);
+  const [armorOverrideDraft, setArmorOverrideDraft] = useState(0);
   const [editingInspiration, setEditingInspiration] = useState(false);
+  const [editingLuckMax, setEditingLuckMax]         = useState(false);
+  const [luckMaxDraft, setLuckMaxDraft]             = useState(0);
   const [editingAllSkills, setEditingAllSkills] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   // Результат відпочинку, який натиснула інша сторона (ГМ чи власник) —
@@ -298,7 +305,10 @@ export default function CharacterSheet({ publicView = false }) {
   };
 
   const openDefenseEditor = () => {
-    setDefenseBonusDraft(data.character.defense_bonus ?? 0);
+    setMagicDefenseDraft(data.character.magic_defense_bonus ?? 0);
+    setSpecialDefenseDraft(data.character.special_defense_bonus ?? 0);
+    setArmorOverrideOn(data.character.armor_defense_override != null);
+    setArmorOverrideDraft(data.character.armor_defense_override ?? 0);
     setEditingDefense(true);
   };
 
@@ -506,27 +516,32 @@ export default function CharacterSheet({ publicView = false }) {
     return catalogItem?.type === 'armor' && e.is_equipped;
   });
   const equippedArmorItem = equippedArmorEntry && (equippedArmorEntry.item || allEquipment.find(a => a.id === equippedArmorEntry.equipment_id));
-  const equippedDefense = equippedArmorItem?.defense_value || 0;
+  // Майстер може вручну задати "Обладунки" незалежно від того, що (чи чи
+  // взагалі) одягнено — напр. для НІП без повного інвентаря.
+  const hasArmorOverride = c.armor_defense_override != null;
+  const equippedDefense = hasArmorOverride ? c.armor_defense_override : (equippedArmorItem?.defense_value || 0);
   // Травма 3+ — пасивний захист удвічі менший (множник з effects, угору).
   const defenseFactor   = effects?.passive_defense_factor ?? 1;
-  const totalDefense    = Math.ceil((equippedDefense + (c.defense_bonus ?? 0)) * defenseFactor);
+  // "Особливі умови" = ручне поле + сума defense_bonus усіх відкритих вузлів
+  // дерева розвитку (рахує character-sheet і віддає через effects).
+  const nodeDefenseBonus   = effects?.defense_node_bonus ?? 0;
+  const specialDefenseTotal = (c.special_defense_bonus ?? 0) + nodeDefenseBonus;
+  const totalDefense = Math.ceil((equippedDefense + (c.magic_defense_bonus ?? 0) + specialDefenseTotal) * defenseFactor);
+  // Максимум вдачі = власне поле персонажа + сума luck_max_bonus відкритих вузлів.
+  const luckMaxEffective = (c.luck_max ?? 0) + (effects?.luck_max_node_bonus ?? 0);
   const heroicTotal    = HEROIC_COUNT[charLevels.wisdom];
   const heroicLeft     = heroicTotal - c.heroic_actions_used;
   const gameInspirationDie = INSPIRATION_DIE[charLevels.charisma];
 
-  // Fighter has no archetype-specific tab of its own — its abilities
-  // (including maneuver-capable ones, is_maneuver=true) show on the general
-  // AbilitiesTab like every other archetype's. Ритуали чаклуна живуть у
-  // «Магії та чарах», окремої вкладки не мають.
-  const ARCHETYPE_TABS = {
-    rogue:       { key: 'luck',      label: 'Вдача' },
-  };
-  const archetypeTab = ARCHETYPE_TABS[c.archetype];
-
+  // Вдача пройдисвіта більше не окрема вкладка — трекер живе на вкладці
+  // «Характеристики» (замість магічної енергії, яку прибрано звідти для всіх
+  // архетипів). Fighter has no archetype-specific tab of its own — its
+  // abilities (including maneuver-capable ones, is_maneuver=true) show on the
+  // general AbilitiesTab like every other archetype's. Ритуали чаклуна живуть
+  // у «Магії та чарах», окремої вкладки не мають.
   const TABS = [
     { key: 'skills',    label: 'Характеристики' },
     { key: 'magic',     label: 'Магія та чари' },
-    ...(archetypeTab ? [archetypeTab] : []),
     { key: 'abilities', label: 'Вміння' },
     { key: 'equipment', label: 'Спорядження' },
     { key: 'tree',      label: 'Дерево розвитку' },
@@ -709,31 +724,43 @@ export default function CharacterSheet({ publicView = false }) {
                     </button>
                   )}
                 />
-                <BannerBox
-                  label="МАГІЧНА ЕНЕРГІЯ"
-                  sub={(
-                    <span className="inline-flex items-center gap-2">
-                      {is_owner && (
-                        <button type="button" aria-label="Менше магії"
-                          className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
-                          disabled={c.current_magic <= 0}
-                          onClick={() => patchCharacter({ current_magic: Math.max(0, c.current_magic - 1) })}>−</button>
-                      )}
-                      <span>{c.current_magic} / {maxMagic}</span>
-                      {is_owner && (
-                        <button type="button" aria-label="Більше магії"
-                          className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
-                          disabled={c.current_magic >= maxMagic}
-                          onClick={() => patchCharacter({ current_magic: Math.min(maxMagic, c.current_magic + 1) })}>+</button>
-                      )}
-                    </span>
-                  )}
-                  accent
-                />
+                {c.archetype === 'rogue' && (
+                  <BannerBox
+                    label="ВДАЧА"
+                    accent
+                    sub={(
+                      <span className="inline-flex items-center gap-2">
+                        {is_owner && (
+                          <button type="button" aria-label="Менше вдачі"
+                            className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
+                            disabled={c.luck_current <= 0}
+                            onClick={() => patchCharacter({ luck_current: Math.max(0, c.luck_current - 1) })}>−</button>
+                        )}
+                        <span>{c.luck_current} / {luckMaxEffective}</span>
+                        {is_owner && (
+                          <button type="button" aria-label="Більше вдачі"
+                            className="flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-hover text-sm text-text disabled:opacity-40"
+                            disabled={c.luck_current >= luckMaxEffective}
+                            onClick={() => patchCharacter({ luck_current: Math.min(luckMaxEffective, c.luck_current + 1) })}>+</button>
+                        )}
+                      </span>
+                    )}
+                    corner={is_owner && (
+                      <button
+                        type="button"
+                        onClick={() => { setLuckMaxDraft(c.luck_max); setEditingLuckMax(true); }}
+                        title="Редагувати максимум вдачі"
+                        className="flex h-6 w-6 items-center justify-center rounded text-text-dim hover:bg-surface-hover hover:text-text"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    )}
+                  />
+                )}
                 <BannerBox
                   label="ПАСИВНИЙ ЗАХИСТ"
                   sub={defenseFactor < 1 ? <span title="Травма: пасивний захист удвічі менший" className="text-danger">{totalDefense}</span> : totalDefense}
-                  onClick={is_owner ? openDefenseEditor : undefined}
+                  onClick={(is_owner || is_gm) ? openDefenseEditor : undefined}
                 />
               </div>
             )}
@@ -800,9 +827,6 @@ export default function CharacterSheet({ publicView = false }) {
             unlockedNodeIds={unlockedNodeIds}
           />
         )}
-        {tab === 'luck' && (
-          <LuckTab c={c} is_owner={is_owner} patchCharacter={patchCharacter} />
-        )}
         {tab === 'equipment' && (
           <EquipmentTab
             c={c} patchCharacter={patchCharacter} currencies={currencies}
@@ -848,33 +872,113 @@ export default function CharacterSheet({ publicView = false }) {
       {editingDefense && (
         <Sheet open onClose={() => setEditingDefense(false)} title="Пасивний захист">
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-text-dim">
-              {equippedArmorItem
-                ? `Одягнено: ${equippedArmorItem.name} (захист ${equippedDefense})`
-                : 'Обладунок не одягнено — захист від спорядження: 0.'}
-              {' '}Разом із модифікатором нижче дає пасивний захист.
-              {defenseFactor < 1 && ' Травма: результат удвічі менший (угору).'}
-            </p>
-            <Field label="Модифікатор">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Обладунки</span>
+              <p className="text-sm text-text">
+                {equippedArmorItem
+                  ? `${equippedArmorItem.name} — захист ${equippedArmorItem.defense_value || 0}`
+                  : 'Обладунок не одягнено — захист 0'}
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs text-text-dim">Підтягується автоматично з одягненого спорядження.</p>
+                {is_owner && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingDefense(false); setTab('equipment'); }}
+                    className="shrink-0 text-xs font-semibold text-accent hover:underline"
+                  >
+                    Перейти до спорядження →
+                  </button>
+                )}
+              </div>
+              {is_gm && (
+                <div className="mt-2 border-t border-border/60 pt-2">
+                  <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-text">
+                    <input
+                      type="checkbox"
+                      checked={armorOverrideOn}
+                      onChange={e => { setArmorOverrideOn(e.target.checked); if (e.target.checked) setArmorOverrideDraft(equippedArmorItem?.defense_value || 0); }}
+                    />
+                    Майстер: задати вручну (незалежно від спорядження)
+                  </label>
+                  {armorOverrideOn && (
+                    <input
+                      type="number"
+                      className={`${inputClass} mt-1.5 w-28`}
+                      value={armorOverrideDraft}
+                      onChange={e => setArmorOverrideDraft(e.target.value)}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Field label="Магічний захист">
               <input
                 autoFocus
                 type="number"
                 className={inputClass}
-                value={defenseBonusDraft}
-                onChange={e => setDefenseBonusDraft(e.target.value)}
+                value={magicDefenseDraft}
+                onChange={e => setMagicDefenseDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              />
+            </Field>
+
+            <Field label="Особливі умови">
+              <input
+                type="number"
+                className={inputClass}
+                value={specialDefenseDraft}
+                onChange={e => setSpecialDefenseDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              />
+              {nodeDefenseBonus > 0 && (
+                <p className="mt-0.5 text-xs text-text-dim">+ {nodeDefenseBonus} від відкритих вузлів дерева розвитку.</p>
+              )}
+            </Field>
+
+            <p className="text-sm text-text-dim">
+              Разом: {Math.ceil(((armorOverrideOn ? (parseInt(armorOverrideDraft, 10) || 0) : (equippedArmorItem?.defense_value || 0)) + (parseInt(magicDefenseDraft, 10) || 0) + (parseInt(specialDefenseDraft, 10) || 0) + nodeDefenseBonus) * defenseFactor)}
+              {defenseFactor < 1 && ' (Травма: удвічі менше, угору)'}
+            </p>
+            <Button onClick={() => {
+              patchCharacter({
+                magic_defense_bonus: parseInt(magicDefenseDraft, 10) || 0,
+                special_defense_bonus: parseInt(specialDefenseDraft, 10) || 0,
+                ...(is_gm ? { armor_defense_override: armorOverrideOn ? (parseInt(armorOverrideDraft, 10) || 0) : null } : {}),
+              });
+              setEditingDefense(false);
+            }}>Зберегти</Button>
+          </div>
+        </Sheet>
+      )}
+
+      {editingLuckMax && (
+        <Sheet open onClose={() => setEditingLuckMax(false)} title="Максимум вдачі">
+          <div className="flex flex-col gap-4">
+            <Field label="Базовий максимум">
+              <input
+                autoFocus
+                type="number"
+                className={inputClass}
+                value={luckMaxDraft}
+                onChange={e => setLuckMaxDraft(e.target.value)}
                 onKeyDown={e => {
                   if (e.key !== 'Enter') return;
-                  patchCharacter({ defense_bonus: parseInt(defenseBonusDraft, 10) || 0 });
-                  setEditingDefense(false);
+                  patchCharacter({ luck_max: Math.max(0, parseInt(luckMaxDraft, 10) || 0) });
+                  setEditingLuckMax(false);
                 }}
               />
             </Field>
-            <p className="text-sm text-text-dim">
-              Разом: {Math.ceil((equippedDefense + (parseInt(defenseBonusDraft, 10) || 0)) * defenseFactor)}
-            </p>
+            {effects?.luck_max_node_bonus > 0 && (
+              <p className="text-sm text-text-dim">
+                + {effects.luck_max_node_bonus} від відкритих вузлів дерева розвитку.
+                {' '}Разом: {Math.max(0, parseInt(luckMaxDraft, 10) || 0) + effects.luck_max_node_bonus}
+              </p>
+            )}
             <Button onClick={() => {
-              patchCharacter({ defense_bonus: parseInt(defenseBonusDraft, 10) || 0 });
-              setEditingDefense(false);
+              patchCharacter({ luck_max: Math.max(0, parseInt(luckMaxDraft, 10) || 0) });
+              setEditingLuckMax(false);
             }}>Зберегти</Button>
           </div>
         </Sheet>
@@ -1674,6 +1778,8 @@ function MagicTab({
             return (
               <SpellEntry key={entry.spell_id} entry={entry} spell={spell}
                 is_owner={is_owner} met={met}
+                currentMagic={c.current_magic}
+                onCast={(amount) => setMagic(c.current_magic - amount)}
                 onPatch={patch => onPatchSpell(entry.spell_id, patch)}
                 onRemove={() => onRemoveSpell(entry.spell_id)}
               />
@@ -1734,11 +1840,12 @@ function TraditionsPanel({ traditions, openIds, is_owner, onToggle }) {
   );
 }
 
-function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, onRemove }) {
+function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, currentMagic = 0, onCast, onPatch, onRemove }) {
   const [showModal, setShowModal] = useState(false);
   const tiers = baseSpell ? spellTiers(baseSpell) : [];
   // Показуємо поля форми, якою персонаж користується (див. spellForCharacter).
   const spell = baseSpell && spellForCharacter(baseSpell, entry);
+  const canCast = is_owner && !!spell?.energy_cost && currentMagic >= spell.energy_cost;
 
   return (
     <>
@@ -1762,6 +1869,14 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
             >
               {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
             </select>
+          )}
+          {is_owner && !!spell?.energy_cost && (
+            <button
+              className="min-h-9 rounded border border-accent/60 px-2.5 py-1.5 text-xs font-semibold text-accent disabled:cursor-not-allowed disabled:border-border disabled:text-text-dim disabled:opacity-50"
+              disabled={!canCast}
+              title={canCast ? `Списати ${spell.energy_cost} магічної енергії` : 'Недостатньо магічної енергії'}
+              onClick={() => onCast(spell.energy_cost)}
+            >Кастувати</button>
           )}
           <label className={`inline-flex items-center gap-1.5 ${is_owner ? 'cursor-pointer' : 'cursor-default'}`}>
             <input
@@ -1791,8 +1906,11 @@ function SpellEntry({ entry, spell: baseSpell, is_owner, met = true, onPatch, on
 
 function SpellDetailModal({ spell, spellId, onClose }) {
   useMagicForms(); // підвантажує відредаговані адміном назви/описи форм магії
-  const type   = primaryNature(spell.nature);
-  const ritual = RITUAL_TYPES[spell.ritual];
+  const { spellKindsMap } = useSpellKinds();
+  const type       = primaryNature(spell.nature);
+  const ritual     = RITUAL_TYPES[spell.ritual];
+  const complexity = SPELL_COMPLEXITIES[spell.complexity];
+  const kind       = spellKindsMap[spell.spell_kind];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70" />
@@ -1807,6 +1925,8 @@ function SpellDetailModal({ spell, spellId, onClose }) {
             </Tooltip>
             <span className="font-display text-base font-bold text-gold">{spell.name}</span>
             {spell.form_label && <span className="text-xs italic text-text-dim">{spell.form_label}</span>}
+            {spell.is_canonical && <CanonBadge />}
+            {spell.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
           </div>
           <div className="flex items-center gap-2">
             <a href={`/spellbook/${spellId}`} target="_blank" rel="noreferrer"
@@ -1815,12 +1935,47 @@ function SpellDetailModal({ spell, spellId, onClose }) {
           </div>
         </div>
         <div className="overflow-y-auto p-4">
-          <div className="mb-4 grid grid-cols-4 gap-px overflow-hidden rounded-md border border-border bg-border">
+          <div className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3">
+            {complexity && <ModalStat label="Складність" value={complexity.label} />}
+            {kind && <ModalStat label="Вид" value={kind.label} />}
             <ModalStat label="Енергія"   value={spell.energy_cost} />
             <ModalStat label="Дії"       value={`${spell.action_time} / 3`} />
             <ModalStat label="Ритуал"    value={ritual ? `${ritual.symbol} ${ritual.label}` : '—'} />
             <ModalStat label="Тривалість" value={formatDuration(spell.duration_value, spell.duration_unit)} />
+            {spell.range_desc && <ModalStat label="Дальність" value={spell.range_desc} />}
+            {spell.spell_kind === 'combat' && spell.damage_die && (
+              <ModalStat label="Шкода" value={`${spell.damage_dice_count || 1}${spell.damage_die}`} />
+            )}
           </div>
+
+          {spell.traditions?.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-text-dim">Традиції:</span>
+              {spell.traditions.map(t => (
+                <Link key={t.id} to={`/spellbook/traditions/${t.id}`}
+                  className="rounded border border-border px-2 py-0.5 text-xs font-semibold text-accent hover:bg-surface-hover">
+                  {t.name}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {spell.components?.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-dim">Компоненти</p>
+              <ComponentsList components={spell.components} />
+            </div>
+          )}
+
+          {spell.lore_creator && (
+            <p className="mb-3 text-sm text-text-dim">
+              Творець:{' '}
+              {spell.lore_creator_npc_id
+                ? <Link to={`/npcs/${spell.lore_creator_npc_id}`} className="text-accent hover:underline">{spell.lore_creator}</Link>
+                : <span className="text-text">{spell.lore_creator}</span>}
+            </p>
+          )}
+
           {spell.narrative_desc && (
             <SmartTextReader text={spell.narrative_desc} className="mb-3 text-sm italic leading-relaxed text-text-dim" />
           )}
@@ -2106,8 +2261,10 @@ function AbilitiesTab({ abilities, allAbilities, archetype, is_owner, onAdd, onP
 }
 
 // Рядок вміння в листі — з формами так само, як SpellEntry: рівнева форма,
-// до якої дійшов персонаж.
+// до якої дійшов персонаж. Клік по рядку — попередній перегляд (модалка),
+// окрема стрілочка ↗ — пряме відкриття сторінки в сервісі вмінь.
 function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPatch, onRemove }) {
+  const [showModal, setShowModal] = useState(false);
   const tiers = baseAbility ? abilityTiers(baseAbility) : [];
   // Поля (описи, тривалість) — з форми, якою персонаж користується.
   const a = baseAbility && abilityForCharacter(baseAbility, entry);
@@ -2115,9 +2272,9 @@ function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPat
   const href = a ? `/abilities/${a.id}${hasForms ? `?form=${encodeURIComponent(a.form_key)}` : ''}` : '#';
 
   return (
-    <div className="mb-1.5 rounded-md border border-border bg-bg px-3 py-2.5">
-      <div className="flex items-start gap-3">
-        <Link to={href} className="flex flex-1 flex-col gap-0.5">
+    <>
+      <div className="mb-1.5 flex cursor-pointer items-start gap-3 rounded-md border border-border bg-bg px-3 py-2.5" onClick={() => setShowModal(true)}>
+        <div className="flex flex-1 flex-col gap-0.5">
           <span className="text-sm text-text">
             {a?.name ?? '(невідоме)'}
             {hasForms && <span className="text-xs text-text-dim"> · {a.form_label}</span>}
@@ -2126,8 +2283,8 @@ function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPat
             <span className="text-xs text-text-dim">{htmlToPreviewText(a.narrative_desc || a.mechanical_desc)}</span>
           )}
           {!met && <span className="text-xs text-danger">⚠ вимоги дерева розвитку більше не виконані</span>}
-        </Link>
-        <div className="flex items-center gap-2">
+        </div>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           {is_owner && tiers.length > 0 && (
             <select
               className="min-h-9 rounded border border-border bg-bg px-1.5 text-xs text-text"
@@ -2138,8 +2295,77 @@ function AbilityEntry({ entry, ability: baseAbility, is_owner, met = true, onPat
               {tiers.map(t => <option key={t} value={t}>{FORM_TIERS[t].label}</option>)}
             </select>
           )}
+          <a href={href} target="_blank" rel="noreferrer"
+            className="flex h-9 w-9 items-center justify-center text-sm text-accent" title="Відкрити у Вміннях"
+            onClick={e => e.stopPropagation()}
+          >↗</a>
           {is_owner && (
             <button className="flex h-9 w-9 items-center justify-center text-sm text-danger" onClick={onRemove}>✕</button>
+          )}
+        </div>
+      </div>
+      {showModal && a && (
+        <AbilityDetailModal ability={a} abilityId={entry.ability_id} onClose={() => setShowModal(false)} />
+      )}
+    </>
+  );
+}
+
+// ── AbilityDetailModal (дзеркало SpellDetailModal) ────────────────────────────
+
+function AbilityDetailModal({ ability, abilityId, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative z-10 flex max-h-[85vh] w-full max-w-[540px] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-surface sm:rounded-2xl sm:border"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border bg-surface-hover px-4 py-3">
+          <div className="flex items-center gap-2">
+            {ability.is_maneuver && (
+              <Tooltip text="Можна використати як маневр — дію в бою">
+                <span className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-text-dim">маневр</span>
+              </Tooltip>
+            )}
+            <span className="font-display text-base font-bold text-gold">{ability.name}</span>
+            {ability.form_label && <span className="text-xs italic text-text-dim">{ability.form_label}</span>}
+            {ability.is_canonical && <CanonBadge />}
+            {ability.is_public && <span className="text-xs italic text-text-dim">публічне</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <a href={`/abilities/${abilityId}`} target="_blank" rel="noreferrer"
+              className="flex h-9 items-center rounded border border-border px-2 text-sm text-accent" title="Відкрити у Вміннях">↗</a>
+            <button className="flex h-9 w-9 items-center justify-center text-text-dim" onClick={onClose}>✕</button>
+          </div>
+        </div>
+        <div className="overflow-y-auto p-4">
+          <div className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border">
+            <ModalStat label="Архетипи" value={(ability.archetypes || []).map(k => ARCHETYPES[k]?.label ?? k).join(', ')} />
+            <ModalStat label="Тривалість" value={formatDuration(ability.duration_value, ability.duration_unit)} />
+          </div>
+
+          {ability.components?.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-text-dim">Компоненти</p>
+              <ComponentsList components={ability.components} />
+            </div>
+          )}
+
+          {ability.lore_creator && (
+            <p className="mb-3 text-sm text-text-dim">
+              Творець:{' '}
+              {ability.lore_creator_npc_id
+                ? <Link to={`/npcs/${ability.lore_creator_npc_id}`} className="text-accent hover:underline">{ability.lore_creator}</Link>
+                : <span className="text-text">{ability.lore_creator}</span>}
+            </p>
+          )}
+
+          {ability.narrative_desc && (
+            <SmartTextReader text={ability.narrative_desc} className="mb-3 text-sm italic leading-relaxed text-text-dim" />
+          )}
+          {ability.mechanical_desc && (
+            <SmartTextReader text={ability.mechanical_desc} className="text-sm leading-relaxed text-text-muted" />
           )}
         </div>
       </div>
@@ -2252,71 +2478,6 @@ function RitualTracker({ tracker, is_owner, onUpdate, onRemove }) {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-// ── LuckTab (rogue) ──────────────────────────────────────────────────────────
-
-function LuckTab({ c, is_owner, patchCharacter }) {
-  const setLuckCurrent = v => patchCharacter({ luck_current: Math.max(0, Math.min(c.luck_max, v)) });
-  const setLuckMax     = v => patchCharacter({ luck_max: Math.max(0, v) });
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <SectionTitle>Вдача</SectionTitle>
-        <p className="-mt-1 mb-3 text-xs italic text-text-dim">Дозволяє перекинути d20 при перевірці</p>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Залишилось</span>
-            <div className="flex items-center gap-1">
-              {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setLuckCurrent(c.luck_current - 1)}>−</button>}
-              <span className="min-w-[40px] text-center text-3xl font-bold text-gold">{c.luck_current}</span>
-              {is_owner && <button className="flex h-9 w-9 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setLuckCurrent(c.luck_current + 1)}>+</button>}
-            </div>
-          </div>
-          <span className="text-lg text-border">/</span>
-          <div className="flex flex-col items-center">
-            <span className="mb-0.5 text-[0.62rem] uppercase tracking-wide text-text-dim">Макс</span>
-            <div className="flex items-center gap-1">
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setLuckMax(c.luck_max - 1)}>−</button>}
-              <span className="min-w-[24px] text-center text-lg font-semibold text-text-muted">{c.luck_max}</span>
-              {is_owner && <button className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface-hover text-text" onClick={() => setLuckMax(c.luck_max + 1)}>+</button>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <SectionTitle>Ігрове натхнення</SectionTitle>
-        <p className="-mt-1 mb-3 text-xs italic text-text-dim">Кубик, який ви можете віддати іншому гравцю (або собі) цієї сесії</p>
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          <button
-            className={`rounded border px-2.5 py-1.5 text-sm ${!c.rogue_inspiration_die ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'}`}
-            onClick={() => is_owner && patchCharacter({ rogue_inspiration_die: null })}
-            disabled={!is_owner}
-          >Немає</button>
-          {DAMAGE_DICE.map(die => (
-            <button
-              key={die}
-              className={`rounded border px-2.5 py-1.5 text-sm font-semibold ${c.rogue_inspiration_die === die ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-dim'}`}
-              onClick={() => is_owner && patchCharacter({ rogue_inspiration_die: die })}
-              disabled={!is_owner}
-            >{die}</button>
-          ))}
-        </div>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-text-dim">Кому віддано</span>
-          <input
-            className={inputClass}
-            value={c.rogue_inspiration_given_to ?? ''}
-            onChange={e => patchCharacter({ rogue_inspiration_given_to: e.target.value || null })}
-            placeholder="Ім'я гравця чи персонажа"
-            disabled={!is_owner}
-          />
-        </label>
       </div>
     </div>
   );

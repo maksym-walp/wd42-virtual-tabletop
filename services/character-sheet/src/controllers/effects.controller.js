@@ -1,7 +1,7 @@
 const CharacterStateModel = require('../models/character-state.model');
 const { sheetDerived } = require('../rules');
 const { heroicTotal } = require('../rules/stats');
-const { treeModifiersForMany, treeCastSkillOptionsForMany } = require('../models/tree-modifiers.model');
+const { treeModifiersForMany, treeCastSkillOptionsForMany, treeFlatBonusesForMany } = require('../models/tree-modifiers.model');
 const { treeSpellAccessForMany } = require('../models/spell-access.model');
 const EquipmentModel = require('../models/equipment.model');
 const SpellProgressModel = require('../models/spell.model');
@@ -31,13 +31,14 @@ const EffectsController = {
     const spells = (await SpellProgressModel.combatSpellsForMany(ownIds)) ?? {};
     const spellAccess = (await treeSpellAccessForMany(ownIds)) ?? {};
     const castSkillOptions = (await treeCastSkillOptionsForMany(ownIds)) ?? {};
+    const flatBonuses = (await treeFlatBonusesForMany(ownIds)) ?? {};
 
     const result = {};
     for (const character of characters) {
       const own = skills.filter((s) => s.character_id === character.id);
       const access = spellAccess[character.id] ?? { traditions: [], maxComplexity: null };
       result[character.id] = {
-        ...sheetDerived(character, own, modifiers[character.id] ?? []),
+        ...sheetDerived(character, own, modifiers[character.id] ?? [], flatBonuses[character.id] ?? {}),
         conditions: character.conditions || [],
         // Архетип потрібен трекеру для правила повторення дій (4.10):
         // бійцю не рахуються атаки, чаклуну — чарування.

@@ -1,4 +1,5 @@
 const NpcModel = require('../models/npc.model');
+const FactionModel = require('../models/faction.model');
 const { canCreate, canWrite, isAdmin } = require('./access');
 const { isReadable } = require('./visibility');
 const { decorateStatBlock } = require('../dto/stat-block.dto');
@@ -116,7 +117,14 @@ function parseImportRecords(records) {
 const NpcController = {
   async list(req, res) {
     const npcs = await NpcModel.findAll(req.user.sub, isAdmin(req.user));
-    res.json({ npcs: npcs.map((n) => present(n, req.user)) });
+    // Фракції — пачкою на весь список (таблиця НІПів показує колонку
+    // "Фракції" замість "Здоров'я"), а не по одному запиту на рядок.
+    const factionsByNpc = await FactionModel.findMembershipsByNpcIds(
+      npcs.map((n) => n.id), req.user.sub, isAdmin(req.user)
+    );
+    res.json({
+      npcs: npcs.map((n) => ({ ...present(n, req.user), factions: factionsByNpc[n.id] ?? [] })),
+    });
   },
 
   async create(req, res) {
