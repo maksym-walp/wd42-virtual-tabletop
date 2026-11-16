@@ -570,26 +570,28 @@ export function EventTypesConfigCard({ config, onChange, onSaved }) {
             type="color"
             value={HEX_COLOR_RE.test(t.color || '') ? t.color : '#888888'}
             onChange={(e) => update(t._rowId, { color: e.target.value })}
-            className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1"
+            className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1 [&::-webkit-color-swatch]:rounded-[inherit] [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
             aria-label={`Колір типу ${t.label || ''}`}
           />
-          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_7rem_6rem]">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             <input className={inputClass} placeholder="Назва" value={t.label}
               onChange={(e) => update(t._rowId, { label: e.target.value })} />
-            <input className={keyInputClass} placeholder="key" value={t.key}
-              onChange={(e) => update(t._rowId, { key: e.target.value })} />
-            <input className={keyInputClass} placeholder="#rrggbb" value={t.color} maxLength={7}
-              onChange={(e) => update(t._rowId, { color: e.target.value })} />
-            <select
-              className={`${keyInputClass} basis-24`}
-              title="Пріоритетна колонка на стрічці часу (4-та — завжди для подій не з основного календаря)"
-              value={[1, 2, 3].includes(t.priority_column) ? t.priority_column : 1}
-              onChange={(e) => update(t._rowId, { priority_column: parseInt(e.target.value, 10) })}
-            >
-              <option value={1}>Колонка 1</option>
-              <option value={2}>Колонка 2</option>
-              <option value={3}>Колонка 3</option>
-            </select>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(5rem,1fr)_minmax(5rem,1fr)_minmax(6rem,1fr)]">
+              <input className={keyInputClass} placeholder="key" value={t.key}
+                onChange={(e) => update(t._rowId, { key: e.target.value })} />
+              <input className={keyInputClass} placeholder="#rrggbb" value={t.color} maxLength={7}
+                onChange={(e) => update(t._rowId, { color: e.target.value })} />
+              <select
+                className={keyInputClass}
+                title="Пріоритетна колонка на стрічці часу (4-та — завжди для подій не з основного календаря)"
+                value={[1, 2, 3].includes(t.priority_column) ? t.priority_column : 1}
+                onChange={(e) => update(t._rowId, { priority_column: parseInt(e.target.value, 10) })}
+              >
+                <option value={1}>Колонка 1</option>
+                <option value={2}>Колонка 2</option>
+                <option value={3}>Колонка 3</option>
+              </select>
+            </div>
           </div>
           <button type="button" onClick={() => onChange(value.filter((x) => x._rowId !== t._rowId))}
             aria-label="Видалити тип" className="shrink-0 rounded-lg p-2 text-text-dim hover:text-danger">

@@ -12,7 +12,7 @@ export default function AccentPicker() {
           value={accent || DEFAULT_ACCENT}
           onChange={(e) => setAccent(e.target.value.toLowerCase())}
           aria-label="Акцентний колір"
-          className="h-11 w-16 cursor-pointer rounded-lg border border-border bg-bg p-1"
+          className="h-11 w-16 cursor-pointer rounded-lg border border-border bg-bg p-1 [&::-webkit-color-swatch]:rounded-[inherit] [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
         />
         <span className="text-sm text-text-muted">{(accent || DEFAULT_ACCENT).toUpperCase()}</span>
         {accent && (

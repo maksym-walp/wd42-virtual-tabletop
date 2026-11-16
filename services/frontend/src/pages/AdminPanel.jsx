@@ -103,27 +103,39 @@ export default function AdminPanel() {
         onRoleChanged={(saved) => setUsers((us) => us.map((u) => (u.id === saved.id ? saved : u)))}
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <BackupCard />
-
-        {loading ? (
-          <p className="py-12 text-center text-text-dim lg:col-span-2">Завантаження...</p>
-        ) : error ? (
-          <p className="text-sm text-danger lg:col-span-2">{error}</p>
-        ) : (
-          configs.map((config) => {
-            const Editor = CONFIG_EDITORS[config.key] ?? ConfigCard;
-            return (
-              <Editor
-                key={config.key}
-                config={config}
-                onChange={(value) => updateLocal(config.key, value)}
-                onSaved={(saved) => handleSaved(config.key, saved)}
-              />
-            );
-          })
-        )}
-      </div>
+      {loading ? (
+        <p className="py-12 text-center text-text-dim">Завантаження...</p>
+      ) : error ? (
+        <p className="text-sm text-danger">{error}</p>
+      ) : (
+        (() => {
+          // Дві незалежні колонки (а не grid-рядки): так висота кожної картки
+          // залежить лише від власного вмісту, а не від найвищої картки в
+          // тому самому рядку сітки.
+          const cards = [
+            <BackupCard key="backup" />,
+            ...configs.map((config) => {
+              const Editor = CONFIG_EDITORS[config.key] ?? ConfigCard;
+              return (
+                <Editor
+                  key={config.key}
+                  config={config}
+                  onChange={(value) => updateLocal(config.key, value)}
+                  onSaved={(saved) => handleSaved(config.key, saved)}
+                />
+              );
+            }),
+          ];
+          const left = cards.filter((_, i) => i % 2 === 0);
+          const right = cards.filter((_, i) => i % 2 === 1);
+          return (
+            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+              <div className="flex flex-col gap-5">{left}</div>
+              <div className="flex flex-col gap-5">{right}</div>
+            </div>
+          );
+        })()
+      )}
     </div>
   );
 }

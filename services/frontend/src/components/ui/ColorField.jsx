@@ -41,7 +41,7 @@ export default function ColorField({ value, onChange, presets, label, className 
           type="color"
           value={safeValue}
           onChange={(e) => onChange(e.target.value)}
-          className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1"
+          className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-border bg-bg p-1 [&::-webkit-color-swatch]:rounded-[inherit] [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
           aria-label="Колір"
         />
         <input
