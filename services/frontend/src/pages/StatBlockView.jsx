@@ -148,7 +148,7 @@ export default function StatBlockView({ kind: kindKey }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-6">
         <div className="overflow-hidden rounded-lg border border-border bg-surface lg:sticky lg:top-4 lg:self-start">
           {entry.image_url && (
-            <div className="aspect-[16/9] w-full overflow-hidden bg-bg">
+            <div className={`${isNpc ? 'aspect-[3/4]' : 'aspect-[16/9]'} w-full overflow-hidden bg-bg`}>
               <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} />
             </div>
           )}

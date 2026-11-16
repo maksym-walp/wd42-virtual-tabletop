@@ -14,7 +14,7 @@ export default function StatBlockCard({ kind: kindKey, entry, ...rest }) {
       style={{ borderLeft: '4px solid var(--color-accent)' }}
     >
       {entry.image_url && (
-        <div className="aspect-[4/3] w-full overflow-hidden bg-bg">
+        <div className={`${kindKey === 'npc' ? 'aspect-[3/4]' : 'aspect-[4/3]'} w-full overflow-hidden bg-bg`}>
           <CroppedImage src={entry.image_url} crop={entry.image_crop} alt={entry.name} loading="lazy" />
         </div>
       )}
