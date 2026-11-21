@@ -59,7 +59,6 @@ export default function MapView() {
   // Pin authoring (owner only)
   const [placing, setPlacing] = useState(false);
   const [pendingCoords, setPendingCoords] = useState(null);
-  const [editingPin, setEditingPin] = useState(null);
   const [myLocations, setMyLocations] = useState([]);
   const [myCampaigns, setMyCampaigns] = useState([]);
 
@@ -371,7 +370,6 @@ export default function MapView() {
 
   const handlePinSaved = async () => {
     setPendingCoords(null);
-    setEditingPin(null);
     await Promise.all([refreshPins(), refreshMyLocations()]);
   };
 
@@ -733,7 +731,9 @@ export default function MapView() {
           isGm={isOwner}
           year={filterYear}
           pin={selectedPin}
-          onEditPin={setEditingPin}
+          mapId={id}
+          lenses={lenses}
+          campaigns={myCampaigns}
           onRemovePin={handleRemovePin}
           onDeleteLocation={handleDeleteLocation}
           onLocationUpdated={refreshPins}
@@ -741,17 +741,16 @@ export default function MapView() {
         />
       )}
 
-      {(pendingCoords || editingPin) && (
+      {pendingCoords && (
         <PinForm
           mapId={id}
           coords={pendingCoords}
-          pin={editingPin}
           lenses={lenses}
           campaigns={myCampaigns}
           activeLensId={activeLens?.id}
           myLocations={myLocations}
           onSaved={handlePinSaved}
-          onClose={() => { setPendingCoords(null); setEditingPin(null); }}
+          onClose={() => setPendingCoords(null)}
         />
       )}
 

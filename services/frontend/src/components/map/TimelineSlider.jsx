@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Ruler, Equal } from 'lucide-react';
 
 // Floating year scrubber for the map view. Spans [min, max] (the min/max year
 // across the active lens's versions); `ticks` are the years that actually have
 // a version — drawn as notches on the track in both modes.
 //
-// Two track modes, switched with the toggle:
-//   "за роками"    — value is continuous, notch spacing reflects the real year
+// Two track modes, switched with the toggle (icon clarifies which is which —
+// a ruler for "measured by real years" vs. an equals sign for "equal steps"):
+//   "пропорційно"  — value is continuous, notch spacing reflects the real year
 //                    gap. Clusters of versions in a wide range look cramped.
 //   "рівномірно"   — the slider is an index into the version list, so every
 //                    version gets equal spacing regardless of the year gap.
@@ -14,7 +15,7 @@ import { Clock } from 'lucide-react';
 // orientation: 'horizontal' (bottom-centre, phones) or 'vertical' (left rail,
 // wide screens — a static block, the parent positions it).
 export default function TimelineSlider({ min, max, value, ticks = [], onChange, orientation = 'horizontal' }) {
-  const [even, setEven] = useState(false);
+  const [even, setEven] = useState(true);
   const [draft, setDraft] = useState(null); // in-progress text in the year input
   if (min == null || max == null || min >= max) return null;
 
@@ -62,15 +63,30 @@ export default function TimelineSlider({ min, max, value, ticks = [], onChange, 
   );
 
   const modeToggle = canEven && (
-    <div className={`flex overflow-hidden rounded border border-border text-[10px] font-semibold ${vertical ? 'flex-col' : ''}`}>
-      <button type="button" onClick={() => setEven(false)}
-        className={`px-1.5 py-0.5 ${!useEven ? 'bg-gold/20 text-gold' : 'text-text-dim hover:bg-surface-hover'}`}>
-        за роками
+    <div
+      role="radiogroup"
+      aria-label="Крок шкали часу"
+      className={`flex overflow-hidden rounded-md border border-border text-[11px] font-semibold ${vertical ? 'flex-col' : ''}`}
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={!useEven}
+        title="Пропорційно: відстань на шкалі відповідає різниці років між версіями"
+        onClick={() => setEven(false)}
+        className={`flex items-center gap-1 px-2 py-1 ${!useEven ? 'bg-gold/20 text-gold' : 'text-text-dim hover:bg-surface-hover'}`}
+      >
+        <Ruler size={12} /> пропорційно
       </button>
-      <button type="button"
+      <button
+        type="button"
+        role="radio"
+        aria-checked={useEven}
+        title="Рівномірно: усі версії розташовані на однаковій відстані одна від одної"
         onClick={() => { setEven(true); onChange(years[nearestIdx]); }}
-        className={`px-1.5 py-0.5 ${vertical ? 'border-t' : 'border-l'} border-border ${useEven ? 'bg-gold/20 text-gold' : 'text-text-dim hover:bg-surface-hover'}`}>
-        рівномірно
+        className={`flex items-center gap-1 px-2 py-1 ${vertical ? 'border-t' : 'border-l'} border-border ${useEven ? 'bg-gold/20 text-gold' : 'text-text-dim hover:bg-surface-hover'}`}
+      >
+        <Equal size={12} /> рівномірно
       </button>
     </div>
   );

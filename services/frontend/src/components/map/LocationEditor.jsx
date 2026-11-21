@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, Clock } from 'lucide-react';
+import { Plus, Trash2, Clock, SlidersHorizontal } from 'lucide-react';
 import Sheet from '../ui/Sheet';
 import Button from '../ui/Button';
+import Field, { inputClass } from '../ui/Field';
+import MultiSelectDropdown from '../ui/MultiSelectDropdown';
 import mapsApi from '../../api/maps';
 import LocationFields from './LocationFields';
 import LocationVersionFields from './LocationVersionFields';
@@ -32,9 +34,27 @@ function versionPayload(v) {
 // Shared create/edit modal for a location. `location` is either null (new) or a
 // full location object with `.versions`. Renders the base fields once plus a
 // list of chronological versions the GM can add/remove.
-export default function LocationEditor({ location, onClose, onSaved }) {
+//
+// When `pin` (plus `mapId`/`lenses`/`campaigns`) is given, also renders that
+// pin's visibility settings (lens/campaign restriction, year window) in the
+// same window instead of a separate one — saving the location saves the pin too.
+export default function LocationEditor({ location, pin, mapId, lenses, campaigns, onClose, onSaved }) {
   const isEdit = Boolean(location?.id);
   const keySeq = useRef(1);
+
+  const readYear = (raw) => {
+    const s = raw.trim();
+    if (s === '') return undefined;
+    const n = Number(s);
+    return Number.isInteger(n) ? n : NaN;
+  };
+
+  const [lensIds, setLensIds] = useState(() => pin?.lens_ids || []);
+  const [visibleCampaignIds, setVisibleCampaignIds] = useState(() => pin?.visible_campaign_ids || []);
+  const [pinStartYear, setPinStartYear] = useState(() => (pin?.start_year != null ? String(pin.start_year) : ''));
+  const [pinEndYear, setPinEndYear] = useState(() => (pin?.end_year != null ? String(pin.end_year) : ''));
+  const lensOptions = (lenses || []).map((l) => ({ key: l.id, label: l.name }));
+  const campaignOptions = (campaigns || []).map((c) => ({ key: c.id, label: c.name }));
 
   const [base, setBase] = useState(() => (isEdit
     ? { name: location.name || '', types: location.types || [], marker_icon: location.marker_icon || null, marker_level: location.marker_level ?? null }
@@ -75,6 +95,10 @@ export default function LocationEditor({ location, onClose, onSaved }) {
       }
       if (s != null && e != null && s > e) { setError('Рік завершення раніше за рік початку'); return; }
     }
+    const pinStart = readYear(pinStartYear);
+    const pinEnd = readYear(pinEndYear);
+    if (pin && (Number.isNaN(pinStart) || Number.isNaN(pinEnd))) { setError('Рік має бути цілим числом'); return; }
+    if (pin && pinStart != null && pinEnd != null && pinStart > pinEnd) { setError('Рік початку пізніший за рік завершення'); return; }
     setError('');
     setSaving(true);
     try {
@@ -110,6 +134,19 @@ export default function LocationEditor({ location, onClose, onSaved }) {
         }
       }
 
+      if (pin) {
+        await mapsApi.updatePin(mapId, pin.id, {
+          x_coordinate: pin.x_coordinate,
+          y_coordinate: pin.y_coordinate,
+          min_zoom: pin.min_zoom,
+          max_zoom: pin.max_zoom,
+          lens_ids: lensIds,
+          visible_campaign_ids: visibleCampaignIds,
+          start_year: pinStart ?? null,
+          end_year: pinEnd ?? null,
+        });
+      }
+
       onSaved();
     } catch (err) {
       setError(err.response?.data?.message || 'Не вдалось зберегти');
@@ -130,8 +167,9 @@ export default function LocationEditor({ location, onClose, onSaved }) {
   };
 
   return (
-    <Sheet open onClose={onClose} title={isEdit ? 'Редагувати локацію' : 'Нова локація'}>
-      <div className="flex flex-col gap-4">
+    <Sheet open onClose={onClose} title={isEdit ? 'Редагувати локацію' : 'Нова локація'} size="xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+      <div className="flex flex-1 flex-col gap-4">
         <LocationFields value={base} onChange={setBase} />
 
         <div className="flex flex-col gap-3">
@@ -162,20 +200,46 @@ export default function LocationEditor({ location, onClose, onSaved }) {
             <Plus size={14} /> Додати версію
           </Button>
         </div>
+      </div>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+      {pin && (
+        <div className="flex flex-col gap-3 sm:w-80 sm:shrink-0 sm:border-l sm:border-border sm:pl-6">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">
+            <SlidersHorizontal size={13} /> Видимість мітки
+          </p>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-2">
-            <Button onClick={save} disabled={saving}>{saving ? 'Збереження…' : 'Зберегти'}</Button>
-            <Button variant="ghost" onClick={onClose}>Скасувати</Button>
+          <Field label="Видима на шарах" hint="Порожньо — видима на всіх шарах мапи.">
+            <MultiSelectDropdown options={lensOptions} value={lensIds} onChange={setLensIds} placeholder="Усі шари" />
+          </Field>
+
+          <Field label="Видима в кампаніях" hint="Порожньо — видима в будь-якій кампанії, що має доступ до мапи.">
+            <MultiSelectDropdown options={campaignOptions} value={visibleCampaignIds} onChange={setVisibleCampaignIds} placeholder="Усі кампанії" />
+          </Field>
+
+          <div className="flex gap-3">
+            <Field label="Рік початку" className="flex-1" hint="Без нижньої межі.">
+              <input type="number" className={inputClass} value={pinStartYear} onChange={(e) => setPinStartYear(e.target.value)} placeholder="—" />
+            </Field>
+            <Field label="Рік завершення" className="flex-1" hint="Без верхньої межі.">
+              <input type="number" className={inputClass} value={pinEndYear} onChange={(e) => setPinEndYear(e.target.value)} placeholder="—" />
+            </Field>
           </div>
-          {isEdit && (
-            <Button variant="danger" size="sm" onClick={del} disabled={saving}>
-              <Trash2 size={14} /> Видалити
-            </Button>
-          )}
         </div>
+      )}
+      </div>
+
+      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <Button onClick={save} disabled={saving}>{saving ? 'Збереження…' : 'Зберегти'}</Button>
+          <Button variant="ghost" onClick={onClose}>Скасувати</Button>
+        </div>
+        {isEdit && (
+          <Button variant="danger" size="sm" onClick={del} disabled={saving}>
+            <Trash2 size={14} /> Видалити
+          </Button>
+        )}
       </div>
     </Sheet>
   );

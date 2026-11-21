@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, Share2, Check, Pencil, Trash2, MapPin, SlidersHorizontal, Clock } from 'lucide-react';
+import { X, Share2, Check, Pencil, Trash2, MapPin, Clock } from 'lucide-react';
 import mapsApi from '../../api/maps';
 import { resolveLocationVersion } from '../../constants/maps';
 import Badge from '../ui/Badge';
@@ -12,9 +12,11 @@ import MarkerIcon from './MarkerIcon';
 // Side panel (right rail on desktop, bottom sheet on mobile) showing a location.
 // gm_note is returned by the server (per-version) only for the owner/admin;
 // `isGm` here also unlocks editing / deleting and (when a pin is given)
-// editing/removing the pin. `year` is the map's current in-fiction year (from
-// the timeline slider / campaign) — it selects which chronological version shows.
-export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin, onRemovePin, onDeleteLocation, onLocationUpdated, onClose }) {
+// editing/removing the pin — pin visibility settings are edited inline in the
+// same "Редагувати" window (see LocationEditor), not a separate one.
+// `year` is the map's current in-fiction year (from the timeline slider /
+// campaign) — it selects which chronological version shows.
+export default function LocationDrawer({ locationId, isGm, year, pin, mapId, lenses, campaigns, onRemovePin, onDeleteLocation, onLocationUpdated, onClose }) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -119,14 +121,9 @@ export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin,
             <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">
               <Button variant="ghost" size="sm" onClick={() => setEditing(true)}><Pencil size={14} /> Редагувати</Button>
               {pin && (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => onEditPin?.(pin)}>
-                    <SlidersHorizontal size={14} /> Видимість мітки
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onRemovePin?.(pin.id)}>
-                    <MapPin size={14} /> Прибрати мітку
-                  </Button>
-                </>
+                <Button variant="ghost" size="sm" onClick={() => onRemovePin?.(pin.id)}>
+                  <MapPin size={14} /> Прибрати мітку
+                </Button>
               )}
               <Button variant="danger" size="sm" onClick={() => { if (confirm('Видалити локацію разом з усіма її мітками?')) onDeleteLocation?.(locationId); }}>
                 <Trash2 size={14} /> Видалити локацію
@@ -143,6 +140,10 @@ export default function LocationDrawer({ locationId, isGm, year, pin, onEditPin,
       {editing && (
         <LocationEditor
           location={location}
+          pin={pin}
+          mapId={mapId}
+          lenses={lenses}
+          campaigns={campaigns}
           onClose={() => setEditing(false)}
           onSaved={async () => {
             setEditing(false);
